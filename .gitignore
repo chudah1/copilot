@@ -1,0 +1,9 @@
+docs/superpowers/
+__pycache__/
+*.pyc
+.env
+*.db
+.pytest_cache/
+node_modules/
+.next/
+.env.local
