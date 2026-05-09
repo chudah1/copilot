@@ -25,6 +25,9 @@ app.include_router(auth_router)
 from app.routes.portfolio import router as portfolio_router
 app.include_router(portfolio_router)
 
+from app.routes.monitoring import router as monitoring_router
+app.include_router(monitoring_router)
+
 
 @app.get("/health")
 async def health():
