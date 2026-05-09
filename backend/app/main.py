@@ -22,6 +22,9 @@ app.add_middleware(
 from app.routes.auth import router as auth_router
 app.include_router(auth_router)
 
+from app.routes.portfolio import router as portfolio_router
+app.include_router(portfolio_router)
+
 
 @app.get("/health")
 async def health():
