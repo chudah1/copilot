@@ -3,10 +3,14 @@ from contextlib import asynccontextmanager
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 
+from app.jobs.scheduler import setup_scheduler, shutdown_scheduler
+
 
 @asynccontextmanager
 async def lifespan(app: FastAPI):
+    setup_scheduler()
     yield
+    shutdown_scheduler()
 
 
 app = FastAPI(title="Copilot Investor", version="0.1.0", lifespan=lifespan)
