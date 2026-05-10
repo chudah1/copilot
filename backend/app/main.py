@@ -31,6 +31,12 @@ app.include_router(monitoring_router)
 from app.routes.settings import router as settings_router
 app.include_router(settings_router)
 
+from app.routes.thesis import router as thesis_router
+app.include_router(thesis_router)
+
+from app.routes.digest import router as digest_router
+app.include_router(digest_router)
+
 
 @app.get("/health")
 async def health():
