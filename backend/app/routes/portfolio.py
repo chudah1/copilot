@@ -1,7 +1,7 @@
 import uuid
 from datetime import datetime, timezone
 
-from fastapi import APIRouter, Depends, HTTPException, status
+from fastapi import APIRouter, Depends, HTTPException, UploadFile, File, status
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
@@ -15,6 +15,7 @@ from app.schemas.broker_connection import ConnectBrokerRequest, BrokerConnection
 from app.schemas.holding import HoldingResponse, ManualHoldingRequest, PortfolioSummary
 from app.services.encryption import encrypt, decrypt
 from app.services.trading212 import Trading212Client
+from app.services.csv_parser import parse_csv
 
 router = APIRouter(prefix="/api/portfolio", tags=["portfolio"])
 
@@ -146,6 +147,64 @@ async def add_manual_holding(
     await db.commit()
     await db.refresh(holding)
     return holding
+
+
+@router.post("/upload-csv", response_model=list[HoldingResponse], status_code=status.HTTP_201_CREATED)
+async def upload_csv(
+    file: UploadFile = File(...),
+    current_user: User = Depends(get_current_user),
+    db: AsyncSession = Depends(get_db),
+):
+    if not file.filename or not file.filename.endswith(".csv"):
+        raise HTTPException(status_code=400, detail="Please upload a .csv file")
+
+    content = await file.read()
+    try:
+        text = content.decode("utf-8")
+    except UnicodeDecodeError:
+        text = content.decode("latin-1")
+
+    parsed = parse_csv(text)
+    if not parsed:
+        raise HTTPException(status_code=400, detail="No holdings found in CSV. Check the format.")
+
+    created = []
+    for p in parsed:
+        # Upsert: update if ticker already exists for this user
+        existing_result = await db.execute(
+            select(Holding).where(
+                Holding.user_id == current_user.id,
+                Holding.ticker == p.ticker,
+            )
+        )
+        holding = existing_result.scalar_one_or_none()
+
+        if holding:
+            holding.quantity = p.quantity
+            holding.average_cost_basis = p.average_cost_basis
+            holding.currency = p.currency
+            holding.name = p.name
+            holding.last_updated_at = datetime.now(timezone.utc)
+        else:
+            holding = Holding(
+                user_id=current_user.id,
+                ticker=p.ticker,
+                name=p.name,
+                quantity=p.quantity,
+                average_cost_basis=p.average_cost_basis,
+                currency=p.currency,
+                current_value=p.quantity * p.average_cost_basis,
+                last_updated_at=datetime.now(timezone.utc),
+            )
+            db.add(holding)
+
+        created.append(holding)
+
+    await db.commit()
+    for h in created:
+        await db.refresh(h)
+
+    return created
 
 
 @router.get("/summary", response_model=PortfolioSummary)

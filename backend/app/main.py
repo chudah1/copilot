@@ -1,13 +1,21 @@
+import logging
 from contextlib import asynccontextmanager
 
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 
+from app.database import engine, Base
+from app.models import user, broker_connection, holding, thesis, monitoring_event, digest  # noqa: F401
 from app.jobs.scheduler import setup_scheduler, shutdown_scheduler
+
+logger = logging.getLogger(__name__)
 
 
 @asynccontextmanager
 async def lifespan(app: FastAPI):
+    # Auto-create tables for SQLite local dev
+    async with engine.begin() as conn:
+        await conn.run_sync(Base.metadata.create_all)
     setup_scheduler()
     yield
     shutdown_scheduler()

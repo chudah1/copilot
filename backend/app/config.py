@@ -2,7 +2,7 @@ from pydantic_settings import BaseSettings
 
 
 class Settings(BaseSettings):
-    database_url: str = "postgresql+asyncpg://localhost:5432/copilot_investor"
+    database_url: str = "sqlite+aiosqlite:///./copilot_investor.db"
     test_database_url: str = "sqlite+aiosqlite:///./test.db"
     redis_url: str = "redis://localhost:6379"
 

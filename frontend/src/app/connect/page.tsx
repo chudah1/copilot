@@ -26,6 +26,11 @@ export default function ConnectPage() {
   const [manualError, setManualError] = useState("");
   const [manualLoading, setManualLoading] = useState(false);
 
+  const [csvFile, setCsvFile] = useState<File | null>(null);
+  const [csvError, setCsvError] = useState("");
+  const [csvLoading, setCsvLoading] = useState(false);
+  const [csvResult, setCsvResult] = useState("");
+
   const handleConnect = async (e: React.FormEvent) => {
     e.preventDefault();
     setBrokerError("");
@@ -67,15 +72,46 @@ export default function ConnectPage() {
     }
   };
 
+  const handleCsvUpload = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!csvFile) return;
+    setCsvError("");
+    setCsvResult("");
+    setCsvLoading(true);
+    try {
+      const formData = new FormData();
+      formData.append("file", csvFile);
+      const token = localStorage.getItem("access_token");
+      const API_URL = process.env.NEXT_PUBLIC_API_URL || "http://localhost:8000";
+      const res = await fetch(`${API_URL}/api/portfolio/upload-csv`, {
+        method: "POST",
+        headers: token ? { Authorization: `Bearer ${token}` } : {},
+        body: formData,
+      });
+      if (!res.ok) {
+        const body = await res.json().catch(() => ({}));
+        throw new Error(body.detail || `Upload failed: ${res.status}`);
+      }
+      const holdings: Holding[] = await res.json();
+      setCsvResult(`Imported ${holdings.length} holding${holdings.length !== 1 ? "s" : ""} successfully.`);
+      setTimeout(() => router.push("/dashboard"), 1500);
+    } catch (err: any) {
+      setCsvError(err.message || "CSV upload failed");
+    } finally {
+      setCsvLoading(false);
+    }
+  };
+
   return (
     <AuthGuard>
       <Navbar />
       <main className="mx-auto max-w-2xl px-4 py-10">
         <h1 className="mb-6 text-2xl font-bold">Connect Your Portfolio</h1>
-        <Tabs defaultValue="broker">
+        <Tabs defaultValue="csv">
           <TabsList className="mb-4">
-            <TabsTrigger value="broker">Trading 212</TabsTrigger>
+            <TabsTrigger value="csv">CSV Upload</TabsTrigger>
             <TabsTrigger value="manual">Manual Entry</TabsTrigger>
+            <TabsTrigger value="broker">Trading 212 API</TabsTrigger>
           </TabsList>
 
           <TabsContent value="broker">
@@ -96,6 +132,37 @@ export default function ConnectPage() {
                   {brokerError && <p className="text-sm text-red-500">{brokerError}</p>}
                   <Button type="submit" disabled={brokerLoading}>
                     {brokerLoading ? "Connecting..." : "Connect & Sync"}
+                  </Button>
+                </form>
+              </CardContent>
+            </Card>
+          </TabsContent>
+
+          <TabsContent value="csv">
+            <Card>
+              <CardHeader>
+                <CardTitle>Upload CSV</CardTitle>
+                <CardDescription>
+                  Upload a Trading 212 transaction export or a generic CSV with columns:
+                  ticker, name, quantity, average_cost_basis.
+                </CardDescription>
+              </CardHeader>
+              <CardContent>
+                <form onSubmit={handleCsvUpload} className="space-y-4">
+                  <div className="space-y-2">
+                    <Label htmlFor="csvFile">CSV File</Label>
+                    <Input
+                      id="csvFile"
+                      type="file"
+                      accept=".csv"
+                      onChange={(e) => setCsvFile(e.target.files?.[0] || null)}
+                      required
+                    />
+                  </div>
+                  {csvError && <p className="text-sm text-red-500">{csvError}</p>}
+                  {csvResult && <p className="text-sm text-green-600">{csvResult}</p>}
+                  <Button type="submit" disabled={csvLoading || !csvFile}>
+                    {csvLoading ? "Uploading..." : "Upload & Import"}
                   </Button>
                 </form>
               </CardContent>
