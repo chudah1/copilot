@@ -5,7 +5,7 @@ from sqlalchemy import String, DateTime, JSON
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 from sqlalchemy.sql import func
 
-from app.database import Base, UUIDType
+from app.database import Base, TZDateTime, UUIDType
 
 
 class User(Base):
@@ -19,6 +19,9 @@ class User(Base):
         default=lambda: {"digest_frequency": "weekly", "notification_sensitivity": "all"},
     )
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now())
+    onboarding_completed_at: Mapped[datetime | None] = mapped_column(
+        TZDateTime(), nullable=True, default=None
+    )
 
     broker_connections = relationship("BrokerConnection", back_populates="user")
     holdings = relationship("Holding", back_populates="user")

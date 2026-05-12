@@ -54,6 +54,9 @@ app.include_router(thesis_router)
 from app.routes.digest import router as digest_router
 app.include_router(digest_router)
 
+from app.routes.onboarding import router as onboarding_router
+app.include_router(onboarding_router)
+
 
 @app.get("/health")
 async def health():
