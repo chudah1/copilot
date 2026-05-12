@@ -93,3 +93,54 @@ async def test_validate_reset_token_rejects_wrong_token(db):
     await create_reset_token(user.id, db)
     found_user_id = await validate_reset_token("completely-wrong-token", db)
     assert found_user_id is None
+
+
+async def test_forgot_password_sends_email_for_existing_user(client, db):
+    from app.services.auth import hash_password
+    user = User(email="forgot@example.com", password_hash=hash_password("testpass123"))
+    db.add(user)
+    await db.commit()
+
+    with patch("app.routes.auth.send_password_reset_email", new_callable=AsyncMock, return_value=True) as mock_send:
+        response = await client.post("/api/auth/forgot-password", json={"email": "forgot@example.com"})
+
+    assert response.status_code == 200
+    assert response.json()["message"] == "If that email exists, a reset link has been sent."
+    mock_send.assert_called_once()
+    assert mock_send.call_args[0][0] == "forgot@example.com"
+
+
+async def test_forgot_password_returns_200_for_nonexistent_email(client):
+    response = await client.post("/api/auth/forgot-password", json={"email": "nobody@example.com"})
+    assert response.status_code == 200
+    assert response.json()["message"] == "If that email exists, a reset link has been sent."
+
+
+async def test_reset_password_changes_password(client, db):
+    from app.services.auth import hash_password, verify_password
+    from app.services.password_reset import create_reset_token
+
+    user = User(email="resetpw@example.com", password_hash=hash_password("oldpass123"))
+    db.add(user)
+    await db.commit()
+    await db.refresh(user)
+
+    raw_token = await create_reset_token(user.id, db)
+
+    response = await client.post("/api/auth/reset-password", json={
+        "token": raw_token,
+        "new_password": "newpass456",
+    })
+    assert response.status_code == 200
+
+    await db.refresh(user)
+    assert verify_password("newpass456", user.password_hash)
+
+
+async def test_reset_password_rejects_invalid_token(client):
+    response = await client.post("/api/auth/reset-password", json={
+        "token": "bogus-token",
+        "new_password": "newpass456",
+    })
+    assert response.status_code == 400
+    assert "Invalid or expired" in response.json()["detail"]
