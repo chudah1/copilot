@@ -78,5 +78,6 @@ async def reset_password(body: ResetPasswordRequest, db: AsyncSession = Depends(
         raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="Invalid or expired reset token")
 
     user.password_hash = hash_password(body.new_password)
+    # Single commit: token marked as used + password changed atomically
     await db.commit()
     return {"message": "Password has been reset."}

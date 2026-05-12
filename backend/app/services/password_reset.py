@@ -3,7 +3,7 @@ import secrets
 import uuid
 from datetime import datetime, timedelta, timezone
 
-from sqlalchemy import select
+from sqlalchemy import select, update
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.models.password_reset_token import PasswordResetToken
@@ -16,6 +16,16 @@ def _hash_token(raw_token: str) -> str:
 
 
 async def create_reset_token(user_id: uuid.UUID, db: AsyncSession) -> str:
+    # Invalidate any existing unused tokens for this user
+    await db.execute(
+        update(PasswordResetToken)
+        .where(
+            PasswordResetToken.user_id == user_id,
+            PasswordResetToken.used_at.is_(None),
+        )
+        .values(used_at=datetime.now(timezone.utc))
+    )
+
     raw_token = secrets.token_urlsafe(32)
     token_hash = _hash_token(raw_token)
     expires_at = datetime.now(timezone.utc) + timedelta(hours=TOKEN_EXPIRY_HOURS)
@@ -31,6 +41,7 @@ async def create_reset_token(user_id: uuid.UUID, db: AsyncSession) -> str:
 
 
 async def validate_reset_token(raw_token: str, db: AsyncSession) -> uuid.UUID | None:
+    """Find and mark a reset token as used. Does NOT commit — caller must commit."""
     token_hash = _hash_token(raw_token)
     result = await db.execute(
         select(PasswordResetToken).where(
@@ -44,5 +55,4 @@ async def validate_reset_token(raw_token: str, db: AsyncSession) -> uuid.UUID | 
         return None
 
     token_row.used_at = datetime.now(timezone.utc)
-    await db.commit()
     return token_row.user_id

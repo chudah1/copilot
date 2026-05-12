@@ -5,7 +5,6 @@ def test_password_reset_token_model_exists():
     assert PasswordResetToken.__tablename__ == "password_reset_tokens"
 
 
-import secrets
 from datetime import datetime, timedelta, timezone
 from unittest.mock import AsyncMock, patch
 
@@ -144,3 +143,43 @@ async def test_reset_password_rejects_invalid_token(client):
     })
     assert response.status_code == 400
     assert "Invalid or expired" in response.json()["detail"]
+
+
+async def test_new_reset_token_invalidates_old_ones(db):
+    user = User(email="multi@example.com", password_hash=hash_password("testpass123"))
+    db.add(user)
+    await db.commit()
+    await db.refresh(user)
+
+    first_token = await create_reset_token(user.id, db)
+    second_token = await create_reset_token(user.id, db)
+
+    # First token should be invalidated
+    found = await validate_reset_token(first_token, db)
+    assert found is None
+
+    # Second token should still work
+    found = await validate_reset_token(second_token, db)
+    assert found == user.id
+
+
+async def test_reset_password_rejects_short_password(client, db):
+    user = User(email="short@example.com", password_hash=hash_password("testpass123"))
+    db.add(user)
+    await db.commit()
+    await db.refresh(user)
+
+    raw_token = await create_reset_token(user.id, db)
+    response = await client.post("/api/auth/reset-password", json={
+        "token": raw_token,
+        "new_password": "short",
+    })
+    assert response.status_code == 422
+
+
+async def test_register_rejects_short_password(client):
+    response = await client.post("/api/auth/register", json={
+        "email": "short@example.com",
+        "password": "short",
+    })
+    assert response.status_code == 422

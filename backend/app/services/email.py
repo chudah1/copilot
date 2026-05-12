@@ -23,10 +23,11 @@ async def send_password_reset_email(to_email: str, reset_token: str) -> bool:
         logger.warning("No Resend API key configured — skipping password reset email")
         return False
     resend.api_key = settings.resend_api_key
+    reset_url = f"{settings.frontend_url}/reset-password?token={reset_token}"
     html = (
         "<h2>Reset your password</h2>"
-        "<p>Use this code to reset your Copilot Investor password. It expires in 1 hour.</p>"
-        f"<p style='font-size:24px;font-weight:bold;letter-spacing:2px'>{reset_token}</p>"
+        "<p>Click the link below to reset your Copilot Investor password. It expires in 1 hour.</p>"
+        f'<p><a href="{reset_url}" style="font-size:18px;font-weight:bold">Reset my password</a></p>'
         "<p>If you didn't request this, ignore this email.</p>"
     )
     try:
