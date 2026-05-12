@@ -4,8 +4,9 @@ from contextlib import asynccontextmanager
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 
+from app.config import settings
 from app.database import engine, Base
-from app.models import user, broker_connection, holding, thesis, monitoring_event, digest  # noqa: F401
+from app.models import user, broker_connection, holding, thesis, monitoring_event, digest, password_reset_token  # noqa: F401
 from app.jobs.scheduler import setup_scheduler, shutdown_scheduler
 
 logger = logging.getLogger(__name__)
@@ -16,16 +17,20 @@ async def lifespan(app: FastAPI):
     # Auto-create tables for SQLite local dev
     async with engine.begin() as conn:
         await conn.run_sync(Base.metadata.create_all)
-    setup_scheduler()
+    scheduler_started = False
+    if settings.enable_scheduler:
+        setup_scheduler()
+        scheduler_started = True
     yield
-    shutdown_scheduler()
+    if scheduler_started:
+        shutdown_scheduler()
 
 
 app = FastAPI(title="Copilot Investor", version="0.1.0", lifespan=lifespan)
 
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=["http://localhost:3000"],
+    allow_origins=["http://localhost:3000", "http://localhost:3001"],
     allow_credentials=True,
     allow_methods=["*"],
     allow_headers=["*"],
