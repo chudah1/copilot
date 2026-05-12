@@ -1,4 +1,5 @@
 import uuid as _uuid
+from datetime import datetime, timezone
 
 from sqlalchemy import String, types
 from sqlalchemy.ext.asyncio import async_sessionmaker, create_async_engine, AsyncSession
@@ -35,6 +36,28 @@ class UUIDType(types.TypeDecorator):
         if isinstance(value, _uuid.UUID):
             return value
         return _uuid.UUID(value)
+
+
+class TZDateTime(types.TypeDecorator):
+    """Cross-database timezone-aware DateTime: native TIMESTAMPTZ on PostgreSQL,
+    UTC-normalised naive storage on SQLite with timezone restored on load."""
+
+    impl = types.DateTime
+    cache_ok = True
+
+    def process_bind_param(self, value, dialect):
+        if value is None:
+            return value
+        if value.tzinfo is not None:
+            value = value.astimezone(timezone.utc).replace(tzinfo=None)
+        return value
+
+    def process_result_value(self, value, dialect):
+        if value is None:
+            return value
+        if value.tzinfo is None:
+            return value.replace(tzinfo=timezone.utc)
+        return value
 
 
 class Base(DeclarativeBase):
