@@ -15,9 +15,11 @@ class Settings(BaseSettings):
     encryption_key: str = "change-me-32-byte-key-in-prod!!"  # Must be 32 bytes
 
     anthropic_api_key: str = ""
+    openai_api_key: str = ""
+    gemini_api_key: str = ""
     resend_api_key: str = ""
     trading212_base_url: str = "https://live.trading212.com/api/v0"
-    alpha_vantage_api_key: str = "A7ZGHG76OMN4U57E"
+    alpha_vantage_api_key: str = ""
     market_data_provider: str = "alpha_vantage"
     frontend_url: str = "http://localhost:3000"
 
