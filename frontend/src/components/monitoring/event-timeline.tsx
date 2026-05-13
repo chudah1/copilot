@@ -20,7 +20,9 @@ export function EventTimeline({ events }: Props) {
     return (
       <Card>
         <CardHeader><CardTitle className="text-base">Monitoring Events</CardTitle></CardHeader>
-        <CardContent><p className="text-muted-foreground">No events yet.</p></CardContent>
+        <CardContent>
+          <p className="text-muted-foreground">No material changes yet. The app is still watching this position against your thesis.</p>
+        </CardContent>
       </Card>
     );
   }
@@ -38,6 +40,16 @@ export function EventTimeline({ events }: Props) {
             <h4 className="mt-1 font-medium">{e.title}</h4>
             <p className="text-sm text-muted-foreground">{e.summary}</p>
             {e.ai_analysis && <p className="mt-1 text-sm italic">{e.ai_analysis}</p>}
+            {e.source_url && (
+              <a
+                href={e.source_url}
+                target="_blank"
+                rel="noreferrer"
+                className="mt-2 inline-block text-sm text-primary underline-offset-4 hover:underline"
+              >
+                Open source
+              </a>
+            )}
           </div>
         ))}
       </CardContent>

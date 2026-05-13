@@ -16,9 +16,10 @@ class ClassificationResult:
 CLASSIFY_PROMPT = """You are an investment monitoring assistant. Given a thesis and new data, classify impact.
 
 Thesis:
-- Bull case: {bull_case}
-- Key metrics: {key_metrics}
-- Risk factors: {risk_factors}
+- Why own it: {why_own_it}
+- What must remain true: {must_remain_true}
+- What would change the user's mind: {what_would_change_my_mind}
+- AI summary: {ai_summary}
 
 New data point:
 {event_description}
@@ -31,9 +32,26 @@ Output valid JSON:
 Output ONLY valid JSON."""
 
 
-async def classify_event(bull_case: str, key_metrics: list[dict], risk_factors: str, event_description: str) -> ClassificationResult | None:
-    prompt = CLASSIFY_PROMPT.format(bull_case=bull_case, key_metrics=json.dumps(key_metrics), risk_factors=risk_factors, event_description=event_description)
+async def classify_event(
+    why_own_it: str,
+    must_remain_true: str | None,
+    what_would_change_my_mind: str | None,
+    ai_summary: str | None,
+    event_description: str,
+) -> ClassificationResult | None:
+    prompt = CLASSIFY_PROMPT.format(
+        why_own_it=why_own_it,
+        must_remain_true=must_remain_true or "Not specified",
+        what_would_change_my_mind=what_would_change_my_mind or "Not specified",
+        ai_summary=ai_summary or "Not available",
+        event_description=event_description,
+    )
     try:
+        if not settings.anthropic_api_key:
+            return ClassificationResult(
+                severity="warning",
+                analysis="Something changed that appears relevant to the user's thesis. Review the position to confirm whether the original reason still holds.",
+            )
         client = anthropic.AsyncAnthropic(api_key=settings.anthropic_api_key)
         response = await client.messages.create(model="claude-haiku-4-5-20251001", max_tokens=512, messages=[{"role": "user", "content": prompt}])
         text = response.content[0].text.strip()
