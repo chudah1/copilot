@@ -1,7 +1,7 @@
 import uuid
 from datetime import datetime
 
-from sqlalchemy import String, DateTime, ForeignKey, Text, Boolean, JSON
+from sqlalchemy import String, DateTime, ForeignKey, Text, JSON, Integer
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 from sqlalchemy.sql import func
 
@@ -15,11 +15,15 @@ class Thesis(Base):
     holding_id: Mapped[uuid.UUID] = mapped_column(UUIDType, ForeignKey("holdings.id"), nullable=False)
     user_id: Mapped[uuid.UUID] = mapped_column(UUIDType, ForeignKey("users.id"), nullable=False)
     status: Mapped[str] = mapped_column(String(20), default="draft")
-    bull_case: Mapped[str] = mapped_column(Text, nullable=False)
-    key_metrics: Mapped[list] = mapped_column(JSON, default=list)
-    risk_factors: Mapped[str] = mapped_column(Text, nullable=False)
-    conviction: Mapped[str] = mapped_column(String(10), default="medium")
-    ai_generated: Mapped[bool] = mapped_column(Boolean, default=False)
+    thesis_kind: Mapped[str] = mapped_column(String(30), default="company")
+    why_own_it: Mapped[str] = mapped_column(Text, nullable=False)
+    must_remain_true: Mapped[str | None] = mapped_column(Text, nullable=True)
+    what_would_change_my_mind: Mapped[str | None] = mapped_column(Text, nullable=True)
+    confidence: Mapped[str] = mapped_column(String(10), default="medium")
+    review_cadence_days: Mapped[int] = mapped_column(Integer, default=7)
+    ai_summary: Mapped[str | None] = mapped_column(Text, nullable=True)
+    interpretation: Mapped[dict | None] = mapped_column(JSON, nullable=True)
+    source: Mapped[str] = mapped_column(String(20), default="user")
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now())
     updated_at: Mapped[datetime] = mapped_column(
         DateTime(timezone=True), server_default=func.now(), onupdate=func.now()
@@ -30,3 +34,9 @@ class Thesis(Base):
     holding = relationship("Holding", back_populates="theses")
     user = relationship("User", back_populates="theses")
     monitoring_events = relationship("MonitoringEvent", back_populates="thesis")
+    decompositions = relationship(
+        "ThesisDecomposition",
+        back_populates="thesis",
+        cascade="all, delete-orphan",
+        order_by="desc(ThesisDecomposition.version)",
+    )

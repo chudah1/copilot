@@ -6,7 +6,19 @@ from fastapi.middleware.cors import CORSMiddleware
 
 from app.config import settings
 from app.database import engine, Base
-from app.models import user, broker_connection, holding, thesis, monitoring_event, digest, password_reset_token  # noqa: F401
+from app.models import (  # noqa: F401
+    user,
+    broker_connection,
+    holding,
+    thesis,
+    thesis_decomposition,
+    thesis_claim,
+    thesis_entity,
+    thesis_signal,
+    monitoring_event,
+    digest,
+    password_reset_token,
+)
 from app.jobs.scheduler import setup_scheduler, shutdown_scheduler
 
 logger = logging.getLogger(__name__)

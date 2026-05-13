@@ -1,6 +1,7 @@
 import json
 import logging
 from dataclasses import dataclass
+import re
 
 import anthropic
 
@@ -11,48 +12,150 @@ logger = logging.getLogger(__name__)
 
 
 @dataclass
-class ThesisOutput:
-    bull_case: str
-    key_metrics: list[dict]
-    risk_factors: str
-    suggested_conviction: str
+class ThesisAssistOutput:
+    ai_summary: str
+    interpretation: dict
 
 
-THESIS_PROMPT = """You are an investment analyst assistant helping a retail investor understand why they hold a stock.
+VAGUE_PATTERNS = (
+    r"\bfriend recommended\b",
+    r"\brecommended it\b",
+    r"\btip from\b",
+    r"\beveryone was talking about it\b",
+    r"\bnot sure\b",
+    r"\bjust because\b",
+    r"\bi like the stock\b",
+    r"\blong[- ]term hold\b",
+)
+THEME_KEYWORDS = {
+    "growth": ("growth", "demand", "expansion", "adoption"),
+    "income": ("dividend", "income", "yield"),
+    "quality": ("margin", "margins", "cash flow", "profitability", "resilient"),
+    "valuation": ("valuation", "multiple", "cheap", "expensive", "pe", "p/e"),
+    "theme": ("ai", "cloud", "energy", "semiconductor", "automation", "infrastructure"),
+}
+SUPPORTED_PROXY_METRICS = {
+    "revenue_growth_yoy",
+    "earnings_growth_yoy",
+    "pe_ratio",
+    "dividend_yield",
+}
+PROXY_TICKER_PATTERN = re.compile(r"^[A-Z][A-Z0-9.\-]{0,9}$")
 
-Given the following position and any available market data, generate a thesis for why a retail investor likely owns this stock.
+
+THESIS_PROMPT = """You are an investment thesis assistant helping a retail investor clarify why they own a position.
+
+Given the position, the user's rough draft, and any available market data, produce:
+- a concise summary of the likely thesis in plain English
+- a lightweight interpretation object that helps the product monitor or review the thesis
 
 Position:
 - Ticker: {ticker}
 - Name: {name}
 - Shares: {quantity}
 - Average cost: {average_cost}
+- User draft: {draft_text}
 
 {market_data_section}
 
 Output valid JSON with this exact structure:
 {{
-    "bull_case": "2-3 sentences explaining why this is a good hold. Reference specific numbers.",
-    "key_metrics": [
-        {{
-            "metric": "metric_name_snake_case",
-            "operator": ">=" or "<=" or ">" or "<" or "==",
-            "threshold": 15.0,
-            "rationale": "Why this metric matters to the thesis"
-        }}
-    ],
-    "risk_factors": "2-3 sentences about what could go wrong. Be specific.",
-    "suggested_conviction": "high" or "medium" or "low"
+    "ai_summary": "2-3 sentences explaining the thesis in investor language.",
+    "interpretation": {{
+        "labels": ["theme_or_reason"],
+        "monitorability": "high|medium|low",
+        "watch_hints": [
+            {{
+                "kind": "price_move_pct" or "metric_threshold",
+                "threshold": 10.0,
+                "metric": "optional_metric_name",
+                "operator": "optional_operator",
+                "rationale": "Why this would matter to the thesis"
+            }}
+        ],
+        "proxy_signals": [
+            {{
+                "ticker": "RELATED_TICKER",
+                "rationale": "Why this company sits in the causal chain for the thesis",
+                "signal_hint": "What specifically to look for in this proxy's earnings/news",
+                "allowed_metrics": ["optional_metric_name"]
+            }}
+        ],
+        "ambiguity_note": "Explain any vagueness or missing specificity."
+    }}
 }}
 
 Requirements:
-- key_metrics must have 2-4 items
-- Metrics must be specific and measurable
-- Be direct and specific, not generic
+- If the user's draft is vague, say so directly in ambiguity_note
+- Include 0-3 watch_hints total
+- Include 0-3 proxy_signals: other tickers (never the held ticker itself) whose news or earnings would inform whether this thesis holds.
+- For each proxy, include:
+  - rationale: why it matters in the causal chain
+  - signal_hint: the specific commentary, guidance, or operating signal to watch
+  - allowed_metrics: only from revenue_growth_yoy, earnings_growth_yoy, pe_ratio, dividend_yield when they genuinely help
+- Use price_move_pct only when a generic price review trigger is sensible
 - Output ONLY valid JSON, no markdown fences"""
 
 
-async def _call_claude(prompt: str) -> ThesisOutput:
+def _fallback_assist(ticker: str, draft_text: str | None) -> ThesisAssistOutput:
+    cleaned = (draft_text or "").strip()
+    if cleaned:
+        lowered = cleaned.lower()
+        is_vague = any(re.search(pattern, lowered) for pattern in VAGUE_PATTERNS) or len(cleaned.split()) < 5
+        labels = [
+            label
+            for label, keywords in THEME_KEYWORDS.items()
+            if any(keyword in lowered for keyword in keywords)
+        ] or ["user_defined"]
+        monitorability = "low" if is_vague else "medium"
+        watch_hints = [] if is_vague else [
+            {
+                "kind": "price_move_pct",
+                "threshold": 5.0,
+                "rationale": "Prompt a review when price moves sharply.",
+            }
+        ]
+        if not is_vague and any(keyword in lowered for keyword in ("growth", "demand", "adoption")):
+            watch_hints.append(
+                {
+                    "kind": "metric_threshold",
+                    "metric": "revenue_growth_yoy",
+                    "operator": ">=",
+                    "threshold": 0.0,
+                    "rationale": "Revenue growth should stay positive if the thesis depends on demand expansion.",
+                }
+            )
+        if not is_vague and any(keyword in lowered for keyword in ("margin", "margins", "profitability")):
+            watch_hints.append(
+                {
+                    "kind": "metric_threshold",
+                    "metric": "earnings_growth_yoy",
+                    "operator": ">=",
+                    "threshold": 0.0,
+                    "rationale": "Earnings growth should remain healthy if margins are a key part of the thesis.",
+                }
+            )
+        ai_summary = f"{ticker} thesis draft: {cleaned}"
+        interpretation = {
+            "labels": labels[:3],
+            "monitorability": monitorability,
+            "watch_hints": watch_hints[:3],
+            "proxy_signals": [],
+            "ambiguity_note": "The reason is still vague and may need clarification before monitoring can be precise." if is_vague else "",
+        }
+    else:
+        ai_summary = f"No clear thesis draft was provided for {ticker}."
+        interpretation = {
+            "labels": ["unclear"],
+            "monitorability": "low",
+            "watch_hints": [],
+            "proxy_signals": [],
+            "ambiguity_note": "The user has not given enough detail to monitor this thesis well.",
+        }
+    return ThesisAssistOutput(ai_summary=ai_summary, interpretation=interpretation)
+
+
+async def _call_claude(prompt: str) -> ThesisAssistOutput:
     client = anthropic.AsyncAnthropic(api_key=settings.anthropic_api_key)
     response = await client.messages.create(
         model="claude-sonnet-4-20250514",
@@ -63,32 +166,156 @@ async def _call_claude(prompt: str) -> ThesisOutput:
     if text.startswith("```"):
         text = text.split("\n", 1)[1].rsplit("```", 1)[0].strip()
     data = json.loads(text)
-    return ThesisOutput(
-        bull_case=data["bull_case"],
-        key_metrics=data["key_metrics"],
-        risk_factors=data["risk_factors"],
-        suggested_conviction=data["suggested_conviction"],
+    return ThesisAssistOutput(
+        ai_summary=data["ai_summary"],
+        interpretation=data["interpretation"],
     )
 
 
-async def generate_thesis(ticker: str, name: str, quantity: float, average_cost: float) -> ThesisOutput | None:
-    market_data = await fetch_company_data(ticker)
+def _normalize_interpretation(interpretation: dict | None) -> dict:
+    data = interpretation if isinstance(interpretation, dict) else {}
+
+    labels = data.get("labels")
+    if not isinstance(labels, list):
+        labels = []
+    normalized_labels = [str(label).strip() for label in labels if str(label).strip()][:3]
+
+    monitorability = data.get("monitorability")
+    if monitorability not in {"high", "medium", "low"}:
+        monitorability = "medium" if normalized_labels else "low"
+
+    ambiguity_note = data.get("ambiguity_note")
+    if not isinstance(ambiguity_note, str):
+        ambiguity_note = ""
+
+    normalized_watch_hints: list[dict] = []
+    for hint in data.get("watch_hints", []) if isinstance(data.get("watch_hints"), list) else []:
+        if not isinstance(hint, dict):
+            continue
+        kind = hint.get("kind")
+        if kind == "price_move_pct":
+            threshold = hint.get("threshold")
+            if isinstance(threshold, (int, float)):
+                normalized_watch_hints.append(
+                    {
+                        "kind": "price_move_pct",
+                        "threshold": float(threshold),
+                        "rationale": str(hint.get("rationale", "")).strip(),
+                    }
+                )
+        elif kind == "metric_threshold":
+            metric = hint.get("metric")
+            operator = hint.get("operator")
+            threshold = hint.get("threshold")
+            if (
+                isinstance(metric, str)
+                and isinstance(operator, str)
+                and operator in {">=", "<=", ">", "<", "=="}
+                and isinstance(threshold, (int, float))
+            ):
+                normalized_watch_hints.append(
+                    {
+                        "kind": "metric_threshold",
+                        "metric": metric,
+                        "operator": operator,
+                        "threshold": float(threshold),
+                        "rationale": str(hint.get("rationale", "")).strip(),
+                    }
+                )
+
+    if monitorability in {"high", "medium"} and not any(hint.get("kind") == "price_move_pct" for hint in normalized_watch_hints):
+        normalized_watch_hints.insert(
+            0,
+            {
+                "kind": "price_move_pct",
+                "threshold": 5.0,
+                "rationale": "Prompt a review when price moves sharply.",
+            },
+        )
+
+    normalized_proxy_signals: list[dict[str, object]] = []
+    seen_proxy_tickers: set[str] = set()
+    for signal in data.get("proxy_signals", []) if isinstance(data.get("proxy_signals"), list) else []:
+        if not isinstance(signal, dict):
+            continue
+        proxy_ticker = signal.get("ticker")
+        rationale = signal.get("rationale", "")
+        signal_hint = signal.get("signal_hint", "")
+        allowed_metrics = signal.get("allowed_metrics", [])
+        if isinstance(proxy_ticker, str) and proxy_ticker.strip():
+            upper_ticker = proxy_ticker.strip().upper()
+            if not PROXY_TICKER_PATTERN.match(upper_ticker):
+                continue
+            if upper_ticker not in seen_proxy_tickers:
+                entry: dict[str, object] = {"ticker": upper_ticker, "rationale": str(rationale).strip()}
+                if isinstance(signal_hint, str) and signal_hint.strip():
+                    entry["signal_hint"] = signal_hint.strip()
+                if isinstance(allowed_metrics, list):
+                    normalized_allowed_metrics = [
+                        str(metric).strip()
+                        for metric in allowed_metrics
+                        if str(metric).strip() in SUPPORTED_PROXY_METRICS
+                    ]
+                    if normalized_allowed_metrics:
+                        entry["allowed_metrics"] = normalized_allowed_metrics[:3]
+                normalized_proxy_signals.append(entry)
+                seen_proxy_tickers.add(upper_ticker)
+
+    return {
+        "labels": normalized_labels or ["user_defined"],
+        "monitorability": monitorability,
+        "watch_hints": normalized_watch_hints[:3],
+        "proxy_signals": normalized_proxy_signals[:3],
+        "ambiguity_note": ambiguity_note,
+    }
+
+
+async def assist_thesis(
+    ticker: str,
+    name: str,
+    quantity: float,
+    average_cost: float,
+    draft_text: str | None,
+) -> ThesisAssistOutput | None:
+    try:
+        market_data = await fetch_company_data(ticker)
+    except Exception as e:
+        logger.warning("Market data unavailable for thesis assist on %s: %s", ticker, e)
+        market_data = None
     if market_data:
-        market_data_section = f"Market Data:\n- Sector: {market_data.sector}\n- P/E: {market_data.pe_ratio}\n- Revenue Growth: {market_data.revenue_growth_yoy}%"
+        market_data_section = (
+            f"Market Data:\n"
+            f"- Sector: {market_data.sector}\n"
+            f"- Industry: {market_data.industry}\n"
+            f"- Revenue Growth: {market_data.revenue_growth_yoy}%\n"
+            f"- Earnings Growth: {market_data.earnings_growth_yoy}%"
+        )
     else:
         market_data_section = "Market Data: Not available. Use your knowledge of this company."
 
-    prompt = THESIS_PROMPT.format(ticker=ticker, name=name, quantity=quantity, average_cost=average_cost, market_data_section=market_data_section)
+    prompt = THESIS_PROMPT.format(
+        ticker=ticker,
+        name=name,
+        quantity=quantity,
+        average_cost=average_cost,
+        draft_text=(draft_text or "None provided"),
+        market_data_section=market_data_section,
+    )
 
     try:
+        if not settings.anthropic_api_key:
+            return _fallback_assist(ticker=ticker, draft_text=draft_text)
         result = await _call_claude(prompt)
-        if not result.bull_case or not result.key_metrics:
+        if not result.ai_summary or not isinstance(result.interpretation, dict):
             raise ValueError("Incomplete thesis output")
+        result.interpretation = _normalize_interpretation(result.interpretation)
         return result
     except Exception as e:
         logger.error(f"Thesis generation failed for {ticker}: {e}")
         try:
-            return await _call_claude(prompt + "\n\nIMPORTANT: Output ONLY valid JSON.")
+            result = await _call_claude(prompt + "\n\nIMPORTANT: Output ONLY valid JSON.")
+            result.interpretation = _normalize_interpretation(result.interpretation)
+            return result
         except Exception:
             logger.error(f"Thesis generation retry failed for {ticker}")
-            return None
+            return _fallback_assist(ticker=ticker, draft_text=draft_text)

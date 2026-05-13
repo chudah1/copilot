@@ -1,28 +1,109 @@
 import uuid
+from typing import Any
 from datetime import datetime
 from pydantic import BaseModel
 
 
-class KeyMetric(BaseModel):
-    metric: str
-    operator: str
-    threshold: float
-    rationale: str
-
-
-class GenerateThesisRequest(BaseModel):
+class CreateThesisRequest(BaseModel):
     holding_id: uuid.UUID
+    thesis_kind: str = "company"
+    why_own_it: str
+    must_remain_true: str | None = None
+    what_would_change_my_mind: str | None = None
+    confidence: str = "medium"
+    review_cadence_days: int = 7
+    ai_summary: str | None = None
+    interpretation: dict[str, Any] | None = None
+    source: str = "user"
+    status: str = "draft"
+
+
+class AssistThesisRequest(BaseModel):
+    holding_id: uuid.UUID
+    draft_text: str | None = None
+
+
+class AssistThesisResponse(BaseModel):
+    ai_summary: str
+    interpretation: dict[str, Any]
+    source: str = "ai_assisted"
+
+
+class ThesisSignalResponse(BaseModel):
+    id: uuid.UUID
+    signal_type: str
+    signal_label: str | None
+    signal_config_json: dict[str, Any] | None
+    rationale: str | None
+    confidence: float | None
+    confirmation_required: bool
+    user_confirmed: bool | None
+    active: bool
+    created_at: datetime
+    model_config = {"from_attributes": True}
+
+
+class ThesisEntityResponse(BaseModel):
+    id: uuid.UUID
+    entity_name: str
+    entity_ticker: str | None
+    entity_type: str | None
+    relation_type: str | None
+    rationale: str | None
+    confidence: float | None
+    confirmation_required: bool
+    user_confirmed: bool | None
+    created_at: datetime
+    signals: list[ThesisSignalResponse]
+    model_config = {"from_attributes": True}
+
+
+class ThesisClaimResponse(BaseModel):
+    id: uuid.UUID
+    claim_text: str
+    claim_type: str | None
+    confidence: float | None
+    position: int
+    created_at: datetime
+    entities: list[ThesisEntityResponse]
+    model_config = {"from_attributes": True}
+
+
+class ThesisDecompositionResponse(BaseModel):
+    id: uuid.UUID
+    thesis_id: uuid.UUID
+    version: int
+    status: str
+    reason_type: str | None
+    monitorability: str | None
+    decomposition_confidence: float | None
+    provider: str | None
+    model: str | None
+    prompt_version: str | None
+    created_at: datetime
+    claims: list[ThesisClaimResponse]
+    model_config = {"from_attributes": True}
+
+
+class ThesisDecompositionEnvelopeResponse(BaseModel):
+    status: str
+    message: str | None = None
+    decomposition: ThesisDecompositionResponse | None = None
 
 
 class ThesisResponse(BaseModel):
     id: uuid.UUID
     holding_id: uuid.UUID
     status: str
-    bull_case: str
-    key_metrics: list[KeyMetric]
-    risk_factors: str
-    conviction: str
-    ai_generated: bool
+    thesis_kind: str
+    why_own_it: str
+    must_remain_true: str | None
+    what_would_change_my_mind: str | None
+    confidence: str
+    review_cadence_days: int
+    ai_summary: str | None
+    interpretation: dict[str, Any] | None
+    source: str
     created_at: datetime
     updated_at: datetime
     invalidated_at: datetime | None
@@ -31,11 +112,50 @@ class ThesisResponse(BaseModel):
 
 
 class UpdateThesisRequest(BaseModel):
-    bull_case: str | None = None
-    key_metrics: list[KeyMetric] | None = None
-    risk_factors: str | None = None
-    conviction: str | None = None
+    thesis_kind: str | None = None
+    why_own_it: str | None = None
+    must_remain_true: str | None = None
+    what_would_change_my_mind: str | None = None
+    confidence: str | None = None
+    review_cadence_days: int | None = None
+    ai_summary: str | None = None
+    interpretation: dict[str, Any] | None = None
+    source: str | None = None
     status: str | None = None
+
+class DebugDecomposeRequest(BaseModel):
+    ticker: str
+    name: str
+    why_own_it: str
+    must_remain_true: str | None = None
+    what_would_change_my_mind: str | None = None
+
+
+class ProviderDebugResult(BaseModel):
+    provider: str
+    model: str | None = None
+    success: bool
+    status: str
+    latency_ms: int | None = None
+    failure_reason: str | None = None
+    raw_output: dict[str, Any] | None = None
+    normalized_output: dict[str, Any] | None = None
+    valid: bool
+    validation_error: str | None = None
+
+class GatewayDebugResult(BaseModel):
+    success: bool
+    status: str
+    provider: str | None = None
+    model: str | None = None
+    confidence: float | None = None
+    latency_ms: int | None = None
+    failure_reason: str | None = None
+    normalized_output: dict[str, Any] | None = None
+
+class DebugDecomposeResult(BaseModel):
+    providers: list[ProviderDebugResult]
+    gateway_result: GatewayDebugResult
 
 
 class InvalidateThesisRequest(BaseModel):
