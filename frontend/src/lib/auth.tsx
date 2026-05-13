@@ -1,6 +1,6 @@
 "use client";
 
-import { createContext, useContext, useEffect, useState, ReactNode } from "react";
+import { createContext, useContext, useEffect, useState, ReactNode, startTransition } from "react";
 import { useRouter } from "next/navigation";
 import { api } from "./api";
 import type { TokenResponse } from "@/types";
@@ -22,8 +22,10 @@ export function AuthProvider({ children }: { children: ReactNode }) {
 
   useEffect(() => {
     const token = localStorage.getItem("access_token");
-    setIsAuthenticated(!!token);
-    setIsLoading(false);
+    startTransition(() => {
+      setIsAuthenticated(!!token);
+      setIsLoading(false);
+    });
   }, []);
 
   const handleTokens = (data: TokenResponse) => {

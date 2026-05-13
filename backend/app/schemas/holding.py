@@ -32,6 +32,14 @@ class ManualHoldingRequest(BaseModel):
     asset_class: str = "stock"
 
 
+class PriorityHoldingSummary(BaseModel):
+    holding_id: uuid.UUID
+    ticker: str
+    name: str
+    reason: str
+    priority: str
+
+
 class PortfolioSummary(BaseModel):
     total_value: float
     total_cost: float
@@ -41,5 +49,14 @@ class PortfolioSummary(BaseModel):
     theses_active: int
     theses_need_review: int
     theses_missing: int
+    top_3_concentration_pct: float
+    thesis_coverage_pct: float
+    monitorable_thesis_coverage_pct: float
+    stale_theses_count: int
+    unmonitored_holdings_count: int
+    conviction_mismatch_count: int
+    monitoring_ready: bool
+    monitoring_message: str
     sector_breakdown: dict[str, float]
     geography_breakdown: dict[str, float]
+    attention_queue: list[PriorityHoldingSummary]

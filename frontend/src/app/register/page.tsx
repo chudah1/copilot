@@ -7,6 +7,7 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
+import { getErrorMessage } from "@/lib/errors";
 
 export default function RegisterPage() {
   const { register } = useAuth();
@@ -25,8 +26,8 @@ export default function RegisterPage() {
     setLoading(true);
     try {
       await register(email, password);
-    } catch (err: any) {
-      setError(err.message || "Registration failed");
+    } catch (error: unknown) {
+      setError(getErrorMessage(error, "Registration failed"));
     } finally {
       setLoading(false);
     }

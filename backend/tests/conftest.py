@@ -43,6 +43,11 @@ async def db():
 
 
 @pytest.fixture
+def job_session_factory():
+    return TestSession
+
+
+@pytest.fixture
 async def test_user(db: AsyncSession):
     from app.models.user import User
     from app.services.auth import hash_password
