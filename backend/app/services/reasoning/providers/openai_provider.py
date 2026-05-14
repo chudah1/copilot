@@ -15,7 +15,7 @@ from app.services.reasoning.types import ReasoningRequest, ReasoningResult, Reas
 class OpenAIReasoningProvider:
     name = "openai"
     model = "gpt-4.1-mini"
-    timeout_seconds = 20
+    timeout_seconds = 30
 
     def _response_schema(self) -> dict:
         # OpenAI Structured Outputs is stricter than our cross-provider schema:

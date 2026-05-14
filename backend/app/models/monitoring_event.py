@@ -29,3 +29,9 @@ class MonitoringEvent(Base):
     holding = relationship("Holding", back_populates="monitoring_events")
     thesis = relationship("Thesis", back_populates="monitoring_events")
     digest = relationship("Digest", back_populates="events")
+    reviews = relationship(
+        "ThesisReview",
+        back_populates="monitoring_event",
+        cascade="all, delete-orphan",
+        order_by="desc(ThesisReview.created_at)",
+    )

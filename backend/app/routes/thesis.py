@@ -18,15 +18,25 @@ from app.models.user import User
 from app.schemas.thesis import (
     AssistThesisRequest,
     AssistThesisResponse,
+    ConfirmDecompositionRequest,
+    CounterThesisResponse,
     CreateThesisRequest,
+    DebugDecomposeRequest,
+    DebugDecomposeResponse,
+    HealthCheckResponse,
     InvalidateThesisRequest,
     ThesisDecompositionEnvelopeResponse,
     ThesisDecompositionResponse,
     ThesisResponse,
     UpdateThesisRequest,
 )
-from app.services.ai_thesis import assist_thesis
-from app.services.decomposition import PersistedDecompositionResult, generate_decomposition_for_thesis
+from app.services.ai_thesis import assist_thesis, generate_counter_thesis
+from app.services.decomposition import (
+    PersistedDecompositionResult,
+    confirm_decomposition_for_thesis,
+    debug_compare_decomposition_providers,
+    generate_decomposition_for_thesis,
+)
 
 router = APIRouter(prefix="/api/theses", tags=["theses"])
 
@@ -140,6 +150,15 @@ async def assist_thesis_endpoint(
     return AssistThesisResponse(ai_summary=output.ai_summary, interpretation=output.interpretation)
 
 
+@router.post("/debug/decompose", response_model=DebugDecomposeResponse)
+async def debug_decompose(
+    body: DebugDecomposeRequest,
+    current_user: User = Depends(get_current_user),
+):
+    del current_user
+    return await debug_compare_decomposition_providers(body.model_dump())
+
+
 @router.post("/{thesis_id}/decompose", response_model=ThesisDecompositionEnvelopeResponse, status_code=status.HTTP_201_CREATED)
 async def decompose_thesis(
     thesis_id: uuid.UUID,
@@ -177,6 +196,44 @@ async def decompose_thesis(
     if latest is None:
         raise HTTPException(status_code=status.HTTP_502_BAD_GATEWAY, detail="Failed to create decomposition")
     return ThesisDecompositionEnvelopeResponse(status="draft", message=None, decomposition=latest)
+
+
+@router.post("/{thesis_id}/decomposition/confirm", response_model=ThesisDecompositionEnvelopeResponse)
+async def confirm_decomposition(
+    thesis_id: uuid.UUID,
+    body: ConfirmDecompositionRequest,
+    current_user: User = Depends(get_current_user),
+    db: AsyncSession = Depends(get_db),
+):
+    result = await db.execute(
+        select(Thesis)
+        .where(
+            Thesis.id == thesis_id,
+            Thesis.user_id == current_user.id,
+        )
+        .options(selectinload(Thesis.holding))
+    )
+    thesis = result.scalar_one_or_none()
+    if thesis is None:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Thesis not found")
+    if thesis.holding is None:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Holding not found")
+
+    decomposition = await confirm_decomposition_for_thesis(
+        db,
+        thesis=thesis,
+        holding=thesis.holding,
+        decomposition_id=body.decomposition_id,
+        entity_confirmations=body.model_dump()["entities"],
+        signal_confirmations=body.model_dump()["signals"],
+    )
+    if decomposition is None:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Decomposition not found")
+
+    latest = await _get_latest_decomposition_record(db, thesis.id, current_user.id)
+    if latest is None:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Decomposition not found")
+    return ThesisDecompositionEnvelopeResponse(status=latest.status, message=None, decomposition=latest)
 
 
 @router.get("/{thesis_id}/decomposition", response_model=ThesisDecompositionEnvelopeResponse)
@@ -352,3 +409,86 @@ async def reaffirm_thesis(
     await db.commit()
     await db.refresh(thesis)
     return thesis
+
+
+@router.post("/{thesis_id}/health-check", response_model=HealthCheckResponse)
+async def thesis_health_check(
+    thesis_id: uuid.UUID,
+    current_user: User = Depends(get_current_user),
+    db: AsyncSession = Depends(get_db),
+):
+    from app.services.health_check import run_health_check
+
+    result = await db.execute(
+        select(Thesis)
+        .where(
+            Thesis.id == thesis_id,
+            Thesis.user_id == current_user.id,
+        )
+        .options(selectinload(Thesis.holding))
+    )
+    thesis = result.scalar_one_or_none()
+    if thesis is None:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Thesis not found")
+    if thesis.holding is None:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Holding not found")
+
+    check = await run_health_check(thesis, thesis.holding)
+    return HealthCheckResponse(
+        thesis_id=thesis.id,
+        ticker=check.ticker,
+        current_price=check.current_price,
+        sector=check.sector,
+        pe_ratio=check.pe_ratio,
+        market_cap=check.market_cap,
+        upcoming_earnings_date=check.upcoming_earnings_date,
+        recent_earnings_surprise_pct=check.recent_earnings_surprise_pct,
+        candidates=[
+            {"event_type": c.event_type, "description": c.description, "severity": c.severity, "ai_analysis": c.ai_analysis}
+            for c in check.candidates
+        ],
+        watch_hints_status=[
+            {"metric": w.metric, "operator": w.operator, "threshold": w.threshold, "actual_value": w.actual_value, "breached": w.breached, "rationale": w.rationale}
+            for w in check.watch_hints_status
+        ],
+        recent_news_count=check.recent_news_count,
+        thesis_assessment=check.thesis_assessment,
+        checked_at=check.checked_at,
+    )
+
+
+@router.post("/{thesis_id}/counter-thesis", response_model=CounterThesisResponse)
+async def counter_thesis(
+    thesis_id: uuid.UUID,
+    current_user: User = Depends(get_current_user),
+    db: AsyncSession = Depends(get_db),
+):
+    result = await db.execute(
+        select(Thesis)
+        .where(
+            Thesis.id == thesis_id,
+            Thesis.user_id == current_user.id,
+        )
+        .options(selectinload(Thesis.holding))
+    )
+    thesis = result.scalar_one_or_none()
+    if thesis is None:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Thesis not found")
+    if thesis.holding is None:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Holding not found")
+
+    output = await generate_counter_thesis(
+        why_own_it=thesis.why_own_it,
+        must_remain_true=thesis.must_remain_true,
+        what_would_change_my_mind=thesis.what_would_change_my_mind,
+        ai_summary=thesis.ai_summary,
+        ticker=thesis.holding.ticker,
+    )
+    return CounterThesisResponse(
+        thesis_id=thesis.id,
+        bear_case=output.bear_case,
+        key_risks=output.key_risks,
+        blind_spots=output.blind_spots,
+        suggested_additions=output.suggested_additions,
+        generated_at=datetime.now(timezone.utc),
+    )

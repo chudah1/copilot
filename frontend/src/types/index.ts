@@ -45,6 +45,77 @@ export interface ThesisAssistResponse {
   source: "ai_assisted";
 }
 
+export interface ThesisDecompositionSignal {
+  id: string;
+  signal_type: string;
+  signal_label: string | null;
+  signal_config_json: Record<string, unknown> | null;
+  rationale: string | null;
+  confidence: number | null;
+  confirmation_required: boolean;
+  user_confirmed: boolean | null;
+  active: boolean;
+  created_at: string;
+}
+
+export interface ThesisDecompositionEntity {
+  id: string;
+  entity_name: string;
+  entity_ticker: string | null;
+  entity_type: string | null;
+  relation_type: string | null;
+  rationale: string | null;
+  confidence: number | null;
+  confirmation_required: boolean;
+  user_confirmed: boolean | null;
+  created_at: string;
+  signals: ThesisDecompositionSignal[];
+}
+
+export interface ThesisDecompositionClaim {
+  id: string;
+  claim_text: string;
+  claim_type: string | null;
+  confidence: number | null;
+  position: number;
+  created_at: string;
+  entities: ThesisDecompositionEntity[];
+}
+
+export interface ThesisDecomposition {
+  id: string;
+  thesis_id: string;
+  version: number;
+  status: "draft" | "confirmed" | "partially_confirmed" | "rejected" | "pending" | "failed";
+  reason_type: string | null;
+  monitorability: string | null;
+  decomposition_confidence: number | null;
+  provider: string | null;
+  model: string | null;
+  prompt_version: string | null;
+  created_at: string;
+  claims: ThesisDecompositionClaim[];
+}
+
+export interface ThesisDecompositionEnvelope {
+  status: "draft" | "confirmed" | "partially_confirmed" | "rejected" | "pending" | "failed";
+  message: string | null;
+  decomposition: ThesisDecomposition | null;
+}
+
+export interface ConfirmDecompositionRequest {
+  decomposition_id: string;
+  entities: Array<{
+    id: string;
+    user_confirmed: boolean;
+  }>;
+  signals: Array<{
+    id: string;
+    user_confirmed: boolean;
+    active: boolean;
+  }>;
+}
+
 export interface MonitoringEvent {
   id: string;
   holding_id: string;
@@ -55,7 +126,19 @@ export interface MonitoringEvent {
   summary: string;
   source_url: string | null;
   ai_analysis: string | null;
+  review_action: "reaffirmed" | "ignored" | "lowered_confidence" | "invalidated" | null;
+  review_notes: string | null;
   created_at: string;
+}
+
+export interface MonitoringEventReviewResponse {
+  id: string;
+  monitoring_event_id: string;
+  thesis_id: string;
+  action: "reaffirmed" | "ignored" | "lowered_confidence" | "invalidated";
+  notes: string | null;
+  created_at: string;
+  thesis: Thesis;
 }
 
 export interface PortfolioSummary {
@@ -105,10 +188,112 @@ export interface Digest {
   status: string;
 }
 
+export interface HoldingPulse {
+  holding_id: string;
+  ticker: string;
+  name: string;
+  pulse_status: "intact" | "watch" | "review";
+  reason: string;
+  latest_event_summary: string | null;
+  days_since_thesis_update: number | null;
+  has_thesis: boolean;
+}
+
+export interface PortfolioPulse {
+  pulses: HoldingPulse[];
+  next_digest_at: string | null;
+}
+
+export interface PortfolioTrend {
+  snapshot_date: string | null;
+  top_3_concentration_pct: number | null;
+  thesis_coverage_pct: number | null;
+  monitorable_pct: number | null;
+  unmonitored_count: number | null;
+  holdings_count: number | null;
+}
+
+export interface HealthCheckCandidate {
+  event_type: string;
+  description: string;
+  severity: string | null;
+  ai_analysis: string | null;
+}
+
+export interface WatchHintStatus {
+  metric: string;
+  operator: string;
+  threshold: number;
+  actual_value: number;
+  breached: boolean;
+  rationale: string;
+}
+
+export interface HealthCheckResult {
+  thesis_id: string;
+  ticker: string;
+  current_price: number | null;
+  sector: string | null;
+  pe_ratio: number | null;
+  market_cap: number | null;
+  upcoming_earnings_date: string | null;
+  recent_earnings_surprise_pct: number | null;
+  candidates: HealthCheckCandidate[];
+  watch_hints_status: WatchHintStatus[];
+  recent_news_count: number;
+  thesis_assessment: "all_clear" | "watch" | "review_needed";
+  checked_at: string;
+}
+
 export interface BrokerConnection {
   id: string;
   broker_type: string;
   status: string;
   last_synced_at: string | null;
   created_at: string;
+}
+
+export interface CheckNowResponse {
+  status: "completed" | "rate_limited";
+  events_created: number;
+  next_available_at: string | null;
+}
+
+export interface SimulateTradeRequest {
+  ticker: string;
+  quantity: number;
+  price_per_share: number;
+}
+
+export interface PortfolioSnapshot {
+  total_value: number;
+  total_cost: number;
+  holdings_count: number;
+  top_3_concentration_pct: number;
+  sector_breakdown: Record<string, number>;
+}
+
+export interface SimulationWarning {
+  warning_type: string;
+  message: string;
+}
+
+export interface SimulateTradeResponse {
+  ticker: string;
+  name: string;
+  simulated_quantity: number;
+  simulated_price: number;
+  simulated_value: number;
+  before: PortfolioSnapshot;
+  after: PortfolioSnapshot;
+  warnings: SimulationWarning[];
+}
+
+export interface CounterThesisResponse {
+  thesis_id: string;
+  bear_case: string;
+  key_risks: string[];
+  blind_spots: string[];
+  suggested_additions: string[];
+  generated_at: string;
 }

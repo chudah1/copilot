@@ -2,7 +2,7 @@ import uuid
 from datetime import datetime, timezone
 
 from fastapi import APIRouter, Depends, HTTPException, UploadFile, File, status
-from sqlalchemy import select
+from sqlalchemy import select, and_
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.database import get_db
@@ -13,10 +13,11 @@ from app.models.holding import Holding
 from app.models.thesis import Thesis
 from app.models.user import User
 from app.schemas.broker_connection import ConnectBrokerRequest, BrokerConnectionResponse
-from app.schemas.holding import HoldingResponse, ManualHoldingRequest, PortfolioSummary, PriorityHoldingSummary
+from app.schemas.holding import HoldingResponse, ManualHoldingRequest, PortfolioSummary, PortfolioPulseResponse, PortfolioTrendResponse, PriorityHoldingSummary, SimulateTradeRequest, SimulateTradeResponse
 from app.services.encryption import encrypt, decrypt
 from app.services.trading212 import Trading212Client
 from app.services.csv_parser import parse_csv
+from app.services.market_data import fetch_company_data, fetch_company_overview
 
 router = APIRouter(prefix="/api/portfolio", tags=["portfolio"])
 
@@ -129,15 +130,30 @@ async def sync_broker(
         current_value = pos.quantity * pos.current_price if pos.current_price else None
 
         if holding is None:
+            # Enrich new holdings with sector/geography from market data
+            h_sector = None
+            h_geography = None
+            h_name = pos.ticker
+            try:
+                overview = await fetch_company_overview(pos.ticker)
+                if overview:
+                    h_sector = overview["sector"] if overview["sector"] != "Unknown" else None
+                    h_geography = overview["country"] if overview["country"] != "Unknown" else None
+                    h_name = overview["name"] if overview["name"] != pos.ticker else pos.ticker
+            except Exception:
+                pass
+
             holding = Holding(
                 user_id=current_user.id,
                 broker_connection_id=connection.id,
                 ticker=pos.ticker,
-                name=pos.ticker,
+                name=h_name,
                 quantity=pos.quantity,
                 average_cost_basis=pos.average_price,
                 current_price=pos.current_price,
                 current_value=current_value,
+                sector=h_sector,
+                geography=h_geography,
                 last_updated_at=datetime.now(timezone.utc),
             )
             db.add(holding)
@@ -147,6 +163,19 @@ async def sync_broker(
             holding.current_price = pos.current_price
             holding.current_value = current_value
             holding.last_updated_at = datetime.now(timezone.utc)
+            # Backfill sector/geography if missing
+            if not holding.sector or not holding.geography:
+                try:
+                    overview = await fetch_company_overview(pos.ticker)
+                    if overview:
+                        if not holding.sector and overview["sector"] != "Unknown":
+                            holding.sector = overview["sector"]
+                        if not holding.geography and overview["country"] != "Unknown":
+                            holding.geography = overview["country"]
+                        if holding.name == pos.ticker and overview["name"] != pos.ticker:
+                            holding.name = overview["name"]
+                except Exception:
+                    pass
 
         synced_holdings.append(holding)
 
@@ -209,16 +238,33 @@ async def add_manual_holding(
     current_user: User = Depends(get_current_user),
     db: AsyncSession = Depends(get_db),
 ):
+    # Try to enrich with market data if sector/geography not provided
+    enriched_sector = body.sector
+    enriched_geography = body.geography
+    enriched_name = body.name
+    if not enriched_sector or not enriched_geography:
+        try:
+            overview = await fetch_company_overview(body.ticker)
+            if overview:
+                if not enriched_sector and overview["sector"] != "Unknown":
+                    enriched_sector = overview["sector"]
+                if not enriched_geography and overview["country"] != "Unknown":
+                    enriched_geography = overview["country"]
+                if enriched_name == body.ticker and overview["name"] != body.ticker:
+                    enriched_name = overview["name"]
+        except Exception:
+            pass
+
     holding = Holding(
         user_id=current_user.id,
         ticker=body.ticker,
-        name=body.name,
+        name=enriched_name,
         exchange=body.exchange,
         quantity=body.quantity,
         average_cost_basis=body.average_cost_basis,
         currency=body.currency,
-        sector=body.sector,
-        geography=body.geography,
+        sector=enriched_sector,
+        geography=enriched_geography,
         asset_class=body.asset_class,
         last_updated_at=datetime.now(timezone.utc),
     )
@@ -226,6 +272,44 @@ async def add_manual_holding(
     await db.commit()
     await db.refresh(holding)
     return holding
+
+
+@router.post("/holdings/enrich", response_model=list[HoldingResponse])
+async def enrich_holdings(
+    current_user: User = Depends(get_current_user),
+    db: AsyncSession = Depends(get_db),
+):
+    """Backfill sector/geography for holdings missing this data."""
+    from sqlalchemy import or_
+
+    result = await db.execute(
+        select(Holding).where(
+            Holding.user_id == current_user.id,
+            or_(Holding.sector.is_(None), Holding.geography.is_(None)),
+        )
+    )
+    holdings = result.scalars().all()
+    updated = []
+
+    for h in holdings:
+        try:
+            overview = await fetch_company_overview(h.ticker)
+            if not overview:
+                continue
+            if not h.sector and overview["sector"] != "Unknown":
+                h.sector = overview["sector"]
+            if not h.geography and overview["country"] != "Unknown":
+                h.geography = overview["country"]
+            if h.name == h.ticker and overview["name"] != h.ticker:
+                h.name = overview["name"]
+            updated.append(h)
+        except Exception:
+            continue
+
+    await db.commit()
+    for h in updated:
+        await db.refresh(h)
+    return updated
 
 
 @router.post("/upload-csv", response_model=list[HoldingResponse], status_code=status.HTTP_201_CREATED)
@@ -284,6 +368,32 @@ async def upload_csv(
         await db.refresh(h)
 
     return created
+
+
+@router.get("/pulse", response_model=PortfolioPulseResponse)
+async def portfolio_pulse(
+    current_user: User = Depends(get_current_user),
+    db: AsyncSession = Depends(get_db),
+):
+    from app.services.pulse import compute_portfolio_pulse
+
+    pulses, next_digest_at = await compute_portfolio_pulse(current_user.id, db)
+    return PortfolioPulseResponse(
+        pulses=[
+            {
+                "holding_id": p.holding_id,
+                "ticker": p.ticker,
+                "name": p.name,
+                "pulse_status": p.pulse_status,
+                "reason": p.reason,
+                "latest_event_summary": p.latest_event_summary,
+                "days_since_thesis_update": p.days_since_thesis_update,
+                "has_thesis": p.has_thesis,
+            }
+            for p in pulses
+        ],
+        next_digest_at=next_digest_at,
+    )
 
 
 @router.get("/summary", response_model=PortfolioSummary)
@@ -412,6 +522,33 @@ async def portfolio_summary(
     else:
         monitoring_message = "Daily monitoring is active. We check your current theses each morning and send a weekly digest on Sunday."
 
+    thesis_cov = round((thesis_coverage_value / total_value * 100), 2) if total_value > 0 else 0.0
+    monitorable_cov = round((monitorable_coverage_value / total_value * 100), 2) if total_value > 0 else 0.0
+
+    # Lazy snapshot: create one per user per day
+    from app.models.portfolio_snapshot import PortfolioSnapshot
+    today = datetime.now(timezone.utc).date()
+    existing_snap = await db.execute(
+        select(PortfolioSnapshot).where(
+            PortfolioSnapshot.user_id == current_user.id,
+            PortfolioSnapshot.snapshot_date == today,
+        )
+    )
+    if existing_snap.scalar_one_or_none() is None and len(holdings) > 0:
+        snap = PortfolioSnapshot(
+            user_id=current_user.id,
+            snapshot_date=today,
+            total_value=total_value,
+            total_cost=total_cost,
+            top_3_concentration_pct=top_3_concentration_pct,
+            thesis_coverage_pct=thesis_cov,
+            monitorable_pct=monitorable_cov,
+            unmonitored_count=unmonitored_holdings_count,
+            holdings_count=len(holdings),
+        )
+        db.add(snap)
+        await db.commit()
+
     return PortfolioSummary(
         total_value=total_value,
         total_cost=total_cost,
@@ -422,8 +559,8 @@ async def portfolio_summary(
         theses_need_review=theses_need_review,
         theses_missing=theses_missing,
         top_3_concentration_pct=top_3_concentration_pct,
-        thesis_coverage_pct=round((thesis_coverage_value / total_value * 100), 2) if total_value > 0 else 0.0,
-        monitorable_thesis_coverage_pct=round((monitorable_coverage_value / total_value * 100), 2) if total_value > 0 else 0.0,
+        thesis_coverage_pct=thesis_cov,
+        monitorable_thesis_coverage_pct=monitorable_cov,
         stale_theses_count=stale_theses_count,
         unmonitored_holdings_count=unmonitored_holdings_count,
         conviction_mismatch_count=conviction_mismatch_count,
@@ -432,4 +569,72 @@ async def portfolio_summary(
         sector_breakdown=to_pct(sector_totals),
         geography_breakdown=to_pct(geography_totals),
         attention_queue=attention_queue,
+    )
+
+
+@router.get("/summary/trend", response_model=PortfolioTrendResponse)
+async def portfolio_trend(
+    current_user: User = Depends(get_current_user),
+    db: AsyncSession = Depends(get_db),
+):
+    from app.models.portfolio_snapshot import PortfolioSnapshot
+    today = datetime.now(timezone.utc).date()
+    result = await db.execute(
+        select(PortfolioSnapshot).where(
+            PortfolioSnapshot.user_id == current_user.id,
+            PortfolioSnapshot.snapshot_date < today,
+        ).order_by(PortfolioSnapshot.snapshot_date.desc()).limit(1)
+    )
+    snap = result.scalar_one_or_none()
+    if snap is None:
+        return PortfolioTrendResponse()
+    return PortfolioTrendResponse(
+        snapshot_date=snap.snapshot_date.isoformat(),
+        top_3_concentration_pct=float(snap.top_3_concentration_pct),
+        thesis_coverage_pct=float(snap.thesis_coverage_pct),
+        monitorable_pct=float(snap.monitorable_pct),
+        unmonitored_count=snap.unmonitored_count,
+        holdings_count=snap.holdings_count,
+    )
+
+
+@router.post("/simulate", response_model=SimulateTradeResponse)
+async def simulate_trade(
+    body: SimulateTradeRequest,
+    current_user: User = Depends(get_current_user),
+    db: AsyncSession = Depends(get_db),
+):
+    from app.services.simulation import simulate_trade as run_simulation
+
+    result = await run_simulation(
+        user_id=current_user.id,
+        ticker=body.ticker,
+        quantity=body.quantity,
+        price_per_share=body.price_per_share,
+        db=db,
+    )
+    return SimulateTradeResponse(
+        ticker=result.ticker,
+        name=result.name,
+        simulated_quantity=result.simulated_quantity,
+        simulated_price=result.simulated_price,
+        simulated_value=result.simulated_value,
+        before={
+            "total_value": result.before.total_value,
+            "total_cost": result.before.total_cost,
+            "holdings_count": result.before.holdings_count,
+            "top_3_concentration_pct": result.before.top_3_concentration_pct,
+            "sector_breakdown": result.before.sector_breakdown,
+        },
+        after={
+            "total_value": result.after.total_value,
+            "total_cost": result.after.total_cost,
+            "holdings_count": result.after.holdings_count,
+            "top_3_concentration_pct": result.after.top_3_concentration_pct,
+            "sector_breakdown": result.after.sector_breakdown,
+        },
+        warnings=[
+            {"warning_type": w.warning_type, "message": w.message}
+            for w in result.warnings
+        ],
     )

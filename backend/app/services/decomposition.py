@@ -1,9 +1,11 @@
 import logging
 from dataclasses import dataclass
 from datetime import datetime, timedelta, timezone
+from typing import Any
 
 from sqlalchemy import func, select
 from sqlalchemy.ext.asyncio import AsyncSession
+from sqlalchemy.orm import selectinload
 
 from app.models.holding import Holding
 from app.models.thesis import Thesis
@@ -12,8 +14,14 @@ from app.models.thesis_decomposition import ThesisDecomposition
 from app.models.thesis_entity import ThesisEntity
 from app.models.thesis_signal import ThesisSignal
 from app.services.reasoning.gateway import ThesisReasoningGateway
-from app.services.reasoning.types import ReasoningRequest, ReasoningTaskType
-from app.services.reasoning.normalizers import to_float
+from app.services.reasoning.normalizers import normalize_decomposition_output, to_float
+from app.services.reasoning.providers import (
+    AnthropicReasoningProvider,
+    GeminiReasoningProvider,
+    OpenAIReasoningProvider,
+)
+from app.services.reasoning.types import ReasoningRequest, ReasoningResult, ReasoningTaskType
+from app.services.reasoning.validators import validate_decomposition_output
 
 logger = logging.getLogger(__name__)
 
@@ -43,6 +51,86 @@ def get_reasoning_gateway() -> ThesisReasoningGateway:
     return _gateway
 
 
+async def debug_compare_decomposition_providers(payload: dict[str, Any]) -> dict[str, Any]:
+    request = ReasoningRequest(
+        task_type=ReasoningTaskType.DECOMPOSE_THESIS,
+        thesis_id="debug",
+        user_id="debug",
+        payload=payload,
+    )
+    providers = [
+        OpenAIReasoningProvider(),
+        AnthropicReasoningProvider(),
+        GeminiReasoningProvider(),
+    ]
+    provider_results: list[dict[str, Any]] = []
+    original_text = str(payload.get("why_own_it", ""))
+
+    for provider in providers:
+        try:
+            result = await provider.run(request)
+        except Exception as exc:
+            logger.exception(
+                "Debug provider %s raised an unhandled exception",
+                getattr(provider, "name", "<unknown>"),
+            )
+            result = ReasoningResult(
+                success=False,
+                status="failed",
+                provider=getattr(provider, "name", None),
+                model=getattr(provider, "model", None),
+                prompt_version=None,
+                normalized_output=None,
+                raw_output=None,
+                confidence=None,
+                latency_ms=None,
+                failure_reason=str(exc),
+                retryable=True,
+            )
+
+        normalized_output: dict[str, Any] | None = None
+        valid = False
+        validation_error: str | None = None
+
+        if result.success and result.raw_output is not None:
+            normalized_output = normalize_decomposition_output(result.raw_output)
+            valid, validation_error = validate_decomposition_output(
+                normalized_output,
+                original_text=original_text,
+            )
+
+        provider_results.append(
+            {
+                "provider": provider.name,
+                "model": getattr(provider, "model", None),
+                "success": result.success,
+                "status": result.status,
+                "latency_ms": result.latency_ms,
+                "failure_reason": result.failure_reason,
+                "raw_output": result.raw_output,
+                "normalized_output": normalized_output,
+                "valid": valid,
+                "validation_error": validation_error,
+            }
+        )
+
+    gateway = ThesisReasoningGateway(providers=providers)
+    gateway_result = await gateway.run(request)
+    return {
+        "providers": provider_results,
+        "gateway_result": {
+            "success": gateway_result.success,
+            "status": gateway_result.status,
+            "provider": gateway_result.provider,
+            "model": gateway_result.model,
+            "confidence": gateway_result.confidence,
+            "latency_ms": gateway_result.latency_ms,
+            "failure_reason": gateway_result.failure_reason,
+            "normalized_output": gateway_result.normalized_output,
+        },
+    }
+
+
 def _signal_is_direct_and_auto_activatable(
     holding: Holding,
     entity_data: dict,
@@ -69,19 +157,23 @@ def _watch_hint_from_signal(signal: ThesisSignal) -> dict | None:
         }
     if signal.signal_type == "revenue_growth":
         threshold = to_float(config.get("threshold")) if isinstance(config, dict) else None
+        raw_op = config.get("operator", ">=") if isinstance(config, dict) else ">="
+        operator = raw_op if raw_op in {">=", "<=", ">", "<", "=="} else ">="
         return {
             "kind": "metric_threshold",
             "metric": "revenue_growth_yoy",
-            "operator": config.get("operator", ">=") if isinstance(config, dict) else ">=",
+            "operator": operator,
             "threshold": threshold if threshold is not None else 0.0,
             "rationale": signal.rationale or "Revenue growth should stay healthy.",
         }
     if signal.signal_type == "earnings_growth":
         threshold = to_float(config.get("threshold")) if isinstance(config, dict) else None
+        raw_op = config.get("operator", ">=") if isinstance(config, dict) else ">="
+        operator = raw_op if raw_op in {">=", "<=", ">", "<", "=="} else ">="
         return {
             "kind": "metric_threshold",
             "metric": "earnings_growth_yoy",
-            "operator": config.get("operator", ">=") if isinstance(config, dict) else ">=",
+            "operator": operator,
             "threshold": threshold if threshold is not None else 0.0,
             "rationale": signal.rationale or "Earnings growth should remain healthy.",
         }
@@ -97,6 +189,7 @@ def _sync_interpretation_cache(
     active_signals: list[ThesisSignal],
 ) -> None:
     if not active_signals:
+        thesis.interpretation = None
         return
 
     watch_hints: list[dict] = []
@@ -266,3 +359,101 @@ async def generate_decomposition_for_thesis(
     message = "We saved your thesis and are retrying decomposition." if status == "pending" else "We could not decompose this thesis right now."
     logger.warning("Decomposition unavailable for thesis %s: %s", thesis.id, result.failure_reason)
     return PersistedDecompositionResult(status=status, message=message, decomposition=None)
+
+
+async def confirm_decomposition_for_thesis(
+    db: AsyncSession,
+    *,
+    thesis: Thesis,
+    holding: Holding,
+    decomposition_id,
+    entity_confirmations: list[dict[str, Any]],
+    signal_confirmations: list[dict[str, Any]],
+) -> ThesisDecomposition | None:
+    result = await db.execute(
+        select(ThesisDecomposition)
+        .where(
+            ThesisDecomposition.id == decomposition_id,
+            ThesisDecomposition.thesis_id == thesis.id,
+        )
+        .options(
+            selectinload(ThesisDecomposition.claims)
+            .selectinload(ThesisClaim.entities)
+            .selectinload(ThesisEntity.signals)
+        )
+    )
+    decomposition = result.scalar_one_or_none()
+    if decomposition is None:
+        return None
+
+    entities_by_id = {
+        entity.id: entity
+        for claim in decomposition.claims
+        for entity in claim.entities
+    }
+    signals_by_id = {
+        signal.id: signal
+        for entity in entities_by_id.values()
+        for signal in entity.signals
+    }
+
+    for entity_update in entity_confirmations:
+        entity = entities_by_id.get(entity_update["id"])
+        if entity is None:
+            continue
+        entity.user_confirmed = entity_update["user_confirmed"]
+        if entity.user_confirmed is False:
+            for signal in entity.signals:
+                signal.user_confirmed = False
+                signal.active = False
+
+    for signal_update in signal_confirmations:
+        signal = signals_by_id.get(signal_update["id"])
+        if signal is None:
+            continue
+        signal.user_confirmed = signal_update["user_confirmed"]
+        signal.active = bool(signal_update["active"]) and signal.user_confirmed is True
+        if signal.user_confirmed is True:
+            signal.entity.user_confirmed = True
+
+    all_confirmation_values: list[bool] = []
+    for entity in entities_by_id.values():
+        if entity.user_confirmed is not None:
+            all_confirmation_values.append(entity.user_confirmed)
+        for signal in entity.signals:
+            if signal.user_confirmed is not None:
+                all_confirmation_values.append(signal.user_confirmed)
+
+    any_true = any(all_confirmation_values)
+    any_false = any(value is False for value in all_confirmation_values)
+
+    if all_confirmation_values and not any_true:
+        decomposition.status = "rejected"
+    elif any_true and any_false:
+        decomposition.status = "partially_confirmed"
+    elif any_true:
+        decomposition.status = "confirmed"
+    else:
+        decomposition.status = "draft"
+
+    labels: list[str] = []
+    for claim in decomposition.claims:
+        if claim.claim_type and claim.claim_type not in labels:
+            labels.append(claim.claim_type)
+
+    active_signals = [
+        signal
+        for signal in signals_by_id.values()
+        if signal.active
+    ]
+    _sync_interpretation_cache(
+        thesis,
+        reason_type=decomposition.reason_type,
+        monitorability=decomposition.monitorability,
+        labels=labels,
+        active_signals=active_signals,
+    )
+
+    await db.commit()
+    await db.refresh(decomposition)
+    return decomposition

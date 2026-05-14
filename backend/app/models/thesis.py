@@ -34,6 +34,12 @@ class Thesis(Base):
     holding = relationship("Holding", back_populates="theses")
     user = relationship("User", back_populates="theses")
     monitoring_events = relationship("MonitoringEvent", back_populates="thesis")
+    reviews = relationship(
+        "ThesisReview",
+        back_populates="thesis",
+        cascade="all, delete-orphan",
+        order_by="desc(ThesisReview.created_at)",
+    )
     decompositions = relationship(
         "ThesisDecomposition",
         back_populates="thesis",

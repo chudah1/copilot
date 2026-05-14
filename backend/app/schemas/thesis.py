@@ -123,6 +123,7 @@ class UpdateThesisRequest(BaseModel):
     source: str | None = None
     status: str | None = None
 
+
 class DebugDecomposeRequest(BaseModel):
     ticker: str
     name: str
@@ -143,6 +144,7 @@ class ProviderDebugResult(BaseModel):
     valid: bool
     validation_error: str | None = None
 
+
 class GatewayDebugResult(BaseModel):
     success: bool
     status: str
@@ -153,10 +155,69 @@ class GatewayDebugResult(BaseModel):
     failure_reason: str | None = None
     normalized_output: dict[str, Any] | None = None
 
-class DebugDecomposeResult(BaseModel):
+
+class DebugDecomposeResponse(BaseModel):
     providers: list[ProviderDebugResult]
     gateway_result: GatewayDebugResult
 
 
+class ConfirmDecompositionEntityRequest(BaseModel):
+    id: uuid.UUID
+    user_confirmed: bool
+
+
+class ConfirmDecompositionSignalRequest(BaseModel):
+    id: uuid.UUID
+    user_confirmed: bool
+    active: bool = False
+
+
+class ConfirmDecompositionRequest(BaseModel):
+    decomposition_id: uuid.UUID
+    entities: list[ConfirmDecompositionEntityRequest] = []
+    signals: list[ConfirmDecompositionSignalRequest] = []
+
+
 class InvalidateThesisRequest(BaseModel):
     reason: str
+
+
+class HealthCheckCandidateResponse(BaseModel):
+    event_type: str
+    description: str
+    severity: str | None = None
+    ai_analysis: str | None = None
+
+
+class WatchHintStatusResponse(BaseModel):
+    metric: str
+    operator: str
+    threshold: float
+    actual_value: float
+    breached: bool
+    rationale: str
+
+
+class HealthCheckResponse(BaseModel):
+    thesis_id: uuid.UUID
+    ticker: str
+    current_price: float | None = None
+    sector: str | None = None
+    pe_ratio: float | None = None
+    market_cap: float | None = None
+    upcoming_earnings_date: datetime | None = None
+    recent_earnings_surprise_pct: float | None = None
+    candidates: list[HealthCheckCandidateResponse]
+    watch_hints_status: list[WatchHintStatusResponse]
+    recent_news_count: int
+    thesis_assessment: str
+    checked_at: datetime
+
+
+class CounterThesisResponse(BaseModel):
+    thesis_id: uuid.UUID
+    bear_case: str
+    key_risks: list[str]
+    blind_spots: list[str]
+    suggested_additions: list[str]
+    generated_at: datetime

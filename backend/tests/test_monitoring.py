@@ -1,3 +1,4 @@
+import uuid
 from datetime import datetime, timezone
 from unittest.mock import AsyncMock, patch
 
@@ -9,6 +10,7 @@ from app.jobs.monitoring_run import (
 from app.models.holding import Holding
 from app.models.monitoring_event import MonitoringEvent
 from app.models.thesis import Thesis
+from app.models.thesis_review import ThesisReview
 from app.models.user import User
 from app.services.auth import hash_password
 from app.services.market_data import CompanyData, InsiderTransaction, NewsItem, TranscriptSignal
@@ -807,3 +809,109 @@ async def test_run_monitoring_deduplicates_across_direct_and_proxy(db, job_sessi
     # so it won't be deduped — each thesis gets its own event
     proxy_events = [e for e in events if "Proxy: TSM" in e.summary]
     assert len(proxy_events) == 2  # one per thesis
+
+
+async def test_review_monitoring_event_lowers_confidence_and_returns_updated_thesis(client, auth_headers, db, test_user):
+    holding_row = Holding(
+        user_id=test_user.id,
+        ticker="AAPL",
+        name="Apple",
+        quantity=10,
+        average_cost_basis=100,
+        current_price=100,
+        current_value=1000,
+    )
+    db.add(holding_row)
+    await db.flush()
+
+    thesis = Thesis(
+        user_id=holding_row.user_id,
+        holding_id=holding_row.id,
+        status="needs_review",
+        thesis_kind="company",
+        why_own_it="Resilient earnings.",
+        confidence="high",
+        review_cadence_days=7,
+        source="user",
+    )
+    db.add(thesis)
+    await db.flush()
+
+    event = MonitoringEvent(
+        holding_id=holding_row.id,
+        thesis_id=thesis.id,
+        event_type="earnings_call_transcript",
+        severity="warning",
+        title="Earnings call raised questions",
+        summary="Margins looked weaker.",
+        ai_analysis="Review whether margins still hold.",
+    )
+    db.add(event)
+    await db.commit()
+
+    response = await client.post(
+        f"/api/monitoring/events/{event.id}/review",
+        headers=auth_headers,
+        json={"action": "lowered_confidence", "notes": "Less certain after the margin commentary."},
+    )
+
+    assert response.status_code == 200
+    data = response.json()
+    assert data["action"] == "lowered_confidence"
+    assert data["notes"] == "Less certain after the margin commentary."
+    assert data["thesis"]["confidence"] == "medium"
+    assert data["thesis"]["status"] == "active"
+
+
+async def test_get_events_for_holding_includes_latest_review_state(client, auth_headers, db, test_user):
+    holding_row = Holding(
+        user_id=test_user.id,
+        ticker="AAPL",
+        name="Apple",
+        quantity=10,
+        average_cost_basis=100,
+        current_price=100,
+        current_value=1000,
+    )
+    db.add(holding_row)
+    await db.flush()
+
+    thesis = Thesis(
+        user_id=holding_row.user_id,
+        holding_id=holding_row.id,
+        status="active",
+        thesis_kind="company",
+        why_own_it="Resilient earnings.",
+        confidence="medium",
+        review_cadence_days=7,
+        source="user",
+    )
+    db.add(thesis)
+    await db.flush()
+
+    event = MonitoringEvent(
+        holding_id=holding_row.id,
+        thesis_id=thesis.id,
+        event_type="news_topic",
+        severity="warning",
+        title="Management commentary changed",
+        summary="Something worth checking.",
+        ai_analysis="Review whether guidance still supports the thesis.",
+    )
+    db.add(event)
+    await db.flush()
+
+    review = ThesisReview(
+        thesis_id=thesis.id,
+        monitoring_event_id=event.id,
+        action="ignored",
+        notes="Noise for now.",
+    )
+    db.add(review)
+    await db.commit()
+
+    response = await client.get(f"/api/monitoring/holdings/{holding_row.id}/events", headers=auth_headers)
+    assert response.status_code == 200
+    data = response.json()
+    assert data[0]["review_action"] == "ignored"
+    assert data[0]["review_notes"] == "Noise for now."

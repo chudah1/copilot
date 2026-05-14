@@ -70,6 +70,70 @@ async def test_assist_thesis_does_not_persist(client, auth_headers, holding):
     assert theses_response.json() == []
 
 
+async def test_debug_decompose_returns_provider_and_gateway_results(client, auth_headers):
+    debug_payload = {
+        "providers": [
+            {
+                "provider": "openai",
+                "model": "gpt-4.1-mini",
+                "success": True,
+                "status": "success",
+                "latency_ms": 1200,
+                "failure_reason": None,
+                "raw_output": {"reason_type": "business_performance"},
+                "normalized_output": {
+                    "reason_type": "business_performance",
+                    "monitorability": "high",
+                    "decomposition_confidence": 0.9,
+                    "claims": [],
+                },
+                "valid": True,
+                "validation_error": None,
+            }
+        ],
+        "gateway_result": {
+            "success": True,
+            "status": "success",
+            "provider": "openai",
+            "model": "gpt-4.1-mini",
+            "confidence": 0.9,
+            "latency_ms": 1200,
+            "failure_reason": None,
+            "normalized_output": {
+                "reason_type": "business_performance",
+                "monitorability": "high",
+                "decomposition_confidence": 0.9,
+                "claims": [],
+            },
+        },
+    }
+
+    with patch(
+        "app.routes.thesis.debug_compare_decomposition_providers",
+        new_callable=AsyncMock,
+        return_value=debug_payload,
+    ):
+        response = await client.post(
+            "/api/theses/debug/decompose",
+            json={
+                "ticker": "AAPL",
+                "name": "Apple Inc",
+                "why_own_it": "I own Apple because services revenue is resilient.",
+                "must_remain_true": "Services growth stays healthy.",
+                "what_would_change_my_mind": "Margin deterioration.",
+            },
+            headers=auth_headers,
+        )
+
+    assert response.status_code == 200
+    data = response.json()
+    assert len(data["providers"]) == 1
+    assert data["providers"][0]["provider"] == "openai"
+    assert data["providers"][0]["valid"] is True
+    assert data["gateway_result"]["provider"] == "openai"
+    assert data["gateway_result"]["success"] is True
+
+
 async def test_update_thesis(client, auth_headers, holding):
     create = await client.post(
         "/api/theses",
@@ -546,6 +610,177 @@ async def test_proxy_signal_remains_inactive_and_not_projected(client, auth_head
     signal = response.json()["decomposition"]["claims"][0]["entities"][0]["signals"][0]
     assert signal["active"] is False
     assert signal["user_confirmed"] is None
+
+    thesis_response = await client.get(f"/api/theses/{thesis_id}", headers=auth_headers)
+    assert thesis_response.json()["interpretation"] is None
+
+
+async def test_confirm_decomposition_activates_proxy_signal_and_updates_status(client, auth_headers, holding):
+    create = await client.post(
+        "/api/theses",
+        json={
+            "holding_id": holding["id"],
+            "status": "active",
+            "thesis_kind": "company",
+            "why_own_it": "Apple benefits from stronger supply chain demand.",
+            "confidence": "medium",
+            "review_cadence_days": 7,
+            "source": "user",
+        },
+        headers=auth_headers,
+    )
+    thesis_id = create.json()["id"]
+    gateway_result = ReasoningResult(
+        success=True,
+        status="success",
+        provider="anthropic",
+        model="claude-test",
+        prompt_version="v1",
+        normalized_output={
+            "reason_type": "macro_theme",
+            "monitorability": "medium",
+            "decomposition_confidence": 0.7,
+            "claims": [
+                {
+                    "claim_text": "Upstream demand remains strong.",
+                    "claim_type": "demand",
+                    "confidence": 0.7,
+                    "entities": [
+                        {
+                            "entity_name": "TSMC",
+                            "entity_ticker": "TSM",
+                            "entity_type": "supplier",
+                            "relation_type": "validated_by",
+                            "rationale": "TSMC is a proxy for supply chain demand.",
+                            "confidence": 0.7,
+                            "confirmation_required": True,
+                            "signals": [
+                                {
+                                    "signal_type": "news_topic",
+                                    "signal_label": "TSMC demand commentary",
+                                    "signal_config_json": {},
+                                    "rationale": "Proxy commentary matters.",
+                                    "confidence": 0.7,
+                                    "confirmation_required": True,
+                                }
+                            ],
+                        }
+                    ],
+                }
+            ],
+        },
+        raw_output={"provider": "anthropic"},
+        confidence=0.7,
+        latency_ms=120,
+        failure_reason=None,
+    )
+    with patch("app.services.decomposition.get_reasoning_gateway", return_value=MockGateway(gateway_result)):
+        decompose_response = await client.post(f"/api/theses/{thesis_id}/decompose", headers=auth_headers)
+
+    decomposition = decompose_response.json()["decomposition"]
+    entity = decomposition["claims"][0]["entities"][0]
+    signal = entity["signals"][0]
+
+    response = await client.post(
+        f"/api/theses/{thesis_id}/decomposition/confirm",
+        json={
+            "decomposition_id": decomposition["id"],
+            "entities": [{"id": entity["id"], "user_confirmed": True}],
+            "signals": [{"id": signal["id"], "user_confirmed": True, "active": True}],
+        },
+        headers=auth_headers,
+    )
+
+    assert response.status_code == 200
+    envelope = response.json()
+    assert envelope["status"] == "confirmed"
+    confirmed_signal = envelope["decomposition"]["claims"][0]["entities"][0]["signals"][0]
+    assert confirmed_signal["user_confirmed"] is True
+    assert confirmed_signal["active"] is True
+
+
+async def test_confirm_decomposition_can_reject_active_signal_and_clear_interpretation(client, auth_headers, holding):
+    create = await client.post(
+        "/api/theses",
+        json={
+            "holding_id": holding["id"],
+            "status": "active",
+            "thesis_kind": "company",
+            "why_own_it": "Revenue should keep growing.",
+            "confidence": "high",
+            "review_cadence_days": 7,
+            "source": "user",
+        },
+        headers=auth_headers,
+    )
+    thesis_id = create.json()["id"]
+    gateway_result = ReasoningResult(
+        success=True,
+        status="success",
+        provider="anthropic",
+        model="claude-test",
+        prompt_version="v1",
+        normalized_output={
+            "reason_type": "business_performance",
+            "monitorability": "high",
+            "decomposition_confidence": 0.89,
+            "claims": [
+                {
+                    "claim_text": "Revenue should keep growing.",
+                    "claim_type": "growth",
+                    "confidence": 0.9,
+                    "entities": [
+                        {
+                            "entity_name": "Apple Inc",
+                            "entity_ticker": "AAPL",
+                            "entity_type": "held_company",
+                            "relation_type": "validated_by",
+                            "rationale": "Direct company execution matters.",
+                            "confidence": 0.96,
+                            "confirmation_required": False,
+                            "signals": [
+                                {
+                                    "signal_type": "revenue_growth",
+                                    "signal_label": "Apple revenue growth",
+                                    "signal_config_json": {"operator": ">=", "threshold": 0.0},
+                                    "rationale": "Revenue growth should stay positive.",
+                                    "confidence": 0.91,
+                                    "confirmation_required": False,
+                                }
+                            ],
+                        }
+                    ],
+                }
+            ],
+        },
+        raw_output={"provider": "anthropic"},
+        confidence=0.89,
+        latency_ms=120,
+        failure_reason=None,
+    )
+    with patch("app.services.decomposition.get_reasoning_gateway", return_value=MockGateway(gateway_result)):
+        decompose_response = await client.post(f"/api/theses/{thesis_id}/decompose", headers=auth_headers)
+
+    decomposition = decompose_response.json()["decomposition"]
+    entity = decomposition["claims"][0]["entities"][0]
+    signal = entity["signals"][0]
+
+    response = await client.post(
+        f"/api/theses/{thesis_id}/decomposition/confirm",
+        json={
+            "decomposition_id": decomposition["id"],
+            "entities": [{"id": entity["id"], "user_confirmed": False}],
+            "signals": [{"id": signal["id"], "user_confirmed": False, "active": False}],
+        },
+        headers=auth_headers,
+    )
+
+    assert response.status_code == 200
+    envelope = response.json()
+    assert envelope["status"] == "rejected"
+    rejected_signal = envelope["decomposition"]["claims"][0]["entities"][0]["signals"][0]
+    assert rejected_signal["user_confirmed"] is False
+    assert rejected_signal["active"] is False
 
     thesis_response = await client.get(f"/api/theses/{thesis_id}", headers=auth_headers)
     assert thesis_response.json()["interpretation"] is None

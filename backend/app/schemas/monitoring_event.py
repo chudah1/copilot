@@ -1,6 +1,22 @@
 import uuid
 from datetime import datetime
 from pydantic import BaseModel
+from app.schemas.thesis import ThesisResponse
+
+
+class ReviewMonitoringEventRequest(BaseModel):
+    action: str
+    notes: str | None = None
+
+
+class MonitoringEventReviewResponse(BaseModel):
+    id: uuid.UUID
+    monitoring_event_id: uuid.UUID
+    thesis_id: uuid.UUID
+    action: str
+    notes: str | None
+    created_at: datetime
+    thesis: ThesisResponse
 
 
 class MonitoringEventResponse(BaseModel):
@@ -13,5 +29,6 @@ class MonitoringEventResponse(BaseModel):
     summary: str
     source_url: str | None
     ai_analysis: str | None
+    review_action: str | None = None
+    review_notes: str | None = None
     created_at: datetime
-    model_config = {"from_attributes": True}

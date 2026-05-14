@@ -4,12 +4,24 @@ import Link from "next/link";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { Badge } from "@/components/ui/badge";
 import { formatCurrency, formatPercent } from "@/lib/utils";
-import type { Holding, Thesis } from "@/types";
+import type { Holding, Thesis, HoldingPulse } from "@/types";
 
 interface Props {
   holdings: Holding[];
   currentThesesByHolding: Record<string, Thesis | undefined>;
+  pulseByHolding?: Record<string, HoldingPulse | undefined>;
 }
+
+const PULSE_DOT: Record<string, string> = {
+  intact: "bg-emerald-500",
+  watch: "bg-amber-500",
+  review: "bg-red-500",
+};
+
+const PULSE_ROW_BG: Record<string, string> = {
+  watch: "bg-amber-50",
+  review: "bg-red-50",
+};
 
 function getHoldingThesisState(thesis: Thesis | undefined) {
   if (!thesis) {
@@ -46,12 +58,13 @@ function getHoldingThesisState(thesis: Thesis | undefined) {
   };
 }
 
-export function HoldingsTable({ holdings, currentThesesByHolding }: Props) {
+export function HoldingsTable({ holdings, currentThesesByHolding, pulseByHolding = {} }: Props) {
   return (
     <div className="overflow-hidden rounded-xl border">
       <Table>
         <TableHeader>
           <TableRow>
+            <TableHead className="w-8"></TableHead>
             <TableHead>Ticker</TableHead>
             <TableHead>Name</TableHead>
             <TableHead>Thesis</TableHead>
@@ -70,9 +83,15 @@ export function HoldingsTable({ holdings, currentThesesByHolding }: Props) {
             const pnl = value - cost;
             const pnlPct = cost > 0 ? (pnl / cost) * 100 : 0;
             const thesisState = getHoldingThesisState(currentThesesByHolding[h.id]);
+            const pulse = pulseByHolding[h.id];
+            const pulseStatus = pulse?.pulse_status ?? "intact";
+            const rowBg = PULSE_ROW_BG[pulseStatus] ?? "";
 
             return (
-              <TableRow key={h.id} className="transition-colors hover:bg-muted/30">
+              <TableRow key={h.id} className={`transition-colors hover:bg-muted/30 ${rowBg}`}>
+                <TableCell className="pr-0">
+                  <span className={`inline-block h-2.5 w-2.5 rounded-full ${PULSE_DOT[pulseStatus] ?? "bg-muted"}`} title={pulseStatus} />
+                </TableCell>
                 <TableCell>
                   <Link href={`/dashboard/positions/${h.ticker}`} className="font-medium underline-offset-4 hover:underline">
                     {h.ticker}

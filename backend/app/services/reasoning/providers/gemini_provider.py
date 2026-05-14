@@ -14,7 +14,7 @@ from app.services.reasoning.types import ReasoningRequest, ReasoningResult, Reas
 class GeminiReasoningProvider:
     name = "gemini"
     model = "gemini-2.5-flash"
-    timeout_seconds = 20
+    timeout_seconds = 30
 
     async def run(self, request: ReasoningRequest) -> ReasoningResult:
         started = time.perf_counter()

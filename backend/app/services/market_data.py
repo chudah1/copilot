@@ -158,6 +158,7 @@ class CompanyData:
     recent_fiscal_quarter: str | None = None
     earnings_call: TranscriptSignal | None = None
     insider_transactions: list[InsiderTransaction] = field(default_factory=list)
+    country: str = "Unknown"
 
 
 def _to_float(value: Any) -> float | None:
@@ -199,6 +200,7 @@ def _parse_alpha_vantage_overview(payload: dict[str, Any]) -> dict[str, Any]:
         "name": payload.get("Name") or payload.get("name") or "",
         "sector": payload.get("Sector") or "",
         "industry": payload.get("Industry") or "",
+        "country": payload.get("Country") or "",
         "description": payload.get("Description") or "",
         "market_cap": _to_float(payload.get("MarketCapitalization")),
         "pe_ratio": _to_float(payload.get("PERatio")),
@@ -477,14 +479,16 @@ def shortlist_qualitative_candidates(
             }
         )
 
-    if upcoming_earnings_date is not None and 0 <= (upcoming_earnings_date - reference_now).days <= 7:
-        candidates.append(
-            {
-                "event_type": "upcoming_earnings",
-                "description": f"Earnings are scheduled for {upcoming_earnings_date.date().isoformat()}.",
-                "evidence": {"upcoming_earnings_date": upcoming_earnings_date.isoformat()},
-            }
-        )
+    if upcoming_earnings_date is not None:
+        days_until_earnings = (upcoming_earnings_date.date() - reference_now.date()).days
+        if 0 <= days_until_earnings <= 7:
+            candidates.append(
+                {
+                    "event_type": "upcoming_earnings",
+                    "description": f"Earnings are scheduled for {upcoming_earnings_date.date().isoformat()}.",
+                    "evidence": {"upcoming_earnings_date": upcoming_earnings_date.isoformat()},
+                }
+            )
 
     if earnings_call is not None:
         transcript_cutoff = reference_now - timedelta(days=14)
@@ -638,6 +642,25 @@ async def _cached_request(
     return result
 
 
+async def fetch_company_overview(ticker: str) -> dict[str, str] | None:
+    """Lightweight call: only OVERVIEW endpoint. Returns {name, sector, country} or None."""
+    if not settings.alpha_vantage_api_key:
+        return None
+    try:
+        async with httpx.AsyncClient() as client:
+            payload = await _cached_request(client, "OVERVIEW", _CACHE_TTL_LONG, symbol=ticker)
+        if not isinstance(payload, dict):
+            return None
+        overview = _parse_alpha_vantage_overview(payload)
+        return {
+            "name": overview["name"] or ticker,
+            "sector": overview["sector"] or "Unknown",
+            "country": overview.get("country") or payload.get("Country") or "Unknown",
+        }
+    except Exception:
+        return None
+
+
 async def fetch_company_data(ticker: str) -> CompanyData | None:
     if settings.market_data_provider != "alpha_vantage":
         raise RuntimeError(f"Unsupported market data provider: {settings.market_data_provider}")
@@ -717,6 +740,7 @@ async def fetch_company_data(ticker: str) -> CompanyData | None:
         name=overview["name"] or ticker,
         sector=overview["sector"] or "Unknown",
         industry=overview["industry"] or "Unknown",
+        country=overview["country"] or "Unknown",
         current_price=_parse_alpha_vantage_quote(quote_payload if isinstance(quote_payload, dict) else {}),
         market_cap=overview["market_cap"],
         pe_ratio=overview["pe_ratio"],

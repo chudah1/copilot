@@ -109,7 +109,7 @@ DECOMPOSITION_JSON_SCHEMA = {
                                                 "additionalProperties": False,
                                                 "properties": {
                                                     "metric": {"type": "string"},
-                                                    "operator": {"type": "string"},
+                                                    "operator": {"type": "string", "enum": [">=", "<=", ">", "<", "=="]},
                                                     "threshold": {"type": "number"},
                                                     "threshold_pct": {"type": "number"},
                                                     "segment": {"type": "string"},

@@ -1,6 +1,6 @@
 import json
 import logging
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 import re
 
 import anthropic
@@ -9,6 +9,14 @@ from app.config import settings
 from app.services.market_data import fetch_company_data
 
 logger = logging.getLogger(__name__)
+
+
+@dataclass
+class CounterThesisOutput:
+    bear_case: str
+    key_risks: list[str]
+    blind_spots: list[str]
+    suggested_additions: list[str]
 
 
 @dataclass
@@ -319,3 +327,132 @@ async def assist_thesis(
         except Exception:
             logger.error(f"Thesis generation retry failed for {ticker}")
             return _fallback_assist(ticker=ticker, draft_text=draft_text)
+
+
+COUNTER_THESIS_PROMPT = """You are a devil's advocate investment analyst. Given a retail investor's thesis for holding a stock, generate a structured counter-argument to sharpen their thinking.
+
+Ticker: {ticker}
+Why they own it: {why_own_it}
+Must remain true: {must_remain_true}
+What would change their mind: {what_would_change_my_mind}
+AI Summary of thesis: {ai_summary}
+
+Output valid JSON with this exact structure:
+{{
+    "bear_case": "2-3 sentences presenting the strongest bear case against this thesis.",
+    "key_risks": ["risk1", "risk2", "risk3"],
+    "blind_spots": ["blind_spot1", "blind_spot2"],
+    "suggested_additions": ["suggested_addition1", "suggested_addition2"]
+}}
+
+Requirements:
+- bear_case: 2-3 sentences, be specific and reference the actual thesis points
+- key_risks: 3-5 concrete risks the investor should monitor
+- blind_spots: 2-3 things the thesis doesn't address but should
+- suggested_additions: 2-3 specific "what would change my mind" criteria the investor should add
+- Be constructive but challenging — the goal is to make the investor think harder
+- Output ONLY valid JSON, no markdown fences"""
+
+
+def _fallback_counter_thesis(
+    why_own_it: str,
+    must_remain_true: str | None,
+    what_would_change_my_mind: str | None,
+    ai_summary: str | None,
+    ticker: str,
+) -> CounterThesisOutput:
+    lowered = (why_own_it or "").lower()
+    labels = [
+        label
+        for label, keywords in THEME_KEYWORDS.items()
+        if any(keyword in lowered for keyword in keywords)
+    ] or ["general"]
+
+    bear_case = (
+        f"The bull case for {ticker} may be overly optimistic. "
+        f"Investors should consider whether the thesis assumptions around "
+        f"{', '.join(labels)} are already priced in or face structural headwinds."
+    )
+
+    key_risks = [
+        f"Competitive pressure could erode {ticker}'s position",
+        "Macroeconomic downturn may reduce demand",
+        "Valuation may already reflect the optimistic scenario",
+    ]
+    if "growth" in labels:
+        key_risks.append("Growth deceleration could trigger a re-rating")
+    if "income" in labels:
+        key_risks.append("Dividend sustainability under earnings pressure")
+
+    blind_spots = [
+        "Regulatory or geopolitical risks not addressed in thesis",
+        "Management execution risk and capital allocation decisions",
+    ]
+
+    suggested_additions = [
+        "Set a specific valuation ceiling where the risk/reward no longer holds",
+        "Define a timeline for thesis milestones to be achieved",
+    ]
+    if not what_would_change_my_mind or len(what_would_change_my_mind.strip()) < 10:
+        suggested_additions.append(
+            "Add concrete, measurable exit criteria rather than vague conditions"
+        )
+
+    return CounterThesisOutput(
+        bear_case=bear_case,
+        key_risks=key_risks[:5],
+        blind_spots=blind_spots[:3],
+        suggested_additions=suggested_additions[:3],
+    )
+
+
+async def generate_counter_thesis(
+    why_own_it: str,
+    must_remain_true: str | None,
+    what_would_change_my_mind: str | None,
+    ai_summary: str | None,
+    ticker: str,
+) -> CounterThesisOutput:
+    if not settings.anthropic_api_key:
+        return _fallback_counter_thesis(
+            why_own_it=why_own_it,
+            must_remain_true=must_remain_true,
+            what_would_change_my_mind=what_would_change_my_mind,
+            ai_summary=ai_summary,
+            ticker=ticker,
+        )
+
+    prompt = COUNTER_THESIS_PROMPT.format(
+        ticker=ticker,
+        why_own_it=why_own_it or "Not provided",
+        must_remain_true=must_remain_true or "Not provided",
+        what_would_change_my_mind=what_would_change_my_mind or "Not provided",
+        ai_summary=ai_summary or "Not provided",
+    )
+
+    try:
+        client = anthropic.AsyncAnthropic(api_key=settings.anthropic_api_key)
+        response = await client.messages.create(
+            model="claude-sonnet-4-20250514",
+            max_tokens=1024,
+            messages=[{"role": "user", "content": prompt}],
+        )
+        text = response.content[0].text.strip()
+        if text.startswith("```"):
+            text = text.split("\n", 1)[1].rsplit("```", 1)[0].strip()
+        data = json.loads(text)
+        return CounterThesisOutput(
+            bear_case=data["bear_case"],
+            key_risks=data["key_risks"][:5],
+            blind_spots=data["blind_spots"][:3],
+            suggested_additions=data["suggested_additions"][:3],
+        )
+    except Exception as e:
+        logger.error(f"Counter-thesis generation failed for {ticker}: {e}")
+        return _fallback_counter_thesis(
+            why_own_it=why_own_it,
+            must_remain_true=must_remain_true,
+            what_would_change_my_mind=what_would_change_my_mind,
+            ai_summary=ai_summary,
+            ticker=ticker,
+        )
