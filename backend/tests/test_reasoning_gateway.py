@@ -124,3 +124,96 @@ async def test_gateway_returns_pending_when_all_providers_fail():
     result = await gateway.run(_request())
     assert result.success is False
     assert result.status == "pending"
+
+
+async def test_gateway_escalates_when_first_provider_returns_odd_signal_mapping():
+    gateway = ThesisReasoningGateway(
+        providers=[
+            StubProvider(
+                "openai",
+                ReasoningResult(
+                    success=True,
+                    status="success",
+                    provider="openai",
+                    model="test-model",
+                    prompt_version="v1",
+                    normalized_output=None,
+                    raw_output={
+                        "reason_type": "business_performance",
+                        "monitorability": "medium",
+                        "decomposition_confidence": 0.9,
+                        "claims": [
+                            {
+                                "claim_text": "Margins should expand.",
+                                "claim_type": "margins",
+                                "confidence": 0.9,
+                                "entities": [
+                                    {
+                                        "entity_name": "Apple Inc",
+                                        "entity_ticker": "AAPL",
+                                        "entity_type": "held_company",
+                                        "signals": [
+                                            {
+                                                "signal_type": "macro_series_change",
+                                                "signal_label": "Macro series",
+                                                "confidence": 0.9,
+                                                "confirmation_required": False,
+                                            }
+                                        ],
+                                    }
+                                ],
+                            }
+                        ],
+                    },
+                    confidence=None,
+                    latency_ms=50,
+                    failure_reason=None,
+                ),
+            ),
+            StubProvider(
+                "anthropic",
+                ReasoningResult(
+                    success=True,
+                    status="success",
+                    provider="anthropic",
+                    model="test-model",
+                    prompt_version="v1",
+                    normalized_output=None,
+                    raw_output={
+                        "reason_type": "business_performance",
+                        "monitorability": "medium",
+                        "decomposition_confidence": 0.8,
+                        "claims": [
+                            {
+                                "claim_text": "Margins should expand.",
+                                "claim_type": "margins",
+                                "confidence": 0.8,
+                                "entities": [
+                                    {
+                                        "entity_name": "Apple Inc",
+                                        "entity_ticker": "AAPL",
+                                        "entity_type": "held_company",
+                                        "signals": [
+                                            {
+                                                "signal_type": "guidance_change",
+                                                "signal_label": "Guidance commentary",
+                                                "confidence": 0.8,
+                                                "confirmation_required": False,
+                                            }
+                                        ],
+                                    }
+                                ],
+                            }
+                        ],
+                    },
+                    confidence=None,
+                    latency_ms=50,
+                    failure_reason=None,
+                ),
+            ),
+        ]
+    )
+
+    result = await gateway.run(_request("Margins should expand as the product mix improves."))
+    assert result.success is True
+    assert result.provider == "anthropic"

@@ -1,7 +1,7 @@
 "use client";
 
 import { Badge } from "@/components/ui/badge";
-import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
+import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { formatDate } from "@/lib/utils";
 import type { Thesis } from "@/types";
 
@@ -61,76 +61,85 @@ function describeWatchHint(hint: Record<string, unknown>) {
 
 export function ThesisCard({ thesis, onEdit, onInvalidate }: Props) {
   const { labels, watchHints, monitorability, ambiguityNote } = getInterpretation(thesis);
+  const watchDescriptions = watchHints
+    .map((hint) => describeWatchHint(hint))
+    .filter((description): description is string => Boolean(description));
 
   return (
     <Card>
-      <CardHeader className="flex flex-row items-center justify-between">
-        <div className="flex items-center gap-2">
-          <CardTitle className="text-base">Investment Thesis</CardTitle>
-          <Badge className={statusColors[thesis.status]}>{thesis.status.replace("_", " ")}</Badge>
-          <Badge className={convictionColors[thesis.confidence]}>{thesis.confidence} confidence</Badge>
-          <Badge variant="outline">{thesis.source === "ai_assisted" ? "AI assisted" : "User authored"}</Badge>
-        </div>
-        <div className="flex gap-2">
-          {thesis.status !== "invalidated" && (
-            <>
-              <button onClick={onEdit} className="text-sm text-blue-600 hover:underline">Edit</button>
-              <button onClick={onInvalidate} className="text-sm text-red-600 hover:underline">Invalidate</button>
-            </>
-          )}
+      <CardHeader className="gap-3">
+        <div className="flex flex-wrap items-start justify-between gap-3">
+          <div className="space-y-2">
+            <div className="flex flex-wrap items-center gap-2">
+              <CardTitle className="text-base">Current thesis</CardTitle>
+              <Badge className={statusColors[thesis.status]}>{thesis.status.replace("_", " ")}</Badge>
+              <Badge className={convictionColors[thesis.confidence]}>{thesis.confidence} confidence</Badge>
+              <Badge variant="outline">{thesis.source === "ai_assisted" ? "AI assisted" : "User authored"}</Badge>
+            </div>
+            <CardDescription>
+              This is the working reason for owning the position. Keep it tight enough that a future version of you can tell when it broke.
+            </CardDescription>
+          </div>
+          <div className="flex gap-3 text-sm">
+            <button onClick={onEdit} className="text-blue-600 hover:underline">
+              Edit
+            </button>
+            {thesis.status !== "invalidated" && (
+              <button onClick={onInvalidate} className="text-red-600 hover:underline">
+                Invalidate
+              </button>
+            )}
+          </div>
         </div>
       </CardHeader>
       <CardContent className="space-y-4">
-        <div>
-          <h4 className="text-sm font-medium text-muted-foreground">Why You Own It</h4>
-          <p className="mt-1">{thesis.why_own_it}</p>
+        <div className="grid gap-3 md:grid-cols-3">
+          <ThesisBlock
+            label="Own it because"
+            text={thesis.why_own_it}
+            tone="bg-background"
+          />
+          <ThesisBlock
+            label="Still true if"
+            text={thesis.must_remain_true ?? "You have not defined the condition that must remain true yet."}
+            tone={thesis.must_remain_true ? "bg-background" : "bg-amber-50"}
+          />
+          <ThesisBlock
+            label="Breaks if"
+            text={thesis.what_would_change_my_mind ?? "You have not written the exit condition yet."}
+            tone={thesis.what_would_change_my_mind ? "bg-background" : "bg-red-50"}
+          />
         </div>
-        {thesis.must_remain_true && (
-          <div>
-            <h4 className="text-sm font-medium text-muted-foreground">What Must Remain True</h4>
-            <p className="mt-1">{thesis.must_remain_true}</p>
-          </div>
-        )}
-        {thesis.what_would_change_my_mind && (
-          <div>
-            <h4 className="text-sm font-medium text-muted-foreground">What Would Change Your Mind</h4>
-            <p className="mt-1">{thesis.what_would_change_my_mind}</p>
-          </div>
-        )}
-        {thesis.ai_summary && (
-          <div>
-            <h4 className="text-sm font-medium text-muted-foreground">AI Summary</h4>
-            <p className="mt-1 text-sm text-muted-foreground">{thesis.ai_summary}</p>
-          </div>
-        )}
+
         {(monitorability || labels.length > 0 || watchHints.length > 0 || ambiguityNote) && (
           <div className="rounded-xl border bg-muted/30 p-4">
-            <div className="flex flex-wrap items-center gap-2">
-              {monitorability && (
-                <Badge className={monitorabilityColors[monitorability] ?? monitorabilityColors.low}>
-                  {monitorability} monitorability
-                </Badge>
-              )}
-              {labels.map((label) => (
-                <Badge key={label} variant="outline">
-                  {label}
-                </Badge>
-              ))}
+            <div className="flex flex-wrap items-center justify-between gap-3">
+              <div className="flex flex-wrap items-center gap-2">
+                {monitorability && (
+                  <Badge className={monitorabilityColors[monitorability] ?? monitorabilityColors.low}>
+                    {monitorability} monitorability
+                  </Badge>
+                )}
+                {labels.map((label) => (
+                  <Badge key={label} variant="outline">
+                    {label}
+                  </Badge>
+                ))}
+              </div>
+              <p className="text-xs text-muted-foreground">
+                Updated {formatDate(thesis.updated_at)}
+              </p>
             </div>
 
-            {watchHints.length > 0 && (
-              <div className="mt-3 space-y-2">
+            {watchDescriptions.length > 0 && (
+              <div className="mt-3">
                 <p className="text-sm font-medium text-muted-foreground">What the app is watching</p>
-                <div className="space-y-1">
-                  {watchHints.map((hint, index) => {
-                    const description = describeWatchHint(hint);
-                    if (!description) return null;
-                    return (
-                      <p key={`${description}-${index}`} className="text-sm text-muted-foreground">
-                        {description}
-                      </p>
-                    );
-                  })}
+                <div className="mt-2 grid gap-2 md:grid-cols-2">
+                  {watchDescriptions.map((description, index) => (
+                    <div key={`${description}-${index}`} className="rounded-lg border bg-background/80 p-3">
+                      <p className="text-sm text-muted-foreground">{description}</p>
+                    </div>
+                  ))}
                 </div>
               </div>
             )}
@@ -143,10 +152,35 @@ export function ThesisCard({ thesis, onEdit, onInvalidate }: Props) {
             )}
           </div>
         )}
+
+        {thesis.ai_summary && (
+          <div className="rounded-lg border border-dashed p-3">
+            <p className="text-xs font-medium uppercase tracking-wide text-muted-foreground">Summary</p>
+            <p className="mt-1 text-sm text-muted-foreground">{thesis.ai_summary}</p>
+          </div>
+        )}
+
         <p className="text-xs text-muted-foreground">
-          Created {formatDate(thesis.created_at)} · Updated {formatDate(thesis.updated_at)}
+          Created {formatDate(thesis.created_at)} · Last reviewed {formatDate(thesis.updated_at)}
         </p>
       </CardContent>
     </Card>
+  );
+}
+
+function ThesisBlock({
+  label,
+  text,
+  tone,
+}: {
+  label: string;
+  text: string;
+  tone: string;
+}) {
+  return (
+    <div className={`rounded-xl border p-4 ${tone}`}>
+      <p className="text-xs font-medium uppercase tracking-wide text-muted-foreground">{label}</p>
+      <p className="mt-2 text-sm leading-6">{text}</p>
+    </div>
   );
 }

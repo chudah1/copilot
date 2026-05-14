@@ -3,6 +3,85 @@ from typing import Any
 from app.services.reasoning.normalizers import is_descriptive_only, is_vague_thesis
 
 
+ENTITY_SIGNAL_ALLOWLIST: dict[str, set[str]] = {
+    "held_company": {
+        "price_move",
+        "revenue_growth",
+        "earnings_growth",
+        "guidance_change",
+        "earnings_surprise",
+        "transcript_topic",
+        "news_topic",
+        "insider_transaction",
+        "dividend_change",
+    },
+    "supplier": {
+        "price_move",
+        "revenue_growth",
+        "earnings_growth",
+        "guidance_change",
+        "earnings_surprise",
+        "transcript_topic",
+        "news_topic",
+        "insider_transaction",
+        "dividend_change",
+    },
+    "customer": {
+        "price_move",
+        "revenue_growth",
+        "earnings_growth",
+        "guidance_change",
+        "earnings_surprise",
+        "transcript_topic",
+        "news_topic",
+        "insider_transaction",
+        "dividend_change",
+    },
+    "competitor": {
+        "price_move",
+        "revenue_growth",
+        "earnings_growth",
+        "guidance_change",
+        "earnings_surprise",
+        "transcript_topic",
+        "news_topic",
+        "insider_transaction",
+        "dividend_change",
+    },
+    "benchmark": {"price_move", "macro_series_change", "news_topic"},
+    "macro_series": {"macro_series_change", "news_topic"},
+    "commodity": {"price_move", "macro_series_change", "news_topic"},
+    "sector_proxy": {"price_move", "macro_series_change", "news_topic"},
+}
+
+CLAIM_SIGNAL_ALLOWLIST: dict[str, set[str]] = {
+    "growth": {"price_move", "revenue_growth", "earnings_growth", "guidance_change", "earnings_surprise", "transcript_topic", "news_topic"},
+    "margins": {"earnings_growth", "guidance_change", "transcript_topic", "news_topic"},
+    "demand": {"revenue_growth", "guidance_change", "earnings_surprise", "transcript_topic", "news_topic"},
+    "valuation": {"price_move", "earnings_growth", "dividend_change", "macro_series_change", "news_topic"},
+    "cash_flow": {"earnings_growth", "dividend_change", "guidance_change", "transcript_topic", "news_topic"},
+    "income": {"dividend_change", "earnings_growth", "price_move", "news_topic"},
+    "macro_tailwind": {"macro_series_change", "price_move", "news_topic"},
+    "portfolio_fit": {"price_move", "news_topic"},
+}
+
+
+def _invalid_mapping_reason(normalized_output: dict[str, Any]) -> str | None:
+    for claim in normalized_output.get("claims", []):
+        claim_type = claim.get("claim_type")
+        allowed_for_claim = CLAIM_SIGNAL_ALLOWLIST.get(str(claim_type)) if claim_type else None
+        for entity in claim.get("entities", []):
+            entity_type = entity.get("entity_type")
+            allowed_for_entity = ENTITY_SIGNAL_ALLOWLIST.get(str(entity_type)) if entity_type else None
+            for signal in entity.get("signals", []):
+                signal_type = signal.get("signal_type")
+                if allowed_for_entity is not None and signal_type not in allowed_for_entity:
+                    return f"Signal {signal_type} is not a sensible match for entity type {entity_type}"
+                if allowed_for_claim is not None and signal_type not in allowed_for_claim:
+                    return f"Signal {signal_type} is not a sensible match for claim type {claim_type}"
+    return None
+
+
 def validate_decomposition_output(
     normalized_output: dict[str, Any] | None,
     *,
@@ -24,6 +103,9 @@ def validate_decomposition_output(
         )
         if signal_count > 0:
             return False, "Descriptive-only thesis should not produce monitorable signals"
+    invalid_mapping = _invalid_mapping_reason(normalized_output)
+    if invalid_mapping:
+        return False, invalid_mapping
     return True, None
 
 
