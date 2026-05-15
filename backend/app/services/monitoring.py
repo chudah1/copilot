@@ -18,6 +18,8 @@ class RuleCheckResult:
     actual_value: float
     breached: bool
     rationale: str
+    signal_id: str | None = None
+    claim_id: str | None = None
 
 
 def extract_watch_hints(interpretation: dict[str, Any] | None) -> list[dict[str, Any]]:
@@ -55,6 +57,8 @@ def check_metric_watch_hints(
                 actual_value=actual,
                 breached=not met,
                 rationale=hint.get("rationale", ""),
+                signal_id=hint.get("signal_id"),
+                claim_id=hint.get("claim_id"),
             )
         )
     return results
@@ -71,15 +75,29 @@ DEFAULT_WATCH_HINTS: list[dict[str, Any]] = [
 ]
 
 
-def get_price_watch_threshold(interpretation: dict[str, Any] | None, default: float = DEFAULT_PRICE_THRESHOLD_PCT) -> float | None:
+@dataclass
+class PriceWatchInfo:
+    threshold: float
+    signal_id: str | None = None
+    claim_id: str | None = None
+
+
+def get_price_watch_info(interpretation: dict[str, Any] | None, default: float = DEFAULT_PRICE_THRESHOLD_PCT) -> PriceWatchInfo:
     hints = extract_watch_hints(interpretation)
     for hint in hints:
         if hint.get("kind") == "price_move_pct":
             threshold = hint.get("threshold")
             if isinstance(threshold, (int, float)):
-                return float(threshold)
-    # Always return a default so every thesis gets price monitoring
-    return default
+                return PriceWatchInfo(
+                    threshold=float(threshold),
+                    signal_id=hint.get("signal_id"),
+                    claim_id=hint.get("claim_id"),
+                )
+    return PriceWatchInfo(threshold=default)
+
+
+def get_price_watch_threshold(interpretation: dict[str, Any] | None, default: float = DEFAULT_PRICE_THRESHOLD_PCT) -> float | None:
+    return get_price_watch_info(interpretation, default).threshold
 
 
 def check_price_move(current_price: float, previous_price: float, threshold_pct: float = 10.0) -> bool:
@@ -110,23 +128,28 @@ def generate_monitoring_candidates(
     candidates: list[dict[str, Any]] = []
     normalized_now = now or datetime.now(timezone.utc)
 
-    price_threshold = get_price_watch_threshold(effective)
+    price_info = get_price_watch_info(effective)
     if (
-        price_threshold is not None
+        price_info.threshold is not None
         and company_data.current_price is not None
         and previous_price is not None
-        and check_price_move(company_data.current_price, previous_price, price_threshold)
+        and check_price_move(company_data.current_price, previous_price, price_info.threshold)
     ):
         pct_change = abs((company_data.current_price - previous_price) / previous_price) * 100
+        evidence: dict[str, Any] = {
+            "current_price": company_data.current_price,
+            "previous_price": previous_price,
+            "threshold_pct": price_info.threshold,
+        }
+        if price_info.signal_id:
+            evidence["signal_id"] = price_info.signal_id
+        if price_info.claim_id:
+            evidence["claim_id"] = price_info.claim_id
         candidates.append(
             {
                 "event_type": "price_move",
                 "description": f"Price moved {pct_change:.1f}% since the last recorded price.",
-                "evidence": {
-                    "current_price": company_data.current_price,
-                    "previous_price": previous_price,
-                    "threshold_pct": price_threshold,
-                },
+                "evidence": evidence,
             }
         )
 
@@ -139,6 +162,17 @@ def generate_monitoring_candidates(
     market_values = {k: v for k, v in market_values.items() if v is not None}
     for breach in check_metric_watch_hints(effective, market_values):
         if breach.breached:
+            evidence = {
+                "metric": breach.metric,
+                "actual_value": breach.actual_value,
+                "operator": breach.operator,
+                "threshold": breach.threshold,
+                "rationale": breach.rationale,
+            }
+            if breach.signal_id:
+                evidence["signal_id"] = breach.signal_id
+            if breach.claim_id:
+                evidence["claim_id"] = breach.claim_id
             candidates.append(
                 {
                     "event_type": "metric_threshold",
@@ -146,13 +180,7 @@ def generate_monitoring_candidates(
                         f"Watch hint breached: {breach.metric} is {breach.actual_value} "
                         f"(expected {breach.operator} {breach.threshold})."
                     ),
-                    "evidence": {
-                        "metric": breach.metric,
-                        "actual_value": breach.actual_value,
-                        "operator": breach.operator,
-                        "threshold": breach.threshold,
-                        "rationale": breach.rationale,
-                    },
+                    "evidence": evidence,
                 }
             )
 

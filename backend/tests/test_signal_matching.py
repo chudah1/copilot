@@ -50,3 +50,131 @@ def test_watch_hint_from_signal_unknown_type_returns_none():
     signal = _make_signal("unknown_type")
     hint = _watch_hint_from_signal(signal)
     assert hint is None
+
+
+from app.services.monitoring import (
+    check_metric_watch_hints,
+    generate_monitoring_candidates,
+)
+from app.services.market_data import CompanyData
+
+
+def test_check_metric_watch_hints_carries_signal_ids():
+    signal_id = str(uuid.uuid4())
+    claim_id = str(uuid.uuid4())
+    interpretation = {
+        "watch_hints": [
+            {
+                "kind": "metric_threshold",
+                "metric": "revenue_growth_yoy",
+                "operator": ">=",
+                "threshold": 15.0,
+                "rationale": "Growth driver",
+                "signal_id": signal_id,
+                "claim_id": claim_id,
+            }
+        ]
+    }
+    market_values = {"revenue_growth_yoy": 8.0}
+    results = check_metric_watch_hints(interpretation, market_values)
+    assert len(results) == 1
+    assert results[0].breached is True
+    assert results[0].signal_id == signal_id
+    assert results[0].claim_id == claim_id
+
+
+def test_check_metric_watch_hints_works_without_ids():
+    interpretation = {
+        "watch_hints": [
+            {
+                "kind": "metric_threshold",
+                "metric": "revenue_growth_yoy",
+                "operator": ">=",
+                "threshold": 15.0,
+                "rationale": "Growth driver",
+            }
+        ]
+    }
+    market_values = {"revenue_growth_yoy": 8.0}
+    results = check_metric_watch_hints(interpretation, market_values)
+    assert len(results) == 1
+    assert results[0].signal_id is None
+    assert results[0].claim_id is None
+
+
+def test_generate_candidates_price_move_carries_ids():
+    signal_id = str(uuid.uuid4())
+    claim_id = str(uuid.uuid4())
+    interpretation = {
+        "watch_hints": [
+            {
+                "kind": "price_move_pct",
+                "threshold": 5.0,
+                "rationale": "Review on big moves.",
+                "signal_id": signal_id,
+                "claim_id": claim_id,
+            }
+        ]
+    }
+    company_data = CompanyData(
+        ticker="AAPL",
+        name="Apple",
+        sector="Technology",
+        industry="Consumer Electronics",
+        current_price=120.0,
+        revenue_growth_yoy=None,
+        earnings_growth_yoy=None,
+        pe_ratio=None,
+        market_cap=None,
+        dividend_yield=None,
+        description="",
+        recent_news=[],
+        upcoming_earnings_date=None,
+        recent_earnings_surprise_pct=None,
+        news_items=[],
+    )
+    candidates = generate_monitoring_candidates(interpretation, company_data, 100.0)
+    price_candidates = [c for c in candidates if c["event_type"] == "price_move"]
+    assert len(price_candidates) == 1
+    assert price_candidates[0]["evidence"]["signal_id"] == signal_id
+    assert price_candidates[0]["evidence"]["claim_id"] == claim_id
+
+
+def test_generate_candidates_metric_breach_carries_ids():
+    signal_id = str(uuid.uuid4())
+    claim_id = str(uuid.uuid4())
+    interpretation = {
+        "watch_hints": [
+            {
+                "kind": "metric_threshold",
+                "metric": "revenue_growth_yoy",
+                "operator": ">=",
+                "threshold": 15.0,
+                "rationale": "Growth driver",
+                "signal_id": signal_id,
+                "claim_id": claim_id,
+            }
+        ]
+    }
+    company_data = CompanyData(
+        ticker="AAPL",
+        name="Apple",
+        sector="Technology",
+        industry="Consumer Electronics",
+        current_price=150.0,
+        revenue_growth_yoy=8.0,
+        earnings_growth_yoy=None,
+        pe_ratio=None,
+        market_cap=None,
+        dividend_yield=None,
+        description="",
+        recent_news=[],
+        upcoming_earnings_date=None,
+        recent_earnings_surprise_pct=None,
+        news_items=[],
+    )
+    candidates = generate_monitoring_candidates(interpretation, company_data, 150.0)
+    metric_candidates = [c for c in candidates if c["event_type"] == "metric_threshold"]
+    assert len(metric_candidates) == 1
+    assert metric_candidates[0]["evidence"]["signal_id"] == signal_id
+    assert metric_candidates[0]["evidence"]["claim_id"] == claim_id
