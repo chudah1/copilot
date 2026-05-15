@@ -148,12 +148,18 @@ def _signal_is_direct_and_auto_activatable(
 
 def _watch_hint_from_signal(signal: ThesisSignal) -> dict | None:
     config = signal.signal_config_json or {}
+    # Derive claim_id via signal -> entity -> claim
+    claim_id = str(signal.entity.claim_id) if signal.entity else None
+    signal_id = str(signal.id)
+
     if signal.signal_type == "price_move":
         threshold = to_float(config.get("threshold_pct")) or 5.0
         return {
             "kind": "price_move_pct",
             "threshold": threshold,
             "rationale": signal.rationale or "Prompt a review when price moves sharply.",
+            "signal_id": signal_id,
+            "claim_id": claim_id,
         }
     if signal.signal_type == "revenue_growth":
         threshold = to_float(config.get("threshold")) if isinstance(config, dict) else None
@@ -165,6 +171,8 @@ def _watch_hint_from_signal(signal: ThesisSignal) -> dict | None:
             "operator": operator,
             "threshold": threshold if threshold is not None else 0.0,
             "rationale": signal.rationale or "Revenue growth should stay healthy.",
+            "signal_id": signal_id,
+            "claim_id": claim_id,
         }
     if signal.signal_type == "earnings_growth":
         threshold = to_float(config.get("threshold")) if isinstance(config, dict) else None
@@ -176,6 +184,8 @@ def _watch_hint_from_signal(signal: ThesisSignal) -> dict | None:
             "operator": operator,
             "threshold": threshold if threshold is not None else 0.0,
             "rationale": signal.rationale or "Earnings growth should remain healthy.",
+            "signal_id": signal_id,
+            "claim_id": claim_id,
         }
     return None
 
