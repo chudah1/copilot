@@ -1,4 +1,5 @@
 import logging
+import uuid
 from datetime import datetime, timezone
 from typing import Any
 
@@ -12,6 +13,12 @@ from app.models.monitoring_event import MonitoringEvent
 from app.services.monitoring import check_metric_watch_hints, generate_monitoring_candidates
 from app.services.market_data import CompanyData, fetch_company_data, shortlist_qualitative_candidates
 from app.services.ai_monitor import classify_event
+from app.services.signal_matching import (
+    build_evidence_summary,
+    determine_verdict,
+    load_active_decomposition,
+    match_candidates_to_signals,
+)
 
 logger = logging.getLogger(__name__)
 
@@ -228,6 +235,21 @@ async def run_monitoring():
                         )
                     )
 
+                # Signal linking: load decomposition and enrich candidates
+                decomposition = await load_active_decomposition(db, thesis.id)
+                claims = decomposition.claims if decomposition else None
+                candidates = match_candidates_to_signals(candidates, claims)
+
+                # Build lookup tables for narrative generation
+                claims_by_id: dict[str, Any] = {}
+                signals_by_id: dict[str, Any] = {}
+                if claims:
+                    for claim in claims:
+                        claims_by_id[str(claim.id)] = claim
+                        for entity in claim.entities:
+                            for signal in entity.signals:
+                                signals_by_id[str(signal.id)] = signal
+
                 # Update holding price from direct ticker data
                 if company_data and company_data.current_price is not None:
                     holding.current_price = company_data.current_price
@@ -273,6 +295,32 @@ async def run_monitoring():
 
                     source_url = evidence.get("url")
 
+                    # Signal linking fields
+                    evidence_signal_id = evidence.get("signal_id")
+                    evidence_claim_id = evidence.get("claim_id")
+                    claim_obj = claims_by_id.get(evidence_claim_id) if evidence_claim_id else None
+                    signal_obj = signals_by_id.get(evidence_signal_id) if evidence_signal_id else None
+
+                    evidence_summary = build_evidence_summary(
+                        candidate=candidate,
+                        claim_text=claim_obj.claim_text if claim_obj else None,
+                        signal_label=signal_obj.signal_label if signal_obj else None,
+                        why_own_it=thesis.why_own_it,
+                    )
+                    verdict = determine_verdict(severity)
+
+                    evt_type = candidate["event_type"]
+                    evidence_type_map = {
+                        "price_move": "price_move",
+                        "metric_threshold": "metric_breach",
+                        "news_keyword": "news",
+                        "earnings_surprise": "earnings",
+                        "upcoming_earnings": "earnings",
+                        "earnings_call": "earnings",
+                        "insider_activity": "insider",
+                    }
+                    evidence_type = evidence_type_map.get(evt_type, evt_type)
+
                     # For proxy events, include the causal rationale in the
                     # stored summary so the user sees *why* this matters
                     stored_summary = candidate["description"]
@@ -295,6 +343,11 @@ async def run_monitoring():
                             "candidate_type": candidate["event_type"],
                             "evidence": evidence,
                         },
+                        claim_id=uuid.UUID(evidence_claim_id) if evidence_claim_id else None,
+                        signal_id=uuid.UUID(evidence_signal_id) if evidence_signal_id else None,
+                        evidence_type=evidence_type,
+                        evidence_summary=evidence_summary,
+                        verdict=verdict,
                     )
                     db.add(event)
 
