@@ -128,6 +128,11 @@ export interface MonitoringEvent {
   ai_analysis: string | null;
   review_action: "reaffirmed" | "ignored" | "lowered_confidence" | "invalidated" | null;
   review_notes: string | null;
+  claim_id: string | null;
+  signal_id: string | null;
+  evidence_type: string | null;
+  evidence_summary: string | null;
+  verdict: "supports" | "threatens" | "neutral" | "review" | null;
   created_at: string;
 }
 
@@ -197,6 +202,8 @@ export interface HoldingPulse {
   latest_event_summary: string | null;
   days_since_thesis_update: number | null;
   has_thesis: boolean;
+  pnl_pct: number | null;
+  last_checked_at: string | null;
 }
 
 export interface PortfolioPulse {
@@ -253,10 +260,27 @@ export interface BrokerConnection {
   created_at: string;
 }
 
+export interface MarketSnapshot {
+  current_price: number | null;
+  price_change_pct: number | null;
+  cost_basis: number | null;
+  pnl: number | null;
+  pnl_pct: number | null;
+  sector: string | null;
+  pe_ratio: number | null;
+  market_cap: number | null;
+  upcoming_earnings_date: string | null;
+  recent_news_count: number;
+  watch_hints_ok: number;
+  watch_hints_total: number;
+  checked_at: string | null;
+}
+
 export interface CheckNowResponse {
   status: "completed" | "rate_limited";
   events_created: number;
   next_available_at: string | null;
+  snapshot: MarketSnapshot | null;
 }
 
 export interface SimulateTradeRequest {
