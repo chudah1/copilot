@@ -31,4 +31,9 @@ class MonitoringEventResponse(BaseModel):
     ai_analysis: str | None
     review_action: str | None = None
     review_notes: str | None = None
+    claim_id: uuid.UUID | None = None
+    signal_id: uuid.UUID | None = None
+    evidence_type: str | None = None
+    evidence_summary: str | None = None
+    verdict: str | None = None
     created_at: datetime

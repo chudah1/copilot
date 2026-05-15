@@ -21,6 +21,11 @@ class MonitoringEvent(Base):
     source_url: Mapped[str | None] = mapped_column(String(1000), nullable=True)
     raw_data: Mapped[dict | None] = mapped_column(JSON, nullable=True)
     ai_analysis: Mapped[str | None] = mapped_column(Text, nullable=True)
+    claim_id: Mapped[uuid.UUID | None] = mapped_column(UUIDType, nullable=True, index=True)
+    signal_id: Mapped[uuid.UUID | None] = mapped_column(UUIDType, nullable=True, index=True)
+    evidence_type: Mapped[str | None] = mapped_column(String(30), nullable=True)
+    evidence_summary: Mapped[str | None] = mapped_column(Text, nullable=True)
+    verdict: Mapped[str | None] = mapped_column(String(20), nullable=True)
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now())
     included_in_digest_id: Mapped[uuid.UUID | None] = mapped_column(
         UUIDType, ForeignKey("digests.id"), nullable=True
