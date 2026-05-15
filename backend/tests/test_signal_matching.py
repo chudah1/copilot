@@ -337,3 +337,177 @@ def test_determine_verdict_info():
 
 def test_determine_verdict_unknown_defaults_to_review():
     assert determine_verdict("something_else") == "review"
+
+
+import pytest
+from unittest.mock import patch
+from sqlalchemy import select as sa_select
+from sqlalchemy.ext.asyncio import AsyncSession
+
+from app.models.holding import Holding
+from app.models.monitoring_event import MonitoringEvent
+from app.models.thesis import Thesis
+from app.models.thesis_claim import ThesisClaim
+from app.models.thesis_decomposition import ThesisDecomposition
+from app.models.thesis_entity import ThesisEntity
+from app.models.thesis_signal import ThesisSignal
+from app.models.user import User
+from app.services.auth import hash_password
+from app.services.check_now import run_check_now
+from app.services.market_data import CompanyData
+
+
+@pytest.fixture
+async def db_with_decomposition(async_session: AsyncSession):
+    """Set up user, holding, thesis, and confirmed decomposition."""
+    user = User(email="test-signal@test.com", password_hash=hash_password("pass"))
+    async_session.add(user)
+    await async_session.flush()
+
+    holding = Holding(
+        user_id=user.id,
+        ticker="AAPL",
+        name="Apple Inc.",
+        quantity=10,
+        average_cost_basis=150.0,
+        currency="USD",
+        current_price=150.0,
+    )
+    async_session.add(holding)
+    await async_session.flush()
+
+    thesis = Thesis(
+        holding_id=holding.id,
+        user_id=user.id,
+        status="active",
+        thesis_kind="company",
+        why_own_it="I believe iPhone demand stays strong",
+        confidence="high",
+        review_cadence_days=90,
+    )
+    async_session.add(thesis)
+    await async_session.flush()
+
+    decomposition = ThesisDecomposition(
+        thesis_id=thesis.id,
+        version=1,
+        status="confirmed",
+        reason_type="growth",
+        monitorability="high",
+    )
+    async_session.add(decomposition)
+    await async_session.flush()
+
+    claim = ThesisClaim(
+        decomposition_id=decomposition.id,
+        claim_text="iPhone demand remains strong globally",
+        claim_type="growth",
+        position=0,
+    )
+    async_session.add(claim)
+    await async_session.flush()
+
+    entity = ThesisEntity(
+        claim_id=claim.id,
+        entity_name="Apple Inc.",
+        entity_ticker="AAPL",
+        entity_type="held_company",
+        user_confirmed=True,
+    )
+    async_session.add(entity)
+    await async_session.flush()
+
+    signal = ThesisSignal(
+        entity_id=entity.id,
+        signal_type="price_move",
+        signal_label="AAPL share price",
+        signal_config_json={"threshold_pct": 5.0},
+        rationale="Large price moves warrant review",
+        active=True,
+        user_confirmed=True,
+    )
+    async_session.add(signal)
+    await async_session.flush()
+
+    # Set interpretation with signal_id/claim_id embedded
+    thesis.interpretation = {
+        "labels": ["growth"],
+        "monitorability": "high",
+        "watch_hints": [
+            {
+                "kind": "price_move_pct",
+                "threshold": 5.0,
+                "rationale": "Large price moves warrant review",
+                "signal_id": str(signal.id),
+                "claim_id": str(claim.id),
+            }
+        ],
+        "proxy_signals": [],
+        "ambiguity_note": "",
+    }
+    await async_session.commit()
+
+    return {
+        "user": user,
+        "holding": holding,
+        "thesis": thesis,
+        "decomposition": decomposition,
+        "claim": claim,
+        "entity": entity,
+        "signal": signal,
+    }
+
+
+@pytest.mark.asyncio
+async def test_check_now_creates_events_with_signal_linking(
+    async_session: AsyncSession,
+    db_with_decomposition: dict,
+):
+    """check_now should create events with claim_id, signal_id, evidence_summary, verdict."""
+    data = db_with_decomposition
+    holding = data["holding"]
+    thesis = data["thesis"]
+    claim = data["claim"]
+    signal = data["signal"]
+
+    # Mock fetch_company_data to return a big price move
+    company_data = CompanyData(
+        ticker="AAPL",
+        name="Apple Inc.",
+        sector="Technology",
+        industry="Consumer Electronics",
+        current_price=180.0,  # 20% move from 150
+        revenue_growth_yoy=None,
+        earnings_growth_yoy=None,
+        pe_ratio=None,
+        market_cap=None,
+        dividend_yield=None,
+        description="",
+        recent_news=[],
+        upcoming_earnings_date=None,
+        recent_earnings_surprise_pct=None,
+        news_items=[],
+        country="US",
+    )
+
+    with patch("app.services.check_now.fetch_company_data", return_value=company_data), \
+         patch("app.services.check_now.classify_event", return_value=None):
+        result = await run_check_now(holding, thesis, async_session)
+
+    assert result.status == "completed"
+    assert result.events_created >= 1
+
+    # Query the created event
+    events_result = await async_session.execute(
+        sa_select(MonitoringEvent).where(MonitoringEvent.holding_id == holding.id)
+    )
+    events = events_result.scalars().all()
+    price_event = next((e for e in events if e.event_type == "price_move"), None)
+    assert price_event is not None
+    assert price_event.claim_id == claim.id
+    assert price_event.signal_id == signal.id
+    assert price_event.evidence_type == "price_move"
+    assert price_event.evidence_summary is not None
+    assert "You said:" in price_event.evidence_summary
+    assert "iPhone demand remains strong" in price_event.evidence_summary
+    assert price_event.verdict is not None

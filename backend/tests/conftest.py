@@ -43,6 +43,12 @@ async def db():
 
 
 @pytest.fixture
+async def async_session():
+    async with TestSession() as session:
+        yield session
+
+
+@pytest.fixture
 def job_session_factory():
     return TestSession
 
