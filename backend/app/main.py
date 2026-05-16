@@ -20,6 +20,8 @@ from app.models import (  # noqa: F401
     thesis_review,
     monitoring_event,
     digest,
+    quarterly_review,
+    quarterly_review_response,
     password_reset_token,
 )
 from app.jobs.scheduler import setup_scheduler, shutdown_scheduler
@@ -106,6 +108,9 @@ app.include_router(digest_router)
 
 from app.routes.onboarding import router as onboarding_router
 app.include_router(onboarding_router)
+
+from app.routes.quarterly_review import router as quarterly_review_router
+app.include_router(quarterly_review_router)
 
 
 @app.get("/health")

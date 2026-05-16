@@ -11,6 +11,8 @@ from app.models.thesis_review import ThesisReview
 from app.models.digest import Digest
 from app.models.portfolio_snapshot import PortfolioSnapshot
 from app.models.conviction_log_entry import ConvictionLogEntry
+from app.models.quarterly_review import QuarterlyReview
+from app.models.quarterly_review_response import QuarterlyReviewResponse
 
 __all__ = [
     "User",
@@ -26,4 +28,6 @@ __all__ = [
     "Digest",
     "PortfolioSnapshot",
     "ConvictionLogEntry",
+    "QuarterlyReview",
+    "QuarterlyReviewResponse",
 ]

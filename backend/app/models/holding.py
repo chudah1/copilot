@@ -34,3 +34,4 @@ class Holding(Base):
     theses = relationship("Thesis", back_populates="holding")
     monitoring_events = relationship("MonitoringEvent", back_populates="holding")
     conviction_log_entries = relationship("ConvictionLogEntry", back_populates="holding")
+    quarterly_review_responses = relationship("QuarterlyReviewResponse", back_populates="holding")

@@ -28,3 +28,9 @@ class User(Base):
     theses = relationship("Thesis", back_populates="user")
     digests = relationship("Digest", back_populates="user")
     conviction_log_entries = relationship("ConvictionLogEntry", back_populates="user")
+    quarterly_reviews = relationship(
+        "QuarterlyReview",
+        back_populates="user",
+        cascade="all, delete-orphan",
+        order_by="desc(QuarterlyReview.created_at)",
+    )

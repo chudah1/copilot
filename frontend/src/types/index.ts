@@ -126,7 +126,7 @@ export interface MonitoringEvent {
   summary: string;
   source_url: string | null;
   ai_analysis: string | null;
-  review_action: "reaffirmed" | "ignored" | "lowered_confidence" | "invalidated" | null;
+  review_action: "reaffirmed" | "ignored" | "lowered_confidence" | "invalidated" | "not_relevant" | null;
   review_notes: string | null;
   claim_id: string | null;
   signal_id: string | null;
@@ -140,10 +140,64 @@ export interface MonitoringEventReviewResponse {
   id: string;
   monitoring_event_id: string;
   thesis_id: string;
-  action: "reaffirmed" | "ignored" | "lowered_confidence" | "invalidated";
+  action: "reaffirmed" | "ignored" | "lowered_confidence" | "invalidated" | "not_relevant";
   notes: string | null;
   created_at: string;
   thesis: Thesis;
+}
+
+export interface ConvictionLogEntry {
+  id: string;
+  thesis_id: string;
+  holding_id: string;
+  entry_type: string;
+  content: string;
+  metadata_json: Record<string, unknown> | null;
+  claim_id: string | null;
+  signal_id: string | null;
+  created_at: string;
+}
+
+export interface ConvictionLogResponse {
+  entries: ConvictionLogEntry[];
+  reason_age_days: number | null;
+  review_count: number;
+}
+
+export interface QuarterlyReviewHolding {
+  holding_id: string;
+  thesis_id: string;
+  ticker: string;
+  name: string;
+  currency: string;
+  current_price: number | null;
+  reason_age_days: number;
+  why_own_it: string;
+  response: "yes_absolutely" | "probably" | "not_sure" | "no" | null;
+  response_notes: string | null;
+  reviewed_at: string | null;
+}
+
+export interface QuarterlyReviewCurrent {
+  review_id: string;
+  quarter: string;
+  status: "pending" | "completed" | "skipped";
+  total_holdings: number;
+  completed_count: number;
+  pending_count: number;
+  holdings: QuarterlyReviewHolding[];
+}
+
+export interface QuarterlyReviewSubmission {
+  review_id: string;
+  holding_id: string;
+  thesis_id: string;
+  response: "yes_absolutely" | "probably" | "not_sure" | "no";
+  notes: string | null;
+  price_at_review: number | null;
+  created_at: string;
+  thesis_status: Thesis["status"];
+  pending_count: number;
 }
 
 export interface PortfolioSummary {
@@ -181,6 +235,8 @@ export interface Digest {
   period_end: string;
   content: {
     html?: string;
+    digest_mode?: "events" | "quiet_week";
+    subject_line?: string;
     events_count?: number;
     holdings_count?: number;
     stable_holdings_count?: number;
@@ -189,6 +245,8 @@ export interface Digest {
     missing_theses_count?: number;
     stale_theses_count?: number;
     concentration_warning?: string;
+    monitoring_receipt?: string;
+    quiet_nudge?: string | null;
   };
   status: string;
 }
