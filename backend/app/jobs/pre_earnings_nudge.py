@@ -36,7 +36,7 @@ async def run_pre_earnings_nudge() -> None:
             logger.info("No earnings within nudge window, skipping")
             return
 
-        upcoming_tickers = {e.ticker: e.report_date for e in upcoming}
+        upcoming_tickers = {e.ticker.upper(): e.report_date for e in upcoming}
 
         # Find all users holding these tickers who have an active thesis
         holdings_result = await db.execute(
