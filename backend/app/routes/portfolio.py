@@ -287,6 +287,9 @@ async def add_manual_holding(
         last_updated_at=datetime.now(timezone.utc),
     )
     db.add(holding)
+    await db.flush()
+    from app.services.onboarding import mark_portfolio_connected
+    await mark_portfolio_connected(db, current_user.id)
     await db.commit()
     await db.refresh(holding)
     return holding

@@ -15,6 +15,7 @@ from app.models.earnings_calendar import EarningsCalendar
 from app.models.user_notification import UserNotification
 from app.models.quarterly_review import QuarterlyReview
 from app.models.quarterly_review_response import QuarterlyReviewResponse
+from app.models.onboarding_state import OnboardingState
 
 __all__ = [
     "User",
@@ -34,4 +35,5 @@ __all__ = [
     "UserNotification",
     "QuarterlyReview",
     "QuarterlyReviewResponse",
+    "OnboardingState",
 ]

@@ -23,6 +23,8 @@ from app.schemas.thesis import (
     CreateThesisRequest,
     DebugDecomposeRequest,
     DebugDecomposeResponse,
+    DraftThesisRequest,
+    DraftThesisResponse,
     HealthCheckResponse,
     InvalidateThesisRequest,
     ThesisDecompositionEnvelopeResponse,
@@ -30,7 +32,7 @@ from app.schemas.thesis import (
     ThesisResponse,
     UpdateThesisRequest,
 )
-from app.services.ai_thesis import assist_thesis, generate_counter_thesis
+from app.services.ai_thesis import assist_thesis, generate_counter_thesis, generate_initial_draft
 from app.services.conviction_log import (
     REASON_CREATED,
     REASON_INVALIDATED,
@@ -133,6 +135,8 @@ async def create_thesis(
         content=thesis.why_own_it,
         metadata={"confidence": thesis.confidence, "source": thesis.source},
     )
+    from app.services.onboarding import mark_reason_written
+    await mark_reason_written(db, current_user.id)
     await db.commit()
     await db.refresh(thesis)
     return thesis
@@ -164,6 +168,22 @@ async def assist_thesis_endpoint(
     if output is None:
         raise HTTPException(status_code=status.HTTP_502_BAD_GATEWAY, detail="Failed to assist thesis draft")
     return AssistThesisResponse(ai_summary=output.ai_summary, interpretation=output.interpretation)
+
+
+@router.post("/draft", response_model=DraftThesisResponse)
+async def draft_thesis_endpoint(
+    body: DraftThesisRequest,
+    current_user: User = Depends(get_current_user),
+    db: AsyncSession = Depends(get_db),
+):
+    # Simply generate a draft for the given ticker.
+    # No holding validation required here, as it's just a text generation helper.
+    output = await generate_initial_draft(ticker=body.ticker)
+    return DraftThesisResponse(
+        why_own_it=output["why_own_it"],
+        must_remain_true=output["must_remain_true"],
+        what_would_change_my_mind=output["what_would_change_my_mind"]
+    )
 
 
 @router.post("/debug/decompose", response_model=DebugDecomposeResponse)

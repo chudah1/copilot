@@ -494,6 +494,9 @@ async def run_digest_builder():
                     )
                     digest.status = "sent" if sent else "failed"
                     digest.sent_at = datetime.now(timezone.utc) if sent else None
+                    if sent:
+                        from app.services.onboarding import mark_digest_received
+                        await mark_digest_received(db, user.id)
                 else:
                     digest.status = "failed"
 

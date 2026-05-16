@@ -18,6 +18,19 @@ async def send_digest_email(to_email: str, subject: str, html_content: str) -> b
         return False
 
 
+async def send_onboarding_email(to_email: str, subject: str, html_content: str) -> bool:
+    if not settings.resend_api_key:
+        logger.warning("No Resend API key configured — skipping onboarding email send")
+        return False
+    resend.api_key = settings.resend_api_key
+    try:
+        resend.Emails.send({"from": "Copilot Investor <hello@copilotinvestor.com>", "to": [to_email], "subject": subject, "html": html_content})
+        return True
+    except Exception as e:
+        logger.error(f"Failed to send onboarding email to {to_email}: {e}")
+        return False
+
+
 async def send_password_reset_email(to_email: str, reset_token: str) -> bool:
     if not settings.resend_api_key:
         logger.warning("No Resend API key configured — skipping password reset email")

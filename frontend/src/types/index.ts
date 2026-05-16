@@ -393,6 +393,19 @@ export interface SimulateTradeResponse {
   warnings: SimulationWarning[];
 }
 
+export interface OnboardingBannerResponse {
+  show: boolean;
+  banner_type: "start_first_reason" | "first_reason_monitoring" | "add_more_reasons" | null;
+  message: string | null;
+  holdings_count: number;
+  reasons_count: number;
+  suggested_holding: {
+    id: string;
+    ticker: string;
+    name: string;
+  } | null;
+}
+
 export interface CounterThesisResponse {
   thesis_id: string;
   bear_case: string;
