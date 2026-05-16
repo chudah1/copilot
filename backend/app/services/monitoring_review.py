@@ -1,18 +1,30 @@
+import logging
 from datetime import datetime, timezone
 
+from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
+from sqlalchemy.orm import selectinload
 
 from app.models.monitoring_event import MonitoringEvent
 from app.models.thesis import Thesis
+from app.models.thesis_claim import ThesisClaim
+from app.models.thesis_decomposition import ThesisDecomposition
+from app.models.thesis_entity import ThesisEntity
 from app.models.thesis_review import ThesisReview
+from app.models.thesis_signal import ThesisSignal
 
+logger = logging.getLogger(__name__)
 
 VALID_REVIEW_ACTIONS = {
     "reaffirmed",
     "ignored",
     "lowered_confidence",
     "invalidated",
+    "not_relevant",
 }
+
+IGNORE_ACTIONS = {"ignored", "not_relevant"}
+SIGNAL_DECAY_THRESHOLD = 3
 
 
 def _lower_confidence(current: str) -> str:
@@ -21,6 +33,59 @@ def _lower_confidence(current: str) -> str:
     if current == "medium":
         return "low"
     return "low"
+
+
+async def _load_signal(db: AsyncSession, signal_id) -> ThesisSignal | None:
+    if signal_id is None:
+        return None
+    result = await db.execute(
+        select(ThesisSignal).where(ThesisSignal.id == signal_id)
+    )
+    return result.scalar_one_or_none()
+
+
+async def _rebuild_interpretation_cache(db: AsyncSession, thesis: Thesis) -> None:
+    """Rebuild the interpretation cache after a signal is deactivated."""
+    from app.services.decomposition import _sync_interpretation_cache
+
+    result = await db.execute(
+        select(ThesisDecomposition)
+        .where(
+            ThesisDecomposition.thesis_id == thesis.id,
+            ThesisDecomposition.status.in_(["confirmed", "partially_confirmed"]),
+        )
+        .order_by(ThesisDecomposition.version.desc())
+        .limit(1)
+        .options(
+            selectinload(ThesisDecomposition.claims)
+            .selectinload(ThesisClaim.entities)
+            .selectinload(ThesisEntity.signals)
+        )
+    )
+    decomposition = result.scalar_one_or_none()
+    if decomposition is None:
+        return
+
+    labels: list[str] = []
+    for claim in decomposition.claims:
+        if claim.claim_type and claim.claim_type not in labels:
+            labels.append(claim.claim_type)
+
+    active_signals = [
+        signal
+        for claim in decomposition.claims
+        for entity in claim.entities
+        for signal in entity.signals
+        if signal.active
+    ]
+
+    _sync_interpretation_cache(
+        thesis,
+        reason_type=decomposition.reason_type,
+        monitorability=decomposition.monitorability,
+        labels=labels,
+        active_signals=active_signals,
+    )
 
 
 async def review_monitoring_event(
@@ -48,7 +113,7 @@ async def review_monitoring_event(
             raise ValueError("Invalidated theses cannot be reaffirmed")
         thesis.status = "active"
         thesis.updated_at = now
-    elif action == "ignored":
+    elif action in IGNORE_ACTIONS:
         if thesis.status != "invalidated":
             thesis.status = "active"
             thesis.updated_at = now
@@ -63,6 +128,22 @@ async def review_monitoring_event(
         thesis.invalidated_at = now
         thesis.invalidation_reason = notes or f"Invalidated after reviewing monitoring event: {event.title}"
         thesis.updated_at = now
+
+    # Signal decay: track consecutive ignores
+    signal = await _load_signal(db, event.signal_id)
+    if signal is not None:
+        if action in IGNORE_ACTIONS:
+            signal.consecutive_ignores += 1
+            if signal.consecutive_ignores >= SIGNAL_DECAY_THRESHOLD and signal.active:
+                signal.active = False
+                logger.info(
+                    "Signal %s auto-deactivated after %d consecutive ignores",
+                    signal.id,
+                    signal.consecutive_ignores,
+                )
+                await _rebuild_interpretation_cache(db, thesis)
+        else:
+            signal.consecutive_ignores = 0
 
     await db.commit()
     await db.refresh(review)
