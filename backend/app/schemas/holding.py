@@ -49,6 +49,8 @@ class HoldingPulseResponse(BaseModel):
     latest_event_summary: str | None = None
     days_since_thesis_update: int | None = None
     has_thesis: bool
+    pnl_pct: float | None = None
+    last_checked_at: datetime | None = None
 
 
 class PortfolioPulseResponse(BaseModel):
@@ -78,10 +80,27 @@ class PortfolioSummary(BaseModel):
     attention_queue: list[PriorityHoldingSummary]
 
 
+class MarketSnapshotResponse(BaseModel):
+    current_price: float | None = None
+    price_change_pct: float | None = None
+    cost_basis: float | None = None
+    pnl: float | None = None
+    pnl_pct: float | None = None
+    sector: str | None = None
+    pe_ratio: float | None = None
+    market_cap: float | None = None
+    upcoming_earnings_date: datetime | None = None
+    recent_news_count: int = 0
+    watch_hints_ok: int = 0
+    watch_hints_total: int = 0
+    checked_at: datetime | None = None
+
+
 class CheckNowResponse(BaseModel):
     status: str  # completed | rate_limited
     events_created: int
     next_available_at: datetime | None = None
+    snapshot: MarketSnapshotResponse | None = None
 
 
 class PortfolioTrendResponse(BaseModel):
@@ -121,3 +140,26 @@ class SimulateTradeResponse(BaseModel):
     before: PortfolioSnapshotResponse
     after: PortfolioSnapshotResponse
     warnings: list[SimulationWarningResponse]
+
+
+class ConvictionLogEntryResponse(BaseModel):
+    id: uuid.UUID
+    thesis_id: uuid.UUID
+    holding_id: uuid.UUID
+    entry_type: str
+    content: str
+    metadata_json: dict | None = None
+    claim_id: uuid.UUID | None = None
+    signal_id: uuid.UUID | None = None
+    created_at: datetime
+    model_config = {"from_attributes": True}
+
+
+class ConvictionLogResponse(BaseModel):
+    entries: list[ConvictionLogEntryResponse]
+    reason_age_days: int | None = None
+    review_count: int = 0
+
+
+class ManualNoteRequest(BaseModel):
+    content: str = Field(min_length=1, max_length=2000)

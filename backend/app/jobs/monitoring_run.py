@@ -13,6 +13,7 @@ from app.models.monitoring_event import MonitoringEvent
 from app.services.monitoring import check_metric_watch_hints, generate_monitoring_candidates
 from app.services.market_data import CompanyData, fetch_company_data, shortlist_qualitative_candidates
 from app.services.ai_monitor import classify_event
+from app.services.conviction_log import EVIDENCE_RECEIVED, append_log_entry
 from app.services.noise_filter import (
     EVIDENCE_TYPE_MAP,
     apply_priority_suppression,
@@ -349,6 +350,17 @@ async def run_monitoring():
                     )
                     db.add(event)
                     await record_signal_fired(evidence_signal_id, signals_by_id, now=now)
+                    append_log_entry(
+                        db,
+                        thesis_id=thesis.id,
+                        holding_id=holding.id,
+                        user_id=thesis.user_id,
+                        entry_type=EVIDENCE_RECEIVED,
+                        content=evidence_summary or stored_summary[:300],
+                        metadata={"event_type": candidate["event_type"], "severity": severity},
+                        claim_id=uuid.UUID(evidence_claim_id) if evidence_claim_id else None,
+                        signal_id=uuid.UUID(evidence_signal_id) if evidence_signal_id else None,
+                    )
 
                     if severity == "thesis_breaking" and thesis.status == "active":
                         thesis.status = "needs_review"

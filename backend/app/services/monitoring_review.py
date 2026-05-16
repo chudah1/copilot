@@ -12,6 +12,7 @@ from app.models.thesis_decomposition import ThesisDecomposition
 from app.models.thesis_entity import ThesisEntity
 from app.models.thesis_review import ThesisReview
 from app.models.thesis_signal import ThesisSignal
+from app.services.conviction_log import EVIDENCE_REVIEWED, append_log_entry
 
 logger = logging.getLogger(__name__)
 
@@ -146,6 +147,19 @@ async def review_monitoring_event(
                 # "We stopped watching {signal_label} because you've ignored it 3 times."
         else:
             signal.consecutive_ignores = 0
+
+    # Conviction log: evidence reviewed
+    append_log_entry(
+        db,
+        thesis_id=thesis.id,
+        holding_id=event.holding_id,
+        user_id=thesis.user_id,
+        entry_type=EVIDENCE_REVIEWED,
+        content=f"{action}: {event.summary[:200] if event.summary else event.title}",
+        metadata={"action": action, "notes": notes, "event_id": str(event.id)},
+        claim_id=event.claim_id,
+        signal_id=event.signal_id,
+    )
 
     await db.commit()
     await db.refresh(review)

@@ -31,6 +31,12 @@ from app.schemas.thesis import (
     UpdateThesisRequest,
 )
 from app.services.ai_thesis import assist_thesis, generate_counter_thesis
+from app.services.conviction_log import (
+    REASON_CREATED,
+    REASON_INVALIDATED,
+    REASON_UPDATED,
+    append_log_entry,
+)
 from app.services.decomposition import (
     PersistedDecompositionResult,
     confirm_decomposition_for_thesis,
@@ -117,6 +123,16 @@ async def create_thesis(
         source=body.source,
     )
     db.add(thesis)
+    await db.flush()
+    append_log_entry(
+        db,
+        thesis_id=thesis.id,
+        holding_id=holding.id,
+        user_id=current_user.id,
+        entry_type=REASON_CREATED,
+        content=thesis.why_own_it,
+        metadata={"confidence": thesis.confidence, "source": thesis.source},
+    )
     await db.commit()
     await db.refresh(thesis)
     return thesis
@@ -334,15 +350,21 @@ async def update_thesis(
     if thesis is None:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Thesis not found")
 
+    changed_fields: dict[str, str] = {}
+    reason_text_changed = False
+
     if body.thesis_kind is not None:
         thesis.thesis_kind = body.thesis_kind
-    if body.why_own_it is not None:
+    if body.why_own_it is not None and body.why_own_it != thesis.why_own_it:
+        changed_fields["why_own_it"] = body.why_own_it
         thesis.why_own_it = body.why_own_it
+        reason_text_changed = True
     if body.must_remain_true is not None:
         thesis.must_remain_true = body.must_remain_true
     if body.what_would_change_my_mind is not None:
         thesis.what_would_change_my_mind = body.what_would_change_my_mind
-    if body.confidence is not None:
+    if body.confidence is not None and body.confidence != thesis.confidence:
+        changed_fields["confidence"] = body.confidence
         thesis.confidence = body.confidence
     if body.review_cadence_days is not None:
         thesis.review_cadence_days = body.review_cadence_days
@@ -354,6 +376,17 @@ async def update_thesis(
         thesis.source = body.source
     if body.status is not None:
         thesis.status = body.status
+
+    if reason_text_changed:
+        append_log_entry(
+            db,
+            thesis_id=thesis.id,
+            holding_id=thesis.holding_id,
+            user_id=current_user.id,
+            entry_type=REASON_UPDATED,
+            content=thesis.why_own_it,
+            metadata=changed_fields if changed_fields else None,
+        )
 
     await db.commit()
     await db.refresh(thesis)
@@ -380,6 +413,15 @@ async def invalidate_thesis(
     thesis.status = "invalidated"
     thesis.invalidated_at = datetime.now(timezone.utc)
     thesis.invalidation_reason = body.reason
+
+    append_log_entry(
+        db,
+        thesis_id=thesis.id,
+        holding_id=thesis.holding_id,
+        user_id=current_user.id,
+        entry_type=REASON_INVALIDATED,
+        content=body.reason or "Thesis invalidated",
+    )
 
     await db.commit()
     await db.refresh(thesis)

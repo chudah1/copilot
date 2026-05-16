@@ -27,3 +27,4 @@ class User(Base):
     holdings = relationship("Holding", back_populates="user")
     theses = relationship("Thesis", back_populates="user")
     digests = relationship("Digest", back_populates="user")
+    conviction_log_entries = relationship("ConvictionLogEntry", back_populates="user")

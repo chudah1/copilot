@@ -13,6 +13,12 @@ from app.models.thesis_claim import ThesisClaim
 from app.models.thesis_decomposition import ThesisDecomposition
 from app.models.thesis_entity import ThesisEntity
 from app.models.thesis_signal import ThesisSignal
+from app.services.conviction_log import (
+    SIGNAL_CONFIRMED,
+    SIGNAL_REMOVED,
+    SIGNALS_GENERATED,
+    append_log_entry,
+)
 from app.services.reasoning.gateway import ThesisReasoningGateway
 from app.services.reasoning.normalizers import normalize_decomposition_output, to_float
 from app.services.reasoning.providers import (
@@ -342,6 +348,35 @@ async def _persist_successful_decomposition(
         active_signals=active_signals,
         signal_claim_map=signal_claim_map,
     )
+
+    # Conviction log: signals generated
+    total_claims = len(normalized.get("claims", []))
+    total_signals = sum(
+        len(sig_list)
+        for c in normalized.get("claims", [])
+        for e in c.get("entities", [])
+        for sig_list in [e.get("signals", [])]
+    )
+    total_entities = sum(
+        len(c.get("entities", []))
+        for c in normalized.get("claims", [])
+    )
+    append_log_entry(
+        db,
+        thesis_id=thesis.id,
+        holding_id=holding.id,
+        user_id=thesis.user_id,
+        entry_type=SIGNALS_GENERATED,
+        content=f"{total_signals} signals across {total_entities} entities",
+        metadata={
+            "decomposition_id": str(decomposition.id),
+            "claims": total_claims,
+            "entities": total_entities,
+            "signals": total_signals,
+            "auto_activated": len(active_signals),
+        },
+    )
+
     await db.commit()
     return decomposition
 
@@ -469,6 +504,32 @@ async def confirm_decomposition_for_thesis(
         labels=labels,
         active_signals=active_signals,
     )
+
+    # Conviction log: signal confirmed / removed
+    for signal_update in signal_confirmations:
+        signal = signals_by_id.get(signal_update["id"])
+        if signal is None:
+            continue
+        if signal.user_confirmed is True:
+            append_log_entry(
+                db,
+                thesis_id=thesis.id,
+                holding_id=holding.id,
+                user_id=thesis.user_id,
+                entry_type=SIGNAL_CONFIRMED,
+                content=f"Confirmed: {signal.signal_label or signal.signal_type}",
+                signal_id=signal.id,
+            )
+        elif signal.user_confirmed is False:
+            append_log_entry(
+                db,
+                thesis_id=thesis.id,
+                holding_id=holding.id,
+                user_id=thesis.user_id,
+                entry_type=SIGNAL_REMOVED,
+                content=f"Removed: {signal.signal_label or signal.signal_type}",
+                signal_id=signal.id,
+            )
 
     await db.commit()
     await db.refresh(decomposition)

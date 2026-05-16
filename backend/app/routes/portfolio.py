@@ -13,7 +13,19 @@ from app.models.holding import Holding
 from app.models.thesis import Thesis
 from app.models.user import User
 from app.schemas.broker_connection import ConnectBrokerRequest, BrokerConnectionResponse
-from app.schemas.holding import HoldingResponse, ManualHoldingRequest, PortfolioSummary, PortfolioPulseResponse, PortfolioTrendResponse, PriorityHoldingSummary, SimulateTradeRequest, SimulateTradeResponse
+from app.schemas.holding import (
+    ConvictionLogEntryResponse,
+    ConvictionLogResponse,
+    HoldingResponse,
+    ManualHoldingRequest,
+    ManualNoteRequest,
+    PortfolioPulseResponse,
+    PortfolioSummary,
+    PortfolioTrendResponse,
+    PriorityHoldingSummary,
+    SimulateTradeRequest,
+    SimulateTradeResponse,
+)
 from app.services.encryption import encrypt, decrypt
 from app.services.trading212 import Trading212Client
 from app.services.csv_parser import parse_csv
@@ -638,3 +650,90 @@ async def simulate_trade(
             for w in result.warnings
         ],
     )
+
+
+@router.get("/holdings/{holding_id}/conviction-log", response_model=ConvictionLogResponse)
+async def get_conviction_log(
+    holding_id: uuid.UUID,
+    current_user: User = Depends(get_current_user),
+    db: AsyncSession = Depends(get_db),
+):
+    from app.models.conviction_log_entry import ConvictionLogEntry
+    from app.services.conviction_log import EVIDENCE_REVIEWED
+
+    # Verify holding belongs to user
+    holding_result = await db.execute(
+        select(Holding).where(Holding.id == holding_id, Holding.user_id == current_user.id)
+    )
+    holding = holding_result.scalar_one_or_none()
+    if holding is None:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Holding not found")
+
+    # Fetch all entries, newest first
+    entries_result = await db.execute(
+        select(ConvictionLogEntry)
+        .where(ConvictionLogEntry.holding_id == holding_id)
+        .order_by(ConvictionLogEntry.created_at.desc())
+    )
+    entries = entries_result.scalars().all()
+
+    # Compute reason age: days since first reason_created entry
+    reason_age_days = None
+    for entry in reversed(entries):
+        if entry.entry_type == "reason_created":
+            reason_age_days = _age_in_days(entry.created_at)
+            break
+
+    review_count = sum(1 for e in entries if e.entry_type == EVIDENCE_REVIEWED)
+
+    return ConvictionLogResponse(
+        entries=entries,
+        reason_age_days=reason_age_days,
+        review_count=review_count,
+    )
+
+
+@router.post(
+    "/holdings/{holding_id}/conviction-log",
+    response_model=ConvictionLogEntryResponse,
+    status_code=status.HTTP_201_CREATED,
+)
+async def add_manual_note(
+    holding_id: uuid.UUID,
+    body: ManualNoteRequest,
+    current_user: User = Depends(get_current_user),
+    db: AsyncSession = Depends(get_db),
+):
+    from app.services.conviction_log import MANUAL_NOTE, append_log_entry
+
+    # Verify holding belongs to user
+    holding_result = await db.execute(
+        select(Holding).where(Holding.id == holding_id, Holding.user_id == current_user.id)
+    )
+    holding = holding_result.scalar_one_or_none()
+    if holding is None:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Holding not found")
+
+    # Need a thesis for this holding
+    thesis_result = await db.execute(
+        select(Thesis).where(
+            Thesis.holding_id == holding_id,
+            Thesis.user_id == current_user.id,
+            Thesis.status.in_(["draft", "active", "needs_review"]),
+        )
+    )
+    thesis = thesis_result.scalar_one_or_none()
+    if thesis is None:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="No active thesis for this holding")
+
+    entry = append_log_entry(
+        db,
+        thesis_id=thesis.id,
+        holding_id=holding.id,
+        user_id=current_user.id,
+        entry_type=MANUAL_NOTE,
+        content=body.content,
+    )
+    await db.commit()
+    await db.refresh(entry)
+    return entry

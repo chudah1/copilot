@@ -10,6 +10,7 @@ from app.models.monitoring_event import MonitoringEvent
 from app.models.thesis_review import ThesisReview
 from app.models.digest import Digest
 from app.models.portfolio_snapshot import PortfolioSnapshot
+from app.models.conviction_log_entry import ConvictionLogEntry
 
 __all__ = [
     "User",
@@ -24,4 +25,5 @@ __all__ = [
     "ThesisReview",
     "Digest",
     "PortfolioSnapshot",
+    "ConvictionLogEntry",
 ]
