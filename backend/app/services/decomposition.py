@@ -146,10 +146,11 @@ def _signal_is_direct_and_auto_activatable(
     )
 
 
-def _watch_hint_from_signal(signal: ThesisSignal) -> dict | None:
+def _watch_hint_from_signal(signal: ThesisSignal, *, override_claim_id: str | None = None) -> dict | None:
     config = signal.signal_config_json or {}
-    # Derive claim_id via signal -> entity -> claim
-    claim_id = str(signal.entity.claim_id) if signal.entity else None
+    # Use explicit claim_id if provided (avoids lazy-load on freshly constructed signals),
+    # otherwise derive from eagerly loaded entity relationship.
+    claim_id = override_claim_id or (str(signal.entity.claim_id) if signal.entity else None)
     signal_id = str(signal.id)
 
     if signal.signal_type == "price_move":
@@ -197,6 +198,7 @@ def _sync_interpretation_cache(
     monitorability: str | None,
     labels: list[str],
     active_signals: list[ThesisSignal],
+    signal_claim_map: dict[str, str] | None = None,
 ) -> None:
     if not active_signals:
         thesis.interpretation = None
@@ -204,7 +206,8 @@ def _sync_interpretation_cache(
 
     watch_hints: list[dict] = []
     for signal in active_signals:
-        hint = _watch_hint_from_signal(signal)
+        override = signal_claim_map.get(str(signal.id)) if signal_claim_map else None
+        hint = _watch_hint_from_signal(signal, override_claim_id=override)
         if hint is not None:
             watch_hints.append(hint)
 
@@ -274,6 +277,7 @@ async def _persist_successful_decomposition(
 
     interpretation_labels: list[str] = []
     active_signals: list[ThesisSignal] = []
+    signal_claim_map: dict[str, str] = {}  # signal_id -> claim_id for freshly built signals
 
     for position, claim_data in enumerate(normalized.get("claims", []), start=1):
         if claim_data.get("claim_type") and claim_data["claim_type"] not in interpretation_labels:
@@ -327,6 +331,7 @@ async def _persist_successful_decomposition(
                 db.add(signal)
                 if auto_activate:
                     active_signals.append(signal)
+                    signal_claim_map[str(signal.id)] = str(claim.id)
 
     await db.flush()
     _sync_interpretation_cache(
@@ -335,6 +340,7 @@ async def _persist_successful_decomposition(
         monitorability=normalized.get("monitorability"),
         labels=interpretation_labels,
         active_signals=active_signals,
+        signal_claim_map=signal_claim_map,
     )
     await db.commit()
     return decomposition

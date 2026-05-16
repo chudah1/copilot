@@ -9,7 +9,7 @@ from app.models.holding import Holding
 from app.models.monitoring_event import MonitoringEvent
 from app.models.thesis import Thesis
 from app.models.user import User
-from app.schemas.holding import CheckNowResponse
+from app.schemas.holding import CheckNowResponse, MarketSnapshotResponse
 from app.schemas.monitoring_event import (
     MonitoringEventResponse,
     MonitoringEventReviewResponse,
@@ -47,6 +47,11 @@ async def get_events_for_holding(holding_id: uuid.UUID, user: User = Depends(get
             ai_analysis=event.ai_analysis,
             review_action=event.reviews[0].action if event.reviews else None,
             review_notes=event.reviews[0].notes if event.reviews else None,
+            claim_id=event.claim_id,
+            signal_id=event.signal_id,
+            evidence_type=event.evidence_type,
+            evidence_summary=event.evidence_summary,
+            verdict=event.verdict,
             created_at=event.created_at,
         )
         for event in events
@@ -125,8 +130,27 @@ async def check_now(
 
     result = await run_check_now(holding, thesis, db)
 
+    snapshot_response = None
+    if result.snapshot is not None:
+        snapshot_response = MarketSnapshotResponse(
+            current_price=result.snapshot.current_price,
+            price_change_pct=result.snapshot.price_change_pct,
+            cost_basis=result.snapshot.cost_basis,
+            pnl=result.snapshot.pnl,
+            pnl_pct=result.snapshot.pnl_pct,
+            sector=result.snapshot.sector,
+            pe_ratio=result.snapshot.pe_ratio,
+            market_cap=result.snapshot.market_cap,
+            upcoming_earnings_date=result.snapshot.upcoming_earnings_date,
+            recent_news_count=result.snapshot.recent_news_count,
+            watch_hints_ok=result.snapshot.watch_hints_ok,
+            watch_hints_total=result.snapshot.watch_hints_total,
+            checked_at=result.snapshot.checked_at,
+        )
+
     return CheckNowResponse(
         status=result.status,
         events_created=result.events_created,
         next_available_at=result.next_available_at,
+        snapshot=snapshot_response,
     )

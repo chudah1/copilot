@@ -54,15 +54,15 @@ def match_candidates_to_signals(
         event_type = candidate.get("event_type", "")
         matched_claim = None
 
-        if event_type in ("earnings_surprise", "upcoming_earnings", "earnings_call"):
+        if event_type in ("earnings_surprise", "upcoming_earnings", "earnings_call_transcript"):
             matched_claim = _find_claim_by_type_keywords(claims, EARNINGS_CLAIM_KEYWORDS)
-        elif event_type == "news_keyword":
+        elif event_type == "news_or_earnings_candidate":
             headline = evidence.get("headline") or candidate.get("description", "")
             matched_claim = _find_claim_by_text_overlap(claims, headline)
-        elif event_type == "insider_activity":
+        elif event_type == "insider_transaction":
             matched_claim = _find_claim_by_type_keywords(claims, MANAGEMENT_CLAIM_KEYWORDS)
 
-        if matched_claim is None and event_type in ("earnings_surprise", "upcoming_earnings", "earnings_call", "insider_activity"):
+        if matched_claim is None and event_type in ("earnings_surprise", "upcoming_earnings", "earnings_call_transcript", "insider_transaction"):
             sorted_claims = sorted(claims, key=lambda c: c.position)
             if sorted_claims:
                 matched_claim = sorted_claims[0]

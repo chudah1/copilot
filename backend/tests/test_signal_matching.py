@@ -229,14 +229,14 @@ def test_match_candidates_upcoming_earnings():
     assert result[0]["evidence"]["claim_id"] == str(claims[0].id)
 
 
-def test_match_candidates_news_keyword():
+def test_match_candidates_news_or_earnings_candidate():
     claims = [
         _make_claim("growth", "iPhone demand remains strong globally", position=0),
         _make_claim("moat", "Services ecosystem creates lock-in", position=1),
     ]
     candidates = [
         {
-            "event_type": "news_keyword",
+            "event_type": "news_or_earnings_candidate",
             "description": "Apple iPhone sales surge in China market",
             "evidence": {"headline": "Apple iPhone sales surge in China market"},
         }

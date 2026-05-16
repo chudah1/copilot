@@ -313,11 +313,11 @@ async def run_monitoring():
                     evidence_type_map = {
                         "price_move": "price_move",
                         "metric_threshold": "metric_breach",
-                        "news_keyword": "news",
+                        "news_or_earnings_candidate": "news",
                         "earnings_surprise": "earnings",
                         "upcoming_earnings": "earnings",
-                        "earnings_call": "earnings",
-                        "insider_activity": "insider",
+                        "earnings_call_transcript": "earnings",
+                        "insider_transaction": "insider",
                     }
                     evidence_type = evidence_type_map.get(evt_type, evt_type)
 
