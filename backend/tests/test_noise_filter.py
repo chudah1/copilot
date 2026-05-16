@@ -1,14 +1,15 @@
 import uuid
 from datetime import datetime, timedelta, timezone
-from unittest.mock import MagicMock
+from unittest.mock import AsyncMock, MagicMock, patch
 
 import pytest
 
 from app.services.noise_filter import (
     _apply_evidence_dedup,
     _apply_minimum_relevance,
-    _apply_priority_suppression,
     _apply_signal_cooldown,
+    apply_priority_suppression,
+    filter_candidates,
     record_signal_fired,
 )
 
@@ -22,12 +23,12 @@ def _make_signal(signal_id: str, last_fired_at: datetime | None = None) -> Magic
 
 
 # ---------------------------------------------------------------------------
-# Rule 1: Evidence dedup
+# Rule 1: Evidence dedup (scoped by evidence_type + source_id)
 # ---------------------------------------------------------------------------
 
 
 def test_evidence_dedup_skips_existing_article():
-    existing = {"article-123"}
+    existing = {("news", "article-123")}
     candidates = [
         {"event_type": "news_or_earnings_candidate", "evidence": {"article_id": "article-123", "headline": "Old news"}},
         {"event_type": "news_or_earnings_candidate", "evidence": {"article_id": "article-456", "headline": "New news"}},
@@ -38,7 +39,7 @@ def test_evidence_dedup_skips_existing_article():
 
 
 def test_evidence_dedup_skips_existing_transaction():
-    existing = {"txn-abc"}
+    existing = {("insider", "txn-abc")}
     candidates = [
         {"event_type": "insider_transaction", "evidence": {"transaction_id": "txn-abc"}},
     ]
@@ -47,7 +48,7 @@ def test_evidence_dedup_skips_existing_transaction():
 
 
 def test_evidence_dedup_skips_existing_transcript():
-    existing = {"transcript:2026Q1"}
+    existing = {("earnings", "transcript:2026Q1")}
     candidates = [
         {"event_type": "earnings_call_transcript", "evidence": {"transcript_id": "transcript:2026Q1"}},
     ]
@@ -56,7 +57,7 @@ def test_evidence_dedup_skips_existing_transcript():
 
 
 def test_evidence_dedup_keeps_candidates_without_source_id():
-    existing = set()
+    existing: set[tuple[str, str]] = set()
     candidates = [
         {"event_type": "price_move", "evidence": {"current_price": 150.0}},
         {"event_type": "metric_threshold", "evidence": {"metric": "pe_ratio"}},
@@ -66,12 +67,23 @@ def test_evidence_dedup_keeps_candidates_without_source_id():
 
 
 def test_evidence_dedup_deduplicates_within_batch():
-    existing = set()
+    existing: set[tuple[str, str]] = set()
     candidates = [
         {"event_type": "news_or_earnings_candidate", "evidence": {"article_id": "same-article"}},
         {"event_type": "news_or_earnings_candidate", "evidence": {"article_id": "same-article"}},
     ]
     result = _apply_evidence_dedup(candidates, existing)
+    assert len(result) == 1
+
+
+def test_evidence_dedup_allows_same_source_different_evidence_type():
+    """Same article_id but different evidence_type should NOT be deduped."""
+    existing = {("news", "shared-id")}
+    candidates = [
+        {"event_type": "earnings_call_transcript", "evidence": {"article_id": "shared-id"}},
+    ]
+    result = _apply_evidence_dedup(candidates, existing)
+    # "earnings" != "news", so this should survive
     assert len(result) == 1
 
 
@@ -137,7 +149,7 @@ def test_signal_cooldown_price_move_within_window():
 
 
 def test_signal_cooldown_allows_no_signal_id():
-    signal_map = {}
+    signal_map: dict = {}
     candidates = [
         {"event_type": "price_move", "evidence": {"current_price": 150}},
     ]
@@ -158,44 +170,44 @@ def test_signal_cooldown_allows_never_fired():
 
 
 # ---------------------------------------------------------------------------
-# Rule 3: Priority suppression
+# Rule 3: Priority suppression (operates on classified tuples)
 # ---------------------------------------------------------------------------
 
 
 def test_priority_suppression_drops_lower_severity_same_source():
-    candidates = [
-        {"event_type": "price_move", "evidence": {"article_id": "src-1"}, "_severity": "thesis_breaking"},
-        {"event_type": "metric_threshold", "evidence": {"article_id": "src-1"}, "_severity": "warning"},
+    classified = [
+        ({"event_type": "price_move", "evidence": {"article_id": "src-1"}}, "thesis_breaking"),
+        ({"event_type": "metric_threshold", "evidence": {"article_id": "src-1"}}, "warning"),
     ]
-    result = _apply_priority_suppression(candidates)
+    result = apply_priority_suppression(classified)
     assert len(result) == 1
-    assert result[0]["_severity"] == "thesis_breaking"
+    assert result[0][1] == "thesis_breaking"
 
 
 def test_priority_suppression_keeps_different_sources():
-    candidates = [
-        {"event_type": "price_move", "evidence": {"article_id": "src-1"}, "_severity": "thesis_breaking"},
-        {"event_type": "news_or_earnings_candidate", "evidence": {"article_id": "src-2"}, "_severity": "warning"},
+    classified = [
+        ({"event_type": "price_move", "evidence": {"article_id": "src-1"}}, "thesis_breaking"),
+        ({"event_type": "news_or_earnings_candidate", "evidence": {"article_id": "src-2"}}, "warning"),
     ]
-    result = _apply_priority_suppression(candidates)
+    result = apply_priority_suppression(classified)
     assert len(result) == 2
 
 
 def test_priority_suppression_no_breaking_keeps_all():
-    candidates = [
-        {"event_type": "price_move", "evidence": {"article_id": "src-1"}, "_severity": "warning"},
-        {"event_type": "news_or_earnings_candidate", "evidence": {"article_id": "src-1"}, "_severity": "info"},
+    classified = [
+        ({"event_type": "price_move", "evidence": {"article_id": "src-1"}}, "warning"),
+        ({"event_type": "news_or_earnings_candidate", "evidence": {"article_id": "src-1"}}, "info"),
     ]
-    result = _apply_priority_suppression(candidates)
+    result = apply_priority_suppression(classified)
     assert len(result) == 2
 
 
 def test_priority_suppression_no_source_id_kept():
-    candidates = [
-        {"event_type": "price_move", "evidence": {"current_price": 150}, "_severity": "thesis_breaking"},
-        {"event_type": "metric_threshold", "evidence": {"metric": "pe"}, "_severity": "warning"},
+    classified = [
+        ({"event_type": "price_move", "evidence": {"current_price": 150}}, "thesis_breaking"),
+        ({"event_type": "metric_threshold", "evidence": {"metric": "pe"}}, "warning"),
     ]
-    result = _apply_priority_suppression(candidates)
+    result = apply_priority_suppression(classified)
     assert len(result) == 2
 
 
@@ -258,28 +270,24 @@ async def test_record_signal_fired_updates_last_fired_at():
 
 @pytest.mark.asyncio
 async def test_record_signal_fired_noop_for_none():
-    signal_map = {}
+    signal_map: dict = {}
     await record_signal_fired(None, signal_map)
 
 
 @pytest.mark.asyncio
 async def test_record_signal_fired_noop_for_unknown_signal():
-    signal_map = {}
+    signal_map: dict = {}
     await record_signal_fired(str(uuid.uuid4()), signal_map)
 
 
 # ---------------------------------------------------------------------------
-# Integration: filter_candidates with DB (evidence dedup)
+# Integration: filter_candidates (rules 1, 2, 4) + priority suppression
 # ---------------------------------------------------------------------------
-
-from unittest.mock import AsyncMock, patch
-
-from app.services.noise_filter import filter_candidates
 
 
 @pytest.mark.asyncio
-async def test_filter_candidates_combines_all_rules():
-    """Integration: all 4 rules applied in sequence."""
+async def test_filter_candidates_combines_rules_1_2_4():
+    """Integration: rules 1, 2, 4 applied in filter_candidates."""
     now = datetime(2026, 5, 16, 12, 0, tzinfo=timezone.utc)
     holding_id = uuid.uuid4()
     signal_id = str(uuid.uuid4())
@@ -297,10 +305,25 @@ async def test_filter_candidates_combines_all_rules():
         {"event_type": "price_move", "evidence": {"current_price": 150}},
     ]
 
-    with patch("app.services.noise_filter._load_recent_evidence_ids", new_callable=AsyncMock) as mock_load:
-        mock_load.return_value = {"old-article"}
+    with patch("app.services.noise_filter._load_recent_evidence_keys", new_callable=AsyncMock) as mock_load:
+        mock_load.return_value = {("news", "old-article")}
         db_mock = AsyncMock()
         result = await filter_candidates(candidates, holding_id, signal_map, db_mock, now=now)
 
     assert len(result) == 1
     assert result[0]["event_type"] == "price_move"
+
+
+def test_priority_suppression_end_to_end():
+    """Priority suppression drops warning when thesis_breaking exists for same source."""
+    classified = [
+        ({"event_type": "price_move", "evidence": {"article_id": "src-1"}, "description": "Price moved"}, "thesis_breaking"),
+        ({"event_type": "news_or_earnings_candidate", "evidence": {"article_id": "src-1"}, "description": "News"}, "warning"),
+        ({"event_type": "earnings_surprise", "evidence": {"article_id": "src-2"}, "description": "Earnings"}, "warning"),
+    ]
+    result = apply_priority_suppression(classified)
+    assert len(result) == 2
+    event_types = [c["event_type"] for c, _ in result]
+    assert "price_move" in event_types
+    assert "earnings_surprise" in event_types
+    assert "news_or_earnings_candidate" not in event_types

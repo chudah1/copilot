@@ -13,7 +13,12 @@ from app.models.monitoring_event import MonitoringEvent
 from app.services.monitoring import check_metric_watch_hints, generate_monitoring_candidates
 from app.services.market_data import CompanyData, fetch_company_data, shortlist_qualitative_candidates
 from app.services.ai_monitor import classify_event
-from app.services.noise_filter import filter_candidates, record_signal_fired
+from app.services.noise_filter import (
+    EVIDENCE_TYPE_MAP,
+    apply_priority_suppression,
+    filter_candidates,
+    record_signal_fired,
+)
 from app.services.signal_matching import (
     build_evidence_summary,
     determine_verdict,
@@ -259,15 +264,16 @@ async def run_monitoring():
                 if not candidates:
                     continue
 
-                # Noise suppression: filter before event creation
+                # Noise suppression: filter before classification (rules 1, 2, 4)
                 candidates = await filter_candidates(candidates, holding.id, signals_by_id, db, now=now)
 
+                # Classify all surviving candidates
+                classified: list[tuple[dict, str, str | None]] = []
                 for candidate in candidates:
                     evidence = candidate.get("evidence", {})
 
                     # For proxy events, include the causal context so the
                     # classifier understands why this upstream signal matters
-                    # and what specifically to evaluate in the data
                     event_desc = candidate["description"]
                     proxy_rationale = evidence.get("proxy_rationale")
                     proxy_signal_hint = evidence.get("proxy_signal_hint")
@@ -286,7 +292,15 @@ async def run_monitoring():
 
                     severity = classification.severity if classification else "warning"
                     ai_analysis = classification.analysis if classification else None
+                    classified.append((candidate, severity, ai_analysis))
 
+                # Rule 3: Priority suppression (post-classification)
+                suppressed = apply_priority_suppression([(c, s) for c, s, _ in classified])
+                surviving_set = {id(c) for c, _ in suppressed}
+                classified = [(c, s, a) for c, s, a in classified if id(c) in surviving_set]
+
+                for candidate, severity, ai_analysis in classified:
+                    evidence = candidate.get("evidence", {})
                     source_url = evidence.get("url")
 
                     # Signal linking fields
@@ -302,22 +316,12 @@ async def run_monitoring():
                         why_own_it=thesis.why_own_it,
                     )
                     verdict = determine_verdict(severity)
+                    evidence_type = EVIDENCE_TYPE_MAP.get(candidate["event_type"], candidate["event_type"])
 
-                    evt_type = candidate["event_type"]
-                    evidence_type_map = {
-                        "price_move": "price_move",
-                        "metric_threshold": "metric_breach",
-                        "news_or_earnings_candidate": "news",
-                        "earnings_surprise": "earnings",
-                        "upcoming_earnings": "earnings",
-                        "earnings_call_transcript": "earnings",
-                        "insider_transaction": "insider",
-                    }
-                    evidence_type = evidence_type_map.get(evt_type, evt_type)
-
-                    # For proxy events, include the causal rationale in the
-                    # stored summary so the user sees *why* this matters
+                    # For proxy events, include the causal rationale in the stored summary
                     stored_summary = candidate["description"]
+                    proxy_rationale = evidence.get("proxy_rationale")
+                    proxy_signal_hint = evidence.get("proxy_signal_hint")
                     if proxy_rationale:
                         stored_summary += f"\nWhy this matters: {proxy_rationale}"
                     if proxy_signal_hint:

@@ -48,45 +48,47 @@ def _get_evidence_type(event_type: str) -> str:
     return EVIDENCE_TYPE_MAP.get(event_type, event_type)
 
 
-async def _load_recent_evidence_ids(
+async def _load_recent_evidence_keys(
     db: AsyncSession,
     holding_id: uuid.UUID,
     days: int = EVIDENCE_DEDUP_DAYS,
-) -> set[str]:
-    """Load evidence source IDs from recent events for this holding."""
+) -> set[tuple[str, str]]:
+    """Load (evidence_type, source_id) pairs from recent events for this holding."""
     cutoff = datetime.now(timezone.utc) - timedelta(days=days)
     result = await db.execute(
-        select(MonitoringEvent.raw_data)
+        select(MonitoringEvent.evidence_type, MonitoringEvent.raw_data)
         .where(
             MonitoringEvent.holding_id == holding_id,
             MonitoringEvent.created_at >= cutoff,
         )
     )
-    ids: set[str] = set()
-    for (raw_data,) in result:
+    keys: set[tuple[str, str]] = set()
+    for ev_type, raw_data in result:
         if not raw_data or not isinstance(raw_data, dict):
             continue
         evidence = raw_data.get("evidence", {})
         source_id = _get_evidence_source_id(evidence)
-        if source_id:
-            ids.add(source_id)
-    return ids
+        if source_id and ev_type:
+            keys.add((ev_type, source_id))
+    return keys
 
 
 def _apply_evidence_dedup(
     candidates: list[dict[str, Any]],
-    existing_ids: set[str],
+    existing_keys: set[tuple[str, str]],
 ) -> list[dict[str, Any]]:
-    """Rule 1: Skip candidates whose evidence source already exists in recent events."""
+    """Rule 1: Skip candidates whose (evidence_type, source_id) already exists in recent events."""
     filtered = []
-    seen: set[str] = set()
+    seen: set[tuple[str, str]] = set()
     for candidate in candidates:
         evidence = candidate.get("evidence", {})
         source_id = _get_evidence_source_id(evidence)
         if source_id:
-            if source_id in existing_ids or source_id in seen:
+            ev_type = _get_evidence_type(candidate.get("event_type", ""))
+            key = (ev_type, source_id)
+            if key in existing_keys or key in seen:
                 continue
-            seen.add(source_id)
+            seen.add(key)
         filtered.append(candidate)
     return filtered
 
@@ -127,34 +129,31 @@ def _apply_signal_cooldown(
     return filtered
 
 
-def _apply_priority_suppression(
-    candidates: list[dict[str, Any]],
-) -> list[dict[str, Any]]:
+def apply_priority_suppression(
+    classified: list[tuple[dict[str, Any], str]],
+) -> list[tuple[dict[str, Any], str]]:
     """Rule 3: If a thesis_breaking candidate exists, drop lower-severity candidates
-    that share the same evidence source."""
-    severity_order = {"thesis_breaking": 0, "warning": 1, "info": 2}
-    # Sort by severity (highest first) for stable processing
-    sorted_candidates = sorted(
-        candidates,
-        key=lambda c: severity_order.get(c.get("_severity", "warning"), 1),
-    )
+    that share the same evidence source.
 
+    Takes and returns a list of (candidate, severity) tuples.
+    Call AFTER classification, BEFORE event persistence.
+    """
     # Collect evidence sources from thesis_breaking candidates
     breaking_sources: set[str] = set()
-    for candidate in sorted_candidates:
-        if candidate.get("_severity") == "thesis_breaking":
+    for candidate, severity in classified:
+        if severity == "thesis_breaking":
             evidence = candidate.get("evidence", {})
             source_id = _get_evidence_source_id(evidence)
             if source_id:
                 breaking_sources.add(source_id)
 
     if not breaking_sources:
-        return candidates
+        return classified
 
     filtered = []
-    for candidate in candidates:
-        if candidate.get("_severity") == "thesis_breaking":
-            filtered.append(candidate)
+    for candidate, severity in classified:
+        if severity == "thesis_breaking":
+            filtered.append((candidate, severity))
             continue
         evidence = candidate.get("evidence", {})
         source_id = _get_evidence_source_id(evidence)
@@ -165,7 +164,7 @@ def _apply_priority_suppression(
                 source_id,
             )
             continue
-        filtered.append(candidate)
+        filtered.append((candidate, severity))
     return filtered
 
 
@@ -200,16 +199,16 @@ async def filter_candidates(
     if not candidates:
         return candidates
 
-    existing_ids = await _load_recent_evidence_ids(db, holding_id)
+    existing_keys = await _load_recent_evidence_keys(db, holding_id)
 
-    # Rule 1: Evidence dedup
-    candidates = _apply_evidence_dedup(candidates, existing_ids)
+    # Rule 1: Evidence dedup (scoped by evidence_type + source_id)
+    candidates = _apply_evidence_dedup(candidates, existing_keys)
 
     # Rule 2: Signal cooldown
     candidates = _apply_signal_cooldown(candidates, signal_map, now)
 
-    # Rule 3: Priority suppression (needs _severity annotation — applied by caller)
-    candidates = _apply_priority_suppression(candidates)
+    # Rule 3: Priority suppression is applied separately after classification
+    # — call apply_priority_suppression() after classify_event() in the caller
 
     # Rule 4: Minimum relevance
     candidates = _apply_minimum_relevance(candidates)
