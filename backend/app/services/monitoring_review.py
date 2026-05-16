@@ -142,6 +142,8 @@ async def review_monitoring_event(
                     signal.consecutive_ignores,
                 )
                 await _rebuild_interpretation_cache(db, thesis)
+                # TODO: create in-app notification when UserNotification model exists
+                # "We stopped watching {signal_label} because you've ignored it 3 times."
         else:
             signal.consecutive_ignores = 0
 
