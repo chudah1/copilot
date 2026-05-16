@@ -53,7 +53,7 @@ def parse_trading212_csv(content: str) -> list[ParsedHolding]:
 
     for row in reader:
         action = row.get("Action", "").strip()
-        ticker = row.get("Ticker", "").strip()
+        ticker = row.get("Ticker", "").strip().upper()
         name = row.get("Name", "").strip()
 
         if not ticker:

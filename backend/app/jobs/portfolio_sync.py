@@ -34,8 +34,9 @@ async def run_portfolio_sync():
                 existing_by_ticker = {h.ticker: h for h in existing.scalars().all()}
 
                 for pos in positions:
-                    if pos.ticker in existing_by_ticker:
-                        holding = existing_by_ticker[pos.ticker]
+                    ticker = pos.ticker.upper()
+                    if ticker in existing_by_ticker:
+                        holding = existing_by_ticker[ticker]
                         holding.quantity = pos.quantity
                         holding.average_cost_basis = pos.average_price
                         holding.current_price = pos.current_price
@@ -45,8 +46,8 @@ async def run_portfolio_sync():
                         db.add(Holding(
                             user_id=conn.user_id,
                             broker_connection_id=conn.id,
-                            ticker=pos.ticker,
-                            name=pos.ticker.replace("_US_EQ", "").replace("_", " "),
+                            ticker=ticker,
+                            name=ticker.replace("_US_EQ", "").replace("_", " "),
                             quantity=pos.quantity,
                             average_cost_basis=pos.average_price,
                             current_price=pos.current_price,
