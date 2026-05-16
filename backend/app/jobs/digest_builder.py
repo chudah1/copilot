@@ -286,9 +286,29 @@ async def run_digest_builder():
 
         for user in users:
             try:
-                frequency = user.preferences.get("digest_frequency", "weekly")
+                prefs = user.preferences or {}
+                if not prefs.get("email_enabled", True):
+                    continue
+                frequency = prefs.get("digest_frequency", "weekly")
                 if frequency == "none":
                     continue
+
+                # Fortnightly / monthly: skip if not enough time since last digest
+                if frequency in ("fortnightly", "monthly"):
+                    min_days = 13 if frequency == "fortnightly" else 27
+                    last_digest_result = await db.execute(
+                        select(Digest)
+                        .where(Digest.user_id == user.id, Digest.status == "sent")
+                        .order_by(Digest.period_end.desc())
+                        .limit(1)
+                    )
+                    last_digest = last_digest_result.scalar_one_or_none()
+                    if last_digest is not None and last_digest.period_end is not None:
+                        last_end = last_digest.period_end
+                        if not last_end.tzinfo:
+                            last_end = last_end.replace(tzinfo=timezone.utc)
+                        if (now - last_end).days < min_days:
+                            continue
 
                 holdings_result = await db.execute(
                     select(Holding).where(Holding.user_id == user.id)

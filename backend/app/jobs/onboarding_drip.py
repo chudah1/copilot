@@ -73,6 +73,8 @@ async def run_onboarding_drip():
                 user = user_result.scalar_one_or_none()
                 if user is None:
                     continue
+                if not (user.preferences or {}).get("email_enabled", True):
+                    continue
 
                 holdings_result = await db.execute(
                     select(Holding).where(Holding.user_id == state.user_id)

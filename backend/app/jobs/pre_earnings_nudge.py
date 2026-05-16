@@ -48,10 +48,26 @@ async def run_pre_earnings_nudge() -> None:
         )
         pairs = holdings_result.all()
 
+        # Load user preferences once per user to avoid repeated queries
+        from sqlalchemy import select as _select
+        from app.models.user import User as _User
+        user_ids_needed = {holding.user_id for holding, _ in pairs}
+        users_result = await db.execute(_select(_User).where(_User.id.in_(user_ids_needed)))
+        user_prefs: dict = {
+            u.id: (u.preferences or {}) for u in users_result.scalars().all()
+        }
+
         nudges_created = 0
         for holding, thesis in pairs:
             report_date = upcoming_tickers.get(holding.ticker.upper())
             if report_date is None:
+                continue
+
+            # Respect email preferences
+            prefs = user_prefs.get(holding.user_id, {})
+            if not prefs.get("email_enabled", True):
+                continue
+            if not prefs.get("earnings_alerts", True):
                 continue
 
             # Don't create duplicate nudge for same user+holding today
