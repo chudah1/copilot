@@ -1,15 +1,21 @@
 import logging
+import uuid
 from datetime import datetime, timedelta, timezone
+from html import escape
 
 from sqlalchemy import select
 
 from app.database import async_session
 from app.models.digest import Digest
+from app.models.earnings_calendar import EarningsCalendar
 from app.models.holding import Holding
 from app.models.monitoring_event import MonitoringEvent
 from app.models.thesis import Thesis
+from app.models.thesis_claim import ThesisClaim
+from app.models.thesis_decomposition import ThesisDecomposition
+from app.models.thesis_entity import ThesisEntity
+from app.models.thesis_signal import ThesisSignal
 from app.models.user import User
-from app.services.ai_digest import generate_digest_content
 from app.services.email import send_digest_email
 
 logger = logging.getLogger(__name__)
@@ -23,14 +29,23 @@ def _age_in_days(timestamp: datetime) -> int:
 def _digest_headline(events_count: int, stale_count: int, missing_count: int, stable_count: int) -> str:
     if events_count > 0:
         verb = "needs" if events_count == 1 else "need"
-        return f"{events_count} thesis event{'s' if events_count != 1 else ''} {verb} your attention."
+        return f"{events_count} of your reasons {verb} review this week."
     if stale_count > 0:
         return f"{stale_count} thesis{'es' if stale_count != 1 else ''} went stale this week."
     if missing_count > 0:
         return f"{missing_count} holding{'s' if missing_count != 1 else ''} still lack a thesis."
     if stable_count > 0:
-        return "Your monitored holdings stayed stable this week."
+        return f"{stable_count} of your reasons held up this week."
     return "No material portfolio changes this week."
+
+
+def _digest_subject(events_count: int, stable_count: int) -> str:
+    if events_count > 0:
+        verb = "needs" if events_count == 1 else "need"
+        return f"{events_count} of your reasons {verb} review this week"
+    if stable_count > 0:
+        return f"{stable_count} of your reasons held up this week"
+    return "0 of your reasons changed this week"
 
 
 def _digest_summary_points(events_data: list[dict], observations: dict) -> list[str]:
@@ -50,12 +65,220 @@ def _digest_summary_points(events_data: list[dict], observations: dict) -> list[
     return points[:3]
 
 
+def _event_rank(event: dict) -> tuple[int, int]:
+    verdict_rank = {
+        "threatens": 0,
+        "review": 1,
+        "supports": 2,
+        "neutral": 3,
+        None: 4,
+    }
+    severity_rank = {
+        "thesis_breaking": 0,
+        "warning": 1,
+        "info": 2,
+    }
+    return (
+        verdict_rank.get(event.get("verdict"), 4),
+        severity_rank.get(event.get("severity"), 3),
+    )
+
+
+def _signal_status_text(intact_count: int, weakening_count: int) -> str:
+    if intact_count == 0 and weakening_count == 0:
+        return ""
+    if weakening_count == 0:
+        return f"All {intact_count} intact" if intact_count > 1 else "Signal intact"
+    return f"{weakening_count} weakening, {intact_count} intact"
+
+
+def _tldr_lines(events_data: list[dict]) -> list[str]:
+    lines = []
+    for event in events_data[:3]:
+        ticker = event["ticker"]
+        verdict = event.get("verdict")
+        summary = event.get("evidence_summary") or event.get("summary", "")
+        if verdict == "threatens":
+            lines.append(f"{ticker}: {summary} Worth reviewing against your reason.")
+        elif verdict == "supports":
+            lines.append(f"{ticker}: {summary} Aligns with your reason for holding.")
+        else:
+            lines.append(f"{ticker}: {summary}")
+    return lines
+
+
+def _monitoring_receipt(
+    holdings_count: int,
+    events_count: int,
+    stable_count: int,
+    upcoming_earnings_count: int = 0,
+) -> str:
+    base = (
+        f"We checked {holdings_count} holding{'s' if holdings_count != 1 else ''} with current reasons. "
+        f"{events_count} produced material evidence. {stable_count} stayed calm."
+    )
+    if upcoming_earnings_count > 0:
+        noun = "holding" if upcoming_earnings_count == 1 else "holdings"
+        verb = "reports" if upcoming_earnings_count == 1 else "report"
+        base += f" {upcoming_earnings_count} {noun} {verb} earnings soon."
+    return base
+
+
+def _oldest_reason_nudge(theses: list[dict]) -> str | None:
+    candidates = [item for item in theses if item.get("why_own_it") and item.get("thesis_updated_at")]
+    if not candidates:
+        return None
+    oldest = max(candidates, key=lambda item: item["reason_age_days"])
+    if oldest["reason_age_days"] < 90:
+        return None
+    return (
+        f'You wrote your reason for holding {oldest["name"]} {oldest["reason_age_days"]} days ago. '
+        f'Would you still buy it today for the same reason?'
+    )
+
+
+def _render_digest_html(
+    *,
+    holdings_with_theses: list[dict],
+    events_data: list[dict],
+    observations: dict,
+    headline: str,
+    monitoring_receipt: str,
+    quiet_nudge: str | None,
+    upcoming_earnings: list[dict] | None = None,
+) -> str:
+    ranked_events = sorted(events_data, key=_event_rank)[:5]
+    stable_holdings = observations.get("stable_holdings", [])[:3]
+
+    parts = [
+        f"<h2>{escape(headline)}</h2>",
+    ]
+
+    if ranked_events:
+        # TLDR section
+        tldr_lines = _tldr_lines(ranked_events)
+        if tldr_lines:
+            parts.append("<h3>TLDR</h3>")
+            for line in tldr_lines:
+                parts.append(f"<p>{escape(line)}</p>")
+            parts.append("<hr>")
+
+        # Per-holding event cards
+        for event in ranked_events:
+            reason_text = event.get("why_own_it") or "No reason recorded."
+            ticker = event["ticker"]
+            verdict = event.get("verdict")
+            is_negative = verdict in ("threatens", "review")
+            signal_text = event.get("signal_status_text") or ""
+
+            parts.append(f"<h3>{escape(ticker)} — {escape(event.get('name') or ticker)}</h3>")
+            parts.append(f"<p><strong>Your reason:</strong> {escape(reason_text)}</p>")
+            parts.append(f"<p><strong>What changed:</strong> {escape(event.get('evidence_summary') or event['summary'])}</p>")
+            if signal_text:
+                parts.append(f"<p><strong>Signal status:</strong> {escape(signal_text)}</p>")
+            if verdict:
+                parts.append(f"<p><strong>Verdict:</strong> {escape(str(verdict).replace('_', ' '))}</p>")
+            if event.get("ai_analysis"):
+                parts.append(f"<p>{escape(event['ai_analysis'])}</p>")
+            action_label = "Review this reason" if is_negative else "No action needed"
+            parts.append(f'<p><a href="/dashboard/positions/{escape(ticker)}">→ {action_label}</a></p>')
+
+        if stable_holdings:
+            parts.append("<hr>")
+            parts.append("<h3>Still intact</h3>")
+            for stable in stable_holdings:
+                parts.append(
+                    f"<p><strong>{escape(stable['ticker'])}</strong>: {escape(stable['why_own_it'])}</p>"
+                )
+    else:
+        parts.append("<p>Your holdings were quiet this week. No material evidence affected any of your monitored signals.</p>")
+        if stable_holdings:
+            parts.append("<h3>Reasons holding up</h3>")
+            for stable in stable_holdings:
+                stale_suffix = " This reason is getting stale." if stable.get("stale") else ""
+                parts.append(
+                    f"<p><strong>{escape(stable['ticker'])}</strong>: {escape(stable['why_own_it'])}.{escape(stale_suffix)}</p>"
+                )
+
+        if upcoming_earnings:
+            earnings_parts = []
+            for e in upcoming_earnings[:3]:
+                days = e["days_until"]
+                ticker = e["ticker"]
+                if days == 0:
+                    earnings_parts.append(f"{ticker} reports today")
+                elif days == 1:
+                    earnings_parts.append(f"{ticker} reports tomorrow")
+                else:
+                    earnings_parts.append(f"{ticker} reports in {days} days")
+            parts.append(f"<p>Upcoming: {escape(', '.join(earnings_parts))}.</p>")
+
+        if quiet_nudge:
+            parts.append("<h3>Quick thought</h3>")
+            parts.append(f"<p>{escape(quiet_nudge)}</p>")
+
+    parts.append("<h3>Monitoring receipt</h3>")
+    parts.append(f"<p>{escape(monitoring_receipt)}</p>")
+
+    if observations.get("missing_theses"):
+        parts.append(
+            f"<p><strong>Missing reasons:</strong> {escape(', '.join(observations['missing_theses']))}</p>"
+        )
+    if observations.get("stale_theses"):
+        parts.append(
+            f"<p><strong>Stale reasons:</strong> {escape(', '.join(observations['stale_theses']))}</p>"
+        )
+    if observations.get("concentration_warnings"):
+        parts.append(
+            f"<p><strong>Concentration:</strong> {escape(observations['concentration_warnings'])}</p>"
+        )
+
+    parts.append('<p><a href="/dashboard">→ Open dashboard</a></p>')
+    return "".join(parts)
+
+
+async def _load_signal_counts(db, thesis_ids: list[uuid.UUID]) -> dict[str, tuple[int, int]]:
+    """Returns {thesis_id_str: (intact_count, weakening_count)} for confirmed decompositions."""
+    if not thesis_ids:
+        return {}
+
+    result = await db.execute(
+        select(
+            ThesisDecomposition.thesis_id,
+            ThesisSignal.active,
+            ThesisSignal.consecutive_ignores,
+        )
+        .select_from(ThesisSignal)
+        .join(ThesisEntity, ThesisSignal.entity_id == ThesisEntity.id)
+        .join(ThesisClaim, ThesisEntity.claim_id == ThesisClaim.id)
+        .join(ThesisDecomposition, ThesisClaim.decomposition_id == ThesisDecomposition.id)
+        .where(
+            ThesisDecomposition.thesis_id.in_(thesis_ids),
+            ThesisDecomposition.status.in_(["confirmed", "partially_confirmed"]),
+            ThesisSignal.user_confirmed == True,
+        )
+    )
+    rows = result.all()
+
+    counts: dict[str, tuple[int, int]] = {}
+    for row in rows:
+        key = str(row.thesis_id)
+        intact, weakening = counts.get(key, (0, 0))
+        if row.active:
+            if row.consecutive_ignores > 0:
+                counts[key] = (intact, weakening + 1)
+            else:
+                counts[key] = (intact + 1, weakening)
+    return counts
+
+
 async def run_digest_builder():
     logger.info("Starting weekly digest builder")
 
     now = datetime.now(timezone.utc)
     period_end = now
     period_start = now - timedelta(days=7)
+    upcoming_window = now + timedelta(days=14)
 
     async with async_session() as db:
         users_result = await db.execute(select(User))
@@ -78,6 +301,7 @@ async def run_digest_builder():
                 missing_theses = []
                 stale_theses = []
                 stable_holdings = []
+                thesis_ids: list[uuid.UUID] = []
 
                 for h in holdings:
                     theses_result = await db.execute(
@@ -90,17 +314,24 @@ async def run_digest_builder():
 
                     entry = {"ticker": h.ticker, "name": h.name, "holding_id": str(h.id)}
                     if thesis:
+                        entry["thesis_id"] = str(thesis.id)
                         entry["why_own_it"] = thesis.why_own_it
                         entry["must_remain_true"] = thesis.must_remain_true
                         entry["what_would_change_my_mind"] = thesis.what_would_change_my_mind
                         entry["ai_summary"] = thesis.ai_summary
                         entry["thesis_status"] = thesis.status
-                        if _age_in_days(thesis.updated_at) > 90:
+                        entry["thesis_updated_at"] = thesis.updated_at
+                        entry["reason_age_days"] = _age_in_days(thesis.updated_at)
+                        if entry["reason_age_days"] > 90:
                             stale_theses.append(h.ticker)
+                        thesis_ids.append(thesis.id)
                     else:
                         missing_theses.append(h.ticker)
 
                     holdings_with_theses.append(entry)
+
+                # Load signal counts per thesis in a single batch query
+                signal_counts = await _load_signal_counts(db, thesis_ids)
 
                 events_result = await db.execute(
                     select(MonitoringEvent)
@@ -119,12 +350,27 @@ async def run_digest_builder():
                 for e in events:
                     holding = next((h for h in holdings if h.id == e.holding_id), None)
                     event_holding_ids.add(e.holding_id)
+                    related_holding = holding
+                    related_reason = None
+                    thesis_id_str = None
+                    if related_holding is not None:
+                        matching_entry = next((item for item in holdings_with_theses if item["holding_id"] == str(related_holding.id)), None)
+                        if matching_entry:
+                            related_reason = matching_entry.get("why_own_it")
+                            thesis_id_str = matching_entry.get("thesis_id")
+
+                    intact, weakening = signal_counts.get(thesis_id_str or "", (0, 0))
                     events_data.append({
                         "ticker": holding.ticker if holding else "Unknown",
+                        "name": holding.name if holding else "Unknown",
                         "severity": e.severity,
                         "title": e.title,
                         "summary": e.summary,
                         "ai_analysis": e.ai_analysis,
+                        "why_own_it": related_reason,
+                        "verdict": e.verdict,
+                        "evidence_summary": e.evidence_summary,
+                        "signal_status_text": _signal_status_text(intact, weakening),
                     })
 
                 for entry in holdings_with_theses:
@@ -138,8 +384,26 @@ async def run_digest_builder():
                                 "name": entry["name"],
                                 "thesis_status": entry.get("thesis_status", "draft"),
                                 "stale": entry["ticker"] in stale_theses,
+                                "why_own_it": entry["why_own_it"],
                             }
                         )
+
+                # Load upcoming earnings for quiet week mode
+                upcoming_earnings: list[dict] = []
+                if not events_data:
+                    tickers = [h.ticker for h in holdings]
+                    earnings_result = await db.execute(
+                        select(EarningsCalendar)
+                        .where(
+                            EarningsCalendar.ticker.in_(tickers),
+                            EarningsCalendar.report_date >= now,
+                            EarningsCalendar.report_date <= upcoming_window,
+                        )
+                        .order_by(EarningsCalendar.report_date)
+                    )
+                    for ec in earnings_result.scalars().all():
+                        days_until = (ec.report_date.replace(tzinfo=timezone.utc) - now).days
+                        upcoming_earnings.append({"ticker": ec.ticker, "days_until": max(0, days_until)})
 
                 total_value = sum(float(h.current_value or 0) for h in holdings)
                 concentration_warnings = ""
@@ -158,28 +422,61 @@ async def run_digest_builder():
                     "missing_theses": missing_theses,
                     "stable_holdings": stable_holdings,
                 }
+                headline = _digest_headline(
+                    len(events_data),
+                    len(stale_theses),
+                    len(missing_theses),
+                    len(stable_holdings),
+                )
+                subject = _digest_subject(len(events_data), len(stable_holdings))
+                receipt = _monitoring_receipt(
+                    len(holdings),
+                    len(events_data),
+                    len(stable_holdings),
+                    upcoming_earnings_count=len(upcoming_earnings),
+                )
+                quiet_nudge = _oldest_reason_nudge(holdings_with_theses) if not events_data else None
 
-                html_content = await generate_digest_content(holdings_with_theses, events_data, observations)
+                # Track consecutive quiet weeks and suggest frequency change
+                prefs = dict(user.preferences) if user.preferences else {}
+                quiet_streak = prefs.get("consecutive_quiet_weeks", 0)
+                if not events_data:
+                    quiet_streak += 1
+                else:
+                    quiet_streak = 0
+                if prefs.get("consecutive_quiet_weeks") != quiet_streak:
+                    prefs["consecutive_quiet_weeks"] = quiet_streak
+                    user.preferences = prefs
+
+                html_content = _render_digest_html(
+                    holdings_with_theses=holdings_with_theses,
+                    events_data=events_data,
+                    observations=observations,
+                    headline=headline,
+                    monitoring_receipt=receipt,
+                    quiet_nudge=quiet_nudge,
+                    upcoming_earnings=upcoming_earnings if not events_data else None,
+                )
 
                 digest = Digest(
                     user_id=user.id,
                     period_start=period_start,
                     period_end=period_end,
                     content={
-                        "html": html_content or "<p>Unable to generate digest this week.</p>",
+                        "html": html_content,
+                        "digest_mode": "events" if events_data else "quiet_week",
+                        "subject_line": subject,
                         "events_count": len(events_data),
                         "holdings_count": len(holdings),
                         "stable_holdings_count": len(stable_holdings),
-                        "headline": _digest_headline(
-                            len(events_data),
-                            len(stale_theses),
-                            len(missing_theses),
-                            len(stable_holdings),
-                        ),
+                        "headline": headline,
                         "summary_points": _digest_summary_points(events_data, observations),
                         "missing_theses_count": len(missing_theses),
                         "stale_theses_count": len(stale_theses),
                         "concentration_warning": concentration_warnings,
+                        "monitoring_receipt": receipt,
+                        "quiet_nudge": quiet_nudge,
+                        "consecutive_quiet_weeks": quiet_streak,
                     },
                     status="pending",
                 )
@@ -190,10 +487,9 @@ async def run_digest_builder():
                     e.included_in_digest_id = digest.id
 
                 if html_content:
-                    week_str = period_end.strftime("%d %b %Y")
                     sent = await send_digest_email(
                         to_email=user.email,
-                        subject=f"Your Weekly Investment Digest — {week_str}",
+                        subject=subject,
                         html_content=html_content,
                     )
                     digest.status = "sent" if sent else "failed"

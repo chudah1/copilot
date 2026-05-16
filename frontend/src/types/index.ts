@@ -249,6 +249,7 @@ export interface Digest {
     concentration_warning?: string;
     monitoring_receipt?: string;
     quiet_nudge?: string | null;
+    consecutive_quiet_weeks?: number;
   };
   status: string;
 }
