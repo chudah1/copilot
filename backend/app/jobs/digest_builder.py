@@ -323,14 +323,23 @@ async def run_digest_builder():
                 stable_holdings = []
                 thesis_ids: list[uuid.UUID] = []
 
-                for h in holdings:
-                    theses_result = await db.execute(
-                        select(Thesis)
-                        .where(Thesis.holding_id == h.id, Thesis.status.in_(["draft", "active", "needs_review"]))
-                        .order_by(Thesis.created_at.desc())
-                        .limit(1)
+                holding_ids = [h.id for h in holdings]
+                all_theses_result = await db.execute(
+                    select(Thesis)
+                    .where(
+                        Thesis.holding_id.in_(holding_ids),
+                        Thesis.status.in_(["draft", "active", "needs_review"]),
                     )
-                    thesis = theses_result.scalar_one_or_none()
+                    .order_by(Thesis.created_at.desc())
+                )
+                thesis_by_holding: dict[str, Thesis] = {}
+                for t in all_theses_result.scalars().all():
+                    hid = str(t.holding_id)
+                    if hid not in thesis_by_holding:
+                        thesis_by_holding[hid] = t
+
+                for h in holdings:
+                    thesis = thesis_by_holding.get(str(h.id))
 
                     entry = {"ticker": h.ticker, "name": h.name, "holding_id": str(h.id)}
                     if thesis:

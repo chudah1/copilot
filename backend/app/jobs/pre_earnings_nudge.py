@@ -8,6 +8,7 @@ from app.database import async_session
 from app.models.earnings_calendar import EarningsCalendar
 from app.models.holding import Holding
 from app.models.thesis import Thesis
+from app.models.user import User
 from app.models.user_notification import UserNotification
 
 logger = logging.getLogger(__name__)
@@ -48,14 +49,23 @@ async def run_pre_earnings_nudge() -> None:
         )
         pairs = holdings_result.all()
 
-        # Load user preferences once per user to avoid repeated queries
-        from sqlalchemy import select as _select
-        from app.models.user import User as _User
         user_ids_needed = {holding.user_id for holding, _ in pairs}
-        users_result = await db.execute(_select(_User).where(_User.id.in_(user_ids_needed)))
+        users_result = await db.execute(select(User).where(User.id.in_(user_ids_needed)))
         user_prefs: dict = {
             u.id: (u.preferences or {}) for u in users_result.scalars().all()
         }
+
+        # Batch-load today's pre_earnings notifications to avoid N+1 dedup checks
+        today_start = now.replace(hour=0, minute=0, second=0, microsecond=0)
+        holding_ids_in_pairs = [h.id for h, _ in pairs]
+        existing_result = await db.execute(
+            select(UserNotification.user_id, UserNotification.holding_id).where(
+                UserNotification.holding_id.in_(holding_ids_in_pairs),
+                UserNotification.notification_type == "pre_earnings",
+                UserNotification.created_at >= today_start,
+            )
+        )
+        already_nudged = {(row.user_id, row.holding_id) for row in existing_result.all()}
 
         nudges_created = 0
         for holding, thesis in pairs:
@@ -63,24 +73,13 @@ async def run_pre_earnings_nudge() -> None:
             if report_date is None:
                 continue
 
-            # Respect email preferences
             prefs = user_prefs.get(holding.user_id, {})
             if not prefs.get("email_enabled", True):
                 continue
             if not prefs.get("earnings_alerts", True):
                 continue
 
-            # Don't create duplicate nudge for same user+holding today
-            today_start = now.replace(hour=0, minute=0, second=0, microsecond=0)
-            existing_result = await db.execute(
-                select(UserNotification).where(
-                    UserNotification.user_id == holding.user_id,
-                    UserNotification.holding_id == holding.id,
-                    UserNotification.notification_type == "pre_earnings",
-                    UserNotification.created_at >= today_start,
-                )
-            )
-            if existing_result.scalar_one_or_none() is not None:
+            if (holding.user_id, holding.id) in already_nudged:
                 continue
 
             # Build signal summary from thesis interpretation

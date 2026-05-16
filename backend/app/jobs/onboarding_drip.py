@@ -2,13 +2,16 @@ import logging
 from datetime import datetime, timedelta, timezone
 from html import escape
 
-from sqlalchemy import select
+from sqlalchemy import select, func as sqlfunc
 
 from app.database import async_session
 from app.models.holding import Holding
 from app.models.onboarding_state import OnboardingState
 from app.models.thesis import Thesis
+from app.models.thesis_claim import ThesisClaim
 from app.models.thesis_decomposition import ThesisDecomposition
+from app.models.thesis_entity import ThesisEntity
+from app.models.thesis_signal import ThesisSignal
 from app.models.user import User
 from app.services.email import send_onboarding_email
 
@@ -18,11 +21,14 @@ CURRENT_THESIS_STATUSES = ["draft", "active", "needs_review"]
 
 
 def _day1_html(holding_name: str, signal_count: int, uncovered_count: int, earnings_date: str | None) -> str:
-    parts = [
-        f"<h2>Your reason for {escape(holding_name)} is now being monitored</h2>",
-        f"<p>We're watching <strong>{signal_count} signal{'s' if signal_count != 1 else ''}</strong> "
-        f"for your {escape(holding_name)} position.</p>",
-    ]
+    parts = [f"<h2>Your reason for {escape(holding_name)} is now being monitored</h2>"]
+    if signal_count > 0:
+        parts.append(
+            f"<p>We're watching <strong>{signal_count} signal{'s' if signal_count != 1 else ''}</strong> "
+            f"for your {escape(holding_name)} position.</p>"
+        )
+    else:
+        parts.append(f"<p>We're monitoring news and data for your {escape(holding_name)} position.</p>")
     if earnings_date:
         parts.append(f"<p>Next earnings date: <strong>{escape(earnings_date)}</strong>.</p>")
     if uncovered_count > 0:
@@ -128,10 +134,6 @@ async def run_onboarding_drip():
                         )
                         decomp = decomp_result.scalar_one_or_none()
                         if decomp is not None:
-                            from sqlalchemy import func as sqlfunc
-                            from app.models.thesis_claim import ThesisClaim
-                            from app.models.thesis_entity import ThesisEntity
-                            from app.models.thesis_signal import ThesisSignal
                             count_result = await db.execute(
                                 select(sqlfunc.count()).select_from(ThesisSignal)
                                 .join(ThesisEntity, ThesisSignal.entity_id == ThesisEntity.id)

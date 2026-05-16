@@ -5,37 +5,34 @@ from app.config import settings
 logger = logging.getLogger(__name__)
 
 
-async def send_digest_email(to_email: str, subject: str, html_content: str) -> bool:
-    if not settings.resend_api_key:
-        logger.warning("No Resend API key configured — skipping email send")
-        return False
+def _send_email_via_resend(from_addr: str, to_email: str, subject: str, html: str) -> bool:
     resend.api_key = settings.resend_api_key
     try:
-        resend.Emails.send({"from": "Copilot Investor <digest@copilotinvestor.com>", "to": [to_email], "subject": subject, "html": html_content})
+        resend.Emails.send({"from": from_addr, "to": [to_email], "subject": subject, "html": html})
         return True
     except Exception as e:
         logger.error(f"Failed to send email to {to_email}: {e}")
         return False
 
 
+async def send_digest_email(to_email: str, subject: str, html_content: str) -> bool:
+    if not settings.resend_api_key:
+        logger.warning("No Resend API key configured — skipping email send")
+        return False
+    return _send_email_via_resend("Copilot Investor <digest@copilotinvestor.com>", to_email, subject, html_content)
+
+
 async def send_onboarding_email(to_email: str, subject: str, html_content: str) -> bool:
     if not settings.resend_api_key:
         logger.warning("No Resend API key configured — skipping onboarding email send")
         return False
-    resend.api_key = settings.resend_api_key
-    try:
-        resend.Emails.send({"from": "Copilot Investor <hello@copilotinvestor.com>", "to": [to_email], "subject": subject, "html": html_content})
-        return True
-    except Exception as e:
-        logger.error(f"Failed to send onboarding email to {to_email}: {e}")
-        return False
+    return _send_email_via_resend("Copilot Investor <hello@copilotinvestor.com>", to_email, subject, html_content)
 
 
 async def send_password_reset_email(to_email: str, reset_token: str) -> bool:
     if not settings.resend_api_key:
         logger.warning("No Resend API key configured — skipping password reset email")
         return False
-    resend.api_key = settings.resend_api_key
     reset_url = f"{settings.frontend_url}/reset-password?token={reset_token}"
     html = (
         "<h2>Reset your password</h2>"
@@ -43,14 +40,4 @@ async def send_password_reset_email(to_email: str, reset_token: str) -> bool:
         f'<p><a href="{reset_url}" style="font-size:18px;font-weight:bold">Reset my password</a></p>'
         "<p>If you didn't request this, ignore this email.</p>"
     )
-    try:
-        resend.Emails.send({
-            "from": "Copilot Investor <noreply@copilotinvestor.com>",
-            "to": [to_email],
-            "subject": "Reset your password",
-            "html": html,
-        })
-        return True
-    except Exception as e:
-        logger.error(f"Failed to send password reset email to {to_email}: {e}")
-        return False
+    return _send_email_via_resend("Copilot Investor <noreply@copilotinvestor.com>", to_email, "Reset your password", html)
