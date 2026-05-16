@@ -5,9 +5,11 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.orm import selectinload
 from app.database import get_db
 from app.dependencies import get_current_user
+from app.models.conviction_log_entry import ConvictionLogEntry
 from app.models.holding import Holding
 from app.models.monitoring_event import MonitoringEvent
 from app.models.thesis import Thesis
+from app.models.thesis_signal import ThesisSignal
 from app.models.user import User
 from app.schemas.holding import CheckNowResponse, MarketSnapshotResponse
 from app.schemas.monitoring_event import (
@@ -16,6 +18,7 @@ from app.schemas.monitoring_event import (
     ReviewMonitoringEventRequest,
 )
 from app.services.check_now import run_check_now
+from app.services.conviction_log import REASON_CREATED
 from app.services.monitoring_review import review_monitoring_event
 
 router = APIRouter(prefix="/api/monitoring", tags=["monitoring"])
@@ -34,6 +37,17 @@ async def get_events_for_holding(holding_id: uuid.UUID, user: User = Depends(get
         .limit(50)
     )
     events = result.scalars().all()
+
+    # Batch-load signal labels for all events that have a signal_id
+    signal_ids = {event.signal_id for event in events if event.signal_id is not None}
+    signal_labels: dict[uuid.UUID, str | None] = {}
+    if signal_ids:
+        signals_result = await db.execute(
+            select(ThesisSignal).where(ThesisSignal.id.in_(signal_ids))
+        )
+        for signal in signals_result.scalars().all():
+            signal_labels[signal.id] = signal.signal_label
+
     return [
         MonitoringEventResponse(
             id=event.id,
@@ -49,6 +63,7 @@ async def get_events_for_holding(holding_id: uuid.UUID, user: User = Depends(get
             review_notes=event.reviews[0].notes if event.reviews else None,
             claim_id=event.claim_id,
             signal_id=event.signal_id,
+            signal_label=signal_labels.get(event.signal_id) if event.signal_id else None,
             evidence_type=event.evidence_type,
             evidence_summary=event.evidence_summary,
             verdict=event.verdict,
@@ -91,6 +106,25 @@ async def review_event(
     except ValueError as exc:
         raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=str(exc)) from exc
 
+    # Compute reason_age_days from conviction log
+    reason_age_days = None
+    first_entry_result = await db.execute(
+        select(ConvictionLogEntry)
+        .where(
+            ConvictionLogEntry.thesis_id == event.thesis.id,
+            ConvictionLogEntry.entry_type == REASON_CREATED,
+        )
+        .order_by(ConvictionLogEntry.created_at.asc())
+        .limit(1)
+    )
+    first_entry = first_entry_result.scalar_one_or_none()
+    if first_entry is not None:
+        from datetime import datetime, timezone
+        created = first_entry.created_at
+        if created.tzinfo is None:
+            created = created.replace(tzinfo=timezone.utc)
+        reason_age_days = (datetime.now(timezone.utc) - created).days
+
     return MonitoringEventReviewResponse(
         id=review.id,
         monitoring_event_id=review.monitoring_event_id,
@@ -99,6 +133,7 @@ async def review_event(
         notes=review.notes,
         created_at=review.created_at,
         thesis=event.thesis,
+        reason_age_days=reason_age_days,
     )
 
 

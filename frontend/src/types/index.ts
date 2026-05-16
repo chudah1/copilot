@@ -130,6 +130,7 @@ export interface MonitoringEvent {
   review_notes: string | null;
   claim_id: string | null;
   signal_id: string | null;
+  signal_label: string | null;
   evidence_type: string | null;
   evidence_summary: string | null;
   verdict: "supports" | "threatens" | "neutral" | "review" | null;
@@ -144,6 +145,7 @@ export interface MonitoringEventReviewResponse {
   notes: string | null;
   created_at: string;
   thesis: Thesis;
+  reason_age_days: number | null;
 }
 
 export interface ConvictionLogEntry {
@@ -267,6 +269,14 @@ export interface HoldingPulse {
 export interface PortfolioPulse {
   pulses: HoldingPulse[];
   next_digest_at: string | null;
+}
+
+export interface UpcomingEarnings {
+  holding_id: string;
+  ticker: string;
+  name: string;
+  report_date: string;
+  days_until: number;
 }
 
 export interface PortfolioTrend {

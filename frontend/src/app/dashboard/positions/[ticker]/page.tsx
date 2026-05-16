@@ -6,6 +6,7 @@ import { api } from "@/lib/api";
 import { getErrorMessage } from "@/lib/errors";
 import { formatCurrency, formatDate } from "@/lib/utils";
 import { ThesisCard } from "@/components/thesis/thesis-card";
+import { ConvictionLog } from "@/components/thesis/conviction-log";
 import { ThesisDecompositionReview } from "@/components/thesis/thesis-decomposition-review";
 import { ThesisEditor } from "@/components/thesis/thesis-editor";
 import { EventTimeline } from "@/components/monitoring/event-timeline";
@@ -19,6 +20,7 @@ import { CounterThesisCard } from "@/components/thesis/counter-thesis-card";
 import { CheckNowButton } from "@/components/monitoring/check-now-button";
 import type {
   ConfirmDecompositionRequest,
+  ConvictionLogResponse,
   HealthCheckResult,
   Holding,
   MonitoringEvent,
@@ -26,6 +28,7 @@ import type {
   Thesis,
   ThesisAssistResponse,
   ThesisDecompositionEnvelope,
+  UpcomingEarnings,
 } from "@/types";
 
 function ageInDays(dateString: string) {
@@ -90,6 +93,26 @@ function getThesisInsights(thesis: Thesis | undefined, events: MonitoringEvent[]
   };
 }
 
+function describeWatchHint(hint: Record<string, unknown>) {
+  if (hint.kind === "price_move_pct" && typeof hint.threshold === "number") {
+    return `Price discipline if the stock moves ${hint.threshold}% or more.`;
+  }
+  if (
+    hint.kind === "metric_threshold" &&
+    typeof hint.metric === "string" &&
+    typeof hint.operator === "string" &&
+    typeof hint.threshold === "number"
+  ) {
+    return `${hint.metric.replaceAll("_", " ")} should stay ${hint.operator} ${hint.threshold}.`;
+  }
+  return null;
+}
+
+function isRecentEvent(dateString: string, days: number) {
+  const ageMs = Date.now() - new Date(dateString).getTime();
+  return ageMs >= 0 && ageMs <= days * 24 * 60 * 60 * 1000;
+}
+
 export default function PositionDetailPage() {
   const { ticker } = useParams<{ ticker: string }>();
   const [holdings, setHoldings] = useState<Holding[]>([]);
@@ -103,6 +126,10 @@ export default function PositionDetailPage() {
   const [decompositionLoading, setDecompositionLoading] = useState(false);
   const [decompositionSaving, setDecompositionSaving] = useState(false);
   const [reviewingEventId, setReviewingEventId] = useState<string | null>(null);
+  const [convictionLog, setConvictionLog] = useState<ConvictionLogResponse | null>(null);
+  const [convictionLogLoading, setConvictionLogLoading] = useState(false);
+  const [noteSaving, setNoteSaving] = useState(false);
+  const [upcomingEarnings, setUpcomingEarnings] = useState<UpcomingEarnings | null>(null);
   const [loading, setLoading] = useState(true);
   const [healthCheck, setHealthCheck] = useState<HealthCheckResult | null>(null);
   const [healthCheckLoading, setHealthCheckLoading] = useState(false);
@@ -119,12 +146,16 @@ export default function PositionDetailPage() {
         setHoldings(h);
         const match = h.find((x) => x.ticker === ticker);
         if (match) {
-          const [t, e] = await Promise.all([
+          const [t, e, log, earnings] = await Promise.all([
             api.get<Thesis[]>(`/api/theses/holding/${match.id}`),
             api.get<MonitoringEvent[]>(`/api/monitoring/holdings/${match.id}/events`),
+            api.get<ConvictionLogResponse>(`/api/portfolio/holdings/${match.id}/conviction-log`).catch(() => null),
+            api.get<UpcomingEarnings[]>("/api/portfolio/upcoming-earnings").catch(() => []),
           ]);
           setTheses(t);
           setEvents(e);
+          setConvictionLog(log);
+          setUpcomingEarnings(earnings.find((item) => item.holding_id === match.id) ?? null);
           const latestThesis = t.find((item) => item.status === "active" || item.status === "draft" || item.status === "needs_review");
           if (latestThesis) {
             setDecompositionLoading(true);
@@ -182,6 +213,19 @@ export default function PositionDetailPage() {
     setEvents(refreshed);
   };
 
+  const refreshConvictionLog = async () => {
+    if (!holding) return;
+    try {
+      setConvictionLogLoading(true);
+      const refreshed = await api.get<ConvictionLogResponse>(`/api/portfolio/holdings/${holding.id}/conviction-log`);
+      setConvictionLog(refreshed);
+    } catch (error) {
+      console.error(error);
+    } finally {
+      setConvictionLogLoading(false);
+    }
+  };
+
   const handleAssist = async (draftText: string): Promise<ThesisAssistResponse> => {
     if (!holding) {
       throw new Error("Holding not found");
@@ -221,6 +265,7 @@ export default function PositionDetailPage() {
         runHealthCheck(savedThesisId);
         setShowCounterThesis(true);
       }
+      await refreshConvictionLog();
     } catch (err) {
       console.error(err);
     }
@@ -234,6 +279,7 @@ export default function PositionDetailPage() {
       setDecompositionEnvelope(null);
       setInvalidateOpen(false);
       setInvalidateReason("");
+      await refreshConvictionLog();
     } catch (err) {
       console.error(err);
     }
@@ -245,6 +291,7 @@ export default function PositionDetailPage() {
       setReaffirming(true);
       const updated = await api.post<Thesis>(`/api/theses/${activeThesis.id}/reaffirm`);
       setTheses(theses.map((t) => (t.id === updated.id ? updated : t)));
+      await refreshConvictionLog();
     } catch (err) {
       console.error(err);
     } finally {
@@ -281,6 +328,7 @@ export default function PositionDetailPage() {
       );
       setDecompositionEnvelope(envelope);
       await refreshCurrentThesis();
+      await refreshConvictionLog();
     } catch (error) {
       console.error(error);
     } finally {
@@ -290,19 +338,45 @@ export default function PositionDetailPage() {
 
   const handleReviewEvent = async (
     event: MonitoringEvent,
-    action: "reaffirmed" | "ignored" | "lowered_confidence" | "invalidated",
+    action: "reaffirmed" | "ignored" | "lowered_confidence" | "invalidated" | "not_relevant",
+    notes?: string,
   ) => {
     try {
       setReviewingEventId(event.id);
       const result = await api.post<MonitoringEventReviewResponse>(`/api/monitoring/events/${event.id}/review`, {
         action,
+        notes: notes?.trim() ? notes.trim() : undefined,
       });
       setTheses((current) => current.map((thesis) => (thesis.id === result.thesis.id ? result.thesis : thesis)));
-      await refreshEvents();
+      await Promise.all([refreshEvents(), refreshConvictionLog()]);
+
+      // Confirmation toast
+      const statusLabel: Record<string, string> = {
+        active: "active",
+        needs_review: "needs review",
+        draft: "draft",
+        invalidated: "invalidated",
+      };
+      const ageText = result.reason_age_days != null ? ` Reason age: ${result.reason_age_days} days.` : "";
+      toast.success(`Logged. Your reason is now ${statusLabel[result.thesis.status] ?? result.thesis.status}.${ageText}`);
+    } catch (error) {
+      console.error(error);
+      toast.error("Failed to save review");
+    } finally {
+      setReviewingEventId(null);
+    }
+  };
+
+  const handleAddManualNote = async (content: string) => {
+    if (!holding) return;
+    try {
+      setNoteSaving(true);
+      await api.post(`/api/portfolio/holdings/${holding.id}/conviction-log`, { content });
+      await refreshConvictionLog();
     } catch (error) {
       console.error(error);
     } finally {
-      setReviewingEventId(null);
+      setNoteSaving(false);
     }
   };
 
@@ -314,11 +388,27 @@ export default function PositionDetailPage() {
   const pnl = value - cost;
   const thesisInsights = getThesisInsights(activeThesis, events);
   const latestEvent = events[0];
+  const recentEarningsEvent =
+    events.find(
+      (event) =>
+        ["earnings_surprise", "earnings_call_transcript"].includes(event.event_type) &&
+        !event.review_action &&
+        isRecentEvent(event.created_at, 3),
+    ) ?? null;
   const hasSignals = Boolean(decompositionEnvelope?.decomposition);
   const hasActiveSignals =
     decompositionEnvelope?.decomposition?.claims.some((claim) =>
       claim.entities.some((entity) => entity.signals.some((signal) => signal.active)),
     ) ?? false;
+  const watchHints = Array.isArray(activeThesis?.interpretation?.watch_hints)
+    ? activeThesis.interpretation.watch_hints.filter(
+        (hint): hint is Record<string, unknown> => typeof hint === "object" && hint !== null,
+      )
+    : [];
+  const earningsWatchList = watchHints
+    .map((hint) => describeWatchHint(hint))
+    .filter((hint): hint is string => Boolean(hint))
+    .slice(0, 3);
   const reviewStateLabel = latestEvent
     ? latestEvent.review_action
       ? `Latest event reviewed: ${latestEvent.review_action.replaceAll("_", " ")}`
@@ -385,6 +475,99 @@ export default function PositionDetailPage() {
           </div>
         </CardContent>
       </Card>
+
+      {activeThesis && upcomingEarnings && upcomingEarnings.days_until <= 14 && (
+        <Card className="border border-sky-200 bg-sky-50/70">
+          <CardHeader className="pb-3">
+            <div className="flex flex-wrap items-center gap-2">
+              <Badge className="bg-sky-100 text-sky-800">
+                Reports in {upcomingEarnings.days_until} day{upcomingEarnings.days_until === 1 ? "" : "s"}
+              </Badge>
+              <Badge variant="outline">{formatDate(upcomingEarnings.report_date)}</Badge>
+            </div>
+            <CardTitle className="text-base">Pre-earnings focus</CardTitle>
+            <CardDescription>
+              {holding.ticker} reports soon. Before the result lands, decide what would actually matter for your reason.
+            </CardDescription>
+          </CardHeader>
+          <CardContent className="space-y-3">
+            {earningsWatchList.length > 0 ? (
+              <div className="space-y-2">
+                <p className="text-sm font-medium text-sky-900">Key signals to watch</p>
+                <div className="space-y-2">
+                  {earningsWatchList.map((item) => (
+                    <div key={item} className="rounded-xl border border-sky-200 bg-white px-3 py-2 text-sm text-sky-900">
+                      {item}
+                    </div>
+                  ))}
+                </div>
+              </div>
+            ) : (
+              <div className="rounded-xl border border-sky-200 bg-white px-3 py-3 text-sm text-sky-900">
+                Tighten the thesis before earnings so the app knows what evidence should matter the morning after.
+              </div>
+            )}
+          </CardContent>
+        </Card>
+      )}
+
+      {activeThesis && recentEarningsEvent && (
+        <Card className="border border-amber-200 bg-amber-50/70">
+          <CardHeader className="pb-3">
+            <div className="flex flex-wrap items-center gap-2">
+              <Badge className="bg-amber-100 text-amber-800">Morning-after review</Badge>
+              {recentEarningsEvent.verdict && (
+                <Badge variant="outline">{recentEarningsEvent.verdict.replaceAll("_", " ")}</Badge>
+              )}
+            </div>
+            <CardTitle className="text-base">Earnings just landed. What does it mean for your reason?</CardTitle>
+            <CardDescription>
+              {recentEarningsEvent.evidence_summary || recentEarningsEvent.summary}
+            </CardDescription>
+          </CardHeader>
+          <CardContent className="space-y-4">
+            {recentEarningsEvent.ai_analysis && (
+              <div className="rounded-xl border border-amber-200 bg-white px-3 py-3 text-sm text-amber-950">
+                {recentEarningsEvent.ai_analysis}
+              </div>
+            )}
+
+            <div className="grid gap-2 md:grid-cols-2">
+              <Button
+                variant="outline"
+                className="justify-start border-emerald-200 bg-white text-emerald-900 hover:bg-emerald-50"
+                disabled={reviewingEventId === recentEarningsEvent.id}
+                onClick={() => void handleReviewEvent(recentEarningsEvent, "reaffirmed")}
+              >
+                Reason still holds
+              </Button>
+              <Button
+                variant="outline"
+                className="justify-start border-stone-300 bg-white text-stone-900 hover:bg-stone-50"
+                onClick={() => setEditing(true)}
+              >
+                Update my reason
+              </Button>
+              <Button
+                variant="outline"
+                className="justify-start border-amber-200 bg-white text-amber-900 hover:bg-amber-100"
+                disabled={reviewingEventId === recentEarningsEvent.id}
+                onClick={() => void handleReviewEvent(recentEarningsEvent, "lowered_confidence")}
+              >
+                Lower confidence
+              </Button>
+              <Button
+                variant="outline"
+                className="justify-start border-red-200 bg-white text-red-900 hover:bg-red-50"
+                disabled={reviewingEventId === recentEarningsEvent.id}
+                onClick={() => void handleReviewEvent(recentEarningsEvent, "invalidated")}
+              >
+                Reason is broken
+              </Button>
+            </div>
+          </CardContent>
+        </Card>
+      )}
 
       <Card>
         <CardHeader>
@@ -472,11 +655,23 @@ export default function PositionDetailPage() {
             <h3 className="text-sm font-medium text-muted-foreground">Monitoring events</h3>
             <p className="text-xs text-muted-foreground">This is the review layer: when something changes, decide whether the thesis still holds.</p>
           </div>
-          <CheckNowButton holdingId={holding.id} onComplete={async () => { await refreshEvents(); await refreshCurrentThesis(); }} />
+          <CheckNowButton holdingId={holding.id} ticker={holding.ticker} currency={holding.currency} onComplete={async () => { await refreshEvents(); await refreshCurrentThesis(); }} />
         </div>
       )}
 
-      <EventTimeline events={events} onReview={handleReviewEvent} reviewingEventId={reviewingEventId} />
+      <EventTimeline
+        events={events}
+        onReview={handleReviewEvent}
+        onEditReason={() => setEditing(true)}
+        reviewingEventId={reviewingEventId}
+      />
+
+      <ConvictionLog
+        data={convictionLog}
+        loading={convictionLogLoading}
+        saving={noteSaving}
+        onAddNote={activeThesis ? handleAddManualNote : undefined}
+      />
 
       <div className="space-y-3">
         <button

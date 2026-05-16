@@ -17,6 +17,7 @@ class MonitoringEventReviewResponse(BaseModel):
     notes: str | None
     created_at: datetime
     thesis: ThesisResponse
+    reason_age_days: int | None = None
 
 
 class MonitoringEventResponse(BaseModel):
@@ -33,6 +34,7 @@ class MonitoringEventResponse(BaseModel):
     review_notes: str | None = None
     claim_id: uuid.UUID | None = None
     signal_id: uuid.UUID | None = None
+    signal_label: str | None = None
     evidence_type: str | None = None
     evidence_summary: str | None = None
     verdict: str | None = None
