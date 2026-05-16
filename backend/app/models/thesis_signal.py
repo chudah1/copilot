@@ -1,7 +1,7 @@
 import uuid
 from datetime import datetime
 
-from sqlalchemy import Boolean, DateTime, ForeignKey, JSON, Numeric, String, Text
+from sqlalchemy import Boolean, DateTime, ForeignKey, Integer, JSON, Numeric, String, Text
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 from sqlalchemy.sql import func
 
@@ -22,6 +22,8 @@ class ThesisSignal(Base):
     user_confirmed: Mapped[bool | None] = mapped_column(Boolean, nullable=True)
     active: Mapped[bool] = mapped_column(Boolean, default=False)
     raw_extraction_json: Mapped[dict | None] = mapped_column(JSON, nullable=True)
+    last_fired_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
+    consecutive_ignores: Mapped[int] = mapped_column(Integer, default=0, server_default="0")
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now())
 
     entity = relationship("ThesisEntity", back_populates="signals")

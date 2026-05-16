@@ -16,6 +16,7 @@ from app.models.thesis import Thesis
 from app.services.ai_monitor import classify_event
 from app.services.market_data import fetch_company_data
 from app.services.monitoring import check_metric_watch_hints, generate_monitoring_candidates
+from app.services.noise_filter import filter_candidates, record_signal_fired
 from app.services.signal_matching import (
     build_evidence_summary,
     determine_verdict,
@@ -177,20 +178,13 @@ async def run_check_now(
         holding.current_price = company_data.current_price
         holding.current_value = float(holding.quantity) * company_data.current_price
 
+    # Noise suppression: filter before event creation
+    candidates = await filter_candidates(candidates, holding.id, signals_by_id, db, now=now)
+
     created_event_ids: list[uuid.UUID] = []
 
-    seen_candidate_ids: set[str] = set()
     for candidate in candidates:
         evidence = candidate.get("evidence", {})
-        dedupe_id = (
-            evidence.get("article_id")
-            or evidence.get("transaction_id")
-            or evidence.get("transcript_id")
-        )
-        if dedupe_id:
-            if dedupe_id in seen_candidate_ids:
-                continue
-            seen_candidate_ids.add(dedupe_id)
 
         classification = await classify_event(
             why_own_it=thesis.why_own_it,
@@ -253,6 +247,7 @@ async def run_check_now(
         )
         db.add(event)
         created_event_ids.append(event.id)
+        await record_signal_fired(evidence_signal_id, signals_by_id, now=now)
 
         if severity == "thesis_breaking" and thesis.status in ("active", "draft"):
             thesis.status = "needs_review"

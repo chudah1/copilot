@@ -13,6 +13,7 @@ from app.models.monitoring_event import MonitoringEvent
 from app.services.monitoring import check_metric_watch_hints, generate_monitoring_candidates
 from app.services.market_data import CompanyData, fetch_company_data, shortlist_qualitative_candidates
 from app.services.ai_monitor import classify_event
+from app.services.noise_filter import filter_candidates, record_signal_fired
 from app.services.signal_matching import (
     build_evidence_summary,
     determine_verdict,
@@ -258,18 +259,11 @@ async def run_monitoring():
                 if not candidates:
                     continue
 
-                seen_candidate_ids: set[str] = set()
+                # Noise suppression: filter before event creation
+                candidates = await filter_candidates(candidates, holding.id, signals_by_id, db, now=now)
+
                 for candidate in candidates:
                     evidence = candidate.get("evidence", {})
-                    dedupe_id = (
-                        evidence.get("article_id")
-                        or evidence.get("transaction_id")
-                        or evidence.get("transcript_id")
-                    )
-                    if dedupe_id:
-                        if dedupe_id in seen_candidate_ids:
-                            continue
-                        seen_candidate_ids.add(dedupe_id)
 
                     # For proxy events, include the causal context so the
                     # classifier understands why this upstream signal matters
@@ -350,6 +344,7 @@ async def run_monitoring():
                         verdict=verdict,
                     )
                     db.add(event)
+                    await record_signal_fired(evidence_signal_id, signals_by_id, now=now)
 
                     if severity == "thesis_breaking" and thesis.status == "active":
                         thesis.status = "needs_review"
