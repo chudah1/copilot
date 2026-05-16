@@ -1,7 +1,9 @@
 import pytest
 from datetime import datetime, timedelta, timezone
+from unittest.mock import patch
 
 from app.models.thesis import Thesis
+from app.services.market_data import CompanyData
 
 
 @pytest.mark.asyncio
@@ -161,3 +163,31 @@ async def test_portfolio_summary_tracks_monitorability_and_conviction_mismatch(c
     assert data["monitorable_thesis_coverage_pct"] > 60.0
     assert data["unmonitored_holdings_count"] == 1
     assert data["conviction_mismatch_count"] == 1
+
+
+@pytest.mark.asyncio
+@patch("app.services.earnings_service._fetch_earnings_date")
+async def test_upcoming_earnings_returns_sorted_items(mock_fetch_earnings_date, client, auth_headers):
+    await client.post(
+        "/api/portfolio/holdings",
+        json={"ticker": "AAPL", "name": "Apple", "quantity": 10, "average_cost_basis": 150},
+        headers=auth_headers,
+    )
+    await client.post(
+        "/api/portfolio/holdings",
+        json={"ticker": "MSFT", "name": "Microsoft", "quantity": 5, "average_cost_basis": 300},
+        headers=auth_headers,
+    )
+
+    async def _mock_earnings(ticker: str) -> datetime:
+        return datetime.now(timezone.utc) + timedelta(days=5 if ticker == "AAPL" else 2)
+
+    mock_fetch_earnings_date.side_effect = _mock_earnings
+
+    response = await client.get("/api/portfolio/upcoming-earnings", headers=auth_headers)
+    assert response.status_code == 200
+    data = response.json()
+    assert len(data) == 2
+    assert data[0]["ticker"] == "MSFT"
+    assert data[1]["ticker"] == "AAPL"
+    assert data[0]["days_until"] <= data[1]["days_until"]

@@ -53,13 +53,24 @@ def _ensure_sqlite_dev_compatibility(conn) -> None:
 
     inspector = inspect(conn)
     tables = set(inspector.get_table_names())
-    if "users" not in tables:
-        return
+    if "users" in tables:
+        user_columns = {column["name"] for column in inspector.get_columns("users")}
+        if "onboarding_completed_at" not in user_columns:
+            conn.execute(text("ALTER TABLE users ADD COLUMN onboarding_completed_at DATETIME"))
+            logger.info("Added missing users.onboarding_completed_at column for local SQLite compatibility")
 
-    user_columns = {column["name"] for column in inspector.get_columns("users")}
-    if "onboarding_completed_at" not in user_columns:
-        conn.execute(text("ALTER TABLE users ADD COLUMN onboarding_completed_at DATETIME"))
-        logger.info("Added missing users.onboarding_completed_at column for local SQLite compatibility")
+    if "thesis_signals" in tables:
+        thesis_signal_columns = {column["name"] for column in inspector.get_columns("thesis_signals")}
+        if "last_fired_at" not in thesis_signal_columns:
+            conn.execute(text("ALTER TABLE thesis_signals ADD COLUMN last_fired_at DATETIME"))
+            logger.info("Added missing thesis_signals.last_fired_at column for local SQLite compatibility")
+        if "consecutive_ignores" not in thesis_signal_columns:
+            conn.execute(
+                text("ALTER TABLE thesis_signals ADD COLUMN consecutive_ignores INTEGER NOT NULL DEFAULT 0")
+            )
+            logger.info(
+                "Added missing thesis_signals.consecutive_ignores column for local SQLite compatibility"
+            )
 
 
 @asynccontextmanager
@@ -111,6 +122,9 @@ app.include_router(onboarding_router)
 
 from app.routes.quarterly_review import router as quarterly_review_router
 app.include_router(quarterly_review_router)
+
+from app.routes.notifications import router as notifications_router
+app.include_router(notifications_router)
 
 
 @app.get("/health")

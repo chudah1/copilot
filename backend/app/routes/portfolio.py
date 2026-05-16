@@ -25,6 +25,7 @@ from app.schemas.holding import (
     PriorityHoldingSummary,
     SimulateTradeRequest,
     SimulateTradeResponse,
+    UpcomingEarningsResponse,
 )
 from app.services.encryption import encrypt, decrypt
 from app.services.trading212 import Trading212Client
@@ -37,6 +38,11 @@ router = APIRouter(prefix="/api/portfolio", tags=["portfolio"])
 def _age_in_days(timestamp: datetime) -> int:
     normalized = timestamp if timestamp.tzinfo is not None else timestamp.replace(tzinfo=timezone.utc)
     return (datetime.now(timezone.utc) - normalized).days
+
+
+def _days_until(timestamp: datetime) -> int:
+    normalized = timestamp if timestamp.tzinfo is not None else timestamp.replace(tzinfo=timezone.utc)
+    return max(0, (normalized.date() - datetime.now(timezone.utc).date()).days)
 
 
 def _holding_value(holding: Holding) -> float:
@@ -406,6 +412,51 @@ async def portfolio_pulse(
         ],
         next_digest_at=next_digest_at,
     )
+
+
+@router.get("/upcoming-earnings", response_model=list[UpcomingEarningsResponse])
+async def upcoming_earnings(
+    current_user: User = Depends(get_current_user),
+    db: AsyncSession = Depends(get_db),
+):
+    holdings_result = await db.execute(
+        select(Holding)
+        .where(Holding.user_id == current_user.id)
+        .order_by(Holding.current_value.desc().nulls_last())
+    )
+    holdings = holdings_result.scalars().all()
+    if not holdings:
+        return []
+
+    from app.services.earnings_service import get_or_refresh_earnings
+
+    upcoming: list[UpcomingEarningsResponse] = []
+    for holding in holdings:
+        try:
+            report_date = await get_or_refresh_earnings(db, holding.ticker)
+        except Exception:
+            continue
+
+        if report_date is None:
+            continue
+
+        days_until = _days_until(report_date)
+        if days_until < 0:
+            continue  # Already passed
+
+        upcoming.append(
+            UpcomingEarningsResponse(
+                holding_id=holding.id,
+                ticker=holding.ticker,
+                name=holding.name,
+                report_date=report_date,
+                days_until=days_until,
+            )
+        )
+
+    await db.commit()
+    upcoming.sort(key=lambda item: item.report_date)
+    return upcoming[:10]
 
 
 @router.get("/summary", response_model=PortfolioSummary)
