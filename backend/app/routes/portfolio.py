@@ -164,7 +164,7 @@ async def sync_broker(
             holding = Holding(
                 user_id=current_user.id,
                 broker_connection_id=connection.id,
-                ticker=pos.ticker,
+                ticker=pos.ticker.upper(),
                 name=h_name,
                 quantity=pos.quantity,
                 average_cost_basis=pos.average_price,
@@ -275,7 +275,7 @@ async def add_manual_holding(
 
     holding = Holding(
         user_id=current_user.id,
-        ticker=body.ticker,
+        ticker=body.ticker.upper(),
         name=enriched_name,
         exchange=body.exchange,
         quantity=body.quantity,
@@ -372,7 +372,7 @@ async def upload_csv(
         else:
             holding = Holding(
                 user_id=current_user.id,
-                ticker=p.ticker,
+                ticker=p.ticker.upper(),
                 name=p.name,
                 quantity=p.quantity,
                 average_cost_basis=p.average_cost_basis,

@@ -4,12 +4,15 @@ from app.config import settings
 
 logger = logging.getLogger(__name__)
 
+# Set once at import time; key is read from env and does not change at runtime.
+if settings.resend_api_key:
+    resend.api_key = settings.resend_api_key
+
 
 def _send_email_via_resend(from_addr: str, to_email: str, subject: str, html: str) -> bool:
     if not settings.resend_api_key:
         logger.warning("No Resend API key configured — skipping email send")
         return False
-    resend.api_key = settings.resend_api_key
     try:
         resend.Emails.send({"from": from_addr, "to": [to_email], "subject": subject, "html": html})
         return True
