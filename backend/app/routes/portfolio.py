@@ -29,7 +29,7 @@ from app.schemas.holding import (
     UpcomingEarningsResponse,
 )
 from app.services.encryption import encrypt, decrypt
-from app.services.trading212 import Trading212Client
+from app.services.trading212 import Trading212Client, detect_trading212_base_url
 from app.services.csv_parser import parse_csv
 from app.services.market_data import fetch_company_data, fetch_company_overview
 
@@ -116,10 +116,12 @@ async def connect_broker(
     if body.broker_type != "trading212":
         raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="Only trading212 is supported")
 
-    client = Trading212Client(api_key=body.api_key)
-    valid = await client.verify_key()
-    if not valid:
-        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="Invalid API key")
+    base_url = await detect_trading212_base_url(body.api_key)
+    if base_url is None:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="API key not accepted by Trading 212. Check you copied the full key and that it's from the correct account (live or practice).",
+        )
 
     encrypted_key = encrypt(body.api_key)
     connection = BrokerConnection(
@@ -152,7 +154,13 @@ async def sync_broker(
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Connection not found")
 
     api_key = decrypt(connection.encrypted_api_key)
-    client = Trading212Client(api_key=api_key)
+    base_url = await detect_trading212_base_url(api_key)
+    if base_url is None:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="Trading 212 API key is no longer valid. Reconnect your account.",
+        )
+    client = Trading212Client(api_key=api_key, base_url=base_url)
     positions = await client.fetch_positions()
 
     synced_holdings = []

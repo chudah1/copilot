@@ -1,11 +1,16 @@
 import uuid
 from datetime import datetime
-from pydantic import BaseModel
+from pydantic import BaseModel, field_validator
 
 
 class ConnectBrokerRequest(BaseModel):
     broker_type: str
     api_key: str
+
+    @field_validator("api_key")
+    @classmethod
+    def strip_whitespace(cls, v: str) -> str:
+        return v.strip()
 
 
 class BrokerConnectionResponse(BaseModel):

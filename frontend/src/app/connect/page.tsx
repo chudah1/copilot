@@ -39,7 +39,7 @@ export default function ConnectPage() {
     try {
       const conn = await api.post<BrokerConnection>("/api/portfolio/connect", {
         broker_type: "trading212",
-        api_key: apiKey,
+        api_key: apiKey.trim(),
       });
       await api.post(`/api/portfolio/sync/${conn.id}`);
       router.push("/onboarding?source=import");
@@ -163,7 +163,7 @@ export default function ConnectPage() {
               <CardHeader>
                 <CardTitle>Connect Trading 212</CardTitle>
                 <CardDescription>
-                  Paste your API key from Trading 212 Settings &gt; API.
+                  Paste your API key from Trading 212 Settings &gt; API (works with both live and practice accounts).
                   We encrypt it and never share it.
                 </CardDescription>
               </CardHeader>

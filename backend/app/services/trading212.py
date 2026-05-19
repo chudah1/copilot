@@ -15,10 +15,14 @@ class Trading212Position:
     fx_ppl: float
 
 
+_LIVE_URL = "https://live.trading212.com/api/v0"
+_DEMO_URL = "https://demo.trading212.com/api/v0"
+
+
 class Trading212Client:
-    def __init__(self, api_key: str):
-        self.api_key = api_key
-        self.base_url = settings.trading212_base_url
+    def __init__(self, api_key: str, base_url: str | None = None):
+        self.api_key = api_key.strip()
+        self.base_url = base_url or settings.trading212_base_url
 
     async def _request(self, method: str, path: str) -> dict | list:
         async with httpx.AsyncClient() as client:
@@ -53,3 +57,12 @@ class Trading212Client:
             return True
         except (PermissionError, httpx.HTTPStatusError):
             return False
+
+
+async def detect_trading212_base_url(api_key: str) -> str | None:
+    """Try live then demo to find which environment the key belongs to."""
+    for url in (_LIVE_URL, _DEMO_URL):
+        client = Trading212Client(api_key=api_key, base_url=url)
+        if await client.verify_key():
+            return url
+    return None

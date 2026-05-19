@@ -87,7 +87,8 @@ async def test_onboarding_requires_auth(client):
 
 
 async def test_onboarding_after_broker_sync(client, auth_headers):
-    with patch("app.routes.portfolio.Trading212Client.verify_key", new_callable=AsyncMock, return_value=True):
+    _live_url = "https://live.trading212.com/api/v0"
+    with patch("app.routes.portfolio.detect_trading212_base_url", new_callable=AsyncMock, return_value=_live_url):
         connect_response = await client.post(
             "/api/portfolio/connect",
             json={"broker_type": "trading212", "api_key": "test-key"},
@@ -104,9 +105,10 @@ async def test_onboarding_after_broker_sync(client, auth_headers):
         ppl=250.0,
         fx_ppl=200.0,
     )
-    with patch("app.routes.portfolio.Trading212Client.fetch_positions", new_callable=AsyncMock, return_value=[fake_position]):
-        with patch("app.routes.portfolio.fetch_company_overview", new_callable=AsyncMock, return_value=None):
-            sync_response = await client.post(f"/api/portfolio/sync/{connection_id}", headers=auth_headers)
+    with patch("app.routes.portfolio.detect_trading212_base_url", new_callable=AsyncMock, return_value=_live_url):
+        with patch("app.routes.portfolio.Trading212Client.fetch_positions", new_callable=AsyncMock, return_value=[fake_position]):
+            with patch("app.routes.portfolio.fetch_company_overview", new_callable=AsyncMock, return_value=None):
+                sync_response = await client.post(f"/api/portfolio/sync/{connection_id}", headers=auth_headers)
 
     assert sync_response.status_code == 200
 
