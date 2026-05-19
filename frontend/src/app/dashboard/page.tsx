@@ -6,6 +6,7 @@ import { api } from "@/lib/api";
 import { getErrorMessage } from "@/lib/errors";
 import { formatCurrency, formatDate, formatPercent } from "@/lib/utils";
 import { HoldingCard } from "@/components/portfolio/holding-card";
+import { DigestCountdown } from "@/components/portfolio/digest-countdown";
 import { OnboardingBanner } from "@/components/onboarding/onboarding-banner";
 import { PulseStream } from "@/components/portfolio/pulse-stream";
 import { QuickAddHolding } from "@/components/portfolio/quick-add-holding";
@@ -272,6 +273,13 @@ export default function DashboardPage() {
             ))}
           </div>
 
+          {/* Digest countdown */}
+          {pulse?.next_digest_at && (
+            <div className="flex justify-center mt-5">
+              <DigestCountdown nextDigestAt={pulse.next_digest_at} />
+            </div>
+          )}
+
           {/* Bottom rule + actions */}
           <div className="flex items-center gap-4 mt-6">
             <div className="flex-1 border-t border-foreground/20" />
@@ -406,9 +414,7 @@ export default function DashboardPage() {
                       label: "Next event",
                       value: nextEarnings
                         ? `${nextEarnings.ticker} reports ${formatDate(nextEarnings.report_date)}`
-                        : pulse?.next_digest_at
-                          ? `Digest ${formatDate(pulse.next_digest_at)}`
-                          : "No scheduled events",
+                        : "No upcoming earnings",
                     },
                     {
                       key: "oldest-reason",
