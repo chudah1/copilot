@@ -173,8 +173,8 @@ export default function ConnectPage() {
                     <Label htmlFor="apiKey">API Key</Label>
                     <Input id="apiKey" type="password" value={apiKey} onChange={(e) => setApiKey(e.target.value)} required />
                   </div>
-                  <div className="rounded-lg bg-muted/30 p-3 text-sm text-muted-foreground">
-                    Best for ongoing sync. After import, the app will surface your biggest positions first so you can set up the most important theses immediately.
+                  <div className="rounded-lg bg-muted/30 p-3 text-sm text-muted-foreground space-y-1">
+                    <p>Works with live and practice accounts. If you set an IP restriction when generating the key, leave it unrestricted.</p>
                   </div>
                   {brokerError && <p className="text-sm text-red-500">{brokerError}</p>}
                   <Button type="submit" disabled={brokerLoading}>
