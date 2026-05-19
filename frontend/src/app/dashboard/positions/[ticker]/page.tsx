@@ -13,6 +13,7 @@ import { ConvictionLog } from "@/components/thesis/conviction-log";
 import { ThesisDecompositionReview } from "@/components/thesis/thesis-decomposition-review";
 import { ThesisEditor } from "@/components/thesis/thesis-editor";
 import { EventTimeline } from "@/components/monitoring/event-timeline";
+import { EventReviewStack } from "@/components/monitoring/event-review-stack";
 import { Button } from "@/components/ui/button";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from "@/components/ui/dialog";
 import { Textarea } from "@/components/ui/textarea";
@@ -759,26 +760,43 @@ export default function PositionDetailPage() {
                 )}
 
                 {/* Events */}
-                <div className="border-t border-border/40 pt-6 space-y-4">
-                  <div className="flex items-center justify-between">
-                    <div>
-                      <p className="font-mono text-[10px] uppercase tracking-[0.25em] text-muted-foreground">Evidence</p>
-                      <p className="font-sans text-xs text-muted-foreground mt-0.5">
-                        When something changes, decide whether the thesis still holds
-                      </p>
+                <div className="border-t border-border/40 pt-6 space-y-6">
+                  {/* Unreviewed — card stack */}
+                  {unreviewedEvents > 0 && (
+                    <div className="space-y-3">
+                      <div>
+                        <p className="font-mono text-[10px] uppercase tracking-[0.25em] text-muted-foreground">Inbox</p>
+                        <p className="font-sans text-xs text-muted-foreground mt-0.5">
+                          Drag right if the thesis holds · drag left to skip · drag up if confidence is eroding
+                        </p>
+                      </div>
+                      <EventReviewStack
+                        events={events.filter((e) => !e.review_action)}
+                        onReview={handleReviewEvent}
+                        reviewingEventId={reviewingEventId}
+                      />
                     </div>
-                    {unreviewedEvents > 0 && (
-                      <span className="font-mono text-[10px] text-amber-700">
-                        {unreviewedEvents} unreviewed
-                      </span>
-                    )}
-                  </div>
-                  <EventTimeline
-                    events={events}
-                    onReview={handleReviewEvent}
-                    onEditReason={() => { setEditing(true); setActiveTab("thesis"); }}
-                    reviewingEventId={reviewingEventId}
-                  />
+                  )}
+
+                  {/* Reviewed — standard timeline */}
+                  {events.some((e) => e.review_action) && (
+                    <div className="space-y-3">
+                      <p className="font-mono text-[10px] uppercase tracking-[0.25em] text-muted-foreground">
+                        {unreviewedEvents > 0 ? "Already reviewed" : "Evidence"}
+                      </p>
+                      <EventTimeline
+                        events={events.filter((e) => e.review_action)}
+                        reviewingEventId={reviewingEventId}
+                      />
+                    </div>
+                  )}
+
+                  {/* No events at all */}
+                  {events.length === 0 && (
+                    <p className="font-sans text-sm text-muted-foreground py-6">
+                      No material changes yet. The app is watching this position against your thesis.
+                    </p>
+                  )}
                 </div>
 
                 {/* No thesis prompt */}

@@ -1,28 +1,28 @@
 import type { Metadata } from "next";
-import { Playfair_Display, Lora, Courier_Prime } from "next/font/google";
+import { Cormorant, Instrument_Sans, JetBrains_Mono } from "next/font/google";
 import "./globals.css";
 import { AuthProvider } from "@/lib/auth";
 
-const playfair = Playfair_Display({
+const cormorant = Cormorant({
   subsets: ["latin"],
-  weight: ["400", "600", "700"],
+  weight: ["300", "400", "500", "600", "700"],
   style: ["normal", "italic"],
-  variable: "--font-playfair",
+  variable: "--font-cormorant",
   display: "swap",
 });
 
-const lora = Lora({
+const instrumentSans = Instrument_Sans({
   subsets: ["latin"],
   weight: ["400", "500", "600"],
   style: ["normal", "italic"],
-  variable: "--font-lora",
+  variable: "--font-instrument",
   display: "swap",
 });
 
-const courier = Courier_Prime({
+const jetbrainsMono = JetBrains_Mono({
   subsets: ["latin"],
-  weight: ["400", "700"],
-  variable: "--font-courier",
+  weight: ["400", "500", "600"],
+  variable: "--font-jetbrains",
   display: "swap",
 });
 
@@ -34,7 +34,7 @@ export const metadata: Metadata = {
 export default function RootLayout({ children }: { children: React.ReactNode }) {
   return (
     <html lang="en">
-      <body className={`${playfair.variable} ${lora.variable} ${courier.variable} antialiased`}>
+      <body className={`${cormorant.variable} ${instrumentSans.variable} ${jetbrainsMono.variable} antialiased`}>
         <AuthProvider>{children}</AuthProvider>
       </body>
     </html>

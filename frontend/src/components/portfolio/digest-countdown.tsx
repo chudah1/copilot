@@ -12,21 +12,32 @@ export function DigestCountdown({ nextDigestAt }: { nextDigestAt: string | null 
   const days = Math.floor(diffMs / (1000 * 60 * 60 * 24));
   const hours = Math.floor((diffMs % (1000 * 60 * 60 * 24)) / (1000 * 60 * 60));
 
-  let label: string;
+  let countdown: string;
   if (days === 0) {
-    label = `${hours}h`;
+    countdown = `${hours}h`;
   } else if (days === 1) {
-    label = "Tomorrow";
+    countdown = "Tomorrow";
   } else {
-    label = `${days} days`;
+    countdown = `${days}d`;
   }
 
+  const dateLabel = next.toLocaleDateString("en-GB", {
+    weekday: "short",
+    hour: "2-digit",
+    minute: "2-digit",
+  });
+
   return (
-    <div className="flex items-center gap-2 rounded-md border px-3 py-2 text-sm">
-      <span className="text-muted-foreground">Next digest:</span>
-      <span className="font-medium">{label}</span>
-      <span className="text-xs text-muted-foreground">
-        {next.toLocaleDateString("en-GB", { weekday: "short", hour: "2-digit", minute: "2-digit" })}
+    <div className="inline-flex items-center gap-3 border border-border px-4 py-1.5">
+      <span className="font-mono text-[9px] uppercase tracking-[0.25em] text-muted-foreground">
+        Next digest
+      </span>
+      <span className="w-px h-3 bg-border" />
+      <span className="font-mono text-[11px] font-medium text-primary tabular-nums">
+        {countdown}
+      </span>
+      <span className="font-mono text-[9px] text-muted-foreground/70">
+        {dateLabel}
       </span>
     </div>
   );

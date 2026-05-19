@@ -13,12 +13,12 @@ interface Props {
   index?: number;
 }
 
-function statusStyle(pulse: HoldingPulse | undefined, hasThesis: boolean) {
-  if (!hasThesis) return { dot: "text-border", label: "No thesis", text: "text-muted-foreground/60" };
+function pulseConfig(pulse: HoldingPulse | undefined, hasThesis: boolean) {
+  if (!hasThesis) return { color: "bg-border", label: "No thesis", labelColor: "text-muted-foreground/50" };
   const s = pulse?.pulse_status ?? "intact";
-  if (s === "review") return { dot: "text-red-600", label: "Needs review", text: "text-red-600" };
-  if (s === "watch") return { dot: "text-amber-700", label: "Watching", text: "text-amber-700" };
-  return { dot: "text-emerald-700", label: "Intact", text: "text-emerald-700" };
+  if (s === "review") return { color: "bg-red-500", label: "Review", labelColor: "text-red-600" };
+  if (s === "watch") return { color: "bg-amber-500", label: "Watch", labelColor: "text-amber-700" };
+  return { color: "bg-emerald-500", label: "Intact", labelColor: "text-emerald-700" };
 }
 
 export function HoldingCard({ holding, thesis, pulse, earnings, onGenerateDraft, index = 0 }: Props) {
@@ -28,59 +28,67 @@ export function HoldingCard({ holding, thesis, pulse, earnings, onGenerateDraft,
   const pnlPct = cost > 0 ? (pnl / cost) * 100 : 0;
 
   const hasThesis = !!thesis;
-  const { label, text } = statusStyle(pulse, hasThesis);
+  const { color: dotColor, label: statusLabel, labelColor } = pulseConfig(pulse, hasThesis);
   const displayName = holding.name !== holding.ticker ? holding.name : holding.ticker;
   const thesisText = pulse?.reason ?? thesis?.why_own_it;
 
   return (
     <Link
       href={`/dashboard/positions/${holding.ticker}`}
-      className="group block border-b border-border/60 py-5 transition-colors hover:bg-muted"
-      style={{ animationDelay: `${index * 40}ms` }}
+      className="group block border-b border-border/50 py-4 transition-colors hover:bg-secondary/60"
+      style={{ animationDelay: `${index * 35}ms` }}
     >
-      <div className="flex items-start gap-4 justify-between">
+      <div className="flex items-start gap-5 justify-between">
 
-        {/* Left: ticker + name + thesis quote */}
-        <div className="flex-1 min-w-0 space-y-1.5">
-          <div className="flex items-baseline gap-3 flex-wrap">
-            <span className="font-mono text-[11px] font-bold uppercase tracking-[0.2em] text-primary">
-              {holding.ticker}
-            </span>
-            <span className="font-sans text-[15px] text-foreground leading-tight">
-              {displayName}
-            </span>
-            {earnings && earnings.days_until <= 7 && (
-              <span className="font-mono text-[10px] tracking-wide text-violet-700">
-                earnings {earnings.days_until === 0 ? "today" : earnings.days_until === 1 ? "tomorrow" : `in ${earnings.days_until}d`}
-              </span>
-            )}
+        {/* Status dot + content */}
+        <div className="flex items-start gap-3 flex-1 min-w-0">
+          {/* Pulse dot */}
+          <div className="mt-[5px] flex-shrink-0">
+            <span className={`block h-2 w-2 rounded-full ${dotColor}`} />
           </div>
 
-          {hasThesis && thesisText ? (
-            <p className="font-sans italic text-sm text-muted-foreground leading-relaxed line-clamp-2 max-w-xl">
-              &ldquo;{thesisText}&rdquo;
-            </p>
-          ) : !hasThesis ? (
-            <button
-              onClick={(e) => { e.preventDefault(); e.stopPropagation(); onGenerateDraft?.(); }}
-              className="font-mono text-[10px] uppercase tracking-[0.15em] text-primary/50 hover:text-primary transition-colors"
-            >
-              + Draft thesis with AI
-            </button>
-          ) : null}
+          {/* Text block */}
+          <div className="flex-1 min-w-0 space-y-1">
+            <div className="flex items-baseline gap-2.5 flex-wrap">
+              <span className="font-mono text-[11px] font-semibold tracking-[0.18em] text-primary">
+                {holding.ticker.replace("_US_EQ", "").replace("_EQ", "")}
+              </span>
+              <span className="font-sans text-sm text-foreground/80 leading-tight">
+                {displayName}
+              </span>
+              {earnings && earnings.days_until <= 7 && (
+                <span className="font-mono text-[9px] tracking-[0.12em] uppercase text-violet-600 border border-violet-200 px-1.5 py-px rounded-sm">
+                  earnings {earnings.days_until === 0 ? "today" : earnings.days_until === 1 ? "tomorrow" : `${earnings.days_until}d`}
+                </span>
+              )}
+            </div>
+
+            {hasThesis && thesisText ? (
+              <p className="font-sans text-xs text-muted-foreground leading-relaxed line-clamp-1 max-w-lg italic">
+                {thesisText}
+              </p>
+            ) : !hasThesis ? (
+              <button
+                onClick={(e) => { e.preventDefault(); e.stopPropagation(); onGenerateDraft?.(); }}
+                className="font-mono text-[9px] uppercase tracking-[0.15em] text-muted-foreground/50 hover:text-primary transition-colors border-b border-dashed border-muted-foreground/30 pb-px"
+              >
+                Draft thesis with AI
+              </button>
+            ) : null}
+          </div>
         </div>
 
-        {/* Right: value, P&L, status */}
+        {/* Right: numbers + status */}
         <div className="text-right shrink-0 space-y-1 pl-4">
-          <p className="font-mono text-base tabular-nums text-foreground">
+          <p className="font-mono text-[0.9375rem] tabular-nums text-foreground font-medium">
             {formatCurrency(value, holding.currency)}
           </p>
-          <p className={`font-mono text-sm tabular-nums ${pnl >= 0 ? "text-emerald-700" : "text-red-600"}`}>
+          <p className={`font-mono text-xs tabular-nums ${pnl >= 0 ? "text-emerald-700" : "text-red-600"}`}>
             {pnl >= 0 ? "+" : ""}{formatCurrency(pnl, holding.currency)}{" "}
-            <span className="text-xs opacity-70">({formatPercent(pnlPct)})</span>
+            <span className="opacity-60">({formatPercent(pnlPct)})</span>
           </p>
-          <p className={`font-mono text-[11px] ${text}`}>
-            ● {label}
+          <p className={`font-mono text-[10px] uppercase tracking-[0.1em] ${labelColor}`}>
+            {statusLabel}
           </p>
         </div>
       </div>

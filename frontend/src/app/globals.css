@@ -2,15 +2,16 @@
 @import "tw-animate-css";
 @import "shadcn/tailwind.css";
 
+/* ── Force light mode — override any OS dark mode preferences ── */
 @custom-variant dark (&:is(.dark *));
 
 @theme inline {
   --color-background: var(--background);
   --color-foreground: var(--foreground);
-  --font-sans: var(--font-lora);
-  --font-mono: var(--font-courier);
-  --font-display: var(--font-playfair);
-  --font-heading: var(--font-playfair);
+  --font-sans: var(--font-instrument);
+  --font-mono: var(--font-jetbrains);
+  --font-display: var(--font-cormorant);
+  --font-heading: var(--font-cormorant);
   --color-sidebar-ring: var(--sidebar-ring);
   --color-sidebar-border: var(--sidebar-border);
   --color-sidebar-accent-foreground: var(--sidebar-accent-foreground);
@@ -50,46 +51,122 @@
 }
 
 :root {
-  /* ── The Financial Chronicle — warm editorial light ── */
-  --background: oklch(0.976 0.008 72);       /* warm cream — quality paper */
-  --foreground: oklch(0.118 0.006 55);       /* ink black */
-  --card: oklch(0.976 0.008 72);             /* same as background — no boxes, only sections */
-  --card-foreground: oklch(0.118 0.006 55);
-  --popover: oklch(0.990 0.004 72);
-  --popover-foreground: oklch(0.118 0.006 55);
-  --primary: oklch(0.390 0.110 28);          /* deep rust / terracotta */
-  --primary-foreground: oklch(0.990 0.004 72);
-  --secondary: oklch(0.946 0.010 72);        /* hover surface — warm off-white */
-  --secondary-foreground: oklch(0.118 0.006 55);
-  --muted: oklch(0.952 0.008 72);            /* subtle fill */
-  --muted-foreground: oklch(0.490 0.010 65); /* warm medium gray */
-  --accent: oklch(0.946 0.010 72);
-  --accent-foreground: oklch(0.118 0.006 55);
-  --destructive: oklch(0.530 0.190 22);      /* readable red */
-  --border: oklch(0.862 0.010 68);           /* thin warm divider rule */
-  --input: oklch(0.862 0.010 68);
-  --ring: oklch(0.390 0.110 28);
-  --chart-1: oklch(0.390 0.110 28);          /* rust */
-  --chart-2: oklch(0.440 0.110 155);         /* forest green */
-  --chart-3: oklch(0.530 0.190 22);          /* red */
-  --chart-4: oklch(0.415 0.095 250);         /* navy */
-  --chart-5: oklch(0.455 0.115 310);         /* plum */
-  --radius: 0.125rem;                        /* sharp edges — editorial precision */
-  --sidebar: oklch(0.968 0.010 72);
-  --sidebar-foreground: oklch(0.118 0.006 55);
-  --sidebar-primary: oklch(0.390 0.110 28);
-  --sidebar-primary-foreground: oklch(0.990 0.004 72);
-  --sidebar-accent: oklch(0.946 0.010 72);
-  --sidebar-accent-foreground: oklch(0.118 0.006 55);
-  --sidebar-border: oklch(0.862 0.010 68);
-  --sidebar-ring: oklch(0.390 0.110 28);
+  /* ── The Investment Ledger — warm paper, sharp edges, serious money ── */
+  --background: oklch(0.987 0.006 75);        /* warm parchment — not stark white */
+  --foreground: oklch(0.118 0.008 50);         /* warm near-black ink */
+  --card: oklch(1.000 0.000 0);               /* pure white — elevated surface */
+  --card-foreground: oklch(0.118 0.008 50);
+  --popover: oklch(1.000 0.000 0);
+  --popover-foreground: oklch(0.118 0.008 50);
+  --primary: oklch(0.365 0.105 30);            /* deep mahogany — authoritative, warm, distinctive */
+  --primary-foreground: oklch(0.991 0.003 75);
+  --secondary: oklch(0.963 0.007 70);
+  --secondary-foreground: oklch(0.118 0.008 50);
+  --muted: oklch(0.957 0.007 72);
+  --muted-foreground: oklch(0.495 0.012 62);   /* warm slate gray */
+  --accent: oklch(0.957 0.007 72);
+  --accent-foreground: oklch(0.118 0.008 50);
+  --destructive: oklch(0.510 0.195 22);
+  --border: oklch(0.882 0.010 68);             /* warm tan border */
+  --input: oklch(0.882 0.010 68);
+  --ring: oklch(0.365 0.105 30);
+  --chart-1: oklch(0.365 0.105 30);            /* mahogany */
+  --chart-2: oklch(0.440 0.110 155);           /* forest green */
+  --chart-3: oklch(0.510 0.195 22);            /* deep red */
+  --chart-4: oklch(0.415 0.095 252);           /* navy */
+  --chart-5: oklch(0.455 0.115 312);           /* plum */
+  --radius: 0.2rem;                            /* crisp — not zero, not round */
+  --sidebar: oklch(0.980 0.007 73);
+  --sidebar-foreground: oklch(0.118 0.008 50);
+  --sidebar-primary: oklch(0.365 0.105 30);
+  --sidebar-primary-foreground: oklch(0.991 0.003 75);
+  --sidebar-accent: oklch(0.957 0.007 72);
+  --sidebar-accent-foreground: oklch(0.118 0.008 50);
+  --sidebar-border: oklch(0.882 0.010 68);
+  --sidebar-ring: oklch(0.365 0.105 30);
+}
+
+/* ── Override dark-mode media queries from imported shadcn stylesheet ── */
+@media (prefers-color-scheme: dark) {
+  :root {
+    --background: oklch(0.987 0.006 75);
+    --foreground: oklch(0.118 0.008 50);
+    --card: oklch(1.000 0.000 0);
+    --card-foreground: oklch(0.118 0.008 50);
+    --popover: oklch(1.000 0.000 0);
+    --popover-foreground: oklch(0.118 0.008 50);
+    --primary: oklch(0.365 0.105 30);
+    --primary-foreground: oklch(0.991 0.003 75);
+    --secondary: oklch(0.963 0.007 70);
+    --secondary-foreground: oklch(0.118 0.008 50);
+    --muted: oklch(0.957 0.007 72);
+    --muted-foreground: oklch(0.495 0.012 62);
+    --accent: oklch(0.957 0.007 72);
+    --accent-foreground: oklch(0.118 0.008 50);
+    --destructive: oklch(0.510 0.195 22);
+    --border: oklch(0.882 0.010 68);
+    --input: oklch(0.882 0.010 68);
+    --ring: oklch(0.365 0.105 30);
+    --sidebar: oklch(0.980 0.007 73);
+    --sidebar-foreground: oklch(0.118 0.008 50);
+    --sidebar-primary: oklch(0.365 0.105 30);
+    --sidebar-primary-foreground: oklch(0.991 0.003 75);
+    --sidebar-accent: oklch(0.957 0.007 72);
+    --sidebar-accent-foreground: oklch(0.118 0.008 50);
+    --sidebar-border: oklch(0.882 0.010 68);
+    --sidebar-ring: oklch(0.365 0.105 30);
+  }
 }
 
 @layer base {
   * {
     @apply border-border outline-ring/50;
   }
+
+  html {
+    color-scheme: light;
+  }
+
   body {
     @apply bg-background text-foreground;
+    font-feature-settings: "kern" 1, "liga" 1, "calt" 1;
+    -webkit-font-smoothing: antialiased;
+    -moz-osx-font-smoothing: grayscale;
+    /* Subtle paper grain */
+    background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='300' height='300'%3E%3Cfilter id='g'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.72' numOctaves='4' stitchTiles='stitch'/%3E%3CfeColorMatrix type='saturate' values='0'/%3E%3C/filter%3E%3Crect width='300' height='300' filter='url(%23g)' opacity='0.022'/%3E%3C/svg%3E");
+    background-attachment: fixed;
+  }
+
+  /* Refined scrollbar */
+  ::-webkit-scrollbar {
+    width: 6px;
+    height: 6px;
+  }
+  ::-webkit-scrollbar-track {
+    background: transparent;
+  }
+  ::-webkit-scrollbar-thumb {
+    background: oklch(0.78 0.008 68);
+    border-radius: 3px;
+  }
+  ::-webkit-scrollbar-thumb:hover {
+    background: oklch(0.60 0.010 65);
+  }
+
+  /* Text selection */
+  ::selection {
+    background: oklch(0.365 0.105 30 / 0.15);
+    color: oklch(0.118 0.008 50);
+  }
+
+  /* Improved focus ring */
+  :focus-visible {
+    outline: 2px solid oklch(0.365 0.105 30 / 0.6);
+    outline-offset: 2px;
+  }
+
+  /* Cormorant number features — lining figures for tables */
+  .tabular-nums {
+    font-variant-numeric: tabular-nums lining-nums;
   }
 }
