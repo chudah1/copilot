@@ -211,11 +211,18 @@ def _sync_interpretation_cache(
         return
 
     watch_hints: list[dict] = []
+    seen_metric_hints: set[tuple] = set()
     for signal in active_signals:
         override = signal_claim_map.get(str(signal.id)) if signal_claim_map else None
         hint = _watch_hint_from_signal(signal, override_claim_id=override)
-        if hint is not None:
-            watch_hints.append(hint)
+        if hint is None:
+            continue
+        if hint.get("kind") == "metric_threshold":
+            dedup_key = (hint.get("metric"), hint.get("operator"), hint.get("threshold"))
+            if dedup_key in seen_metric_hints:
+                continue
+            seen_metric_hints.add(dedup_key)
+        watch_hints.append(hint)
 
     thesis.interpretation = {
         "labels": labels[:3] or [reason_type or "user_defined"],

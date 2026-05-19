@@ -44,6 +44,13 @@ function getInterpretation(thesis: Thesis) {
   return { labels, watchHints, monitorability, ambiguityNote };
 }
 
+const METRIC_LABELS: Record<string, string> = {
+  revenue_growth_yoy: "Revenue growth (YoY)",
+  earnings_growth_yoy: "Earnings growth (YoY)",
+  pe_ratio: "P/E ratio",
+  dividend_yield: "Dividend yield",
+};
+
 function describeWatchHint(hint: Record<string, unknown>) {
   if (hint.kind === "price_move_pct" && typeof hint.threshold === "number") {
     return `Review if price moves ${hint.threshold}% or more.`;
@@ -54,7 +61,8 @@ function describeWatchHint(hint: Record<string, unknown>) {
     typeof hint.operator === "string" &&
     typeof hint.threshold === "number"
   ) {
-    return `${hint.metric.replaceAll("_", " ")} should stay ${hint.operator} ${hint.threshold}.`;
+    const label = METRIC_LABELS[hint.metric] ?? hint.metric.replaceAll("_", " ");
+    return `${label} should stay ${hint.operator} ${hint.threshold}.`;
   }
   return null;
 }
