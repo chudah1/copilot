@@ -124,7 +124,7 @@ async def connect_broker(
             detail="Credentials not accepted by Trading 212. Check you copied the full key and secret, and that they're from the correct account (live or practice).",
         )
 
-    encrypted_key = encrypt(auth_header)
+    encrypted_key = encrypt(f"{base_url}\n{auth_header}")
     connection = BrokerConnection(
         user_id=current_user.id,
         broker_type=body.broker_type,
@@ -154,15 +154,26 @@ async def sync_broker(
     if connection is None:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Connection not found")
 
-    auth_header = decrypt(connection.encrypted_api_key)
-    base_url = await detect_trading212_base_url(auth_header)
-    if base_url is None:
+    stored = decrypt(connection.encrypted_api_key)
+    if "\n" in stored:
+        base_url, auth_header = stored.split("\n", 1)
+    else:
+        # Legacy records stored only the auth header; re-probe once to find the URL.
+        auth_header = stored
+        base_url = await detect_trading212_base_url(auth_header)
+        if base_url is None:
+            raise HTTPException(
+                status_code=status.HTTP_400_BAD_REQUEST,
+                detail="Trading 212 credentials are no longer valid. Reconnect your account.",
+            )
+    client = Trading212Client(auth_header=auth_header, base_url=base_url)
+    try:
+        positions = await client.fetch_positions()
+    except PermissionError:
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST,
             detail="Trading 212 credentials are no longer valid. Reconnect your account.",
         )
-    client = Trading212Client(auth_header=auth_header, base_url=base_url)
-    positions = await client.fetch_positions()
 
     synced_holdings = []
     for pos in positions:
