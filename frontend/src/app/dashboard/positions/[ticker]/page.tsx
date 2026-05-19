@@ -35,6 +35,10 @@ import type {
 
 type TabId = "thesis" | "monitoring" | "history";
 
+function cleanTicker(ticker: string) {
+  return ticker.replace(/_US_EQ$/, "").replace(/_EQ$/, "");
+}
+
 function ageInDays(dateString: string) {
   const now = Date.now();
   const then = new Date(dateString).getTime();
@@ -47,7 +51,7 @@ function getThesisInsights(thesis: Thesis | undefined, events: MonitoringEvent[]
       nextStep: "Write the first thesis for this position so monitoring has something real to watch.",
       qualityLabel: "No thesis yet",
       qualityTone: "bg-red-500/15 text-red-600",
-      statusDot: "text-red-600",
+      statusDot: "text-red-500",
       watchStatus: "This position is not being monitored against any explicit belief yet.",
       canReaffirm: false,
     };
@@ -64,7 +68,7 @@ function getThesisInsights(thesis: Thesis | undefined, events: MonitoringEvent[]
       nextStep: latestEvent?.ai_analysis || "Review what changed and decide whether the thesis still holds.",
       qualityLabel: "Needs review",
       qualityTone: "bg-orange-500/15 text-orange-600",
-      statusDot: "text-orange-600",
+      statusDot: "text-orange-500",
       watchStatus: "Monitoring found something worth revisiting in this thesis.",
       canReaffirm: true,
     };
@@ -75,7 +79,7 @@ function getThesisInsights(thesis: Thesis | undefined, events: MonitoringEvent[]
       nextStep: "This thesis is old. Re-read it and either reaffirm it or tighten the language.",
       qualityLabel: "Stale",
       qualityTone: "bg-amber-500/15 text-amber-700",
-      statusDot: "text-amber-700",
+      statusDot: "text-amber-500",
       watchStatus: "Nothing necessarily broke, but this reasoning has not been reviewed in a while.",
       canReaffirm: true,
     };
@@ -96,11 +100,21 @@ function getThesisInsights(thesis: Thesis | undefined, events: MonitoringEvent[]
     nextStep: latestEvent ? latestEvent.ai_analysis || "Monitoring is active. Review the latest event if it still matters." : "The thesis looks healthy. No action needed.",
     qualityLabel: "Intact",
     qualityTone: "bg-emerald-500/15 text-emerald-700",
-    statusDot: "text-emerald-700",
+    statusDot: "text-emerald-500",
     watchStatus: latestEvent ? "Monitoring has context to evaluate new changes against this thesis." : "Monitoring is active, no material change flagged.",
     canReaffirm: false,
   };
 }
+
+const METRIC_LABELS: Record<string, string> = {
+  revenue_growth_yoy: "Revenue growth (YoY)",
+  earnings_growth_yoy: "Earnings growth (YoY)",
+  pe_ratio: "P/E ratio",
+  dividend_yield: "Dividend yield",
+  gross_margin: "Gross margin",
+  operating_margin: "Operating margin",
+  debt_to_equity: "Debt / equity",
+};
 
 function describeWatchHint(hint: Record<string, unknown>) {
   if (hint.kind === "price_move_pct" && typeof hint.threshold === "number") {
@@ -112,7 +126,8 @@ function describeWatchHint(hint: Record<string, unknown>) {
     typeof hint.operator === "string" &&
     typeof hint.threshold === "number"
   ) {
-    return `${hint.metric.replaceAll("_", " ")} should stay ${hint.operator} ${hint.threshold}.`;
+    const label = METRIC_LABELS[hint.metric] ?? hint.metric.replaceAll("_", " ");
+    return `${label} stays ${hint.operator} ${hint.threshold}.`;
   }
   return null;
 }
@@ -121,6 +136,18 @@ function isRecentEvent(dateString: string, days: number) {
   const ageMs = Date.now() - new Date(dateString).getTime();
   return ageMs >= 0 && ageMs <= days * 24 * 60 * 60 * 1000;
 }
+
+// ── Status dot colour ────────────────────────────────────────────────────────
+
+const STATUS_DOT: Record<string, string> = {
+  intact: "bg-emerald-500",
+  needs_review: "bg-orange-500",
+  stale: "bg-amber-400",
+  no_thesis: "bg-red-500",
+  low_signal: "bg-border",
+};
+
+// ── Page ─────────────────────────────────────────────────────────────────────
 
 export default function PositionDetailPage() {
   const { ticker } = useParams<{ ticker: string }>();
@@ -185,6 +212,10 @@ export default function PositionDetailPage() {
             }
           } else {
             setDecompositionEnvelope(null);
+          }
+          // Auto-switch to monitoring if there are unreviewed events
+          if (e.some((ev) => !ev.review_action)) {
+            setActiveTab("monitoring");
           }
         }
       } catch (err) {
@@ -368,6 +399,8 @@ export default function PositionDetailPage() {
     }
   };
 
+  // ── Loading ──────────────────────────────────────────────────────────────
+
   if (loading) return (
     <div className="flex items-center justify-center min-h-[calc(100vh-53px)]">
       <p className="font-mono text-[10px] uppercase tracking-widest text-muted-foreground animate-pulse">Loading…</p>
@@ -379,6 +412,8 @@ export default function PositionDetailPage() {
       <p className="text-sm text-muted-foreground">Holding not found for ticker {ticker}</p>
     </div>
   );
+
+  // ── Derived state ────────────────────────────────────────────────────────
 
   const cost = holding.quantity * holding.average_cost_basis;
   const value = holding.current_value || 0;
@@ -402,84 +437,94 @@ export default function PositionDetailPage() {
   const unreviewedEvents = events.filter((e) => !e.review_action).length;
   const invalidatedTheses = theses.filter((t) => t.status === "invalidated");
 
-  // Tab definitions with badges
   const tabs: { id: TabId; label: string; badge?: number | string }[] = [
     { id: "thesis", label: "Thesis" },
     { id: "monitoring", label: "Monitoring", badge: unreviewedEvents > 0 ? unreviewedEvents : undefined },
     { id: "history", label: "History", badge: convictionLog?.entries.length ?? undefined },
   ];
 
-  // Core loop progress
   const steps = [
     { done: !!activeThesis, label: "Thesis" },
     { done: hasActiveSignals, partial: hasSignals && !hasActiveSignals, label: "Signals" },
     { done: !!(latestEvent && latestEvent.review_action), partial: !!(latestEvent && !latestEvent.review_action), label: "Review" },
   ];
 
+  const lastReviewedEvent = events.filter((e) => e.review_action).sort((a, b) =>
+    new Date(b.created_at).getTime() - new Date(a.created_at).getTime()
+  )[0];
+
+  // ── Render ───────────────────────────────────────────────────────────────
+
   return (
     <div className="min-h-[calc(100vh-53px)]">
 
-      {/* ── Sticky header ── */}
+      {/* ── Sticky header ────────────────────────────────────────────────── */}
       <div className="sticky top-[52px] z-20 bg-background border-b border-border/60">
-        <div className="max-w-5xl mx-auto px-8">
+        <div className="max-w-5xl mx-auto px-6 lg:px-10">
 
-          {/* Top row: back + check now */}
-          <div className="flex items-center justify-between pt-5 pb-3">
+          {/* Nav row */}
+          <div className="flex items-center justify-between pt-4 pb-2">
             <Link
               href="/dashboard"
               className="font-mono text-[10px] uppercase tracking-[0.2em] text-muted-foreground hover:text-primary transition-colors"
             >
               ← Portfolio
             </Link>
-            {holding && (
-              <CheckNowButton
-                holdingId={holding.id}
-                ticker={holding.ticker}
-                currency={holding.currency}
-                onComplete={async () => { await refreshEvents(); await refreshCurrentThesis(); }}
-              />
-            )}
+            <CheckNowButton
+              holdingId={holding.id}
+              ticker={holding.ticker}
+              currency={holding.currency}
+              onComplete={async () => { await refreshEvents(); await refreshCurrentThesis(); }}
+            />
           </div>
 
-          {/* Position identity */}
-          <div className="flex items-end justify-between gap-6 pb-4">
-            <div className="flex items-baseline gap-4 flex-wrap">
-              <h1 className="font-display italic text-[2.75rem] leading-none text-primary tracking-tight">
-                {holding.ticker}
+          {/* Identity + value row */}
+          <div className="flex items-end justify-between gap-6 pb-3">
+            <div>
+              <h1 className="font-display italic text-[3.5rem] leading-none text-primary tracking-tight">
+                {cleanTicker(holding.ticker)}
               </h1>
-              <span className="font-sans text-lg text-foreground/80 leading-none mb-1">
-                {holding.name !== holding.ticker ? holding.name : ""}
-              </span>
+              {holding.name && holding.name !== holding.ticker && (
+                <p className="font-sans text-[13px] text-muted-foreground mt-1 leading-none">
+                  {holding.name}
+                </p>
+              )}
             </div>
-
-            {/* Value block */}
-            <div className="text-right shrink-0">
-              <p className="font-mono text-2xl tabular-nums text-foreground">
+            <div className="text-right shrink-0 pb-0.5">
+              <p className="font-mono text-[1.6rem] tabular-nums text-foreground leading-tight">
                 {formatCurrency(value, holding.currency)}
               </p>
-              <p className={`font-mono text-sm tabular-nums ${pnl >= 0 ? "text-emerald-700" : "text-red-600"}`}>
+              <p className={`font-mono text-[13px] tabular-nums mt-0.5 ${pnl >= 0 ? "text-emerald-700" : "text-red-600"}`}>
                 {pnl >= 0 ? "+" : ""}{formatCurrency(pnl, holding.currency)}
-                <span className="opacity-60 ml-1">({pnl >= 0 ? "+" : ""}{pnlPct}%)</span>
+                <span className="opacity-60 ml-1.5">({pnl >= 0 ? "+" : ""}{pnlPct}%)</span>
               </p>
             </div>
           </div>
 
-          {/* Status + progress strip */}
-          <div className="flex items-center gap-6 pb-4">
-            <span className={`font-mono text-[10px] uppercase tracking-[0.2em] ${thesisInsights.statusDot}`}>
-              ● {thesisInsights.qualityLabel}
-            </span>
-            {activeThesis && (
-              <span className="font-mono text-[10px] text-muted-foreground">
-                thesis {ageInDays(activeThesis.updated_at)}d old
+          {/* Status ribbon */}
+          <div className="flex items-center gap-4 pb-3">
+            {/* Pulse dot + label */}
+            <div className="flex items-center gap-2">
+              <span className={`h-1.5 w-1.5 rounded-full ${STATUS_DOT[activeThesis?.status ?? "no_thesis"] ?? "bg-border"}`} />
+              <span className="font-mono text-[10px] uppercase tracking-[0.2em] text-muted-foreground">
+                {thesisInsights.qualityLabel}
               </span>
+            </div>
+            {activeThesis && (
+              <>
+                <span className="text-border text-[10px]">·</span>
+                <span className="font-mono text-[10px] text-muted-foreground/60">
+                  thesis {ageInDays(activeThesis.updated_at)}d old
+                </span>
+              </>
             )}
-            <div className="flex items-center gap-2 ml-auto">
+            {/* Progress indicators */}
+            <div className="flex items-center gap-3 ml-auto">
               {steps.map((step, i) => (
                 <div key={step.label} className="flex items-center gap-2">
                   {i > 0 && <span className="text-border text-[10px]">·</span>}
                   <span className={`font-mono text-[9px] uppercase tracking-[0.15em] ${
-                    step.done ? "text-emerald-700" : step.partial ? "text-amber-700" : "text-muted-foreground/50"
+                    step.done ? "text-emerald-600" : step.partial ? "text-amber-600" : "text-muted-foreground/40"
                   }`}>
                     {step.done ? "●" : step.partial ? "◐" : "○"} {step.label}
                   </span>
@@ -489,7 +534,7 @@ export default function PositionDetailPage() {
           </div>
 
           {/* Tab strip */}
-          <div className="flex gap-1">
+          <div className="flex gap-1 -mx-1">
             {tabs.map((tab) => (
               <button
                 key={tab.id}
@@ -499,7 +544,11 @@ export default function PositionDetailPage() {
               >
                 {tab.label}
                 {tab.badge !== undefined && (
-                  <span className={`font-mono text-[9px] ${activeTab === tab.id ? "text-primary/70" : "text-muted-foreground/60"}`}>
+                  <span className={`inline-flex items-center justify-center h-4 min-w-4 px-1 rounded-sm font-mono text-[8px] tabular-nums ${
+                    tab.id === "monitoring" && unreviewedEvents > 0
+                      ? "bg-primary/10 text-primary"
+                      : "text-muted-foreground/60"
+                  }`}>
                     {tab.badge}
                   </span>
                 )}
@@ -516,15 +565,14 @@ export default function PositionDetailPage() {
         </div>
       </div>
 
-      {/* ── Page content ── */}
-      <div className="max-w-5xl mx-auto px-8">
+      {/* ── Contextual banners ───────────────────────────────────────────── */}
+      <div className="max-w-5xl mx-auto px-6 lg:px-10">
 
-        {/* Contextual banners */}
         {activeThesis && upcomingEarnings && upcomingEarnings.days_until <= 14 && (
           <motion.div
             initial={{ opacity: 0, y: -4 }}
             animate={{ opacity: 1, y: 0 }}
-            className="mt-5 border border-sky-500/25 bg-sky-500/10 px-5 py-4 space-y-3"
+            className="mt-5 border border-sky-500/25 bg-sky-500/8 px-5 py-4 space-y-3"
           >
             <div className="flex items-center gap-3">
               <span className="font-mono text-[10px] uppercase tracking-[0.2em] text-sky-700">
@@ -533,9 +581,9 @@ export default function PositionDetailPage() {
               <span className="font-mono text-[10px] text-muted-foreground">{formatDate(upcomingEarnings.report_date)}</span>
             </div>
             {earningsWatchList.length > 0 ? (
-              <div className="flex flex-wrap gap-3">
+              <div className="flex flex-wrap gap-2">
                 {earningsWatchList.map((item) => (
-                  <span key={item} className="font-sans text-xs text-foreground/70 border border-border/60 px-3 py-1">
+                  <span key={item} className="font-sans text-xs text-foreground/70 border border-border/60 bg-card px-3 py-1">
                     {item}
                   </span>
                 ))}
@@ -552,23 +600,21 @@ export default function PositionDetailPage() {
           <motion.div
             initial={{ opacity: 0, y: -4 }}
             animate={{ opacity: 1, y: 0 }}
-            className="mt-5 border border-amber-500/25 bg-amber-500/10 px-5 py-4 space-y-4"
+            className="mt-5 border border-amber-500/25 bg-amber-500/8 px-5 py-4 space-y-4"
           >
-            <div className="flex items-start justify-between gap-4">
-              <div className="space-y-1">
-                <span className="font-mono text-[10px] uppercase tracking-[0.2em] text-amber-700">
-                  ● Earnings just landed
-                </span>
-                <p className="font-sans text-sm text-foreground/80 leading-relaxed">
-                  {recentEarningsEvent.ai_analysis || recentEarningsEvent.evidence_summary || recentEarningsEvent.summary}
-                </p>
-              </div>
+            <div>
+              <span className="font-mono text-[10px] uppercase tracking-[0.2em] text-amber-700">
+                ● Earnings just landed
+              </span>
+              <p className="font-sans text-sm text-foreground/80 leading-relaxed mt-1">
+                {recentEarningsEvent.ai_analysis || recentEarningsEvent.evidence_summary || recentEarningsEvent.summary}
+              </p>
             </div>
             <div className="flex flex-wrap gap-2">
               {[
-                { action: "reaffirmed" as const, label: "Thesis holds", cls: "border-emerald-500/30 text-emerald-700 hover:bg-emerald-500/10" },
-                { action: "lowered_confidence" as const, label: "Lower confidence", cls: "border-amber-500/30 text-amber-700 hover:bg-amber-500/10" },
-                { action: "invalidated" as const, label: "Thesis broken", cls: "border-red-500/30 text-red-600 hover:bg-red-500/10" },
+                { action: "reaffirmed" as const, label: "Thesis holds", cls: "border-emerald-500/30 text-emerald-700 hover:bg-emerald-500/8" },
+                { action: "lowered_confidence" as const, label: "Lower confidence", cls: "border-amber-500/30 text-amber-700 hover:bg-amber-500/8" },
+                { action: "invalidated" as const, label: "Thesis broken", cls: "border-red-500/30 text-red-600 hover:bg-red-500/8" },
               ].map(({ action, label, cls }) => (
                 <button
                   key={action}
@@ -588,24 +634,26 @@ export default function PositionDetailPage() {
             </div>
           </motion.div>
         )}
+      </div>
 
-        {/* ── Tab content ── */}
+      {/* ── Tab content ─────────────────────────────────────────────────── */}
+      <div className="max-w-5xl mx-auto px-6 lg:px-10">
         <AnimatePresence mode="wait">
           <motion.div
             key={activeTab}
-            initial={{ opacity: 0, y: 6 }}
+            initial={{ opacity: 0, y: 5 }}
             animate={{ opacity: 1, y: 0 }}
-            exit={{ opacity: 0, y: -6 }}
-            transition={{ duration: 0.18, ease: "easeOut" }}
-            className="py-7 space-y-6"
+            exit={{ opacity: 0, y: -5 }}
+            transition={{ duration: 0.16, ease: "easeOut" }}
+            className="py-8 space-y-8"
           >
 
-            {/* ─── THESIS TAB ─── */}
+            {/* ─── THESIS TAB ──────────────────────────────────────────── */}
             {activeTab === "thesis" && (
               <>
                 {/* Action prompt */}
                 {(thesisInsights.canReaffirm || !activeThesis) && !editing && (
-                  <div className="border-l-2 border-primary/40 pl-4 py-1 flex items-start justify-between gap-4">
+                  <div className="border-l-2 border-primary/30 pl-4 py-1 flex items-start justify-between gap-4">
                     <p className="font-sans text-sm text-foreground/80 leading-relaxed max-w-xl">
                       {thesisInsights.nextStep}
                     </p>
@@ -668,7 +716,7 @@ export default function PositionDetailPage() {
                   </div>
                 )}
 
-                {/* Advanced: health check + counter thesis */}
+                {/* Analysis (health check + counter thesis) */}
                 {activeThesis && (healthCheck || healthCheckLoading || showCounterThesis) && (
                   <div className="space-y-4 border-t border-border/40 pt-6">
                     <button
@@ -678,11 +726,7 @@ export default function PositionDetailPage() {
                       {showAnalysis ? "▲" : "▼"} Analysis
                     </button>
                     {showAnalysis && (
-                      <motion.div
-                        initial={{ opacity: 0 }}
-                        animate={{ opacity: 1 }}
-                        className="space-y-4"
-                      >
+                      <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} className="space-y-4">
                         {(healthCheck || healthCheckLoading) && (
                           <ThesisHealthCheck result={healthCheck} loading={healthCheckLoading} />
                         )}
@@ -692,7 +736,7 @@ export default function PositionDetailPage() {
                   </div>
                 )}
 
-                {/* Position metrics (collapsible) */}
+                {/* Position metrics */}
                 <div className="border-t border-border/40 pt-5">
                   <button
                     onClick={() => setShowPositionDetails((s) => !s)}
@@ -701,20 +745,16 @@ export default function PositionDetailPage() {
                     {showPositionDetails ? "▲" : "▼"} Position details
                   </button>
                   {showPositionDetails && (
-                    <motion.div
-                      initial={{ opacity: 0 }}
-                      animate={{ opacity: 1 }}
-                      className="grid grid-cols-2 md:grid-cols-4 gap-4 mt-4"
-                    >
+                    <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} className="grid grid-cols-2 md:grid-cols-4 gap-3 mt-4">
                       {[
                         { label: "Shares", value: String(holding.quantity) },
                         { label: "Avg cost", value: formatCurrency(holding.average_cost_basis, holding.currency) },
                         { label: "Current value", value: formatCurrency(value, holding.currency) },
                         { label: "P&L", value: `${pnl >= 0 ? "+" : ""}${formatCurrency(pnl, holding.currency)}`, colored: true },
                       ].map(({ label, value: v, colored }) => (
-                        <div key={label} className="border border-border/60 bg-card p-4">
-                          <p className="font-mono text-[10px] uppercase tracking-[0.2em] text-muted-foreground">{label}</p>
-                          <p className={`font-mono text-xl tabular-nums mt-2 ${colored ? (pnl >= 0 ? "text-emerald-700" : "text-red-600") : "text-foreground"}`}>
+                        <div key={label} className="border border-border/60 bg-card px-4 py-3">
+                          <p className="font-mono text-[9px] uppercase tracking-[0.2em] text-muted-foreground">{label}</p>
+                          <p className={`font-mono text-lg tabular-nums mt-1.5 ${colored ? (pnl >= 0 ? "text-emerald-700" : "text-red-600") : "text-foreground"}`}>
                             {v}
                           </p>
                         </div>
@@ -725,98 +765,134 @@ export default function PositionDetailPage() {
               </>
             )}
 
-            {/* ─── MONITORING TAB ─── */}
+            {/* ─── MONITORING TAB ──────────────────────────────────────── */}
             {activeTab === "monitoring" && (
-              <>
-                {/* Signals / decomposition */}
-                {activeThesis && (
-                  <div className="space-y-1">
-                    <div className="flex items-center justify-between pb-3 border-b border-border/40">
-                      <div>
-                        <p className="font-mono text-[10px] uppercase tracking-[0.25em] text-muted-foreground">Signals</p>
-                        <p className="font-sans text-xs text-muted-foreground mt-0.5">
-                          What the app is watching against your thesis
-                        </p>
-                      </div>
-                      {!hasSignals && (
-                        <button
-                          onClick={handleGenerateDecomposition}
-                          disabled={decompositionLoading}
-                          className="font-mono text-[10px] uppercase tracking-[0.15em] border border-primary/40 text-primary px-4 py-2 hover:border-primary transition-colors disabled:opacity-40"
-                        >
-                          {decompositionLoading ? "Generating…" : "Generate signals"}
-                        </button>
-                      )}
-                    </div>
-                    <ThesisDecompositionReview
-                      key={`${decompositionEnvelope?.decomposition?.id ?? "empty"}:${decompositionEnvelope?.status ?? "none"}`}
-                      envelope={decompositionEnvelope}
-                      loading={decompositionLoading}
-                      saving={decompositionSaving}
-                      onGenerate={handleGenerateDecomposition}
-                      onConfirm={handleConfirmDecomposition}
-                    />
-                  </div>
-                )}
+              <div className="space-y-10">
 
-                {/* Events */}
-                <div className="border-t border-border/40 pt-6 space-y-6">
-                  {/* Unreviewed — card stack */}
-                  {unreviewedEvents > 0 && (
-                    <div className="space-y-3">
-                      <div>
-                        <p className="font-mono text-[10px] uppercase tracking-[0.25em] text-muted-foreground">Inbox</p>
-                        <p className="font-sans text-xs text-muted-foreground mt-0.5">
-                          Drag right if the thesis holds · drag left to skip · drag up if confidence is eroding
-                        </p>
-                      </div>
-                      <EventReviewStack
-                        events={events.filter((e) => !e.review_action)}
-                        onReview={handleReviewEvent}
-                        reviewingEventId={reviewingEventId}
-                      />
-                    </div>
-                  )}
-
-                  {/* Reviewed — standard timeline */}
-                  {events.some((e) => e.review_action) && (
-                    <div className="space-y-3">
-                      <p className="font-mono text-[10px] uppercase tracking-[0.25em] text-muted-foreground">
-                        {unreviewedEvents > 0 ? "Already reviewed" : "Evidence"}
-                      </p>
-                      <EventTimeline
-                        events={events.filter((e) => e.review_action)}
-                        reviewingEventId={reviewingEventId}
-                      />
-                    </div>
-                  )}
-
-                  {/* No events at all */}
-                  {events.length === 0 && (
-                    <p className="font-sans text-sm text-muted-foreground py-6">
-                      No material changes yet. The app is watching this position against your thesis.
+                {/* No thesis guard */}
+                {!activeThesis ? (
+                  <div className="py-16 text-center space-y-4">
+                    <p className="font-display italic text-2xl text-foreground/50">
+                      Nothing to watch yet.
                     </p>
-                  )}
-                </div>
-
-                {/* No thesis prompt */}
-                {!activeThesis && (
-                  <div className="py-12 text-center space-y-3">
-                    <p className="font-sans text-sm text-muted-foreground">
-                      Write a thesis first — monitoring needs something to watch.
+                    <p className="font-sans text-sm text-muted-foreground max-w-xs mx-auto leading-relaxed">
+                      Write a thesis first — monitoring needs an explicit belief to test against.
                     </p>
                     <button
                       onClick={() => { setEditing(true); setActiveTab("thesis"); }}
-                      className="font-mono text-[10px] uppercase tracking-[0.2em] text-primary border border-primary/40 px-4 py-2 hover:border-primary transition-colors"
+                      className="font-mono text-[10px] uppercase tracking-[0.2em] border border-primary/40 text-primary px-5 py-2.5 hover:border-primary transition-colors"
                     >
                       Go to thesis →
                     </button>
                   </div>
+                ) : (
+                  <>
+                    {/* ── DECISION SECTION ────────────────────────────── */}
+                    <section>
+                      {unreviewedEvents > 0 ? (
+                        <div className="space-y-5">
+                          {/* Decisions pending header */}
+                          <div className="flex items-baseline justify-between gap-4">
+                            <div>
+                              <p className="font-mono text-[9px] uppercase tracking-[0.3em] text-muted-foreground mb-1">
+                                Decisions pending
+                              </p>
+                              <p className="font-display italic text-[1.6rem] leading-tight text-foreground">
+                                {unreviewedEvents === 1
+                                  ? "One signal needs your verdict."
+                                  : `${unreviewedEvents} signals need your verdict.`}
+                              </p>
+                            </div>
+                            <span className="font-mono text-[10px] text-muted-foreground/50 shrink-0 self-end pb-0.5">
+                              drag to decide
+                            </span>
+                          </div>
+
+                          {/* Card stack */}
+                          <EventReviewStack
+                            events={events.filter((e) => !e.review_action)}
+                            onReview={handleReviewEvent}
+                            reviewingEventId={reviewingEventId}
+                          />
+                        </div>
+                      ) : (
+                        /* Position clear */
+                        <div className="flex items-start gap-5 py-6 border-l-[3px] border-emerald-500/40 pl-6">
+                          <div className="space-y-1">
+                            <p className="font-display italic text-[1.6rem] leading-tight text-foreground">
+                              Position clear.
+                            </p>
+                            <p className="font-sans text-sm text-muted-foreground leading-relaxed">
+                              {events.length > 0
+                                ? `All ${events.length} event${events.length !== 1 ? "s" : ""} reviewed.${lastReviewedEvent ? ` Last reviewed ${ageInDays(lastReviewedEvent.created_at)}d ago.` : ""} The thesis stands until something changes.`
+                                : "No material changes flagged since monitoring started."}
+                            </p>
+                          </div>
+                        </div>
+                      )}
+                    </section>
+
+                    {/* ── SIGNALS SECTION ─────────────────────────────── */}
+                    <section className="border-t border-border/40 pt-8 space-y-4">
+                      <div className="flex items-center justify-between">
+                        <div>
+                          <p className="font-mono text-[9px] uppercase tracking-[0.3em] text-muted-foreground mb-0.5">
+                            Watching for
+                          </p>
+                          <p className="font-sans text-xs text-muted-foreground/70">
+                            Signals derived from your thesis
+                          </p>
+                        </div>
+                        {!hasSignals && !decompositionLoading && (
+                          <button
+                            onClick={handleGenerateDecomposition}
+                            className="font-mono text-[10px] uppercase tracking-[0.15em] border border-primary/40 text-primary px-4 py-2 hover:border-primary transition-colors"
+                          >
+                            Generate signals
+                          </button>
+                        )}
+                      </div>
+
+                      <ThesisDecompositionReview
+                        key={`${decompositionEnvelope?.decomposition?.id ?? "empty"}:${decompositionEnvelope?.status ?? "none"}`}
+                        envelope={decompositionEnvelope}
+                        loading={decompositionLoading}
+                        saving={decompositionSaving}
+                        onGenerate={handleGenerateDecomposition}
+                        onConfirm={handleConfirmDecomposition}
+                      />
+                    </section>
+
+                    {/* ── EVIDENCE SECTION ────────────────────────────── */}
+                    {events.some((e) => e.review_action) && (
+                      <section className="border-t border-border/40 pt-8 space-y-4">
+                        <div>
+                          <p className="font-mono text-[9px] uppercase tracking-[0.3em] text-muted-foreground mb-0.5">
+                            Evidence on file
+                          </p>
+                          <p className="font-sans text-xs text-muted-foreground/70">
+                            Reviewed events and your verdicts
+                          </p>
+                        </div>
+                        <EventTimeline
+                          events={events.filter((e) => e.review_action)}
+                          reviewingEventId={reviewingEventId}
+                        />
+                      </section>
+                    )}
+
+                    {/* No events at all */}
+                    {events.length === 0 && !decompositionLoading && (
+                      <p className="font-sans text-sm text-muted-foreground/60 italic">
+                        Monitoring is active. Events will appear here as they are detected.
+                      </p>
+                    )}
+                  </>
                 )}
-              </>
+              </div>
             )}
 
-            {/* ─── HISTORY TAB ─── */}
+            {/* ─── HISTORY TAB ─────────────────────────────────────────── */}
             {activeTab === "history" && (
               <>
                 <ConvictionLog
@@ -828,20 +904,20 @@ export default function PositionDetailPage() {
 
                 {invalidatedTheses.length > 0 && (
                   <div className="border-t border-border/40 pt-6 space-y-3">
-                    <p className="font-mono text-[10px] uppercase tracking-[0.25em] text-muted-foreground">
+                    <p className="font-mono text-[9px] uppercase tracking-[0.3em] text-muted-foreground">
                       Previous theses
                     </p>
                     {invalidatedTheses.map((t) => (
-                      <div key={t.id} className="border-l-2 border-border/60 pl-4 py-3 space-y-1">
+                      <div key={t.id} className="border-l-2 border-border/60 pl-4 py-3 space-y-1.5">
                         <p className="font-sans text-sm text-foreground/70 leading-relaxed italic">
                           &ldquo;{t.why_own_it}&rdquo;
                         </p>
                         {t.invalidation_reason && (
-                          <p className="font-mono text-[10px] text-muted-foreground">
+                          <p className="font-sans text-xs text-muted-foreground">
                             Closed: {t.invalidation_reason}
                           </p>
                         )}
-                        <p className="font-mono text-[10px] text-muted-foreground/60">
+                        <p className="font-mono text-[9px] text-muted-foreground/50">
                           {formatDate(t.updated_at)}
                         </p>
                       </div>
@@ -855,7 +931,7 @@ export default function PositionDetailPage() {
         </AnimatePresence>
       </div>
 
-      {/* Invalidate dialog */}
+      {/* ── Invalidate dialog ────────────────────────────────────────────── */}
       <Dialog open={invalidateOpen} onOpenChange={setInvalidateOpen}>
         <DialogContent>
           <DialogHeader>

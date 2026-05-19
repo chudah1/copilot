@@ -87,13 +87,14 @@ function PositionCard({ holding, thesis, pulse, earnings, totalValue, onGenerate
 
   return (
     <motion.div
+      className="h-full"
       initial={{ opacity: 0, y: 6 }}
       animate={{ opacity: 1, y: 0 }}
       transition={{ duration: 0.3, delay: index * 0.04, ease: "easeOut" }}
     >
-      <Link href={`/dashboard/positions/${holding.ticker}`}>
+      <Link href={`/dashboard/positions/${holding.ticker}`} className="block h-full">
         <div
-          className={`group relative flex flex-col gap-3 border border-border bg-card p-4 transition-all duration-150 hover:border-foreground/20 hover:shadow-md cursor-pointer ${ringClass}`}
+          className={`h-full group relative flex flex-col gap-3 border border-border bg-card p-4 transition-all duration-150 hover:border-foreground/20 hover:shadow-md cursor-pointer ${ringClass}`}
         >
           {/* Allocation bar — top edge */}
           <div className="absolute top-0 left-0 right-0 h-[3px] bg-border overflow-hidden">
@@ -155,6 +156,9 @@ function PositionCard({ holding, thesis, pulse, earnings, totalValue, onGenerate
               />
             </div>
           </div>
+
+          {/* Spacer — pushes thesis/CTA flush to bottom */}
+          <div className="flex-1" />
 
           {/* Thesis snippet or CTA */}
           {thesis?.why_own_it ? (
