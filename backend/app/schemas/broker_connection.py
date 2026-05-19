@@ -6,11 +6,17 @@ from pydantic import BaseModel, field_validator
 class ConnectBrokerRequest(BaseModel):
     broker_type: str
     api_key: str
+    api_secret: str | None = None
 
     @field_validator("api_key")
     @classmethod
-    def strip_whitespace(cls, v: str) -> str:
+    def strip_api_key(cls, v: str) -> str:
         return v.strip()
+
+    @field_validator("api_secret")
+    @classmethod
+    def strip_api_secret(cls, v: str | None) -> str | None:
+        return v.strip() if v else None
 
 
 class BrokerConnectionResponse(BaseModel):

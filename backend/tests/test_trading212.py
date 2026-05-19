@@ -24,7 +24,7 @@ async def test_fetch_positions_success():
         },
     ]
 
-    client = Trading212Client(api_key="test-key")
+    client = Trading212Client(auth_header="test-key")
     with patch.object(client, "_request", new_callable=AsyncMock, return_value=mock_response_data):
         positions = await client.fetch_positions()
 
@@ -36,7 +36,7 @@ async def test_fetch_positions_success():
 
 
 async def test_fetch_positions_unauthorized():
-    client = Trading212Client(api_key="bad-key")
+    client = Trading212Client(auth_header="bad-key")
     with patch.object(client, "_request", new_callable=AsyncMock, side_effect=PermissionError("401 Unauthorized")):
         with pytest.raises(PermissionError):
             await client.fetch_positions()

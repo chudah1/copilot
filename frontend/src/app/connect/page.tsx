@@ -17,6 +17,7 @@ export default function ConnectPage() {
   const router = useRouter();
 
   const [apiKey, setApiKey] = useState("");
+  const [apiSecret, setApiSecret] = useState("");
   const [brokerError, setBrokerError] = useState("");
   const [brokerLoading, setBrokerLoading] = useState(false);
 
@@ -40,6 +41,7 @@ export default function ConnectPage() {
       const conn = await api.post<BrokerConnection>("/api/portfolio/connect", {
         broker_type: "trading212",
         api_key: apiKey.trim(),
+        api_secret: apiSecret.trim() || undefined,
       });
       await api.post(`/api/portfolio/sync/${conn.id}`);
       router.push("/onboarding?source=import");
@@ -163,8 +165,7 @@ export default function ConnectPage() {
               <CardHeader>
                 <CardTitle>Connect Trading 212</CardTitle>
                 <CardDescription>
-                  Paste your API key from Trading 212 Settings &gt; API (works with both live and practice accounts).
-                  We encrypt it and never share it.
+                  Generate credentials in Trading 212 Settings &gt; API. Works with live and practice accounts.
                 </CardDescription>
               </CardHeader>
               <CardContent>
@@ -173,8 +174,12 @@ export default function ConnectPage() {
                     <Label htmlFor="apiKey">API Key</Label>
                     <Input id="apiKey" type="password" value={apiKey} onChange={(e) => setApiKey(e.target.value)} required />
                   </div>
-                  <div className="rounded-lg bg-muted/30 p-3 text-sm text-muted-foreground space-y-1">
-                    <p>Works with live and practice accounts. If you set an IP restriction when generating the key, leave it unrestricted.</p>
+                  <div className="space-y-2">
+                    <Label htmlFor="apiSecret">Secret Key <span className="text-muted-foreground font-normal">(if provided)</span></Label>
+                    <Input id="apiSecret" type="password" value={apiSecret} onChange={(e) => setApiSecret(e.target.value)} />
+                  </div>
+                  <div className="rounded-lg bg-muted/30 p-3 text-sm text-muted-foreground">
+                    Leave secret key blank if Trading 212 only gave you one key. Don&rsquo;t set an IP restriction when generating — leave it unrestricted.
                   </div>
                   {brokerError && <p className="text-sm text-red-500">{brokerError}</p>}
                   <Button type="submit" disabled={brokerLoading}>
