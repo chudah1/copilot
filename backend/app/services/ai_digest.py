@@ -1,10 +1,18 @@
+import json
 import logging
+from typing import Any
+
 import anthropic
+
 from app.config import settings
+from app.services.ai_utils import strip_code_fences
 
 logger = logging.getLogger(__name__)
 
-DIGEST_PROMPT = """You are writing a weekly investment digest for a retail investor. Write like a sharp analyst memo — direct, no fluff, no greetings.
+ALLOWED_INSIGHT_TYPES = {"event", "warning", "stable"}
+
+DIGEST_PROMPT = """You are a smart, objective investing assistant for a retail investor. Generate a weekly portfolio digest.
+Instead of paragraphs, provide atomic, scannable insights.
 
 Portfolio holdings and their theses:
 {holdings_section}
@@ -18,104 +26,195 @@ Stable holdings this week:
 Portfolio-level observations:
 {observations_section}
 
-Write the digest as HTML email content. Use <h3> for holding names, <p> for text, <span style="color: red"> for thesis-breaking, <span style="color: orange"> for warnings.
-Output only the HTML body content, no <html> or <body> tags."""
+Output ONLY valid JSON with this exact structure:
+{{
+    "insights": [
+        {{
+            "ticker": "AAPL",
+            "type": "event" | "warning" | "stable",
+            "headline": "Short, punchy headline (e.g. 'Earnings beat expectations')",
+            "rationale": "One plain English sentence on what happened and how it affects the thesis."
+        }}
+    ],
+    "portfolio_warnings": [
+        "A one-sentence warning about concentration or missing theses."
+    ]
+}}
+"""
 
 
-def _fallback_digest(holdings_with_theses: list[dict], events: list[dict], observations: dict) -> str:
-    parts = ["<h2>Weekly Thesis Review</h2>"]
-
-    if events:
-        for event in events:
-            parts.append(f"<h3>{event['ticker']}</h3>")
-            parts.append(f"<p><strong>{event['title']}</strong>: {event['summary']}</p>")
-            if event.get("ai_analysis"):
-                parts.append(f"<p>{event['ai_analysis']}</p>")
-    else:
-        parts.append("<p>No material thesis events this week.</p>")
-
-    stable_holdings = observations.get("stable_holdings", [])
-    if stable_holdings:
-        parts.append("<h3>Stable Holdings</h3>")
-        for stable in stable_holdings:
-            if stable.get("stale"):
-                parts.append(
-                    f"<p>{stable['ticker']}: No material thesis changes this week, but this thesis is stale and deserves a review.</p>"
-                )
-            else:
-                parts.append(f"<p>{stable['ticker']}: No material changes against your thesis this week.</p>")
-
+def _build_holdings_section(holdings_with_theses: list[dict[str, Any]]) -> str:
+    lines = []
     for holding in holdings_with_theses:
-        parts.append(f"<h3>{holding['ticker']} ({holding['name']})</h3>")
-        parts.append(f"<p>Why you own it: {holding.get('why_own_it', 'No thesis recorded.')}</p>")
-        if holding.get("must_remain_true"):
-            parts.append(f"<p>Must remain true: {holding['must_remain_true']}</p>")
-        if holding.get("what_would_change_my_mind"):
-            parts.append(f"<p>Change-my-mind trigger: {holding['what_would_change_my_mind']}</p>")
+        lines.append(
+            (
+                f"- {holding['ticker']} ({holding['name']}): Why own it: {holding.get('why_own_it', 'No thesis')}; "
+                f"Must remain true: {holding.get('must_remain_true', 'Not specified')}; "
+                f"What would change my mind: {holding.get('what_would_change_my_mind', 'Not specified')}"
+            )
+        )
+    return "\n".join(lines)
 
-    if observations.get("stale_theses"):
-        parts.append(f"<p>Stale theses (>90 days): {', '.join(observations['stale_theses'])}</p>")
-    if observations.get("missing_theses"):
-        parts.append(f"<p>Positions without an active thesis: {', '.join(observations['missing_theses'])}</p>")
+
+def _build_events_section(events: list[dict[str, Any]]) -> str:
+    if not events:
+        return "No events this week."
+    return "\n".join(
+        (
+            f"- [{str(event.get('severity', 'info')).upper()}] "
+            f"{event.get('ticker', 'UNKNOWN')}: "
+            f"{event.get('title', 'Untitled event')} — "
+            f"{event.get('summary', 'No summary available.')}"
+        )
+        for event in events
+    )
+
+
+def _build_stable_section(observations: dict[str, Any]) -> str:
+    stable_holdings = observations.get("stable_holdings", [])
+    if not stable_holdings:
+        return "None."
+    lines = []
+    for stable in stable_holdings:
+        stale_str = " (Stale thesis)" if stable.get("stale") else ""
+        lines.append(f"- {stable['ticker']}{stale_str}")
+    return "\n".join(lines)
+
+
+def _build_observations_section(observations: dict[str, Any]) -> str:
+    parts: list[str] = []
     if observations.get("concentration_warnings"):
-        parts.append(f"<p>Concentration warning: {observations['concentration_warnings']}</p>")
+        parts.append(f"Concentration: {observations['concentration_warnings']}")
+    if observations.get("stale_theses"):
+        parts.append(f"Stale theses (>90 days): {', '.join(observations['stale_theses'])}")
+    if observations.get("missing_theses"):
+        parts.append(f"Positions without theses: {', '.join(observations['missing_theses'])}")
+    return "\n".join(parts) if parts else "None."
 
-    return "".join(parts)
+
+def _build_digest_prompt(
+    holdings_with_theses: list[dict[str, Any]],
+    events: list[dict[str, Any]],
+    observations: dict[str, Any],
+) -> str:
+    return DIGEST_PROMPT.format(
+        holdings_section=_build_holdings_section(holdings_with_theses),
+        events_section=_build_events_section(events),
+        stable_section=_build_stable_section(observations),
+        observations_section=_build_observations_section(observations),
+    )
 
 
-async def generate_digest_content(holdings_with_theses: list[dict], events: list[dict], observations: dict) -> str | None:
-    holdings_section = ""
-    for h in holdings_with_theses:
-        holdings_section += (
-            f"\n- {h['ticker']} ({h['name']}): Why own it: {h.get('why_own_it', 'No thesis')}; "
-            f"Must remain true: {h.get('must_remain_true', 'Not specified')}; "
-            f"What would change my mind: {h.get('what_would_change_my_mind', 'Not specified')}; "
-            f"AI summary: {h.get('ai_summary', 'None')}"
+def _parse_digest_response(text: str) -> dict[str, Any]:
+    payload = json.loads(strip_code_fences(text))
+    insights = payload.get("insights")
+    portfolio_warnings = payload.get("portfolio_warnings")
+
+    if not isinstance(insights, list):
+        raise ValueError("Digest insights must be a list.")
+    if not isinstance(portfolio_warnings, list) or any(not isinstance(item, str) for item in portfolio_warnings):
+        raise ValueError("Digest portfolio_warnings must be a list of strings.")
+
+    normalized_insights: list[dict[str, str]] = []
+    for insight in insights:
+        if not isinstance(insight, dict):
+            raise ValueError("Each digest insight must be an object.")
+        ticker = insight.get("ticker")
+        insight_type = insight.get("type")
+        headline = insight.get("headline")
+        rationale = insight.get("rationale")
+        if not all(isinstance(field, str) and field.strip() for field in (ticker, insight_type, headline, rationale)):
+            raise ValueError("Each digest insight must include non-empty string fields.")
+        if insight_type not in ALLOWED_INSIGHT_TYPES:
+            raise ValueError(f"Unsupported digest insight type: {insight_type}")
+        normalized_insights.append(
+            {
+                "ticker": ticker,
+                "type": insight_type,
+                "headline": headline,
+                "rationale": rationale,
+            }
         )
 
-    events_section = ""
-    if events:
-        for e in events:
-            events_section += f"\n- [{e['severity'].upper()}] {e['ticker']}: {e['title']} — {e['summary']} — {e.get('ai_analysis', '')}"
-    else:
-        events_section = "No events this week."
+    return {
+        "insights": normalized_insights,
+        "portfolio_warnings": portfolio_warnings,
+    }
 
-    stable_section = ""
-    stable_holdings = observations.get("stable_holdings", [])
-    if stable_holdings:
-        for stable in stable_holdings:
-            if stable.get("stale"):
-                stable_section += (
-                    f"\n- {stable['ticker']} ({stable['name']}): No material changes this week, "
-                    "but the thesis is stale and should be reviewed."
-                )
-            else:
-                stable_section += f"\n- {stable['ticker']} ({stable['name']}): No material changes against the thesis this week."
-    else:
-        stable_section = "None."
 
-    obs_parts = []
-    if observations.get("concentration_warnings"):
-        obs_parts.append(f"Concentration: {observations['concentration_warnings']}")
-    if observations.get("stale_theses"):
-        obs_parts.append(f"Stale theses (>90 days): {', '.join(observations['stale_theses'])}")
-    if observations.get("missing_theses"):
-        obs_parts.append(f"Positions without theses: {', '.join(observations['missing_theses'])}")
-    observations_section = "\n".join(obs_parts) if obs_parts else "None."
-
-    prompt = DIGEST_PROMPT.format(
-        holdings_section=holdings_section,
-        events_section=events_section,
-        stable_section=stable_section,
-        observations_section=observations_section,
+async def _call_anthropic_digest(prompt: str) -> dict[str, Any]:
+    client = anthropic.AsyncAnthropic(api_key=settings.anthropic_api_key)
+    response = await client.messages.create(
+        model="claude-sonnet-4-20250514",
+        max_tokens=1024,
+        messages=[{"role": "user", "content": prompt}],
+        timeout=30.0,
     )
+    return _parse_digest_response(response.content[0].text)
+
+
+def _fallback_digest(
+    holdings_with_theses: list[dict[str, Any]],
+    events: list[dict[str, Any]],
+    observations: dict[str, Any],
+) -> dict[str, Any]:
+    insights: list[dict[str, str]] = []
+
+    for event in events:
+        insights.append(
+            {
+                "ticker": event["ticker"],
+                "type": "event",
+                "headline": event["title"],
+                "rationale": event["summary"],
+            }
+        )
+
+    for stable in observations.get("stable_holdings", []):
+        if stable.get("stale"):
+            insights.append(
+                {
+                    "ticker": stable["ticker"],
+                    "type": "warning",
+                    "headline": "Thesis is getting stale",
+                    "rationale": "It's been a while since you updated your reasoning for holding this.",
+                }
+            )
+        else:
+            insights.append(
+                {
+                    "ticker": stable["ticker"],
+                    "type": "stable",
+                    "headline": "No material changes",
+                    "rationale": "Everything is quiet and your thesis remains intact.",
+                }
+            )
+
+    warnings: list[str] = []
+    if observations.get("concentration_warnings"):
+        warnings.append(observations["concentration_warnings"])
+    if observations.get("stale_theses"):
+        warnings.append(f"Stale theses (>90 days): {', '.join(observations['stale_theses'])}")
+    if observations.get("missing_theses"):
+        warnings.append(f"Positions without an active thesis: {', '.join(observations['missing_theses'])}")
+
+    return {
+        "insights": insights,
+        "portfolio_warnings": warnings,
+    }
+
+
+async def generate_digest_content(
+    holdings_with_theses: list[dict[str, Any]],
+    events: list[dict[str, Any]],
+    observations: dict[str, Any],
+) -> dict[str, Any] | None:
+    prompt = _build_digest_prompt(holdings_with_theses, events, observations)
 
     try:
         if not settings.anthropic_api_key:
             return _fallback_digest(holdings_with_theses, events, observations)
-        client = anthropic.AsyncAnthropic(api_key=settings.anthropic_api_key)
-        response = await client.messages.create(model="claude-sonnet-4-20250514", max_tokens=2048, messages=[{"role": "user", "content": prompt}])
-        return response.content[0].text.strip()
-    except Exception as e:
-        logger.error(f"Digest generation failed: {e}")
+        return await _call_anthropic_digest(prompt)
+    except Exception as exc:
+        logger.error("Digest generation failed: %s", exc)
         return _fallback_digest(holdings_with_theses, events, observations)

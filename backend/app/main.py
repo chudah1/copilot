@@ -23,6 +23,8 @@ from app.models import (  # noqa: F401
     quarterly_review,
     quarterly_review_response,
     password_reset_token,
+    onboarding_state,
+    onboarding_draft,
 )
 from app.jobs.scheduler import setup_scheduler, shutdown_scheduler
 
@@ -71,6 +73,13 @@ def _ensure_sqlite_dev_compatibility(conn) -> None:
             logger.info(
                 "Added missing thesis_signals.consecutive_ignores column for local SQLite compatibility"
             )
+
+    if "onboarding_states" in tables:
+        ob_columns = {column["name"] for column in inspector.get_columns("onboarding_states")}
+        for col in ("drafts_generated_at", "drafts_reviewed_at", "wizard_skipped_at", "wizard_completed_at"):
+            if col not in ob_columns:
+                conn.execute(text(f"ALTER TABLE onboarding_states ADD COLUMN {col} DATETIME"))
+                logger.info("Added missing onboarding_states.%s column for local SQLite compatibility", col)
 
 
 @asynccontextmanager

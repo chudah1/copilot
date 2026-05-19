@@ -50,6 +50,7 @@ router = APIRouter(prefix="/api/theses", tags=["theses"])
 
 
 CURRENT_THESIS_STATUSES = {"draft", "active", "needs_review"}
+VISIBLE_DECOMPOSITION_STATUSES = {"draft", "confirmed", "partially_confirmed"}
 
 
 async def _get_latest_decomposition_record(
@@ -81,6 +82,23 @@ def _decomposition_envelope_from_result(result: PersistedDecompositionResult) ->
         message=result.message,
         decomposition=result.decomposition,
     )
+
+
+async def _load_user_thesis(
+    db: AsyncSession,
+    *,
+    thesis_id: uuid.UUID,
+    user_id: uuid.UUID,
+    include_holding: bool = False,
+) -> Thesis | None:
+    query = select(Thesis).where(
+        Thesis.id == thesis_id,
+        Thesis.user_id == user_id,
+    )
+    if include_holding:
+        query = query.options(selectinload(Thesis.holding))
+    result = await db.execute(query)
+    return result.scalar_one_or_none()
 
 
 @router.post("", response_model=ThesisResponse, status_code=status.HTTP_201_CREATED)
@@ -201,15 +219,12 @@ async def decompose_thesis(
     current_user: User = Depends(get_current_user),
     db: AsyncSession = Depends(get_db),
 ):
-    result = await db.execute(
-        select(Thesis)
-        .where(
-            Thesis.id == thesis_id,
-            Thesis.user_id == current_user.id,
-        )
-        .options(selectinload(Thesis.holding))
+    thesis = await _load_user_thesis(
+        db,
+        thesis_id=thesis_id,
+        user_id=current_user.id,
+        include_holding=True,
     )
-    thesis = result.scalar_one_or_none()
     if thesis is None:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Thesis not found")
     if thesis.holding is None:
@@ -241,15 +256,12 @@ async def confirm_decomposition(
     current_user: User = Depends(get_current_user),
     db: AsyncSession = Depends(get_db),
 ):
-    result = await db.execute(
-        select(Thesis)
-        .where(
-            Thesis.id == thesis_id,
-            Thesis.user_id == current_user.id,
-        )
-        .options(selectinload(Thesis.holding))
+    thesis = await _load_user_thesis(
+        db,
+        thesis_id=thesis_id,
+        user_id=current_user.id,
+        include_holding=True,
     )
-    thesis = result.scalar_one_or_none()
     if thesis is None:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Thesis not found")
     if thesis.holding is None:
@@ -278,23 +290,17 @@ async def get_latest_decomposition(
     current_user: User = Depends(get_current_user),
     db: AsyncSession = Depends(get_db),
 ):
-    thesis_result = await db.execute(
-        select(Thesis).where(
-            Thesis.id == thesis_id,
-            Thesis.user_id == current_user.id,
-        )
-    )
-    thesis = thesis_result.scalar_one_or_none()
+    thesis = await _load_user_thesis(db, thesis_id=thesis_id, user_id=current_user.id)
     if thesis is None:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Thesis not found")
 
     latest = await _get_latest_decomposition_record(db, thesis_id, current_user.id)
     if latest is None:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Decomposition not found")
-    if latest.status != "draft":
+    if latest.status not in VISIBLE_DECOMPOSITION_STATUSES:
         message = "We saved your thesis and are retrying decomposition." if latest.status == "pending" else latest.last_error
         return ThesisDecompositionEnvelopeResponse(status=latest.status, message=message, decomposition=None)
-    return ThesisDecompositionEnvelopeResponse(status="draft", message=None, decomposition=latest)
+    return ThesisDecompositionEnvelopeResponse(status=latest.status, message=None, decomposition=latest)
 
 
 @router.get("/holding/{holding_id}", response_model=list[ThesisResponse])
@@ -341,13 +347,7 @@ async def get_thesis(
     current_user: User = Depends(get_current_user),
     db: AsyncSession = Depends(get_db),
 ):
-    result = await db.execute(
-        select(Thesis).where(
-            Thesis.id == thesis_id,
-            Thesis.user_id == current_user.id,
-        )
-    )
-    thesis = result.scalar_one_or_none()
+    thesis = await _load_user_thesis(db, thesis_id=thesis_id, user_id=current_user.id)
     if thesis is None:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Thesis not found")
     return thesis
@@ -420,19 +420,14 @@ async def invalidate_thesis(
     current_user: User = Depends(get_current_user),
     db: AsyncSession = Depends(get_db),
 ):
-    result = await db.execute(
-        select(Thesis).where(
-            Thesis.id == thesis_id,
-            Thesis.user_id == current_user.id,
-        )
-    )
-    thesis = result.scalar_one_or_none()
+    thesis = await _load_user_thesis(db, thesis_id=thesis_id, user_id=current_user.id)
     if thesis is None:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Thesis not found")
 
     thesis.status = "invalidated"
     thesis.invalidated_at = datetime.now(timezone.utc)
     thesis.invalidation_reason = body.reason
+    thesis.updated_at = thesis.invalidated_at
 
     append_log_entry(
         db,
@@ -454,13 +449,7 @@ async def reaffirm_thesis(
     current_user: User = Depends(get_current_user),
     db: AsyncSession = Depends(get_db),
 ):
-    result = await db.execute(
-        select(Thesis).where(
-            Thesis.id == thesis_id,
-            Thesis.user_id == current_user.id,
-        )
-    )
-    thesis = result.scalar_one_or_none()
+    thesis = await _load_user_thesis(db, thesis_id=thesis_id, user_id=current_user.id)
     if thesis is None:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Thesis not found")
     if thesis.status == "invalidated":

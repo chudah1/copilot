@@ -123,14 +123,14 @@ export default function QuarterlyReviewPage() {
   };
 
   if (loading) {
-    return <div className="py-16 text-center text-stone-500">Loading quarterly review...</div>;
+    return <div className="py-16 text-center text-muted-foreground">Loading quarterly review...</div>;
   }
 
   if (loadError) {
     return (
       <Card>
         <CardContent className="flex flex-col items-center gap-4 py-12 text-center">
-          <p className="text-stone-500">{loadError}</p>
+          <p className="text-muted-foreground">{loadError}</p>
           <Button onClick={() => { setLoading(true); void refreshReview(); }}>Try again</Button>
         </CardContent>
       </Card>
@@ -142,7 +142,7 @@ export default function QuarterlyReviewPage() {
       <Card>
         <CardContent className="py-12 text-center">
           <p className="text-lg font-medium">No current reasons are ready for quarterly review.</p>
-          <p className="mt-2 text-sm text-stone-500">
+          <p className="mt-2 text-sm text-muted-foreground">
             Add a holding reason first and this flow will appear once there is something worth revisiting.
           </p>
           <div className="mt-6">
@@ -158,20 +158,18 @@ export default function QuarterlyReviewPage() {
   if (!currentHolding) {
     return (
       <div className="space-y-6">
-        <Card className="border-0 bg-[linear-gradient(135deg,rgba(29,37,53,0.98),rgba(47,89,72,0.92)_58%,rgba(229,236,223,0.95))] text-white">
-          <CardHeader>
-            <div className="flex flex-wrap items-center gap-2">
-              <Badge className="bg-white/12 text-white">{review.quarter}</Badge>
-              <Badge className="bg-white/12 text-white">{review.completed_count} reviewed</Badge>
-            </div>
-            <CardTitle className="text-3xl font-semibold tracking-tight text-white">
-              Quarterly review complete
-            </CardTitle>
-            <CardDescription className="text-white/80">
-              Every current reason has been revisited for this quarter. Reason age keeps compounding; the log now has the latest answer.
-            </CardDescription>
-          </CardHeader>
-        </Card>
+        <div className="border-b border-foreground/20 pb-6">
+          <div className="flex flex-wrap items-center gap-2 mb-3">
+            <span className="font-mono text-[10px] uppercase tracking-[0.25em] text-primary">{review.quarter}</span>
+            <span className="font-mono text-[10px] text-muted-foreground">· {review.completed_count} reviewed</span>
+          </div>
+          <h1 className="font-display italic text-[2.5rem] leading-tight text-foreground tracking-tight">
+            Quarterly review complete.
+          </h1>
+          <p className="mt-2 font-sans text-sm text-muted-foreground leading-relaxed max-w-lg">
+            Every current reason has been revisited for this quarter. Reason age keeps compounding; the log now has the latest answer.
+          </p>
+        </div>
         <Card>
           <CardHeader>
             <CardTitle className="text-xl">Reviewed holdings</CardTitle>
@@ -182,14 +180,14 @@ export default function QuarterlyReviewPage() {
                 <div className="flex flex-wrap items-center justify-between gap-3">
                   <div>
                     <p className="font-medium">{holding.ticker} · {holding.name}</p>
-                    <p className="mt-1 text-sm text-stone-500">
+                    <p className="mt-1 text-sm text-muted-foreground">
                       Reason age: {holding.reason_age_days} days
                     </p>
                   </div>
                   <Badge variant="outline">{holding.response?.replace("_", " ")}</Badge>
                 </div>
                 {holding.response_notes && (
-                  <p className="mt-3 text-sm text-stone-600">{holding.response_notes}</p>
+                  <p className="mt-3 text-sm text-foreground/70">{holding.response_notes}</p>
                 )}
               </div>
             ))}
@@ -202,23 +200,19 @@ export default function QuarterlyReviewPage() {
   const currentIndex = review.completed_count + 1;
 
   return (
-    <div className="space-y-6">
-      <Card className="border-0 bg-[linear-gradient(135deg,rgba(31,41,55,0.98),rgba(56,94,80,0.92)_58%,rgba(232,236,224,0.96))] text-white">
-        <CardHeader className="gap-3">
-          <div className="flex flex-wrap items-center gap-2">
-            <Badge className="bg-white/12 text-white">{review.quarter}</Badge>
-            <Badge className="bg-white/12 text-white">
-              {currentIndex} of {review.total_holdings}
-            </Badge>
-          </div>
-          <CardTitle className="text-3xl font-semibold tracking-tight text-white">
-            Would you buy this today?
-          </CardTitle>
-          <CardDescription className="max-w-2xl text-white/80">
-            Keep this simple and honest. The goal is not to predict the market, only to test whether your reason still deserves fresh capital.
-          </CardDescription>
-        </CardHeader>
-      </Card>
+    <div className="max-w-4xl mx-auto px-6 py-8 space-y-6">
+      <div className="border-b border-foreground/20 pb-6">
+        <div className="flex flex-wrap items-center gap-2 mb-3">
+          <span className="font-mono text-[10px] uppercase tracking-[0.25em] text-primary">{review.quarter}</span>
+          <span className="font-mono text-[10px] text-muted-foreground">· {currentIndex} of {review.total_holdings}</span>
+        </div>
+        <h1 className="font-display italic text-[2.5rem] leading-tight text-foreground tracking-tight">
+          Would you buy this today?
+        </h1>
+        <p className="mt-2 font-sans text-sm text-muted-foreground leading-relaxed max-w-xl">
+          Keep this simple and honest. The goal is not to predict the market, only to test whether your reason still deserves fresh capital.
+        </p>
+      </div>
 
       <div className="grid gap-6 lg:grid-cols-[1.15fr_0.85fr]">
         <Card>
@@ -239,9 +233,9 @@ export default function QuarterlyReviewPage() {
             </div>
           </CardHeader>
           <CardContent className="space-y-5">
-            <div className="rounded-2xl border bg-stone-50 p-4">
-              <p className="text-sm font-medium text-stone-500">Your reason</p>
-              <p className="mt-3 whitespace-pre-wrap text-base leading-7 text-stone-900">
+            <div className="rounded-2xl border bg-card p-4">
+              <p className="text-sm font-medium text-muted-foreground">Your reason</p>
+              <p className="mt-3 whitespace-pre-wrap text-base leading-7 text-foreground">
                 {currentHolding.why_own_it}
               </p>
             </div>
@@ -273,18 +267,18 @@ export default function QuarterlyReviewPage() {
                 type="button"
                 onClick={() => void handleSubmit(option.value)}
                 disabled={submitting !== null}
-                className="w-full rounded-2xl border p-4 text-left transition hover:border-stone-400 hover:bg-stone-50 disabled:cursor-not-allowed disabled:opacity-60"
+                className="w-full rounded-2xl border p-4 text-left transition hover:border-border hover:bg-muted disabled:cursor-not-allowed disabled:opacity-60"
               >
                 <div className="flex items-center justify-between gap-3">
                   <p className="font-medium">{option.label}</p>
                   {submitting === option.value && <Badge variant="outline">Saving…</Badge>}
                 </div>
-                <p className="mt-2 text-sm text-stone-500">{option.description}</p>
+                <p className="mt-2 text-sm text-muted-foreground">{option.description}</p>
               </button>
             ))}
 
             {lastSubmitted && ["not_sure", "no"].includes(lastSubmitted.response) && (
-              <div className="rounded-2xl border border-amber-200 bg-amber-50 p-4 text-sm text-amber-900">
+              <div className="rounded-2xl border border-amber-500/25 bg-amber-500/8 p-4 text-sm text-amber-700">
                 This answer keeps the holding in review. The best next move is to tighten or rewrite the reason on the holding page.
               </div>
             )}

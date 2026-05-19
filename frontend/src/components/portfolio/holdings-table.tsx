@@ -19,8 +19,8 @@ const PULSE_DOT: Record<string, string> = {
 };
 
 const PULSE_ROW_BG: Record<string, string> = {
-  watch: "bg-amber-50",
-  review: "bg-red-50",
+  watch: "bg-amber-500/10",
+  review: "bg-red-500/10",
 };
 
 function getHoldingThesisState(thesis: Thesis | undefined) {
@@ -28,7 +28,7 @@ function getHoldingThesisState(thesis: Thesis | undefined) {
     return {
       label: "Missing thesis",
       detail: "Start with why this position exists.",
-      badgeClass: "bg-red-100 text-red-800",
+      badgeClass: "bg-red-500/15 text-red-600",
     };
   }
 
@@ -39,7 +39,7 @@ function getHoldingThesisState(thesis: Thesis | undefined) {
     return {
       label: "Needs review",
       detail: "Something changed or this thesis is stale.",
-      badgeClass: "bg-orange-100 text-orange-800",
+      badgeClass: "bg-orange-500/15 text-orange-600",
     };
   }
 
@@ -47,14 +47,14 @@ function getHoldingThesisState(thesis: Thesis | undefined) {
     return {
       label: "Weak thesis",
       detail: "Reason is too vague to monitor well.",
-      badgeClass: "bg-stone-200 text-stone-800",
+      badgeClass: "bg-muted text-muted-foreground",
     };
   }
 
   return {
     label: "Monitored",
     detail: thesis.confidence === "high" ? "High-confidence thesis in place." : "Thesis is active and being monitored.",
-    badgeClass: "bg-emerald-100 text-emerald-800",
+    badgeClass: "bg-emerald-500/15 text-emerald-700",
   };
 }
 
@@ -108,7 +108,7 @@ export function HoldingsTable({ holdings, currentThesesByHolding, pulseByHolding
                 <TableCell className="text-right">{formatCurrency(h.average_cost_basis, h.currency)}</TableCell>
                 <TableCell className="text-right">{h.current_price ? formatCurrency(h.current_price, h.currency) : "—"}</TableCell>
                 <TableCell className="text-right">{formatCurrency(value, h.currency)}</TableCell>
-                <TableCell className={`text-right ${pnl >= 0 ? "text-green-600" : "text-red-600"}`}>
+                <TableCell className={`text-right ${pnl >= 0 ? "text-emerald-700" : "text-red-600"}`}>
                   {formatPercent(pnlPct)}
                 </TableCell>
                 <TableCell>

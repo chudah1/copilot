@@ -45,6 +45,73 @@ async def _load_signal(db: AsyncSession, signal_id) -> ThesisSignal | None:
     return result.scalar_one_or_none()
 
 
+def _default_invalidation_reason(event: MonitoringEvent, notes: str | None) -> str:
+    return notes or f"Invalidated after reviewing monitoring event: {event.title}"
+
+
+def _apply_review_action(
+    *,
+    thesis: Thesis,
+    event: MonitoringEvent,
+    action: str,
+    notes: str | None,
+    now: datetime,
+) -> None:
+    if action == "reaffirmed":
+        if thesis.status == "invalidated":
+            raise ValueError("Invalidated theses cannot be reaffirmed")
+        thesis.status = "active"
+        thesis.updated_at = now
+        return
+
+    if action in IGNORE_ACTIONS:
+        if thesis.status != "invalidated":
+            thesis.status = "active"
+            thesis.updated_at = now
+        return
+
+    if action == "lowered_confidence":
+        if thesis.status == "invalidated":
+            raise ValueError("Invalidated theses cannot lower confidence")
+        thesis.confidence = _lower_confidence(thesis.confidence)
+        thesis.status = "active"
+        thesis.updated_at = now
+        return
+
+    if action == "invalidated":
+        thesis.status = "invalidated"
+        thesis.invalidated_at = now
+        thesis.invalidation_reason = _default_invalidation_reason(event, notes)
+        thesis.updated_at = now
+
+
+async def _apply_signal_decay(
+    db: AsyncSession,
+    *,
+    thesis: Thesis,
+    signal: ThesisSignal | None,
+    action: str,
+) -> None:
+    if signal is None:
+        return
+
+    if action in IGNORE_ACTIONS:
+        signal.consecutive_ignores += 1
+        if signal.consecutive_ignores >= SIGNAL_DECAY_THRESHOLD and signal.active:
+            signal.active = False
+            logger.info(
+                "Signal %s auto-deactivated after %d consecutive ignores",
+                signal.id,
+                signal.consecutive_ignores,
+            )
+            await _rebuild_interpretation_cache(db, thesis)
+            # TODO: create in-app notification when UserNotification model exists
+            # "We stopped watching {signal_label} because you've ignored it 3 times."
+        return
+
+    signal.consecutive_ignores = 0
+
+
 async def _rebuild_interpretation_cache(db: AsyncSession, thesis: Thesis) -> None:
     """Rebuild the interpretation cache after a signal is deactivated."""
     from app.services.decomposition import _sync_interpretation_cache
@@ -96,59 +163,37 @@ async def review_monitoring_event(
     thesis: Thesis,
     action: str,
     notes: str | None,
+    now: datetime | None = None,
 ) -> ThesisReview:
     if action not in VALID_REVIEW_ACTIONS:
         raise ValueError("Invalid review action")
 
+    review_time = now or datetime.now(timezone.utc)
     review = ThesisReview(
         thesis_id=thesis.id,
         monitoring_event_id=event.id,
         action=action,
         notes=notes,
+        created_at=review_time,
     )
     db.add(review)
 
-    now = datetime.now(timezone.utc)
-    if action == "reaffirmed":
-        if thesis.status == "invalidated":
-            raise ValueError("Invalidated theses cannot be reaffirmed")
-        thesis.status = "active"
-        thesis.updated_at = now
-    elif action in IGNORE_ACTIONS:
-        if thesis.status != "invalidated":
-            thesis.status = "active"
-            thesis.updated_at = now
-    elif action == "lowered_confidence":
-        if thesis.status == "invalidated":
-            raise ValueError("Invalidated theses cannot lower confidence")
-        thesis.confidence = _lower_confidence(thesis.confidence)
-        thesis.status = "active"
-        thesis.updated_at = now
-    elif action == "invalidated":
-        thesis.status = "invalidated"
-        thesis.invalidated_at = now
-        thesis.invalidation_reason = notes or f"Invalidated after reviewing monitoring event: {event.title}"
-        thesis.updated_at = now
+    _apply_review_action(
+        thesis=thesis,
+        event=event,
+        action=action,
+        notes=notes,
+        now=review_time,
+    )
 
-    # Signal decay: track consecutive ignores
     signal = await _load_signal(db, event.signal_id)
-    if signal is not None:
-        if action in IGNORE_ACTIONS:
-            signal.consecutive_ignores += 1
-            if signal.consecutive_ignores >= SIGNAL_DECAY_THRESHOLD and signal.active:
-                signal.active = False
-                logger.info(
-                    "Signal %s auto-deactivated after %d consecutive ignores",
-                    signal.id,
-                    signal.consecutive_ignores,
-                )
-                await _rebuild_interpretation_cache(db, thesis)
-                # TODO: create in-app notification when UserNotification model exists
-                # "We stopped watching {signal_label} because you've ignored it 3 times."
-        else:
-            signal.consecutive_ignores = 0
+    await _apply_signal_decay(
+        db,
+        thesis=thesis,
+        signal=signal,
+        action=action,
+    )
 
-    # Conviction log: evidence reviewed
     append_log_entry(
         db,
         thesis_id=thesis.id,
@@ -161,7 +206,5 @@ async def review_monitoring_event(
         signal_id=event.signal_id,
     )
 
-    await db.commit()
-    await db.refresh(review)
-    await db.refresh(thesis)
+    await db.flush()
     return review

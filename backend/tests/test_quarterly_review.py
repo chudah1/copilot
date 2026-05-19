@@ -1,12 +1,21 @@
+from datetime import datetime, timezone
+
 from sqlalchemy import select
 
+from app.jobs.quarterly_review_prep import run_quarterly_review_prep
 from app.models.conviction_log_entry import ConvictionLogEntry
 from app.models.holding import Holding
 from app.models.quarterly_review import QuarterlyReview
 from app.models.quarterly_review_response import QuarterlyReviewResponse
 from app.models.thesis import Thesis
 from app.services.conviction_log import QUARTERLY_REVIEW
-from app.services.quarterly_review import current_quarter_key
+from app.services.quarterly_review import (
+    build_current_review_snapshot,
+    current_quarter_key,
+    is_quarterly_review_open,
+    quarterly_review_release_at,
+    submit_quarterly_review_response,
+)
 
 
 async def _create_holding(db, user, *, ticker: str, price: float = 150.0):
@@ -126,3 +135,78 @@ async def test_positive_quarterly_review_reactivates_needs_review_thesis(client,
 
     await db.refresh(thesis)
     assert thesis.status == "active"
+
+
+def test_quarterly_review_release_window_opens_on_first_monday():
+    before_release = datetime(2026, 4, 5, 12, 0, tzinfo=timezone.utc)
+    release_day = datetime(2026, 4, 6, 9, 0, tzinfo=timezone.utc)
+
+    assert quarterly_review_release_at(before_release) == datetime(2026, 4, 6, 8, 0, tzinfo=timezone.utc)
+    assert is_quarterly_review_open(before_release) is False
+    assert is_quarterly_review_open(release_day) is True
+
+
+async def test_quarterly_review_prep_job_creates_current_review(db, test_user, job_session_factory):
+    holding = await _create_holding(db, test_user, ticker="NVDA", price=880.0)
+    await _create_thesis(db, test_user, holding)
+    await db.commit()
+
+    await run_quarterly_review_prep(
+        now=datetime(2026, 4, 6, 9, 0, tzinfo=timezone.utc),
+        session_factory=job_session_factory,
+    )
+
+    result = await db.execute(select(QuarterlyReview).where(QuarterlyReview.user_id == test_user.id))
+    review = result.scalar_one()
+    assert review.quarter == "2026-Q2"
+
+
+async def test_build_current_review_snapshot_uses_reference_now_for_reason_age(db, test_user):
+    holding = await _create_holding(db, test_user, ticker="META", price=500.0)
+    thesis = await _create_thesis(db, test_user, holding)
+    thesis.created_at = datetime(2026, 1, 1, 12, 0, tzinfo=timezone.utc)
+    await db.commit()
+
+    _, items = await build_current_review_snapshot(
+        db,
+        user_id=test_user.id,
+        now=datetime(2026, 4, 1, 12, 0, tzinfo=timezone.utc),
+    )
+
+    assert len(items) == 1
+    assert items[0].reason_age_days == 90
+
+
+async def test_submit_quarterly_review_response_reuses_existing_row_and_updates_status(db, test_user):
+    holding = await _create_holding(db, test_user, ticker="ADBE", price=410.0)
+    thesis = await _create_thesis(db, test_user, holding, status="needs_review")
+    await db.commit()
+
+    first_response, _, pending_count = await submit_quarterly_review_response(
+        db,
+        user_id=test_user.id,
+        holding_id=holding.id,
+        response_value="not_sure",
+        notes="Unsure on demand quality.",
+        now=datetime(2026, 4, 10, 9, 0, tzinfo=timezone.utc),
+    )
+    assert pending_count == 0
+
+    second_response, thesis, pending_count = await submit_quarterly_review_response(
+        db,
+        user_id=test_user.id,
+        holding_id=holding.id,
+        response_value="probably",
+        notes="Still looks good enough.",
+        now=datetime(2026, 4, 12, 9, 0, tzinfo=timezone.utc),
+    )
+    await db.flush()
+
+    responses = (
+        await db.execute(select(QuarterlyReviewResponse).where(QuarterlyReviewResponse.holding_id == holding.id))
+    ).scalars().all()
+    assert len(responses) == 1
+    assert first_response.id == second_response.id
+    assert second_response.created_at == datetime(2026, 4, 12, 9, 0, tzinfo=timezone.utc)
+    assert thesis.status == "active"
+    assert pending_count == 0

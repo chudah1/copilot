@@ -5,15 +5,15 @@ import { Badge } from "@/components/ui/badge";
 import type { HealthCheckResult } from "@/types";
 
 const ASSESSMENT_CONFIG = {
-  all_clear: { label: "All clear", className: "bg-emerald-100 text-emerald-800" },
-  watch: { label: "Watch", className: "bg-amber-100 text-amber-800" },
-  review_needed: { label: "Review needed", className: "bg-red-100 text-red-800" },
+  all_clear: { label: "All clear", className: "bg-emerald-500/15 text-emerald-700" },
+  watch: { label: "Watch", className: "bg-amber-500/15 text-amber-700" },
+  review_needed: { label: "Review needed", className: "bg-red-500/15 text-red-600" },
 } as const;
 
 const SEVERITY_COLORS: Record<string, string> = {
   thesis_breaking: "text-red-600",
-  warning: "text-amber-600",
-  info: "text-sky-600",
+  warning: "text-amber-700",
+  info: "text-sky-700",
 };
 
 function formatLargeNumber(n: number): string {
@@ -95,21 +95,21 @@ export function ThesisHealthCheck({
             <p className="mb-2 text-sm font-medium">Your conditions</p>
             <div className="space-y-1.5">
               {breachedHints.map((hint, i) => (
-                <div key={i} className="flex items-start gap-2 rounded-md bg-red-50 px-3 py-2 text-sm">
-                  <span className="mt-0.5 text-red-500">&#x2717;</span>
+                <div key={i} className="flex items-start gap-2 rounded-md bg-red-500/10 border border-red-500/20 px-3 py-2 text-sm">
+                  <span className="mt-0.5 text-red-600">&#x2717;</span>
                   <div>
-                    <span className="font-medium text-red-800">
+                    <span className="font-medium text-red-600">
                       {hint.metric.replace(/_/g, " ")} is {hint.actual_value.toFixed(2)}
                     </span>
-                    <span className="text-red-600"> (expected {hint.operator} {hint.threshold})</span>
-                    {hint.rationale && <p className="mt-0.5 text-xs text-red-600/80">{hint.rationale}</p>}
+                    <span className="text-red-600/70"> (expected {hint.operator} {hint.threshold})</span>
+                    {hint.rationale && <p className="mt-0.5 text-xs text-red-600/60">{hint.rationale}</p>}
                   </div>
                 </div>
               ))}
               {healthyHints.map((hint, i) => (
-                <div key={i} className="flex items-start gap-2 rounded-md bg-emerald-50 px-3 py-2 text-sm">
-                  <span className="mt-0.5 text-emerald-500">&#x2713;</span>
-                  <span className="text-emerald-800">
+                <div key={i} className="flex items-start gap-2 rounded-md bg-emerald-500/10 border border-emerald-500/20 px-3 py-2 text-sm">
+                  <span className="mt-0.5 text-emerald-700">&#x2713;</span>
+                  <span className="text-emerald-700">
                     {hint.metric.replace(/_/g, " ")} is {hint.actual_value.toFixed(2)} ({hint.operator} {hint.threshold})
                   </span>
                 </div>

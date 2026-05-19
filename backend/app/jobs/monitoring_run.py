@@ -12,17 +12,16 @@ from app.models.thesis import Thesis
 from app.models.monitoring_event import MonitoringEvent
 from app.services.monitoring import check_metric_watch_hints, generate_monitoring_candidates
 from app.services.market_data import CompanyData, fetch_company_data, shortlist_qualitative_candidates
-from app.services.ai_monitor import classify_event
-from app.services.conviction_log import EVIDENCE_RECEIVED, append_log_entry
 from app.services.noise_filter import (
-    EVIDENCE_TYPE_MAP,
     apply_priority_suppression,
     filter_candidates,
-    record_signal_fired,
+)
+from app.services.monitoring_pipeline import (
+    build_claim_signal_lookup,
+    classify_candidates_for_thesis,
+    persist_classified_candidates,
 )
 from app.services.signal_matching import (
-    build_evidence_summary,
-    determine_verdict,
     load_active_decomposition,
     match_candidates_to_signals,
 )
@@ -30,6 +29,10 @@ from app.services.signal_matching import (
 logger = logging.getLogger(__name__)
 
 MAX_MONITORED_POSITIONS = 50
+
+
+def _requires_market_data_key() -> bool:
+    return settings.market_data_provider == "alpha_vantage"
 
 
 def _extract_proxy_tickers(interpretation: dict[str, Any] | None) -> list[dict[str, Any]]:
@@ -137,6 +140,76 @@ def _generate_proxy_candidates(
     return candidates
 
 
+async def _maybe_create_monitoring_inactive_event(
+    db,
+    active_theses: list[Thesis],
+) -> bool:
+    if not _requires_market_data_key() or settings.alpha_vantage_api_key or not active_theses:
+        return False
+
+    existing = await db.execute(
+        select(MonitoringEvent)
+        .where(MonitoringEvent.event_type == "monitoring_inactive")
+        .where(MonitoringEvent.created_at >= datetime.now(timezone.utc).replace(hour=0, minute=0, second=0, microsecond=0))
+        .limit(1)
+    )
+    if existing.scalar_one_or_none() is None:
+        first_thesis = active_theses[0]
+        holding_result = await db.execute(select(Holding).where(Holding.id == first_thesis.holding_id))
+        holding = holding_result.scalar_one_or_none()
+        if holding is not None:
+            db.add(
+                MonitoringEvent(
+                    holding_id=holding.id,
+                    thesis_id=first_thesis.id,
+                    event_type="monitoring_inactive",
+                    severity="info",
+                    title="Monitoring is not active",
+                    summary="No Alpha Vantage API key is configured. Set ALPHA_VANTAGE_API_KEY in your .env to enable market data monitoring.",
+                    ai_analysis=None,
+                    raw_data={"reason": "missing_alpha_vantage_api_key"},
+                )
+            )
+            await db.commit()
+    logger.warning("No Alpha Vantage API key configured — monitoring skipped")
+    return True
+
+
+async def _load_thesis_holdings_and_tickers(
+    db,
+    active_theses: list[Thesis],
+) -> tuple[dict[str, Holding], set[str]]:
+    thesis_holdings: dict[str, Holding] = {}
+    all_tickers: set[str] = set()
+
+    for thesis in active_theses:
+        holding_result = await db.execute(select(Holding).where(Holding.id == thesis.holding_id))
+        holding = holding_result.scalar_one_or_none()
+        if holding is None:
+            continue
+        thesis_holdings[str(thesis.id)] = holding
+        direct_ticker = holding.ticker.upper()
+        all_tickers.add(direct_ticker)
+
+        for proxy in _extract_proxy_tickers(thesis.interpretation):
+            proxy_ticker = proxy["ticker"].upper()
+            if proxy_ticker != direct_ticker:
+                all_tickers.add(proxy_ticker)
+
+    return thesis_holdings, all_tickers
+
+
+async def _fetch_ticker_data(tickers: set[str]) -> dict[str, CompanyData | None]:
+    ticker_data: dict[str, CompanyData | None] = {}
+    for ticker in tickers:
+        try:
+            ticker_data[ticker] = await fetch_company_data(ticker)
+        except Exception as exc:
+            logger.error("Failed to fetch data for %s: %s", ticker, exc)
+            ticker_data[ticker] = None
+    return ticker_data
+
+
 async def run_monitoring():
     logger.info("Starting daily monitoring run")
 
@@ -148,65 +221,12 @@ async def run_monitoring():
         )
         active_theses = result.scalars().all()
 
-        if not settings.alpha_vantage_api_key and active_theses:
-            # Only create a warning event if one doesn't already exist from today
-            existing = await db.execute(
-                select(MonitoringEvent)
-                .where(MonitoringEvent.event_type == "monitoring_inactive")
-                .where(MonitoringEvent.created_at >= datetime.now(timezone.utc).replace(hour=0, minute=0, second=0, microsecond=0))
-                .limit(1)
-            )
-            if existing.scalar_one_or_none() is None:
-                first_thesis = active_theses[0]
-                holding_result = await db.execute(
-                    select(Holding).where(Holding.id == first_thesis.holding_id)
-                )
-                holding = holding_result.scalar_one_or_none()
-                if holding is not None:
-                    event = MonitoringEvent(
-                        holding_id=holding.id,
-                        thesis_id=first_thesis.id,
-                        event_type="monitoring_inactive",
-                        severity="info",
-                        title="Monitoring is not active",
-                        summary="No Alpha Vantage API key is configured. Set ALPHA_VANTAGE_API_KEY in your .env to enable market data monitoring.",
-                        ai_analysis=None,
-                        raw_data={"reason": "missing_alpha_vantage_api_key"},
-                    )
-                    db.add(event)
-                    await db.commit()
-            logger.warning("No Alpha Vantage API key configured — monitoring skipped")
+        if await _maybe_create_monitoring_inactive_event(db, active_theses):
             return
 
-        # Phase 1: Collect all unique tickers (direct + proxy)
-        thesis_holdings: dict[str, Holding] = {}  # thesis_id -> Holding
-        all_tickers: set[str] = set()
+        thesis_holdings, all_tickers = await _load_thesis_holdings_and_tickers(db, active_theses)
+        ticker_data = await _fetch_ticker_data(all_tickers)
 
-        for thesis in active_theses:
-            holding_result = await db.execute(
-                select(Holding).where(Holding.id == thesis.holding_id)
-            )
-            holding = holding_result.scalar_one_or_none()
-            if holding is None:
-                continue
-            thesis_holdings[str(thesis.id)] = holding
-            all_tickers.add(holding.ticker.upper())
-
-            for proxy in _extract_proxy_tickers(thesis.interpretation):
-                proxy_ticker = proxy["ticker"].upper()
-                if proxy_ticker != holding.ticker:
-                    all_tickers.add(proxy_ticker)
-
-        # Phase 2: Batch-fetch company data for all unique tickers
-        ticker_data: dict[str, CompanyData | None] = {}
-        for ticker in all_tickers:
-            try:
-                ticker_data[ticker] = await fetch_company_data(ticker)
-            except Exception as e:
-                logger.error(f"Failed to fetch data for {ticker}: {e}")
-                ticker_data[ticker] = None
-
-        # Phase 3: For each thesis, generate candidates from direct + proxy tickers
         now = datetime.now(timezone.utc)
 
         for thesis in active_theses:
@@ -248,14 +268,7 @@ async def run_monitoring():
                 candidates = match_candidates_to_signals(candidates, claims)
 
                 # Build lookup tables for narrative generation
-                claims_by_id: dict[str, Any] = {}
-                signals_by_id: dict[str, Any] = {}
-                if claims:
-                    for claim in claims:
-                        claims_by_id[str(claim.id)] = claim
-                        for entity in claim.entities:
-                            for signal in entity.signals:
-                                signals_by_id[str(signal.id)] = signal
+                claims_by_id, signals_by_id = build_claim_signal_lookup(claims)
 
                 # Update holding price from direct ticker data
                 if company_data and company_data.current_price is not None:
@@ -268,102 +281,22 @@ async def run_monitoring():
                 # Noise suppression: filter before classification (rules 1, 2, 4)
                 candidates = await filter_candidates(candidates, holding.id, signals_by_id, db, now=now)
 
-                # Classify all surviving candidates
-                classified: list[tuple[dict, str, str | None]] = []
-                for candidate in candidates:
-                    evidence = candidate.get("evidence", {})
-
-                    # For proxy events, include the causal context so the
-                    # classifier understands why this upstream signal matters
-                    event_desc = candidate["description"]
-                    proxy_rationale = evidence.get("proxy_rationale")
-                    proxy_signal_hint = evidence.get("proxy_signal_hint")
-                    if proxy_rationale:
-                        event_desc += f"\nWhy this proxy matters to the thesis: {proxy_rationale}"
-                    if proxy_signal_hint:
-                        event_desc += f"\nWhat to look for: {proxy_signal_hint}"
-
-                    classification = await classify_event(
-                        why_own_it=thesis.why_own_it,
-                        must_remain_true=thesis.must_remain_true,
-                        what_would_change_my_mind=thesis.what_would_change_my_mind,
-                        ai_summary=thesis.ai_summary,
-                        event_description=event_desc,
-                    )
-
-                    severity = classification.severity if classification else "warning"
-                    ai_analysis = classification.analysis if classification else None
-                    classified.append((candidate, severity, ai_analysis))
+                classified = await classify_candidates_for_thesis(thesis, candidates)
 
                 # Rule 3: Priority suppression (post-classification)
                 suppressed = apply_priority_suppression([(c, s) for c, s, _ in classified])
                 surviving_set = {id(c) for c, _ in suppressed}
                 classified = [(c, s, a) for c, s, a in classified if id(c) in surviving_set]
 
-                for candidate, severity, ai_analysis in classified:
-                    evidence = candidate.get("evidence", {})
-                    source_url = evidence.get("url")
-
-                    # Signal linking fields
-                    evidence_signal_id = evidence.get("signal_id")
-                    evidence_claim_id = evidence.get("claim_id")
-                    claim_obj = claims_by_id.get(evidence_claim_id) if evidence_claim_id else None
-                    signal_obj = signals_by_id.get(evidence_signal_id) if evidence_signal_id else None
-
-                    evidence_summary = build_evidence_summary(
-                        candidate=candidate,
-                        claim_text=claim_obj.claim_text if claim_obj else None,
-                        signal_label=signal_obj.signal_label if signal_obj else None,
-                        why_own_it=thesis.why_own_it,
-                    )
-                    verdict = determine_verdict(severity)
-                    evidence_type = EVIDENCE_TYPE_MAP.get(candidate["event_type"], candidate["event_type"])
-
-                    # For proxy events, include the causal rationale in the stored summary
-                    stored_summary = candidate["description"]
-                    proxy_rationale = evidence.get("proxy_rationale")
-                    proxy_signal_hint = evidence.get("proxy_signal_hint")
-                    if proxy_rationale:
-                        stored_summary += f"\nWhy this matters: {proxy_rationale}"
-                    if proxy_signal_hint:
-                        stored_summary += f"\nWhat to look for: {proxy_signal_hint}"
-
-                    event = MonitoringEvent(
-                        holding_id=holding.id,
-                        thesis_id=thesis.id,
-                        event_type=candidate["event_type"],
-                        severity=severity,
-                        title=f"Review {holding.ticker}",
-                        summary=stored_summary,
-                        source_url=source_url,
-                        ai_analysis=ai_analysis,
-                        raw_data={
-                            "provider": settings.market_data_provider,
-                            "candidate_type": candidate["event_type"],
-                            "evidence": evidence,
-                        },
-                        claim_id=uuid.UUID(evidence_claim_id) if evidence_claim_id else None,
-                        signal_id=uuid.UUID(evidence_signal_id) if evidence_signal_id else None,
-                        evidence_type=evidence_type,
-                        evidence_summary=evidence_summary,
-                        verdict=verdict,
-                    )
-                    db.add(event)
-                    await record_signal_fired(evidence_signal_id, signals_by_id, now=now)
-                    append_log_entry(
-                        db,
-                        thesis_id=thesis.id,
-                        holding_id=holding.id,
-                        user_id=thesis.user_id,
-                        entry_type=EVIDENCE_RECEIVED,
-                        content=evidence_summary or stored_summary[:300],
-                        metadata={"event_type": candidate["event_type"], "severity": severity},
-                        claim_id=uuid.UUID(evidence_claim_id) if evidence_claim_id else None,
-                        signal_id=uuid.UUID(evidence_signal_id) if evidence_signal_id else None,
-                    )
-
-                    if severity == "thesis_breaking" and thesis.status == "active":
-                        thesis.status = "needs_review"
+                await persist_classified_candidates(
+                    db,
+                    thesis=thesis,
+                    holding=holding,
+                    classified=classified,
+                    claims_by_id=claims_by_id,
+                    signals_by_id=signals_by_id,
+                    now=now,
+                )
 
             except Exception as e:
                 logger.error(f"Monitoring failed for thesis {thesis.id}: {e}")

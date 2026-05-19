@@ -14,6 +14,7 @@ from app.models.thesis_entity import ThesisEntity
 from app.models.thesis_signal import ThesisSignal
 from app.models.user import User
 from app.services.email import send_onboarding_email
+from app.services.onboarding import mark_onboarding_completed
 
 logger = logging.getLogger(__name__)
 
@@ -181,7 +182,7 @@ async def run_onboarding_drip():
 
                 # Mark complete if coverage ≥ 50%
                 if coverage >= 0.5 and state.onboarding_completed_at is None:
-                    state.onboarding_completed_at = now
+                    await mark_onboarding_completed(db, user_id=state.user_id, completed_at=now)
 
                 await db.commit()
 

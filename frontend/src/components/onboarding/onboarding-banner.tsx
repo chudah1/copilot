@@ -2,7 +2,7 @@
 
 import Link from "next/link";
 import { useEffect, useState } from "react";
-import { apiFetch } from "@/lib/api";
+import { api } from "@/lib/api";
 
 interface OnboardingBannerData {
   show: boolean;
@@ -22,8 +22,7 @@ export function OnboardingBanner() {
   const [dismissed, setDismissed] = useState(false);
 
   useEffect(() => {
-    apiFetch("/api/onboarding/banner")
-      .then((r) => r.json())
+    api.get<OnboardingBannerData>("/api/onboarding/banner")
       .then(setBanner)
       .catch(() => null);
   }, []);
@@ -44,33 +43,22 @@ export function OnboardingBanner() {
       ? `Add reason for ${suggested_holding?.ticker ?? "next holding"} →`
       : null;
 
-  const bgColor =
-    banner_type === "first_reason_monitoring"
-      ? "bg-emerald-50 border-emerald-200"
-      : "bg-amber-50 border-amber-200";
-
-  const textColor =
-    banner_type === "first_reason_monitoring"
-      ? "text-emerald-800"
-      : "text-amber-800";
-
-  const actionColor =
-    banner_type === "first_reason_monitoring"
-      ? "text-emerald-700 hover:text-emerald-900"
-      : "text-amber-700 hover:text-amber-900";
+  const isSuccess = banner_type === "first_reason_monitoring";
 
   return (
-    <div className={`rounded-lg border px-5 py-4 flex items-center justify-between gap-4 ${bgColor}`}>
-      <p className={`text-sm font-medium ${textColor}`}>{message}</p>
+    <div className={`flex items-center justify-between gap-4 rounded border px-4 py-3 ${
+      isSuccess ? "border-emerald-500/20 bg-emerald-500/10" : "border-amber-500/20 bg-amber-500/10"
+    }`}>
+      <p className={`text-sm ${isSuccess ? "text-emerald-300/90" : "text-amber-300/90"}`}>{message}</p>
       <div className="flex items-center gap-3 shrink-0">
-        {actionLabel && banner_type !== "first_reason_monitoring" && (
-          <Link href={actionHref} className={`text-sm font-semibold ${actionColor} whitespace-nowrap`}>
+        {actionLabel && !isSuccess && (
+          <Link href={actionHref} className="text-xs font-mono uppercase tracking-wide text-amber-700/80 hover:text-amber-700 whitespace-nowrap transition-colors">
             {actionLabel}
           </Link>
         )}
         <button
           onClick={() => setDismissed(true)}
-          className="text-stone-400 hover:text-stone-600 text-lg leading-none"
+          className="text-muted-foreground hover:text-foreground/70 text-lg leading-none transition-colors"
           aria-label="Dismiss"
         >
           ×

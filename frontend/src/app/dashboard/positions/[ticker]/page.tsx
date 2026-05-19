@@ -2,17 +2,18 @@
 
 import { useEffect, useState } from "react";
 import { useParams } from "next/navigation";
+import Link from "next/link";
+import { motion, AnimatePresence } from "framer-motion";
 import { api } from "@/lib/api";
 import { getErrorMessage } from "@/lib/errors";
 import { formatCurrency, formatDate } from "@/lib/utils";
+import { toast } from "sonner";
 import { ThesisCard } from "@/components/thesis/thesis-card";
 import { ConvictionLog } from "@/components/thesis/conviction-log";
 import { ThesisDecompositionReview } from "@/components/thesis/thesis-decomposition-review";
 import { ThesisEditor } from "@/components/thesis/thesis-editor";
 import { EventTimeline } from "@/components/monitoring/event-timeline";
-import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
-import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from "@/components/ui/dialog";
 import { Textarea } from "@/components/ui/textarea";
 import { ThesisHealthCheck } from "@/components/thesis/thesis-health-check";
@@ -31,6 +32,8 @@ import type {
   UpcomingEarnings,
 } from "@/types";
 
+type TabId = "thesis" | "monitoring" | "history";
+
 function ageInDays(dateString: string) {
   const now = Date.now();
   const then = new Date(dateString).getTime();
@@ -42,7 +45,8 @@ function getThesisInsights(thesis: Thesis | undefined, events: MonitoringEvent[]
     return {
       nextStep: "Write the first thesis for this position so monitoring has something real to watch.",
       qualityLabel: "No thesis yet",
-      qualityTone: "bg-red-100 text-red-800",
+      qualityTone: "bg-red-500/15 text-red-600",
+      statusDot: "text-red-600",
       watchStatus: "This position is not being monitored against any explicit belief yet.",
       canReaffirm: false,
     };
@@ -58,7 +62,8 @@ function getThesisInsights(thesis: Thesis | undefined, events: MonitoringEvent[]
     return {
       nextStep: latestEvent?.ai_analysis || "Review what changed and decide whether the thesis still holds.",
       qualityLabel: "Needs review",
-      qualityTone: "bg-orange-100 text-orange-800",
+      qualityTone: "bg-orange-500/15 text-orange-600",
+      statusDot: "text-orange-600",
       watchStatus: "Monitoring found something worth revisiting in this thesis.",
       canReaffirm: true,
     };
@@ -67,8 +72,9 @@ function getThesisInsights(thesis: Thesis | undefined, events: MonitoringEvent[]
   if (stale) {
     return {
       nextStep: "This thesis is old. Re-read it and either reaffirm it or tighten the language.",
-      qualityLabel: "Stale thesis",
-      qualityTone: "bg-amber-100 text-amber-800",
+      qualityLabel: "Stale",
+      qualityTone: "bg-amber-500/15 text-amber-700",
+      statusDot: "text-amber-700",
       watchStatus: "Nothing necessarily broke, but this reasoning has not been reviewed in a while.",
       canReaffirm: true,
     };
@@ -76,19 +82,21 @@ function getThesisInsights(thesis: Thesis | undefined, events: MonitoringEvent[]
 
   if (monitorability === "low") {
     return {
-      nextStep: ambiguity || "Tighten the thesis so the app can monitor something more precise than a vague reason.",
-      qualityLabel: "Weak monitorability",
-      qualityTone: "bg-stone-200 text-stone-800",
+      nextStep: ambiguity || "Tighten the thesis so the app can monitor something more precise.",
+      qualityLabel: "Weak signals",
+      qualityTone: "bg-muted text-muted-foreground",
+      statusDot: "text-muted-foreground",
       watchStatus: "The current reason is too vague for high-confidence monitoring.",
       canReaffirm: false,
     };
   }
 
   return {
-    nextStep: latestEvent ? latestEvent.ai_analysis || "Monitoring is active. Review the latest event if it still matters." : "The thesis looks healthy. You do not need to do anything unless your view changes.",
-    qualityLabel: `${monitorability} monitorability`,
-    qualityTone: monitorability === "high" ? "bg-emerald-100 text-emerald-800" : "bg-sky-100 text-sky-800",
-    watchStatus: latestEvent ? "Monitoring has context to evaluate new changes against this thesis." : "Monitoring is active and no material thesis change has been flagged yet.",
+    nextStep: latestEvent ? latestEvent.ai_analysis || "Monitoring is active. Review the latest event if it still matters." : "The thesis looks healthy. No action needed.",
+    qualityLabel: "Intact",
+    qualityTone: "bg-emerald-500/15 text-emerald-700",
+    statusDot: "text-emerald-700",
+    watchStatus: latestEvent ? "Monitoring has context to evaluate new changes against this thesis." : "Monitoring is active, no material change flagged.",
     canReaffirm: false,
   };
 }
@@ -115,6 +123,7 @@ function isRecentEvent(dateString: string, days: number) {
 
 export default function PositionDetailPage() {
   const { ticker } = useParams<{ ticker: string }>();
+  const [activeTab, setActiveTab] = useState<TabId>("thesis");
   const [holdings, setHoldings] = useState<Holding[]>([]);
   const [theses, setTheses] = useState<Thesis[]>([]);
   const [events, setEvents] = useState<MonitoringEvent[]>([]);
@@ -134,7 +143,8 @@ export default function PositionDetailPage() {
   const [healthCheck, setHealthCheck] = useState<HealthCheckResult | null>(null);
   const [healthCheckLoading, setHealthCheckLoading] = useState(false);
   const [showCounterThesis, setShowCounterThesis] = useState(false);
-  const [showAdvancedContext, setShowAdvancedContext] = useState(false);
+  const [showAnalysis, setShowAnalysis] = useState(false);
+  const [showPositionDetails, setShowPositionDetails] = useState(false);
 
   const holding = holdings.find((h) => h.ticker === ticker);
   const activeThesis = theses.find((t) => t.status === "active" || t.status === "draft" || t.status === "needs_review");
@@ -167,11 +177,7 @@ export default function PositionDetailPage() {
               if (message.includes("Decomposition not found")) {
                 setDecompositionEnvelope(null);
               } else {
-                setDecompositionEnvelope({
-                  status: "failed",
-                  message,
-                  decomposition: null,
-                });
+                setDecompositionEnvelope({ status: "failed", message, decomposition: null });
               }
             } finally {
               setDecompositionLoading(false);
@@ -227,13 +233,8 @@ export default function PositionDetailPage() {
   };
 
   const handleAssist = async (draftText: string): Promise<ThesisAssistResponse> => {
-    if (!holding) {
-      throw new Error("Holding not found");
-    }
-    return api.post<ThesisAssistResponse>("/api/theses/assist", {
-      holding_id: holding.id,
-      draft_text: draftText,
-    });
+    if (!holding) throw new Error("Holding not found");
+    return api.post<ThesisAssistResponse>("/api/theses/assist", { holding_id: holding.id, draft_text: draftText });
   };
 
   const handleSave = async (data: {
@@ -264,6 +265,7 @@ export default function PositionDetailPage() {
       if (savedThesisId) {
         runHealthCheck(savedThesisId);
         setShowCounterThesis(true);
+        setShowAnalysis(true);
       }
       await refreshConvictionLog();
     } catch (err) {
@@ -308,11 +310,7 @@ export default function PositionDetailPage() {
       await refreshCurrentThesis();
     } catch (error) {
       const message = getErrorMessage(error, "Failed to generate thesis signals");
-      setDecompositionEnvelope({
-        status: "failed",
-        message,
-        decomposition: null,
-      });
+      setDecompositionEnvelope({ status: "failed", message, decomposition: null });
     } finally {
       setDecompositionLoading(false);
     }
@@ -322,10 +320,7 @@ export default function PositionDetailPage() {
     if (!activeThesis) return;
     try {
       setDecompositionSaving(true);
-      const envelope = await api.post<ThesisDecompositionEnvelope>(
-        `/api/theses/${activeThesis.id}/decomposition/confirm`,
-        payload,
-      );
+      const envelope = await api.post<ThesisDecompositionEnvelope>(`/api/theses/${activeThesis.id}/decomposition/confirm`, payload);
       setDecompositionEnvelope(envelope);
       await refreshCurrentThesis();
       await refreshConvictionLog();
@@ -349,16 +344,8 @@ export default function PositionDetailPage() {
       });
       setTheses((current) => current.map((thesis) => (thesis.id === result.thesis.id ? result.thesis : thesis)));
       await Promise.all([refreshEvents(), refreshConvictionLog()]);
-
-      // Confirmation toast
-      const statusLabel: Record<string, string> = {
-        active: "active",
-        needs_review: "needs review",
-        draft: "draft",
-        invalidated: "invalidated",
-      };
       const ageText = result.reason_age_days != null ? ` Reason age: ${result.reason_age_days} days.` : "";
-      toast.success(`Logged. Your reason is now ${statusLabel[result.thesis.status] ?? result.thesis.status}.${ageText}`);
+      toast.success(`Logged. Reason is now ${result.thesis.status.replace("_", " ")}.${ageText}`);
     } catch (error) {
       console.error(error);
       toast.error("Failed to save review");
@@ -380,20 +367,27 @@ export default function PositionDetailPage() {
     }
   };
 
-  if (loading) return <p>Loading...</p>;
-  if (!holding) return <p>Holding not found for ticker {ticker}</p>;
+  if (loading) return (
+    <div className="flex items-center justify-center min-h-[calc(100vh-53px)]">
+      <p className="font-mono text-[10px] uppercase tracking-widest text-muted-foreground animate-pulse">Loading…</p>
+    </div>
+  );
+
+  if (!holding) return (
+    <div className="max-w-4xl mx-auto px-8 py-8">
+      <p className="text-sm text-muted-foreground">Holding not found for ticker {ticker}</p>
+    </div>
+  );
 
   const cost = holding.quantity * holding.average_cost_basis;
   const value = holding.current_value || 0;
   const pnl = value - cost;
+  const pnlPct = cost > 0 ? ((pnl / cost) * 100).toFixed(1) : "0.0";
   const thesisInsights = getThesisInsights(activeThesis, events);
   const latestEvent = events[0];
   const recentEarningsEvent =
     events.find(
-      (event) =>
-        ["earnings_surprise", "earnings_call_transcript"].includes(event.event_type) &&
-        !event.review_action &&
-        isRecentEvent(event.created_at, 3),
+      (e) => ["earnings_surprise", "earnings_call_transcript"].includes(e.event_type) && !e.review_action && isRecentEvent(e.created_at, 3),
     ) ?? null;
   const hasSignals = Boolean(decompositionEnvelope?.decomposition);
   const hasActiveSignals =
@@ -401,336 +395,459 @@ export default function PositionDetailPage() {
       claim.entities.some((entity) => entity.signals.some((signal) => signal.active)),
     ) ?? false;
   const watchHints = Array.isArray(activeThesis?.interpretation?.watch_hints)
-    ? activeThesis.interpretation.watch_hints.filter(
-        (hint): hint is Record<string, unknown> => typeof hint === "object" && hint !== null,
-      )
+    ? activeThesis.interpretation.watch_hints.filter((hint): hint is Record<string, unknown> => typeof hint === "object" && hint !== null)
     : [];
-  const earningsWatchList = watchHints
-    .map((hint) => describeWatchHint(hint))
-    .filter((hint): hint is string => Boolean(hint))
-    .slice(0, 3);
-  const reviewStateLabel = latestEvent
-    ? latestEvent.review_action
-      ? `Latest event reviewed: ${latestEvent.review_action.replaceAll("_", " ")}`
-      : "Latest event needs a decision"
-    : "No recent thesis-breaking events";
+  const earningsWatchList = watchHints.map((h) => describeWatchHint(h)).filter((h): h is string => Boolean(h)).slice(0, 3);
+  const unreviewedEvents = events.filter((e) => !e.review_action).length;
+  const invalidatedTheses = theses.filter((t) => t.status === "invalidated");
+
+  // Tab definitions with badges
+  const tabs: { id: TabId; label: string; badge?: number | string }[] = [
+    { id: "thesis", label: "Thesis" },
+    { id: "monitoring", label: "Monitoring", badge: unreviewedEvents > 0 ? unreviewedEvents : undefined },
+    { id: "history", label: "History", badge: convictionLog?.entries.length ?? undefined },
+  ];
+
+  // Core loop progress
+  const steps = [
+    { done: !!activeThesis, label: "Thesis" },
+    { done: hasActiveSignals, partial: hasSignals && !hasActiveSignals, label: "Signals" },
+    { done: !!(latestEvent && latestEvent.review_action), partial: !!(latestEvent && !latestEvent.review_action), label: "Review" },
+  ];
 
   return (
-    <div className="space-y-6">
-      <Card className="border-0 bg-[linear-gradient(135deg,rgba(19,26,32,0.98),rgba(27,47,60,0.94)_55%,rgba(207,224,231,0.92))] text-white ring-0">
-        <CardHeader className="gap-3">
-          <div className="flex flex-wrap items-center gap-2">
-            <Badge className="bg-white/12 text-white">{holding.ticker}</Badge>
-            <Badge className={thesisInsights.qualityTone}>{thesisInsights.qualityLabel}</Badge>
-            {latestEvent && <Badge className="bg-white/12 text-white">{latestEvent.severity.replace("_", " ")}</Badge>}
-          </div>
-          <CardTitle className="text-3xl font-semibold tracking-tight text-white">{holding.name}</CardTitle>
-          <CardDescription className="max-w-2xl text-white/80">
-            {thesisInsights.watchStatus}
-          </CardDescription>
-        </CardHeader>
-        <CardContent className="grid gap-4 md:grid-cols-[1.2fr_0.8fr]">
-          <div className="rounded-2xl border border-white/12 bg-white/8 p-4 backdrop-blur">
-            <p className="text-sm text-white/70">Next best action</p>
-            <p className="mt-2 text-lg font-medium">{thesisInsights.nextStep}</p>
-            <div className="mt-4 flex flex-wrap gap-2">
-              {!activeThesis && <Button onClick={() => setEditing(true)}>Start thesis</Button>}
-              {activeThesis && (
-                <Button onClick={() => setEditing(true)} variant="outline" className="border-white/20 bg-white/10 text-white hover:bg-white/20">
-                  Tighten thesis
-                </Button>
-              )}
-              {activeThesis && !hasSignals && !editing && (
-                <Button onClick={handleGenerateDecomposition}>
-                  {decompositionLoading ? "Generating..." : "Generate signals"}
-                </Button>
-              )}
-              {activeThesis && thesisInsights.canReaffirm && (
-                <Button onClick={handleReaffirm} disabled={reaffirming}>
-                  {reaffirming ? "Reaffirming..." : "Reaffirm thesis"}
-                </Button>
-              )}
-            </div>
-          </div>
-          <div className="rounded-2xl border border-white/12 bg-white/8 p-4 backdrop-blur">
-            <p className="text-sm text-white/70">Position snapshot</p>
-            <div className="mt-3 grid grid-cols-2 gap-3 text-sm">
-              <div>
-                <p className="text-white/65">Current value</p>
-                <p className="mt-1 text-lg font-semibold">{formatCurrency(value, holding.currency)}</p>
-              </div>
-              <div>
-                <p className="text-white/65">P&L</p>
-                <p className={`mt-1 text-lg font-semibold ${pnl >= 0 ? "text-emerald-200" : "text-rose-200"}`}>{formatCurrency(pnl, holding.currency)}</p>
-              </div>
-              <div>
-                <p className="text-white/65">Last thesis review</p>
-                <p className="mt-1">{activeThesis ? formatDate(activeThesis.updated_at) : "Never"}</p>
-              </div>
-              <div>
-                <p className="text-white/65">Recent events</p>
-                <p className="mt-1">{events.length}</p>
-              </div>
-            </div>
-          </div>
-        </CardContent>
-      </Card>
+    <div className="min-h-[calc(100vh-53px)]">
 
-      {activeThesis && upcomingEarnings && upcomingEarnings.days_until <= 14 && (
-        <Card className="border border-sky-200 bg-sky-50/70">
-          <CardHeader className="pb-3">
-            <div className="flex flex-wrap items-center gap-2">
-              <Badge className="bg-sky-100 text-sky-800">
-                Reports in {upcomingEarnings.days_until} day{upcomingEarnings.days_until === 1 ? "" : "s"}
-              </Badge>
-              <Badge variant="outline">{formatDate(upcomingEarnings.report_date)}</Badge>
+      {/* ── Sticky header ── */}
+      <div className="sticky top-[52px] z-20 bg-background border-b border-border/60">
+        <div className="max-w-5xl mx-auto px-8">
+
+          {/* Top row: back + check now */}
+          <div className="flex items-center justify-between pt-5 pb-3">
+            <Link
+              href="/dashboard"
+              className="font-mono text-[10px] uppercase tracking-[0.2em] text-muted-foreground hover:text-primary transition-colors"
+            >
+              ← Portfolio
+            </Link>
+            {holding && (
+              <CheckNowButton
+                holdingId={holding.id}
+                ticker={holding.ticker}
+                currency={holding.currency}
+                onComplete={async () => { await refreshEvents(); await refreshCurrentThesis(); }}
+              />
+            )}
+          </div>
+
+          {/* Position identity */}
+          <div className="flex items-end justify-between gap-6 pb-4">
+            <div className="flex items-baseline gap-4 flex-wrap">
+              <h1 className="font-display italic text-[2.75rem] leading-none text-primary tracking-tight">
+                {holding.ticker}
+              </h1>
+              <span className="font-sans text-lg text-foreground/80 leading-none mb-1">
+                {holding.name !== holding.ticker ? holding.name : ""}
+              </span>
             </div>
-            <CardTitle className="text-base">Pre-earnings focus</CardTitle>
-            <CardDescription>
-              {holding.ticker} reports soon. Before the result lands, decide what would actually matter for your reason.
-            </CardDescription>
-          </CardHeader>
-          <CardContent className="space-y-3">
-            {earningsWatchList.length > 0 ? (
-              <div className="space-y-2">
-                <p className="text-sm font-medium text-sky-900">Key signals to watch</p>
-                <div className="space-y-2">
-                  {earningsWatchList.map((item) => (
-                    <div key={item} className="rounded-xl border border-sky-200 bg-white px-3 py-2 text-sm text-sky-900">
-                      {item}
-                    </div>
-                  ))}
+
+            {/* Value block */}
+            <div className="text-right shrink-0">
+              <p className="font-mono text-2xl tabular-nums text-foreground">
+                {formatCurrency(value, holding.currency)}
+              </p>
+              <p className={`font-mono text-sm tabular-nums ${pnl >= 0 ? "text-emerald-700" : "text-red-600"}`}>
+                {pnl >= 0 ? "+" : ""}{formatCurrency(pnl, holding.currency)}
+                <span className="opacity-60 ml-1">({pnl >= 0 ? "+" : ""}{pnlPct}%)</span>
+              </p>
+            </div>
+          </div>
+
+          {/* Status + progress strip */}
+          <div className="flex items-center gap-6 pb-4">
+            <span className={`font-mono text-[10px] uppercase tracking-[0.2em] ${thesisInsights.statusDot}`}>
+              ● {thesisInsights.qualityLabel}
+            </span>
+            {activeThesis && (
+              <span className="font-mono text-[10px] text-muted-foreground">
+                thesis {ageInDays(activeThesis.updated_at)}d old
+              </span>
+            )}
+            <div className="flex items-center gap-2 ml-auto">
+              {steps.map((step, i) => (
+                <div key={step.label} className="flex items-center gap-2">
+                  {i > 0 && <span className="text-border text-[10px]">·</span>}
+                  <span className={`font-mono text-[9px] uppercase tracking-[0.15em] ${
+                    step.done ? "text-emerald-700" : step.partial ? "text-amber-700" : "text-muted-foreground/50"
+                  }`}>
+                    {step.done ? "●" : step.partial ? "◐" : "○"} {step.label}
+                  </span>
                 </div>
-              </div>
-            ) : (
-              <div className="rounded-xl border border-sky-200 bg-white px-3 py-3 text-sm text-sky-900">
-                Tighten the thesis before earnings so the app knows what evidence should matter the morning after.
-              </div>
-            )}
-          </CardContent>
-        </Card>
-      )}
-
-      {activeThesis && recentEarningsEvent && (
-        <Card className="border border-amber-200 bg-amber-50/70">
-          <CardHeader className="pb-3">
-            <div className="flex flex-wrap items-center gap-2">
-              <Badge className="bg-amber-100 text-amber-800">Morning-after review</Badge>
-              {recentEarningsEvent.verdict && (
-                <Badge variant="outline">{recentEarningsEvent.verdict.replaceAll("_", " ")}</Badge>
-              )}
+              ))}
             </div>
-            <CardTitle className="text-base">Earnings just landed. What does it mean for your reason?</CardTitle>
-            <CardDescription>
-              {recentEarningsEvent.evidence_summary || recentEarningsEvent.summary}
-            </CardDescription>
-          </CardHeader>
-          <CardContent className="space-y-4">
-            {recentEarningsEvent.ai_analysis && (
-              <div className="rounded-xl border border-amber-200 bg-white px-3 py-3 text-sm text-amber-950">
-                {recentEarningsEvent.ai_analysis}
-              </div>
-            )}
-
-            <div className="grid gap-2 md:grid-cols-2">
-              <Button
-                variant="outline"
-                className="justify-start border-emerald-200 bg-white text-emerald-900 hover:bg-emerald-50"
-                disabled={reviewingEventId === recentEarningsEvent.id}
-                onClick={() => void handleReviewEvent(recentEarningsEvent, "reaffirmed")}
-              >
-                Reason still holds
-              </Button>
-              <Button
-                variant="outline"
-                className="justify-start border-stone-300 bg-white text-stone-900 hover:bg-stone-50"
-                onClick={() => setEditing(true)}
-              >
-                Update my reason
-              </Button>
-              <Button
-                variant="outline"
-                className="justify-start border-amber-200 bg-white text-amber-900 hover:bg-amber-100"
-                disabled={reviewingEventId === recentEarningsEvent.id}
-                onClick={() => void handleReviewEvent(recentEarningsEvent, "lowered_confidence")}
-              >
-                Lower confidence
-              </Button>
-              <Button
-                variant="outline"
-                className="justify-start border-red-200 bg-white text-red-900 hover:bg-red-50"
-                disabled={reviewingEventId === recentEarningsEvent.id}
-                onClick={() => void handleReviewEvent(recentEarningsEvent, "invalidated")}
-              >
-                Reason is broken
-              </Button>
-            </div>
-          </CardContent>
-        </Card>
-      )}
-
-      <Card>
-        <CardHeader>
-          <CardTitle className="text-base">Core loop</CardTitle>
-          <CardDescription>
-            Keep the position honest in three steps: state the thesis, confirm what should be monitored, then react when evidence shows up.
-          </CardDescription>
-        </CardHeader>
-        <CardContent className="grid gap-3 md:grid-cols-3">
-          <div className="rounded-xl border p-4">
-            <p className="text-xs font-medium uppercase tracking-wide text-muted-foreground">Step 1</p>
-            <p className="mt-2 font-medium">Write the thesis</p>
-            <p className="mt-1 text-sm text-muted-foreground">
-              {activeThesis ? "A current thesis exists for this position." : "No thesis yet. Monitoring has nothing to anchor to."}
-            </p>
-            <Badge className={`mt-3 ${activeThesis ? "bg-emerald-100 text-emerald-800" : "bg-stone-200 text-stone-800"}`}>
-              {activeThesis ? "Done" : "Needed"}
-            </Badge>
           </div>
-          <div className="rounded-xl border p-4">
-            <p className="text-xs font-medium uppercase tracking-wide text-muted-foreground">Step 2</p>
-            <p className="mt-2 font-medium">Confirm the signals</p>
-            <p className="mt-1 text-sm text-muted-foreground">
-              {hasSignals
-                ? hasActiveSignals
-                  ? "Signals are confirmed and monitoring is anchored to them."
-                  : "A decomposition exists, but nothing is actively confirmed yet."
-                : "Generate a decomposition so the app can suggest what to watch."}
-            </p>
-            <Badge className={`mt-3 ${hasActiveSignals ? "bg-emerald-100 text-emerald-800" : hasSignals ? "bg-amber-100 text-amber-800" : "bg-stone-200 text-stone-800"}`}>
-              {hasActiveSignals ? "Monitoring ready" : hasSignals ? "Needs confirmation" : "Not started"}
-            </Badge>
+
+          {/* Tab strip */}
+          <div className="flex gap-1">
+            {tabs.map((tab) => (
+              <button
+                key={tab.id}
+                onClick={() => setActiveTab(tab.id)}
+                className="relative pb-3 px-3 font-mono text-[10px] uppercase tracking-[0.2em] transition-colors flex items-center gap-2"
+                style={{ color: activeTab === tab.id ? "var(--primary)" : "var(--muted-foreground)" }}
+              >
+                {tab.label}
+                {tab.badge !== undefined && (
+                  <span className={`font-mono text-[9px] ${activeTab === tab.id ? "text-primary/70" : "text-muted-foreground/60"}`}>
+                    {tab.badge}
+                  </span>
+                )}
+                {activeTab === tab.id && (
+                  <motion.div
+                    layoutId="tab-indicator"
+                    className="absolute bottom-0 left-0 right-0 h-px bg-primary"
+                    transition={{ type: "spring", stiffness: 400, damping: 35 }}
+                  />
+                )}
+              </button>
+            ))}
           </div>
-          <div className="rounded-xl border p-4">
-            <p className="text-xs font-medium uppercase tracking-wide text-muted-foreground">Step 3</p>
-            <p className="mt-2 font-medium">Review live evidence</p>
-            <p className="mt-1 text-sm text-muted-foreground">{reviewStateLabel}</p>
-            <Badge className={`mt-3 ${latestEvent && !latestEvent.review_action ? "bg-amber-100 text-amber-800" : "bg-sky-100 text-sky-800"}`}>
-              {latestEvent && !latestEvent.review_action ? "Decision needed" : "Up to date"}
-            </Badge>
-          </div>
-        </CardContent>
-      </Card>
-
-      {activeThesis && !editing && (
-        <ThesisCard thesis={activeThesis} onEdit={() => setEditing(true)} onInvalidate={() => setInvalidateOpen(true)} />
-      )}
-
-      {activeThesis && !editing && (
-        <ThesisDecompositionReview
-          key={`${decompositionEnvelope?.decomposition?.id ?? "empty"}:${decompositionEnvelope?.status ?? "none"}`}
-          envelope={decompositionEnvelope}
-          loading={decompositionLoading}
-          saving={decompositionSaving}
-          onGenerate={handleGenerateDecomposition}
-          onConfirm={handleConfirmDecomposition}
-        />
-      )}
-
-      {activeThesis && editing && (
-        <ThesisEditor thesis={activeThesis} onSave={handleSave} onAssist={handleAssist} onCancel={() => setEditing(false)} />
-      )}
-
-      {!activeThesis && (
-        <Card>
-          <CardContent className="flex flex-col items-center gap-4 py-8">
-            <p className="text-muted-foreground">No current thesis for this position.</p>
-            <p className="max-w-md text-center text-sm text-muted-foreground">
-              Start with the reason this position exists, what has to stay true, and what would make you rethink it. That is what the monitoring system watches.
-            </p>
-            <Button onClick={() => setEditing(true)}>
-              Start Thesis
-            </Button>
-          </CardContent>
-        </Card>
-      )}
-
-      {!activeThesis && editing && (
-        <ThesisEditor thesis={null} onSave={handleSave} onAssist={handleAssist} onCancel={() => setEditing(false)} />
-      )}
-
-      {activeThesis && holding && (
-        <div className="flex items-center justify-between">
-          <div>
-            <h3 className="text-sm font-medium text-muted-foreground">Monitoring events</h3>
-            <p className="text-xs text-muted-foreground">This is the review layer: when something changes, decide whether the thesis still holds.</p>
-          </div>
-          <CheckNowButton holdingId={holding.id} ticker={holding.ticker} currency={holding.currency} onComplete={async () => { await refreshEvents(); await refreshCurrentThesis(); }} />
         </div>
-      )}
-
-      <EventTimeline
-        events={events}
-        onReview={handleReviewEvent}
-        onEditReason={() => setEditing(true)}
-        reviewingEventId={reviewingEventId}
-      />
-
-      <ConvictionLog
-        data={convictionLog}
-        loading={convictionLogLoading}
-        saving={noteSaving}
-        onAddNote={activeThesis ? handleAddManualNote : undefined}
-      />
-
-      <div className="space-y-3">
-        <button
-          onClick={() => setShowAdvancedContext((current) => !current)}
-          className="text-sm text-muted-foreground transition-colors hover:text-foreground"
-        >
-          {showAdvancedContext ? "Hide" : "Show"} advanced context
-        </button>
-
-        {showAdvancedContext && (
-          <div className="space-y-4 animate-in fade-in duration-200">
-            <div className="grid grid-cols-2 gap-4 md:grid-cols-4">
-              <Card>
-                <CardHeader className="pb-2"><CardTitle className="text-sm text-muted-foreground">Quantity</CardTitle></CardHeader>
-                <CardContent><p className="text-xl font-bold">{holding.quantity}</p></CardContent>
-              </Card>
-              <Card>
-                <CardHeader className="pb-2"><CardTitle className="text-sm text-muted-foreground">Avg Cost</CardTitle></CardHeader>
-                <CardContent><p className="text-xl font-bold">{formatCurrency(holding.average_cost_basis, holding.currency)}</p></CardContent>
-              </Card>
-              <Card>
-                <CardHeader className="pb-2"><CardTitle className="text-sm text-muted-foreground">Current Value</CardTitle></CardHeader>
-                <CardContent><p className="text-xl font-bold">{formatCurrency(value, holding.currency)}</p></CardContent>
-              </Card>
-              <Card>
-                <CardHeader className="pb-2"><CardTitle className="text-sm text-muted-foreground">P&L</CardTitle></CardHeader>
-                <CardContent><p className={`text-xl font-bold ${pnl >= 0 ? "text-green-600" : "text-red-600"}`}>{formatCurrency(pnl, holding.currency)}</p></CardContent>
-              </Card>
-            </div>
-
-            {activeThesis && (healthCheck || healthCheckLoading) && (
-              <ThesisHealthCheck result={healthCheck} loading={healthCheckLoading} />
-            )}
-
-            {activeThesis && showCounterThesis && (
-              <CounterThesisCard thesisId={activeThesis.id} />
-            )}
-
-            {theses.filter((t) => t.status === "invalidated").length > 0 && (
-              <Card>
-                <CardHeader><CardTitle className="text-base">Thesis history</CardTitle></CardHeader>
-                <CardContent className="space-y-2">
-                  {theses.filter((t) => t.status === "invalidated").map((t) => (
-                    <div key={t.id} className="border-l-2 border-muted pl-4 py-2">
-                      <p className="text-sm">{t.why_own_it}</p>
-                      <p className="text-xs text-muted-foreground">Invalidated: {t.invalidation_reason}</p>
-                    </div>
-                  ))}
-                </CardContent>
-              </Card>
-            )}
-          </div>
-        )}
       </div>
 
+      {/* ── Page content ── */}
+      <div className="max-w-5xl mx-auto px-8">
+
+        {/* Contextual banners */}
+        {activeThesis && upcomingEarnings && upcomingEarnings.days_until <= 14 && (
+          <motion.div
+            initial={{ opacity: 0, y: -4 }}
+            animate={{ opacity: 1, y: 0 }}
+            className="mt-5 border border-sky-500/25 bg-sky-500/10 px-5 py-4 space-y-3"
+          >
+            <div className="flex items-center gap-3">
+              <span className="font-mono text-[10px] uppercase tracking-[0.2em] text-sky-700">
+                ● Earnings in {upcomingEarnings.days_until === 0 ? "today" : upcomingEarnings.days_until === 1 ? "tomorrow" : `${upcomingEarnings.days_until} days`}
+              </span>
+              <span className="font-mono text-[10px] text-muted-foreground">{formatDate(upcomingEarnings.report_date)}</span>
+            </div>
+            {earningsWatchList.length > 0 ? (
+              <div className="flex flex-wrap gap-3">
+                {earningsWatchList.map((item) => (
+                  <span key={item} className="font-sans text-xs text-foreground/70 border border-border/60 px-3 py-1">
+                    {item}
+                  </span>
+                ))}
+              </div>
+            ) : (
+              <p className="font-sans text-xs text-muted-foreground">
+                Tighten the thesis so the app knows what evidence should matter the morning after.
+              </p>
+            )}
+          </motion.div>
+        )}
+
+        {activeThesis && recentEarningsEvent && (
+          <motion.div
+            initial={{ opacity: 0, y: -4 }}
+            animate={{ opacity: 1, y: 0 }}
+            className="mt-5 border border-amber-500/25 bg-amber-500/10 px-5 py-4 space-y-4"
+          >
+            <div className="flex items-start justify-between gap-4">
+              <div className="space-y-1">
+                <span className="font-mono text-[10px] uppercase tracking-[0.2em] text-amber-700">
+                  ● Earnings just landed
+                </span>
+                <p className="font-sans text-sm text-foreground/80 leading-relaxed">
+                  {recentEarningsEvent.ai_analysis || recentEarningsEvent.evidence_summary || recentEarningsEvent.summary}
+                </p>
+              </div>
+            </div>
+            <div className="flex flex-wrap gap-2">
+              {[
+                { action: "reaffirmed" as const, label: "Thesis holds", cls: "border-emerald-500/30 text-emerald-700 hover:bg-emerald-500/10" },
+                { action: "lowered_confidence" as const, label: "Lower confidence", cls: "border-amber-500/30 text-amber-700 hover:bg-amber-500/10" },
+                { action: "invalidated" as const, label: "Thesis broken", cls: "border-red-500/30 text-red-600 hover:bg-red-500/10" },
+              ].map(({ action, label, cls }) => (
+                <button
+                  key={action}
+                  disabled={reviewingEventId === recentEarningsEvent.id}
+                  onClick={() => void handleReviewEvent(recentEarningsEvent, action)}
+                  className={`font-mono text-[10px] uppercase tracking-[0.15em] border px-4 py-2 transition-colors disabled:opacity-40 ${cls}`}
+                >
+                  {label}
+                </button>
+              ))}
+              <button
+                onClick={() => { setEditing(true); setActiveTab("thesis"); }}
+                className="font-mono text-[10px] uppercase tracking-[0.15em] border border-border text-muted-foreground hover:text-foreground px-4 py-2 transition-colors"
+              >
+                Update thesis
+              </button>
+            </div>
+          </motion.div>
+        )}
+
+        {/* ── Tab content ── */}
+        <AnimatePresence mode="wait">
+          <motion.div
+            key={activeTab}
+            initial={{ opacity: 0, y: 6 }}
+            animate={{ opacity: 1, y: 0 }}
+            exit={{ opacity: 0, y: -6 }}
+            transition={{ duration: 0.18, ease: "easeOut" }}
+            className="py-7 space-y-6"
+          >
+
+            {/* ─── THESIS TAB ─── */}
+            {activeTab === "thesis" && (
+              <>
+                {/* Action prompt */}
+                {(thesisInsights.canReaffirm || !activeThesis) && !editing && (
+                  <div className="border-l-2 border-primary/40 pl-4 py-1 flex items-start justify-between gap-4">
+                    <p className="font-sans text-sm text-foreground/80 leading-relaxed max-w-xl">
+                      {thesisInsights.nextStep}
+                    </p>
+                    <div className="flex gap-2 shrink-0">
+                      {!activeThesis && (
+                        <button
+                          onClick={() => setEditing(true)}
+                          className="font-mono text-[10px] uppercase tracking-[0.15em] bg-primary text-primary-foreground px-4 py-2 hover:bg-primary/90 transition-colors"
+                        >
+                          Start thesis
+                        </button>
+                      )}
+                      {activeThesis && thesisInsights.canReaffirm && (
+                        <button
+                          onClick={handleReaffirm}
+                          disabled={reaffirming}
+                          className="font-mono text-[10px] uppercase tracking-[0.15em] border border-primary/40 text-primary px-4 py-2 hover:border-primary transition-colors disabled:opacity-40"
+                        >
+                          {reaffirming ? "Reaffirming…" : "Reaffirm thesis"}
+                        </button>
+                      )}
+                    </div>
+                  </div>
+                )}
+
+                {/* Editor */}
+                {editing && (
+                  <ThesisEditor
+                    thesis={activeThesis ?? null}
+                    onSave={handleSave}
+                    onAssist={handleAssist}
+                    onCancel={() => setEditing(false)}
+                  />
+                )}
+
+                {/* Thesis card */}
+                {activeThesis && !editing && (
+                  <ThesisCard
+                    thesis={activeThesis}
+                    onEdit={() => setEditing(true)}
+                    onInvalidate={() => setInvalidateOpen(true)}
+                  />
+                )}
+
+                {/* No thesis empty state */}
+                {!activeThesis && !editing && (
+                  <div className="py-16 text-center space-y-4">
+                    <p className="font-display italic text-2xl text-foreground/50">
+                      No thesis written yet.
+                    </p>
+                    <p className="font-sans text-sm text-muted-foreground max-w-sm mx-auto leading-relaxed">
+                      Start with the reason this position exists, what has to stay true, and what would make you rethink it.
+                    </p>
+                    <button
+                      onClick={() => setEditing(true)}
+                      className="font-mono text-[10px] uppercase tracking-[0.2em] border border-primary/40 text-primary px-5 py-2.5 hover:border-primary transition-colors"
+                    >
+                      Write thesis
+                    </button>
+                  </div>
+                )}
+
+                {/* Advanced: health check + counter thesis */}
+                {activeThesis && (healthCheck || healthCheckLoading || showCounterThesis) && (
+                  <div className="space-y-4 border-t border-border/40 pt-6">
+                    <button
+                      onClick={() => setShowAnalysis((s) => !s)}
+                      className="font-mono text-[10px] uppercase tracking-[0.2em] text-muted-foreground hover:text-foreground transition-colors"
+                    >
+                      {showAnalysis ? "▲" : "▼"} Analysis
+                    </button>
+                    {showAnalysis && (
+                      <motion.div
+                        initial={{ opacity: 0 }}
+                        animate={{ opacity: 1 }}
+                        className="space-y-4"
+                      >
+                        {(healthCheck || healthCheckLoading) && (
+                          <ThesisHealthCheck result={healthCheck} loading={healthCheckLoading} />
+                        )}
+                        {showCounterThesis && <CounterThesisCard thesisId={activeThesis.id} />}
+                      </motion.div>
+                    )}
+                  </div>
+                )}
+
+                {/* Position metrics (collapsible) */}
+                <div className="border-t border-border/40 pt-5">
+                  <button
+                    onClick={() => setShowPositionDetails((s) => !s)}
+                    className="font-mono text-[10px] uppercase tracking-[0.2em] text-muted-foreground hover:text-foreground transition-colors"
+                  >
+                    {showPositionDetails ? "▲" : "▼"} Position details
+                  </button>
+                  {showPositionDetails && (
+                    <motion.div
+                      initial={{ opacity: 0 }}
+                      animate={{ opacity: 1 }}
+                      className="grid grid-cols-2 md:grid-cols-4 gap-4 mt-4"
+                    >
+                      {[
+                        { label: "Shares", value: String(holding.quantity) },
+                        { label: "Avg cost", value: formatCurrency(holding.average_cost_basis, holding.currency) },
+                        { label: "Current value", value: formatCurrency(value, holding.currency) },
+                        { label: "P&L", value: `${pnl >= 0 ? "+" : ""}${formatCurrency(pnl, holding.currency)}`, colored: true },
+                      ].map(({ label, value: v, colored }) => (
+                        <div key={label} className="border border-border/60 bg-card p-4">
+                          <p className="font-mono text-[10px] uppercase tracking-[0.2em] text-muted-foreground">{label}</p>
+                          <p className={`font-mono text-xl tabular-nums mt-2 ${colored ? (pnl >= 0 ? "text-emerald-700" : "text-red-600") : "text-foreground"}`}>
+                            {v}
+                          </p>
+                        </div>
+                      ))}
+                    </motion.div>
+                  )}
+                </div>
+              </>
+            )}
+
+            {/* ─── MONITORING TAB ─── */}
+            {activeTab === "monitoring" && (
+              <>
+                {/* Signals / decomposition */}
+                {activeThesis && (
+                  <div className="space-y-1">
+                    <div className="flex items-center justify-between pb-3 border-b border-border/40">
+                      <div>
+                        <p className="font-mono text-[10px] uppercase tracking-[0.25em] text-muted-foreground">Signals</p>
+                        <p className="font-sans text-xs text-muted-foreground mt-0.5">
+                          What the app is watching against your thesis
+                        </p>
+                      </div>
+                      {!hasSignals && (
+                        <button
+                          onClick={handleGenerateDecomposition}
+                          disabled={decompositionLoading}
+                          className="font-mono text-[10px] uppercase tracking-[0.15em] border border-primary/40 text-primary px-4 py-2 hover:border-primary transition-colors disabled:opacity-40"
+                        >
+                          {decompositionLoading ? "Generating…" : "Generate signals"}
+                        </button>
+                      )}
+                    </div>
+                    <ThesisDecompositionReview
+                      key={`${decompositionEnvelope?.decomposition?.id ?? "empty"}:${decompositionEnvelope?.status ?? "none"}`}
+                      envelope={decompositionEnvelope}
+                      loading={decompositionLoading}
+                      saving={decompositionSaving}
+                      onGenerate={handleGenerateDecomposition}
+                      onConfirm={handleConfirmDecomposition}
+                    />
+                  </div>
+                )}
+
+                {/* Events */}
+                <div className="border-t border-border/40 pt-6 space-y-4">
+                  <div className="flex items-center justify-between">
+                    <div>
+                      <p className="font-mono text-[10px] uppercase tracking-[0.25em] text-muted-foreground">Evidence</p>
+                      <p className="font-sans text-xs text-muted-foreground mt-0.5">
+                        When something changes, decide whether the thesis still holds
+                      </p>
+                    </div>
+                    {unreviewedEvents > 0 && (
+                      <span className="font-mono text-[10px] text-amber-700">
+                        {unreviewedEvents} unreviewed
+                      </span>
+                    )}
+                  </div>
+                  <EventTimeline
+                    events={events}
+                    onReview={handleReviewEvent}
+                    onEditReason={() => { setEditing(true); setActiveTab("thesis"); }}
+                    reviewingEventId={reviewingEventId}
+                  />
+                </div>
+
+                {/* No thesis prompt */}
+                {!activeThesis && (
+                  <div className="py-12 text-center space-y-3">
+                    <p className="font-sans text-sm text-muted-foreground">
+                      Write a thesis first — monitoring needs something to watch.
+                    </p>
+                    <button
+                      onClick={() => { setEditing(true); setActiveTab("thesis"); }}
+                      className="font-mono text-[10px] uppercase tracking-[0.2em] text-primary border border-primary/40 px-4 py-2 hover:border-primary transition-colors"
+                    >
+                      Go to thesis →
+                    </button>
+                  </div>
+                )}
+              </>
+            )}
+
+            {/* ─── HISTORY TAB ─── */}
+            {activeTab === "history" && (
+              <>
+                <ConvictionLog
+                  data={convictionLog}
+                  loading={convictionLogLoading}
+                  saving={noteSaving}
+                  onAddNote={activeThesis ? handleAddManualNote : undefined}
+                />
+
+                {invalidatedTheses.length > 0 && (
+                  <div className="border-t border-border/40 pt-6 space-y-3">
+                    <p className="font-mono text-[10px] uppercase tracking-[0.25em] text-muted-foreground">
+                      Previous theses
+                    </p>
+                    {invalidatedTheses.map((t) => (
+                      <div key={t.id} className="border-l-2 border-border/60 pl-4 py-3 space-y-1">
+                        <p className="font-sans text-sm text-foreground/70 leading-relaxed italic">
+                          &ldquo;{t.why_own_it}&rdquo;
+                        </p>
+                        {t.invalidation_reason && (
+                          <p className="font-mono text-[10px] text-muted-foreground">
+                            Closed: {t.invalidation_reason}
+                          </p>
+                        )}
+                        <p className="font-mono text-[10px] text-muted-foreground/60">
+                          {formatDate(t.updated_at)}
+                        </p>
+                      </div>
+                    ))}
+                  </div>
+                )}
+              </>
+            )}
+
+          </motion.div>
+        </AnimatePresence>
+      </div>
+
+      {/* Invalidate dialog */}
       <Dialog open={invalidateOpen} onOpenChange={setInvalidateOpen}>
         <DialogContent>
-          <DialogHeader><DialogTitle>Invalidate Thesis</DialogTitle></DialogHeader>
-          <Textarea placeholder="Why is this thesis no longer valid?" value={invalidateReason} onChange={(e) => setInvalidateReason(e.target.value)} />
+          <DialogHeader>
+            <DialogTitle className="font-display italic">Invalidate thesis</DialogTitle>
+          </DialogHeader>
+          <Textarea
+            placeholder="Why is this thesis no longer valid?"
+            value={invalidateReason}
+            onChange={(e) => setInvalidateReason(e.target.value)}
+          />
           <DialogFooter>
             <Button variant="outline" onClick={() => setInvalidateOpen(false)}>Cancel</Button>
             <Button variant="destructive" onClick={handleInvalidate}>Invalidate</Button>

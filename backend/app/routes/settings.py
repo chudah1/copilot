@@ -13,6 +13,22 @@ VALID_DAYS = {"monday", "tuesday", "wednesday", "thursday", "friday", "saturday"
 VALID_SENSITIVITIES = {"all", "thesis_breaking_only"}
 
 
+def _normalize_bool(value, *, default: bool) -> bool:
+    if value is None:
+        return default
+    if isinstance(value, bool):
+        return value
+    if isinstance(value, (int, float)):
+        return bool(value)
+    if isinstance(value, str):
+        normalized = value.strip().lower()
+        if normalized in {"true", "1", "yes", "on"}:
+            return True
+        if normalized in {"false", "0", "no", "off", ""}:
+            return False
+    return default
+
+
 class UserPreferences(BaseModel):
     digest_frequency: str = "weekly"
     digest_day: str = "sunday"
@@ -55,9 +71,9 @@ def get_user_prefs(user: User) -> UserPreferences:
         digest_frequency=raw.get("digest_frequency", "weekly"),
         digest_day=raw.get("digest_day", "sunday"),
         digest_time=raw.get("digest_time", "17:00"),
-        earnings_alerts=bool(raw.get("earnings_alerts", True)),
-        quarterly_review_reminders=bool(raw.get("quarterly_review_reminders", True)),
-        email_enabled=bool(raw.get("email_enabled", True)),
+        earnings_alerts=_normalize_bool(raw.get("earnings_alerts"), default=True),
+        quarterly_review_reminders=_normalize_bool(raw.get("quarterly_review_reminders"), default=True),
+        email_enabled=_normalize_bool(raw.get("email_enabled"), default=True),
         notification_sensitivity=raw.get("notification_sensitivity", "all"),
     )
 

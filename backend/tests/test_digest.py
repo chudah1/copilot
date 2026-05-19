@@ -5,6 +5,7 @@ from sqlalchemy import select
 
 from app.jobs.digest_builder import run_digest_builder
 from app.models.digest import Digest
+from app.models.earnings_calendar import EarningsCalendar
 from app.models.holding import Holding
 from app.models.thesis import Thesis
 from app.models.user import User
@@ -58,25 +59,38 @@ async def test_digest_builder_records_missing_and_stale_theses(db, job_session_f
             updated_at=datetime.now(timezone.utc) - timedelta(days=100),
         )
     )
+    db.add(
+        EarningsCalendar(
+            ticker="AAPL",
+            report_date=datetime.now(timezone.utc) + timedelta(days=9),
+            source="test",
+        )
+    )
     await db.commit()
 
     with patch("app.jobs.digest_builder.async_session", job_session_factory):
-        with patch("app.jobs.digest_builder.send_digest_email", new_callable=AsyncMock, return_value=True):
+        with patch("app.jobs.digest_builder.send_digest_email", new_callable=AsyncMock, return_value=True) as send_mock:
             await run_digest_builder()
 
     digest = (await db.execute(select(Digest))).scalar_one()
     html = digest.content["html"]
     assert digest.status == "sent"
     assert "Apple remains a quality compounder." in html
-    assert "AAPL: No material changes against your thesis this week." in html
-    assert "MSFT: No material thesis changes this week, but this thesis is stale and deserves a review." in html
-    assert "Stale theses (>90 days): MSFT" in html
-    assert "Positions without an active thesis: TSLA" in html
+    assert "Your holdings were quiet this week." in html
+    assert "Monitoring receipt" in html
+    assert "Missing reasons" in html
     assert digest.content["stable_holdings_count"] == 2
     assert digest.content["headline"] == "1 thesis went stale this week."
+    assert digest.content["digest_mode"] == "quiet_week"
+    assert digest.content["subject_line"] == "2 of your reasons held up this week"
     assert digest.content["missing_theses_count"] == 1
     assert digest.content["stale_theses_count"] == 1
     assert any("Stale theses: MSFT" == point for point in digest.content["summary_points"])
+    assert digest.content["next_earnings"]["ticker"] == "AAPL"
+    assert "Upcoming:" in html
+    assert "We checked 3 holdings with current reasons." in digest.content["monitoring_receipt"]
+    send_mock.assert_awaited_once()
+    assert send_mock.await_args.kwargs["subject"] == "2 of your reasons held up this week"
 
 
 async def test_digest_happy_path_after_monitoring_event(client, auth_headers, db, test_user, job_session_factory):
@@ -141,20 +155,76 @@ async def test_digest_happy_path_after_monitoring_event(client, auth_headers, db
         mock_settings.market_data_provider = "alpha_vantage"
         with patch("app.jobs.monitoring_run.async_session", job_session_factory):
             with patch("app.jobs.monitoring_run.fetch_company_data", new_callable=AsyncMock, return_value=StubCompanyData()):
-                with patch("app.jobs.monitoring_run.classify_event", new_callable=AsyncMock, return_value=classification):
+                with patch("app.services.monitoring_pipeline.classify_event", new_callable=AsyncMock, return_value=classification):
                     await run_monitoring()
 
     with patch("app.jobs.digest_builder.async_session", job_session_factory):
-        with patch("app.jobs.digest_builder.send_digest_email", new_callable=AsyncMock, return_value=True):
+        with patch("app.jobs.digest_builder.send_digest_email", new_callable=AsyncMock, return_value=True) as send_mock:
             await run_digest_builder()
 
     digest = (await db.execute(select(Digest).where(Digest.user_id == test_user.id))).scalar_one()
     assert digest.status == "sent"
-    assert "Why you own it: I own it for resilient ecosystem demand." in digest.content["html"]
+    assert "Your reason:" in digest.content["html"]
+    assert "I own it for resilient ecosystem demand." in digest.content["html"]
     assert digest.content["events_count"] == 1
     assert digest.content["stable_holdings_count"] == 0
-    assert digest.content["headline"] == "1 thesis event needs your attention."
+    assert digest.content["headline"] == "1 of your reasons needs review this week."
+    assert digest.content["digest_mode"] == "events"
+    assert digest.content["subject_line"] == "1 of your reasons needs review this week"
     assert digest.content["summary_points"][0].startswith("AAPL:")
+    assert "Monitoring receipt" in digest.content["html"]
+    send_mock.assert_awaited_once()
+    assert send_mock.await_args.kwargs["subject"] == "1 of your reasons needs review this week"
 
     thesis = await client.get(f"/api/theses/{thesis_id}", headers=auth_headers)
     assert thesis.status_code == 200
+
+
+async def test_digest_builder_rolls_back_failed_user_and_continues(db, job_session_factory):
+    first_user = User(email="broken@example.com", password_hash=hash_password("testpass123"))
+    second_user = User(email="healthy@example.com", password_hash=hash_password("testpass123"))
+    db.add_all([first_user, second_user])
+    await db.flush()
+
+    first_holding = Holding(user_id=first_user.id, ticker="AAPL", name="Apple", quantity=10, average_cost_basis=100, current_value=1000)
+    second_holding = Holding(user_id=second_user.id, ticker="MSFT", name="Microsoft", quantity=5, average_cost_basis=200, current_value=1000)
+    db.add_all([first_holding, second_holding])
+    await db.flush()
+
+    db.add_all([
+        Thesis(
+            user_id=first_user.id,
+            holding_id=first_holding.id,
+            status="active",
+            thesis_kind="company",
+            why_own_it="Apple remains resilient.",
+            confidence="high",
+            review_cadence_days=7,
+            source="user",
+        ),
+        Thesis(
+            user_id=second_user.id,
+            holding_id=second_holding.id,
+            status="active",
+            thesis_kind="company",
+            why_own_it="Microsoft compounds cloud demand.",
+            confidence="high",
+            review_cadence_days=7,
+            source="user",
+        ),
+    ])
+    await db.commit()
+
+    async def flaky_send(*, to_email: str, subject: str, html_content: str) -> bool:
+        if to_email == "broken@example.com":
+            raise RuntimeError("SMTP outage")
+        return True
+
+    with patch("app.jobs.digest_builder.async_session", job_session_factory):
+        with patch("app.jobs.digest_builder.send_digest_email", new=flaky_send):
+            await run_digest_builder()
+
+    digests = (await db.execute(select(Digest).order_by(Digest.user_id))).scalars().all()
+    assert len(digests) == 1
+    assert digests[0].user_id == second_user.id
+    assert digests[0].status == "sent"

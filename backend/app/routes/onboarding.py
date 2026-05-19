@@ -1,6 +1,7 @@
+import uuid
 from datetime import datetime, timedelta, timezone
 
-from fastapi import APIRouter, Depends
+from fastapi import APIRouter, Depends, HTTPException, status
 from pydantic import BaseModel
 from sqlalchemy import select, func
 from sqlalchemy.ext.asyncio import AsyncSession
@@ -9,10 +10,19 @@ from app.database import get_db
 from app.dependencies import get_current_user
 from app.models.earnings_calendar import EarningsCalendar
 from app.models.holding import Holding
+from app.models.onboarding_draft import OnboardingDraft
 from app.models.thesis import Thesis
 from app.models.user import User
-from app.schemas.onboarding import OnboardingStatusResponse, OnboardingStepStatus
-from app.services.onboarding import get_or_create_state, coverage_pct
+from app.schemas.onboarding import (
+    HoldingContextResponse,
+    OnboardingStateResponse,
+    OnboardingStatusResponse,
+    OnboardingStepStatus,
+    SynthesisRequest,
+    SynthesisResponse,
+)
+from app.services.ai_thesis import synthesize_thesis_from_qa
+from app.services.onboarding import coverage_pct, get_or_create_state, mark_onboarding_completed
 
 router = APIRouter(prefix="/api/onboarding", tags=["onboarding"])
 
@@ -24,7 +34,8 @@ async def onboarding_status(
     current_user: User = Depends(get_current_user),
     db: AsyncSession = Depends(get_db),
 ):
-    if current_user.onboarding_completed_at is not None:
+    state = await get_or_create_state(db, current_user.id)
+    if current_user.onboarding_completed_at is not None or state.onboarding_completed_at is not None:
         holdings_count_result = await db.execute(
             select(func.count()).select_from(Holding).where(Holding.user_id == current_user.id)
         )
@@ -66,7 +77,8 @@ async def onboarding_status(
 
     all_done = has_holdings and has_thesis
     if all_done:
-        current_user.onboarding_completed_at = datetime.now(timezone.utc)
+        completed_at = datetime.now(timezone.utc)
+        await mark_onboarding_completed(db, user_id=current_user.id, completed_at=completed_at)
         await db.commit()
 
     if not has_holdings:
@@ -181,7 +193,7 @@ async def onboarding_banner(
             EarningsCalendar.ticker.in_(tickers),
             EarningsCalendar.report_date >= now,
             EarningsCalendar.report_date <= upcoming_window,
-        ).order_by(EarningsCalendar.report_date)
+        ).order_by(EarningsCalendar.report_date).limit(1)
     )
     next_earnings = earnings_result.scalar_one_or_none()
     if next_earnings is not None:
@@ -206,4 +218,143 @@ async def onboarding_banner(
             ticker=suggested.ticker,
             name=suggested.name,
         ),
+    )
+
+
+# ---------------------------------------------------------------------------
+# Wizard activation endpoints
+# ---------------------------------------------------------------------------
+
+
+@router.get("/state", response_model=OnboardingStateResponse)
+async def wizard_state(
+    current_user: User = Depends(get_current_user),
+    db: AsyncSession = Depends(get_db),
+):
+    state = await get_or_create_state(db, current_user.id)
+    if db.new:
+        await db.commit()
+    return OnboardingStateResponse(
+        portfolio_connected=state.portfolio_connected_at is not None,
+        drafts_generated_at=state.drafts_generated_at,
+        drafts_reviewed_at=state.drafts_reviewed_at,
+        wizard_skipped_at=state.wizard_skipped_at,
+        wizard_completed_at=state.wizard_completed_at,
+        reasons_written_count=state.reasons_written_count or 0,
+    )
+
+
+@router.post("/skip", status_code=status.HTTP_204_NO_CONTENT)
+async def wizard_skip(
+    current_user: User = Depends(get_current_user),
+    db: AsyncSession = Depends(get_db),
+):
+    state = await get_or_create_state(db, current_user.id)
+    if state.wizard_skipped_at is None:
+        state.wizard_skipped_at = datetime.now(timezone.utc)
+    await db.commit()
+
+
+@router.post("/complete", status_code=status.HTTP_204_NO_CONTENT)
+async def wizard_complete(
+    current_user: User = Depends(get_current_user),
+    db: AsyncSession = Depends(get_db),
+):
+    state = await get_or_create_state(db, current_user.id)
+    now = datetime.now(timezone.utc)
+    if state.wizard_completed_at is None:
+        state.wizard_completed_at = now
+    await db.commit()
+
+
+@router.post("/synthesize", response_model=SynthesisResponse, status_code=status.HTTP_201_CREATED)
+async def synthesize_thesis(
+    body: SynthesisRequest,
+    current_user: User = Depends(get_current_user),
+    db: AsyncSession = Depends(get_db),
+):
+    holding_result = await db.execute(
+        select(Holding).where(Holding.id == body.holding_id, Holding.user_id == current_user.id)
+    )
+    holding = holding_result.scalar_one_or_none()
+    if holding is None:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Holding not found")
+
+    output = await synthesize_thesis_from_qa(
+        ticker=holding.ticker,
+        name=holding.name,
+        question1=body.question1,
+        answer1=body.answer1,
+        question2=body.question2,
+        answer2=body.answer2,
+    )
+
+    thesis = Thesis(
+        holding_id=holding.id,
+        user_id=current_user.id,
+        status="draft",
+        source="wizard",
+        confidence="medium",
+        why_own_it=output.why_own_it,
+        must_remain_true=output.must_remain_true,
+        what_would_change_my_mind=output.what_would_change_my_mind,
+        ai_summary=output.ai_summary,
+        interpretation=output.interpretation,
+    )
+    db.add(thesis)
+    await db.flush()
+
+    draft_result = await db.execute(
+        select(OnboardingDraft).where(
+            OnboardingDraft.holding_id == holding.id,
+            OnboardingDraft.user_id == current_user.id,
+        )
+    )
+    draft = draft_result.scalar_one_or_none()
+    if draft is not None:
+        draft.status = "reviewed"
+        draft.thesis_id = thesis.id
+        draft.updated_at = datetime.now(timezone.utc)
+
+    now = datetime.now(timezone.utc)
+    state = await get_or_create_state(db, current_user.id)
+    state.reasons_written_count = (state.reasons_written_count or 0) + 1
+    if state.first_reason_written_at is None:
+        state.first_reason_written_at = now
+    if state.drafts_reviewed_at is None:
+        state.drafts_reviewed_at = now
+
+    await db.commit()
+
+    return SynthesisResponse(
+        thesis_id=thesis.id,
+        why_own_it=thesis.why_own_it,
+        must_remain_true=thesis.must_remain_true or "",
+        what_would_change_my_mind=thesis.what_would_change_my_mind or "",
+        ai_summary=thesis.ai_summary or "",
+    )
+
+
+@router.get("/context/{holding_id}", response_model=HoldingContextResponse)
+async def holding_context(
+    holding_id: uuid.UUID,
+    current_user: User = Depends(get_current_user),
+    db: AsyncSession = Depends(get_db),
+):
+    result = await db.execute(
+        select(Holding).where(Holding.id == holding_id, Holding.user_id == current_user.id)
+    )
+    holding = result.scalar_one_or_none()
+    if holding is None:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Holding not found")
+
+    return HoldingContextResponse(
+        holding_id=holding.id,
+        ticker=holding.ticker,
+        name=holding.name,
+        sector=holding.sector,
+        current_price=float(holding.current_price) if holding.current_price is not None else None,
+        current_value=float(holding.current_value) if holding.current_value is not None else None,
+        quantity=float(holding.quantity),
+        average_cost_basis=float(holding.average_cost_basis),
     )

@@ -423,6 +423,94 @@ async def test_get_latest_decomposition_returns_nested_structure(client, auth_he
         assert "entities" in data["claims"][0]
 
 
+async def test_get_latest_decomposition_returns_confirmed_decomposition(client, auth_headers, holding):
+    create = await client.post(
+        "/api/theses",
+        json={
+            "holding_id": holding["id"],
+            "status": "active",
+            "thesis_kind": "company",
+            "why_own_it": "Apple benefits from stronger supply chain demand.",
+            "confidence": "medium",
+            "review_cadence_days": 7,
+            "source": "user",
+        },
+        headers=auth_headers,
+    )
+    thesis_id = create.json()["id"]
+
+    gateway_result = ReasoningResult(
+        success=True,
+        status="success",
+        provider="anthropic",
+        model="claude-test",
+        prompt_version="v1",
+        normalized_output={
+            "reason_type": "macro_theme",
+            "monitorability": "medium",
+            "decomposition_confidence": 0.7,
+            "claims": [
+                {
+                    "claim_text": "Upstream demand remains strong.",
+                    "claim_type": "demand",
+                    "confidence": 0.7,
+                    "entities": [
+                        {
+                            "entity_name": "TSMC",
+                            "entity_ticker": "TSM",
+                            "entity_type": "supplier",
+                            "relation_type": "validated_by",
+                            "rationale": "TSMC is a proxy for supply chain demand.",
+                            "confidence": 0.7,
+                            "confirmation_required": True,
+                            "signals": [
+                                {
+                                    "signal_type": "news_topic",
+                                    "signal_label": "TSMC demand commentary",
+                                    "signal_config_json": {},
+                                    "rationale": "Proxy commentary matters.",
+                                    "confidence": 0.7,
+                                    "confirmation_required": True,
+                                }
+                            ],
+                        }
+                    ],
+                }
+            ],
+        },
+        raw_output={"provider": "anthropic"},
+        confidence=0.7,
+        latency_ms=120,
+        failure_reason=None,
+    )
+
+    with patch("app.services.decomposition.get_reasoning_gateway", return_value=MockGateway(gateway_result)):
+        decompose_response = await client.post(f"/api/theses/{thesis_id}/decompose", headers=auth_headers)
+
+    decomposition = decompose_response.json()["decomposition"]
+    entity = decomposition["claims"][0]["entities"][0]
+    signal = entity["signals"][0]
+
+    confirm_response = await client.post(
+        f"/api/theses/{thesis_id}/decomposition/confirm",
+        json={
+            "decomposition_id": decomposition["id"],
+            "entities": [{"id": entity["id"], "user_confirmed": True}],
+            "signals": [{"id": signal["id"], "user_confirmed": True, "active": True}],
+        },
+        headers=auth_headers,
+    )
+    assert confirm_response.status_code == 200
+
+    latest_response = await client.get(f"/api/theses/{thesis_id}/decomposition", headers=auth_headers)
+    assert latest_response.status_code == 200
+    envelope = latest_response.json()
+    assert envelope["status"] == "confirmed"
+    assert envelope["decomposition"] is not None
+    assert envelope["decomposition"]["status"] == "confirmed"
+    assert envelope["decomposition"]["claims"][0]["entities"][0]["signals"][0]["active"] is True
+
+
 async def test_get_latest_decomposition_returns_404_when_missing(client, auth_headers):
     response = await client.get("/api/theses/00000000-0000-0000-0000-000000000000/decomposition", headers=auth_headers)
     assert response.status_code == 404

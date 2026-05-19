@@ -1,5 +1,7 @@
 from __future__ import annotations
 
+import asyncio
+import logging
 import time
 from dataclasses import dataclass, field
 from datetime import datetime, timedelta, timezone
@@ -10,6 +12,8 @@ from typing import Any
 import httpx
 
 from app.config import settings
+
+logger = logging.getLogger(__name__)
 
 ALPHA_VANTAGE_BASE_URL = "https://www.alphavantage.co/query"
 
@@ -175,6 +179,14 @@ def _to_datetime(value: str | None) -> datetime | None:
         return None
 
     normalized = value.strip()
+    iso_candidate = normalized.replace("Z", "+00:00")
+    try:
+        parsed = datetime.fromisoformat(iso_candidate)
+        return parsed if parsed.tzinfo is not None else parsed.replace(tzinfo=timezone.utc)
+    except ValueError:
+        pass
+
+    normalized = normalized.rstrip("Z")
     formats = [
         "%Y-%m-%dT%H:%M:%S",
         "%Y-%m-%d %H:%M:%S",
@@ -454,6 +466,175 @@ def _parse_alpha_vantage_insider_transactions(payload: dict[str, Any]) -> list[I
     return items
 
 
+def _candidate_sort_key(candidate: dict[str, Any]) -> float:
+    evidence = candidate.get("evidence", {})
+    timestamp = (
+        evidence.get("published_at")
+        or evidence.get("transaction_date")
+        or evidence.get("call_date")
+        or evidence.get("filing_date")
+    )
+    if not isinstance(timestamp, str):
+        return float("-inf")
+    parsed = _to_datetime(timestamp)
+    if parsed is None:
+        return float("-inf")
+    return parsed.timestamp()
+
+
+def _build_earnings_surprise_candidate(recent_earnings_surprise_pct: float | None) -> dict[str, Any] | None:
+    if recent_earnings_surprise_pct is None or abs(recent_earnings_surprise_pct) < 5:
+        return None
+    return {
+        "event_type": "earnings_surprise",
+        "description": f"Recent earnings surprise was {recent_earnings_surprise_pct:.1f}%.",
+        "evidence": {"recent_earnings_surprise_pct": recent_earnings_surprise_pct},
+    }
+
+
+def _build_upcoming_earnings_candidate(
+    upcoming_earnings_date: datetime | None,
+    *,
+    now: datetime,
+) -> dict[str, Any] | None:
+    if upcoming_earnings_date is None:
+        return None
+    days_until_earnings = (upcoming_earnings_date.date() - now.date()).days
+    if not 0 <= days_until_earnings <= 7:
+        return None
+    return {
+        "event_type": "upcoming_earnings",
+        "description": f"Earnings are scheduled for {upcoming_earnings_date.date().isoformat()}.",
+        "evidence": {"upcoming_earnings_date": upcoming_earnings_date.isoformat()},
+    }
+
+
+def _build_transcript_candidate(
+    earnings_call: TranscriptSignal | None,
+    *,
+    now: datetime,
+) -> tuple[int, dict[str, Any]] | None:
+    if earnings_call is None:
+        return None
+
+    transcript_cutoff = now - timedelta(days=14)
+    negative_sentiment = earnings_call.sentiment is not None and earnings_call.sentiment <= -0.15
+    if (
+        (earnings_call.call_date is not None and earnings_call.call_date < transcript_cutoff)
+        or (not earnings_call.highlights and not negative_sentiment)
+    ):
+        return None
+
+    transcript_summary = earnings_call.highlights[0] if earnings_call.highlights else earnings_call.excerpt
+    sentiment_suffix = ""
+    if negative_sentiment and earnings_call.sentiment_label:
+        sentiment_suffix = f" Transcript sentiment is {earnings_call.sentiment_label.lower()}."
+    return (
+        0,
+        {
+            "event_type": "earnings_call_transcript",
+            "description": (
+                f"{earnings_call.quarter or 'Latest'} earnings call signaled: "
+                f"{transcript_summary}{sentiment_suffix}"
+            ).strip(),
+            "evidence": {
+                "quarter": earnings_call.quarter,
+                "call_date": earnings_call.call_date.isoformat() if earnings_call.call_date else None,
+                "sentiment": earnings_call.sentiment,
+                "sentiment_label": earnings_call.sentiment_label,
+                "highlights": earnings_call.highlights,
+                "excerpt": earnings_call.excerpt,
+                "transcript_id": f"transcript:{earnings_call.quarter or 'latest'}",
+            },
+        },
+    )
+
+
+def _build_insider_candidate(
+    transaction: InsiderTransaction,
+    *,
+    now: datetime,
+) -> tuple[int, dict[str, Any]] | None:
+    txn_date = transaction.transaction_date or transaction.filing_date
+    if txn_date is None or txn_date < (now - timedelta(days=30)):
+        return None
+
+    role_text = f"{transaction.title} {transaction.insider_name}".lower()
+    if not any(keyword in role_text for keyword in INSIDER_ROLE_KEYWORDS):
+        return None
+
+    txn_type = transaction.transaction_type.lower()
+    direction = None
+    priority = 2
+    if any(keyword in txn_type for keyword in INSIDER_SALE_KEYWORDS):
+        direction = "sale"
+        priority = 1
+    elif any(keyword in txn_type for keyword in INSIDER_BUY_KEYWORDS):
+        direction = "purchase"
+        priority = 2
+    if direction is None:
+        return None
+
+    shares_text = f"{transaction.shares:,.0f} shares" if transaction.shares is not None else "shares"
+    return (
+        priority,
+        {
+            "event_type": "insider_transaction",
+            "description": (
+                f"{transaction.insider_name or 'An insider'}"
+                f"{f' ({transaction.title})' if transaction.title else ''} reported a recent {direction} of "
+                f"{shares_text}."
+            ),
+            "evidence": {
+                "transaction_id": transaction.id,
+                "transaction_date": txn_date.isoformat(),
+                "filing_date": transaction.filing_date.isoformat() if transaction.filing_date else None,
+                "insider_name": transaction.insider_name,
+                "title": transaction.title,
+                "transaction_type": transaction.transaction_type,
+                "shares": transaction.shares,
+                "share_price": transaction.share_price,
+                "value": transaction.value,
+            },
+        },
+    )
+
+
+def _build_news_candidate(
+    item: NewsItem,
+    *,
+    now: datetime,
+) -> tuple[int, dict[str, Any]] | None:
+    if item.published_at < (now - timedelta(hours=24)):
+        return None
+
+    combined_text = f"{item.headline} {item.summary}".lower()
+    topic_match = any(topic in QUALITATIVE_TOPICS for topic in item.topics)
+    keyword_match = any(keyword in combined_text for keyword in QUALITATIVE_KEYWORDS)
+    relevance_ok = item.ticker_relevance is None or item.ticker_relevance >= 0.1
+    if not relevance_ok or not (topic_match or keyword_match):
+        return None
+
+    return (
+        3,
+        {
+            "event_type": "news_or_earnings_candidate",
+            "description": f"{item.headline} — {item.summary}",
+            "evidence": {
+                "article_id": item.id,
+                "headline": item.headline,
+                "summary": item.summary,
+                "published_at": item.published_at.isoformat(),
+                "source": item.source,
+                "url": item.url,
+                "sentiment": item.sentiment,
+                "topics": item.topics,
+                "ticker_relevance": item.ticker_relevance,
+            },
+        },
+    )
+
+
 def shortlist_qualitative_candidates(
     news_items: list[NewsItem],
     recent_earnings_surprise_pct: float | None,
@@ -465,149 +646,40 @@ def shortlist_qualitative_candidates(
     max_candidates: int = 3,
 ) -> list[dict[str, Any]]:
     reference_now = now or datetime.now(timezone.utc)
-    recent_cutoff = reference_now - timedelta(hours=24)
     candidates: list[dict[str, Any]] = []
     qualitative_candidates: list[tuple[int, dict[str, Any]]] = []
     seen_ids: set[str] = set()
 
-    if recent_earnings_surprise_pct is not None and abs(recent_earnings_surprise_pct) >= 5:
-        candidates.append(
-            {
-                "event_type": "earnings_surprise",
-                "description": f"Recent earnings surprise was {recent_earnings_surprise_pct:.1f}%.",
-                "evidence": {"recent_earnings_surprise_pct": recent_earnings_surprise_pct},
-            }
-        )
+    earnings_surprise_candidate = _build_earnings_surprise_candidate(recent_earnings_surprise_pct)
+    if earnings_surprise_candidate is not None:
+        candidates.append(earnings_surprise_candidate)
 
-    if upcoming_earnings_date is not None:
-        days_until_earnings = (upcoming_earnings_date.date() - reference_now.date()).days
-        if 0 <= days_until_earnings <= 7:
-            candidates.append(
-                {
-                    "event_type": "upcoming_earnings",
-                    "description": f"Earnings are scheduled for {upcoming_earnings_date.date().isoformat()}.",
-                    "evidence": {"upcoming_earnings_date": upcoming_earnings_date.isoformat()},
-                }
-            )
+    upcoming_earnings_candidate = _build_upcoming_earnings_candidate(upcoming_earnings_date, now=reference_now)
+    if upcoming_earnings_candidate is not None:
+        candidates.append(upcoming_earnings_candidate)
 
-    if earnings_call is not None:
-        transcript_cutoff = reference_now - timedelta(days=14)
-        negative_sentiment = earnings_call.sentiment is not None and earnings_call.sentiment <= -0.15
-        if (
-            (earnings_call.call_date is None or earnings_call.call_date >= transcript_cutoff)
-            and (earnings_call.highlights or negative_sentiment)
-        ):
-            transcript_summary = earnings_call.highlights[0] if earnings_call.highlights else earnings_call.excerpt
-            sentiment_suffix = ""
-            if negative_sentiment and earnings_call.sentiment_label:
-                sentiment_suffix = f" Transcript sentiment is {earnings_call.sentiment_label.lower()}."
-            qualitative_candidates.append(
-                (
-                    0,
-                    {
-                        "event_type": "earnings_call_transcript",
-                        "description": (
-                            f"{earnings_call.quarter or 'Latest'} earnings call signaled: "
-                            f"{transcript_summary}{sentiment_suffix}"
-                        ).strip(),
-                        "evidence": {
-                            "quarter": earnings_call.quarter,
-                            "call_date": earnings_call.call_date.isoformat() if earnings_call.call_date else None,
-                            "sentiment": earnings_call.sentiment,
-                            "sentiment_label": earnings_call.sentiment_label,
-                            "highlights": earnings_call.highlights,
-                            "excerpt": earnings_call.excerpt,
-                            "transcript_id": f"transcript:{earnings_call.quarter or 'latest'}",
-                        },
-                    },
-                )
-            )
+    transcript_candidate = _build_transcript_candidate(earnings_call, now=reference_now)
+    if transcript_candidate is not None:
+        qualitative_candidates.append(transcript_candidate)
 
     for transaction in insider_transactions or []:
-        txn_date = transaction.transaction_date or transaction.filing_date
-        if txn_date is None or txn_date < (reference_now - timedelta(days=30)):
-            continue
-        role_text = f"{transaction.title} {transaction.insider_name}".lower()
-        if not any(keyword in role_text for keyword in INSIDER_ROLE_KEYWORDS):
-            continue
-        txn_type = transaction.transaction_type.lower()
-        direction = None
-        priority = 2
-        if any(keyword in txn_type for keyword in INSIDER_SALE_KEYWORDS):
-            direction = "sale"
-            priority = 1
-        elif any(keyword in txn_type for keyword in INSIDER_BUY_KEYWORDS):
-            direction = "purchase"
-            priority = 2
-        if direction is None:
-            continue
-        shares_text = f"{transaction.shares:,.0f} shares" if transaction.shares is not None else "shares"
-        qualitative_candidates.append(
-            (
-                priority,
-                {
-                    "event_type": "insider_transaction",
-                    "description": (
-                        f"{transaction.insider_name or 'An insider'}"
-                        f"{f' ({transaction.title})' if transaction.title else ''} reported a recent {direction} of "
-                        f"{shares_text}."
-                    ),
-                    "evidence": {
-                        "transaction_id": transaction.id,
-                        "transaction_date": txn_date.isoformat(),
-                        "filing_date": transaction.filing_date.isoformat() if transaction.filing_date else None,
-                        "insider_name": transaction.insider_name,
-                        "title": transaction.title,
-                        "transaction_type": transaction.transaction_type,
-                        "shares": transaction.shares,
-                        "share_price": transaction.share_price,
-                        "value": transaction.value,
-                    },
-                },
-            )
-        )
+        insider_candidate = _build_insider_candidate(transaction, now=reference_now)
+        if insider_candidate is not None:
+            qualitative_candidates.append(insider_candidate)
 
     for item in news_items:
         if item.id in seen_ids:
             continue
         seen_ids.add(item.id)
-        if item.published_at < recent_cutoff:
-            continue
-        combined_text = f"{item.headline} {item.summary}".lower()
-        topic_match = any(topic in QUALITATIVE_TOPICS for topic in item.topics)
-        keyword_match = any(keyword in combined_text for keyword in QUALITATIVE_KEYWORDS)
-        relevance_ok = item.ticker_relevance is None or item.ticker_relevance >= 0.1
-        if not relevance_ok or not (topic_match or keyword_match):
-            continue
-        qualitative_candidates.append(
-            (
-                3,
-                {
-                    "event_type": "news_or_earnings_candidate",
-                    "description": f"{item.headline} — {item.summary}",
-                    "evidence": {
-                        "article_id": item.id,
-                        "headline": item.headline,
-                        "summary": item.summary,
-                        "published_at": item.published_at.isoformat(),
-                        "source": item.source,
-                        "url": item.url,
-                        "sentiment": item.sentiment,
-                        "topics": item.topics,
-                        "ticker_relevance": item.ticker_relevance,
-                    },
-                },
-            )
-        )
+        news_candidate = _build_news_candidate(item, now=reference_now)
+        if news_candidate is not None:
+            qualitative_candidates.append(news_candidate)
 
     qualitative_candidates.sort(
         key=lambda item: (
             item[0],
-            item[1].get("evidence", {}).get("published_at")
-            or item[1].get("evidence", {}).get("transaction_date")
-            or "",
+            -_candidate_sort_key(item[1]),
         ),
-        reverse=False,
     )
     candidates.extend(candidate for _, candidate in qualitative_candidates[:max_candidates])
 
@@ -642,8 +714,176 @@ async def _cached_request(
     return result
 
 
+async def _safe_cached_request(
+    client: httpx.AsyncClient,
+    function: str,
+    ttl: float,
+    fallback: dict[str, Any] | str,
+    **params: Any,
+) -> dict[str, Any] | str:
+    try:
+        return await _cached_request(client, function, ttl, **params)
+    except Exception:
+        return fallback
+
+
+# ---------------------------------------------------------------------------
+# yfinance provider
+# ---------------------------------------------------------------------------
+
+def _yfinance_info_sync(ticker: str) -> dict[str, Any]:
+    """Blocking call — run via asyncio.to_thread."""
+    import yfinance as yf
+
+    t = yf.Ticker(ticker)
+    return dict(t.info)
+
+
+def _yfinance_news_sync(ticker: str) -> list[dict[str, Any]]:
+    import yfinance as yf
+
+    t = yf.Ticker(ticker)
+    return list(t.news or [])
+
+
+def _yfinance_earnings_dates_sync(ticker: str) -> list[dict[str, Any]]:
+    import yfinance as yf
+
+    t = yf.Ticker(ticker)
+    try:
+        df = t.earnings_dates
+        if df is None or df.empty:
+            return []
+        rows = []
+        for dt_index, row in df.iterrows():
+            rows.append({
+                "date": dt_index.to_pydatetime(),
+                "eps_estimate": row.get("EPS Estimate"),
+                "reported_eps": row.get("Reported EPS"),
+                "surprise_pct": row.get("Surprise(%)"),
+            })
+        return rows
+    except Exception:
+        return []
+
+
+async def _fetch_yfinance_overview(ticker: str) -> dict[str, str] | None:
+    try:
+        info = await asyncio.to_thread(_yfinance_info_sync, ticker)
+    except Exception:
+        logger.warning("yfinance overview failed for %s", ticker, exc_info=True)
+        return None
+
+    name = info.get("shortName") or info.get("longName") or ticker
+    sector = info.get("sector") or "Unknown"
+    country = info.get("country") or "Unknown"
+    return {"name": name, "sector": sector, "country": country}
+
+
+def _parse_yfinance_news(raw_news: list[dict[str, Any]], ticker: str) -> list[NewsItem]:
+    items: list[NewsItem] = []
+    for entry in raw_news:
+        content = entry.get("content", entry)
+        title = content.get("title") or ""
+        summary_text = content.get("summary") or content.get("description") or ""
+        pub_date = _to_datetime(content.get("pubDate") or content.get("displayTime"))
+        if pub_date is None:
+            continue
+        provider = content.get("provider", {})
+        source = provider.get("displayName", "") if isinstance(provider, dict) else str(provider)
+        canonical = content.get("canonicalUrl", {})
+        url = canonical.get("url", "") if isinstance(canonical, dict) else ""
+        article_id = content.get("id") or _article_id({"url": url, "time_published": pub_date.isoformat(), "title": title})
+
+        items.append(NewsItem(
+            id=str(article_id),
+            headline=title,
+            summary=summary_text,
+            published_at=pub_date,
+            source=source,
+            url=url,
+            sentiment=None,
+            topics=[],
+            ticker_relevance=None,
+        ))
+    return items
+
+
+async def _fetch_yfinance_company_data(ticker: str) -> CompanyData | None:
+    try:
+        info, raw_news, earnings_rows = await asyncio.gather(
+            asyncio.to_thread(_yfinance_info_sync, ticker),
+            asyncio.to_thread(_yfinance_news_sync, ticker),
+            asyncio.to_thread(_yfinance_earnings_dates_sync, ticker),
+        )
+    except Exception:
+        logger.warning("yfinance fetch failed for %s", ticker, exc_info=True)
+        return None
+
+    name = info.get("shortName") or info.get("longName") or ticker
+    sector = info.get("sector") or "Unknown"
+    industry = info.get("industry") or "Unknown"
+    country = info.get("country") or "Unknown"
+    current_price = info.get("currentPrice") or info.get("regularMarketPrice")
+    market_cap = info.get("marketCap")
+    pe_ratio = info.get("trailingPE")
+    dividend_yield = info.get("dividendYield")
+    revenue_growth_yoy = info.get("revenueGrowth")
+    earnings_growth_yoy = info.get("earningsGrowth")
+    description = info.get("longBusinessSummary") or ""
+
+    news_items = _parse_yfinance_news(raw_news, ticker)
+
+    # Upcoming earnings date: first future date from earnings_dates
+    now = datetime.now(timezone.utc)
+    upcoming_earnings_date: datetime | None = None
+    recent_earnings_surprise_pct: float | None = None
+    recent_fiscal_quarter: str | None = None
+
+    for row in earnings_rows:
+        row_date = row["date"]
+        if not hasattr(row_date, "tzinfo") or row_date.tzinfo is None:
+            row_date = row_date.replace(tzinfo=timezone.utc)
+        if row_date > now and upcoming_earnings_date is None:
+            upcoming_earnings_date = row_date
+        if row_date <= now and recent_earnings_surprise_pct is None:
+            surprise = row.get("surprise_pct")
+            if surprise is not None:
+                recent_earnings_surprise_pct = float(surprise)
+                recent_fiscal_quarter = _quarter_string(row_date)
+
+    return CompanyData(
+        ticker=ticker,
+        name=name,
+        sector=sector,
+        industry=industry,
+        country=country,
+        current_price=_to_float(current_price),
+        market_cap=_to_float(market_cap),
+        pe_ratio=_to_float(pe_ratio),
+        revenue_growth_yoy=_to_float(revenue_growth_yoy),
+        earnings_growth_yoy=_to_float(earnings_growth_yoy),
+        dividend_yield=_to_float(dividend_yield),
+        description=description,
+        recent_news=[item.headline for item in news_items],
+        upcoming_earnings_date=upcoming_earnings_date,
+        recent_earnings_surprise_pct=recent_earnings_surprise_pct,
+        news_items=news_items,
+        recent_fiscal_quarter=recent_fiscal_quarter,
+        earnings_call=None,  # yfinance doesn't provide transcripts
+        insider_transactions=[],  # yfinance doesn't provide insider data
+        provider_payload={"provider": "yfinance", "info": info},
+    )
+
+
 async def fetch_company_overview(ticker: str) -> dict[str, str] | None:
-    """Lightweight call: only OVERVIEW endpoint. Returns {name, sector, country} or None."""
+    """Lightweight call returning {name, sector, country} or None."""
+    # Try yfinance first (no API key needed)
+    result = await _fetch_yfinance_overview(ticker)
+    if result is not None:
+        return result
+
+    # Fall back to Alpha Vantage if key is configured
     if not settings.alpha_vantage_api_key:
         return None
     try:
@@ -662,12 +902,20 @@ async def fetch_company_overview(ticker: str) -> dict[str, str] | None:
 
 
 async def fetch_company_data(ticker: str) -> CompanyData | None:
+    if settings.market_data_provider == "yfinance":
+        return await _fetch_yfinance_company_data(ticker)
+
     if settings.market_data_provider != "alpha_vantage":
         raise RuntimeError(f"Unsupported market data provider: {settings.market_data_provider}")
 
     if not settings.alpha_vantage_api_key:
         return None
 
+    provider_payload = await _fetch_alpha_vantage_payloads(ticker)
+    return _build_company_data_from_alpha_vantage(ticker, provider_payload)
+
+
+async def _fetch_alpha_vantage_payloads(ticker: str) -> dict[str, Any]:
     provider_payload: dict[str, Any] = {}
     async with httpx.AsyncClient() as client:
         quote_payload = await _cached_request(client, "GLOBAL_QUOTE", _CACHE_TTL_SHORT, symbol=ticker)
@@ -679,47 +927,63 @@ async def fetch_company_data(ticker: str) -> CompanyData | None:
         earnings_payload = await _cached_request(client, "EARNINGS", _CACHE_TTL_LONG, symbol=ticker)
         provider_payload["earnings"] = earnings_payload
 
-        transcript_payload: dict[str, Any] = {}
-
-        try:
-            earnings_calendar_payload = await _cached_request(client, "EARNINGS_CALENDAR", _CACHE_TTL_LONG, symbol=ticker, horizon="3month")
-        except Exception:
-            earnings_calendar_payload = ""
+        earnings_calendar_payload = await _safe_cached_request(
+            client,
+            "EARNINGS_CALENDAR",
+            _CACHE_TTL_LONG,
+            "",
+            symbol=ticker,
+            horizon="3month",
+        )
         provider_payload["earnings_calendar"] = earnings_calendar_payload
 
-        try:
-            news_payload = await _cached_request(client, "NEWS_SENTIMENT", _CACHE_TTL_SHORT, tickers=ticker, sort="LATEST", limit=50)
-        except Exception:
-            news_payload = {"feed": []}
+        news_payload = await _safe_cached_request(
+            client,
+            "NEWS_SENTIMENT",
+            _CACHE_TTL_SHORT,
+            {"feed": []},
+            tickers=ticker,
+            sort="LATEST",
+            limit=50,
+        )
         provider_payload["news"] = news_payload
 
         recent_quarter = _parse_alpha_vantage_earnings(
             earnings_payload if isinstance(earnings_payload, dict) else {}
         ).get("recent_fiscal_quarter")
+        transcript_payload: dict[str, Any] = {}
         if recent_quarter:
-            try:
-                transcript_payload = await _cached_request(
-                    client,
-                    "EARNINGS_CALL_TRANSCRIPT",
-                    _CACHE_TTL_LONG,
-                    symbol=ticker,
-                    quarter=recent_quarter,
-                )
-            except Exception:
-                transcript_payload = {}
+            transcript_payload = await _safe_cached_request(
+                client,
+                "EARNINGS_CALL_TRANSCRIPT",
+                _CACHE_TTL_LONG,
+                {},
+                symbol=ticker,
+                quarter=recent_quarter,
+            )
         provider_payload["earnings_call_transcript"] = transcript_payload
 
-        try:
-            insiders_payload = await _cached_request(
-                client,
-                "INSIDER_TRANSACTIONS",
-                _CACHE_TTL_SHORT,
-                symbol=ticker,
-                **{"from": (datetime.now(timezone.utc) - timedelta(days=90)).date().isoformat()},
-            )
-        except Exception:
-            insiders_payload = {"data": []}
+        insiders_payload = await _safe_cached_request(
+            client,
+            "INSIDER_TRANSACTIONS",
+            _CACHE_TTL_SHORT,
+            {"data": []},
+            symbol=ticker,
+            **{"from": (datetime.now(timezone.utc) - timedelta(days=90)).date().isoformat()},
+        )
         provider_payload["insider_transactions"] = insiders_payload
+
+    return provider_payload
+
+
+def _build_company_data_from_alpha_vantage(ticker: str, provider_payload: dict[str, Any]) -> CompanyData:
+    quote_payload = provider_payload.get("quote", {})
+    overview_payload = provider_payload.get("overview", {})
+    earnings_payload = provider_payload.get("earnings", {})
+    earnings_calendar_payload = provider_payload.get("earnings_calendar", "")
+    news_payload = provider_payload.get("news", {"feed": []})
+    transcript_payload = provider_payload.get("earnings_call_transcript", {})
+    insiders_payload = provider_payload.get("insider_transactions", {"data": []})
 
     overview = _parse_alpha_vantage_overview(overview_payload if isinstance(overview_payload, dict) else {})
     earnings = _parse_alpha_vantage_earnings(earnings_payload if isinstance(earnings_payload, dict) else {})

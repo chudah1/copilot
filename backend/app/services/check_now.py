@@ -4,28 +4,25 @@ import logging
 import uuid
 from dataclasses import dataclass, field
 from datetime import datetime, timedelta, timezone
-from typing import Any
 
 from sqlalchemy import select, func
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from app.config import settings
 from app.models.holding import Holding
 from app.models.monitoring_event import MonitoringEvent
 from app.models.thesis import Thesis
-from app.services.ai_monitor import classify_event
 from app.services.market_data import fetch_company_data
 from app.services.monitoring import check_metric_watch_hints, generate_monitoring_candidates
-from app.services.conviction_log import EVIDENCE_RECEIVED, append_log_entry
 from app.services.noise_filter import (
-    EVIDENCE_TYPE_MAP,
     apply_priority_suppression,
     filter_candidates,
-    record_signal_fired,
+)
+from app.services.monitoring_pipeline import (
+    build_claim_signal_lookup,
+    classify_candidates_for_thesis,
+    persist_classified_candidates,
 )
 from app.services.signal_matching import (
-    build_evidence_summary,
-    determine_verdict,
     load_active_decomposition,
     match_candidates_to_signals,
 )
@@ -167,14 +164,7 @@ async def run_check_now(
     candidates = match_candidates_to_signals(candidates, claims)
 
     # Build lookup tables for narrative generation
-    claims_by_id: dict[str, Any] = {}
-    signals_by_id: dict[str, Any] = {}
-    if claims:
-        for claim in claims:
-            claims_by_id[str(claim.id)] = claim
-            for entity in claim.entities:
-                for signal in entity.signals:
-                    signals_by_id[str(signal.id)] = signal
+    claims_by_id, signals_by_id = build_claim_signal_lookup(claims)
 
     # Build snapshot — always returned, even when 0 events
     snapshot = _build_snapshot(company_data, holding, previous_price, thesis)
@@ -187,83 +177,22 @@ async def run_check_now(
     # Noise suppression: filter before classification (rules 1, 2, 4)
     candidates = await filter_candidates(candidates, holding.id, signals_by_id, db, now=now)
 
-    # Classify all surviving candidates
-    classified: list[tuple[dict[str, Any], str, str | None]] = []  # (candidate, severity, ai_analysis)
-    for candidate in candidates:
-        classification = await classify_event(
-            why_own_it=thesis.why_own_it,
-            must_remain_true=thesis.must_remain_true,
-            what_would_change_my_mind=thesis.what_would_change_my_mind,
-            ai_summary=thesis.ai_summary,
-            event_description=candidate["description"],
-        )
-        severity = classification.severity if classification else "warning"
-        ai_analysis = classification.analysis if classification else None
-        classified.append((candidate, severity, ai_analysis))
+    classified = await classify_candidates_for_thesis(thesis, candidates)
 
     # Rule 3: Priority suppression (post-classification)
     suppressed = apply_priority_suppression([(c, s) for c, s, _ in classified])
     surviving_set = {id(c) for c, _ in suppressed}
     classified = [(c, s, a) for c, s, a in classified if id(c) in surviving_set]
 
-    created_event_ids: list[uuid.UUID] = []
-
-    for candidate, severity, ai_analysis in classified:
-        evidence = candidate.get("evidence", {})
-        source_url = evidence.get("url")
-
-        # Extract signal linking from enriched evidence
-        evidence_signal_id = evidence.get("signal_id")
-        evidence_claim_id = evidence.get("claim_id")
-        claim_obj = claims_by_id.get(evidence_claim_id) if evidence_claim_id else None
-        signal_obj = signals_by_id.get(evidence_signal_id) if evidence_signal_id else None
-
-        evidence_summary = build_evidence_summary(
-            candidate=candidate,
-            claim_text=claim_obj.claim_text if claim_obj else None,
-            signal_label=signal_obj.signal_label if signal_obj else None,
-            why_own_it=thesis.why_own_it,
-        )
-        verdict = determine_verdict(severity)
-        evidence_type = EVIDENCE_TYPE_MAP.get(candidate["event_type"], candidate["event_type"])
-
-        event = MonitoringEvent(
-            holding_id=holding.id,
-            thesis_id=thesis.id,
-            event_type=candidate["event_type"],
-            severity=severity,
-            title=f"Review {holding.ticker}",
-            summary=candidate["description"],
-            source_url=source_url,
-            ai_analysis=ai_analysis,
-            raw_data={
-                "provider": settings.market_data_provider,
-                "candidate_type": candidate["event_type"],
-                "evidence": evidence,
-            },
-            claim_id=uuid.UUID(evidence_claim_id) if evidence_claim_id else None,
-            signal_id=uuid.UUID(evidence_signal_id) if evidence_signal_id else None,
-            evidence_type=evidence_type,
-            evidence_summary=evidence_summary,
-            verdict=verdict,
-        )
-        db.add(event)
-        created_event_ids.append(event.id)
-        await record_signal_fired(evidence_signal_id, signals_by_id, now=now)
-        append_log_entry(
-            db,
-            thesis_id=thesis.id,
-            holding_id=holding.id,
-            user_id=thesis.user_id,
-            entry_type=EVIDENCE_RECEIVED,
-            content=evidence_summary or candidate["description"][:300],
-            metadata={"event_type": candidate["event_type"], "severity": severity},
-            claim_id=uuid.UUID(evidence_claim_id) if evidence_claim_id else None,
-            signal_id=uuid.UUID(evidence_signal_id) if evidence_signal_id else None,
-        )
-
-        if severity == "thesis_breaking" and thesis.status in ("active", "draft"):
-            thesis.status = "needs_review"
+    created_event_ids = await persist_classified_candidates(
+        db,
+        thesis=thesis,
+        holding=holding,
+        classified=classified,
+        claims_by_id=claims_by_id,
+        signals_by_id=signals_by_id,
+        now=now,
+    )
 
     await db.commit()
 

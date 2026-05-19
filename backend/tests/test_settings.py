@@ -114,6 +114,20 @@ def test_get_user_prefs_reads_stored_values():
     assert prefs.digest_time == "08:00"
 
 
+def test_get_user_prefs_normalizes_string_bools():
+    class FakeUser:
+        preferences = {
+            "email_enabled": "false",
+            "earnings_alerts": "0",
+            "quarterly_review_reminders": "yes",
+        }
+
+    prefs = get_user_prefs(FakeUser())
+    assert prefs.email_enabled is False
+    assert prefs.earnings_alerts is False
+    assert prefs.quarterly_review_reminders is True
+
+
 @pytest.mark.asyncio
 async def test_get_settings_returns_all_fields(client, auth_headers):
     response = await client.get("/api/settings", headers=auth_headers)

@@ -8,10 +8,12 @@ from app.services.noise_filter import (
     _apply_evidence_dedup,
     _apply_minimum_relevance,
     _apply_signal_cooldown,
+    _load_recent_evidence_keys,
     apply_priority_suppression,
     filter_candidates,
     record_signal_fired,
 )
+from app.models.monitoring_event import MonitoringEvent
 
 
 def _make_signal(signal_id: str, last_fired_at: datetime | None = None) -> MagicMock:
@@ -169,6 +171,19 @@ def test_signal_cooldown_allows_never_fired():
     assert len(result) == 1
 
 
+def test_signal_cooldown_handles_naive_last_fired_at():
+    now = datetime(2026, 5, 16, 12, 0, tzinfo=timezone.utc)
+    signal_id = str(uuid.uuid4())
+    signal = _make_signal(signal_id, last_fired_at=datetime(2026, 5, 16, 8, 0))
+    signal_map = {signal_id: signal}
+
+    candidates = [
+        {"event_type": "price_move", "evidence": {"signal_id": signal_id, "current_price": 150}},
+    ]
+    result = _apply_signal_cooldown(candidates, signal_map, now)
+    assert len(result) == 0
+
+
 # ---------------------------------------------------------------------------
 # Rule 3: Priority suppression (operates on classified tuples)
 # ---------------------------------------------------------------------------
@@ -312,6 +327,34 @@ async def test_filter_candidates_combines_rules_1_2_4():
 
     assert len(result) == 1
     assert result[0]["event_type"] == "price_move"
+
+
+@pytest.mark.asyncio
+async def test_load_recent_evidence_keys_handles_legacy_events_without_evidence_type(db):
+    holding_id = uuid.uuid4()
+    article_id = "legacy-article"
+    db.add(
+        MonitoringEvent(
+            id=uuid.uuid4(),
+            holding_id=holding_id,
+            thesis_id=uuid.uuid4(),
+            event_type="news_or_earnings_candidate",
+            evidence_type=None,
+            severity="warning",
+            title="Legacy event",
+            summary="Legacy summary",
+            raw_data={
+                "candidate_type": "news_or_earnings_candidate",
+                "evidence": {"article_id": article_id},
+            },
+            created_at=datetime.now(timezone.utc),
+        )
+    )
+    await db.commit()
+
+    keys = await _load_recent_evidence_keys(db, holding_id)
+
+    assert ("news", article_id) in keys
 
 
 def test_priority_suppression_end_to_end():

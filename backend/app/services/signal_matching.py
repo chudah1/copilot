@@ -47,7 +47,10 @@ def match_candidates_to_signals(
         return candidates
 
     for candidate in candidates:
-        evidence = candidate.get("evidence", {})
+        evidence = candidate.get("evidence")
+        if not isinstance(evidence, dict):
+            evidence = {}
+            candidate["evidence"] = evidence
         if evidence.get("signal_id"):
             continue
 

@@ -1,3 +1,11 @@
+from datetime import datetime, timedelta, timezone
+from unittest.mock import AsyncMock, patch
+
+from app.models.earnings_calendar import EarningsCalendar
+from app.services.onboarding import get_or_create_state
+from app.services.trading212 import Trading212Position
+
+
 async def test_onboarding_status_new_user(client, auth_headers, test_user):
     response = await client.get("/api/onboarding/status", headers=auth_headers)
     assert response.status_code == 200
@@ -76,3 +84,89 @@ async def test_onboarding_already_completed_user_stays_completed(client, auth_he
 async def test_onboarding_requires_auth(client):
     response = await client.get("/api/onboarding/status")
     assert response.status_code == 403
+
+
+async def test_onboarding_after_broker_sync(client, auth_headers):
+    with patch("app.routes.portfolio.Trading212Client.verify_key", new_callable=AsyncMock, return_value=True):
+        connect_response = await client.post(
+            "/api/portfolio/connect",
+            json={"broker_type": "trading212", "api_key": "test-key"},
+            headers=auth_headers,
+        )
+    assert connect_response.status_code == 201
+    connection_id = connect_response.json()["id"]
+
+    fake_position = Trading212Position(
+        ticker="AAPL",
+        quantity=10.0,
+        average_price=150.0,
+        current_price=175.0,
+        ppl=250.0,
+        fx_ppl=200.0,
+    )
+    with patch("app.routes.portfolio.Trading212Client.fetch_positions", new_callable=AsyncMock, return_value=[fake_position]):
+        with patch("app.routes.portfolio.fetch_company_overview", new_callable=AsyncMock, return_value=None):
+            sync_response = await client.post(f"/api/portfolio/sync/{connection_id}", headers=auth_headers)
+
+    assert sync_response.status_code == 200
+
+    status_response = await client.get("/api/onboarding/status", headers=auth_headers)
+    assert status_response.status_code == 200
+    data = status_response.json()
+    assert data["steps"]["import_holdings"]["done"] is True
+    assert data["steps"]["import_holdings"]["count"] == 1
+    assert data["current_step"] == "write_first_thesis"
+
+
+async def test_onboarding_banner_prefers_soonest_earnings_when_multiple_uncovered(client, auth_headers, db, test_user):
+    hold1 = await client.post(
+        "/api/portfolio/holdings",
+        json={"ticker": "AAPL", "name": "Apple", "quantity": 10, "average_cost_basis": 150},
+        headers=auth_headers,
+    )
+    hold2 = await client.post(
+        "/api/portfolio/holdings",
+        json={"ticker": "MSFT", "name": "Microsoft", "quantity": 5, "average_cost_basis": 300},
+        headers=auth_headers,
+    )
+    hold3 = await client.post(
+        "/api/portfolio/holdings",
+        json={"ticker": "NVDA", "name": "NVIDIA", "quantity": 3, "average_cost_basis": 500},
+        headers=auth_headers,
+    )
+
+    await client.post(
+        "/api/theses",
+        json={
+            "holding_id": hold1.json()["id"],
+            "status": "active",
+            "thesis_kind": "company",
+            "why_own_it": "Apple ecosystem.",
+            "confidence": "high",
+            "review_cadence_days": 7,
+            "source": "user",
+        },
+        headers=auth_headers,
+    )
+
+    state = await get_or_create_state(db, test_user.id)
+    state.first_reason_written_at = datetime.now(timezone.utc) - timedelta(hours=25)
+
+    db.add(EarningsCalendar(
+        ticker="MSFT",
+        report_date=datetime.now(timezone.utc) + timedelta(days=10),
+        source="test",
+    ))
+    db.add(EarningsCalendar(
+        ticker="NVDA",
+        report_date=datetime.now(timezone.utc) + timedelta(days=3),
+        source="test",
+    ))
+    await db.commit()
+
+    response = await client.get("/api/onboarding/banner", headers=auth_headers)
+    assert response.status_code == 200
+    data = response.json()
+    assert data["show"] is True
+    assert data["banner_type"] == "add_more_reasons"
+    assert data["suggested_holding"]["ticker"] == "NVDA"

@@ -12,22 +12,22 @@ interface Props {
 }
 
 const statusColors: Record<string, string> = {
-  draft: "bg-gray-100 text-gray-800",
-  active: "bg-green-100 text-green-800",
-  needs_review: "bg-orange-100 text-orange-800",
-  invalidated: "bg-red-100 text-red-800",
+  draft: "bg-muted text-muted-foreground",
+  active: "bg-emerald-500/15 text-emerald-700",
+  needs_review: "bg-orange-500/15 text-orange-600",
+  invalidated: "bg-red-500/15 text-red-600",
 };
 
 const convictionColors: Record<string, string> = {
-  high: "bg-green-100 text-green-800",
-  medium: "bg-yellow-100 text-yellow-800",
-  low: "bg-red-100 text-red-800",
+  high: "bg-emerald-500/15 text-emerald-700",
+  medium: "bg-amber-500/15 text-amber-700",
+  low: "bg-red-500/15 text-red-600",
 };
 
 const monitorabilityColors: Record<string, string> = {
-  high: "bg-emerald-100 text-emerald-800",
-  medium: "bg-sky-100 text-sky-800",
-  low: "bg-stone-200 text-stone-800",
+  high: "bg-emerald-500/15 text-emerald-700",
+  medium: "bg-sky-500/15 text-sky-700",
+  low: "bg-muted text-muted-foreground",
 };
 
 function getInterpretation(thesis: Thesis) {
@@ -81,11 +81,11 @@ export function ThesisCard({ thesis, onEdit, onInvalidate }: Props) {
             </CardDescription>
           </div>
           <div className="flex gap-3 text-sm">
-            <button onClick={onEdit} className="text-blue-600 hover:underline">
+            <button onClick={onEdit} className="text-primary/80 hover:text-primary transition-colors">
               Edit
             </button>
             {thesis.status !== "invalidated" && (
-              <button onClick={onInvalidate} className="text-red-600 hover:underline">
+              <button onClick={onInvalidate} className="text-red-600/70 hover:text-red-600 transition-colors">
                 Invalidate
               </button>
             )}
@@ -102,12 +102,12 @@ export function ThesisCard({ thesis, onEdit, onInvalidate }: Props) {
           <ThesisBlock
             label="Still true if"
             text={thesis.must_remain_true ?? "You have not defined the condition that must remain true yet."}
-            tone={thesis.must_remain_true ? "bg-background" : "bg-amber-50"}
+            tone={thesis.must_remain_true ? "bg-background" : "bg-amber-500/8"}
           />
           <ThesisBlock
             label="Breaks if"
             text={thesis.what_would_change_my_mind ?? "You have not written the exit condition yet."}
-            tone={thesis.what_would_change_my_mind ? "bg-background" : "bg-red-50"}
+            tone={thesis.what_would_change_my_mind ? "bg-background" : "bg-red-500/8"}
           />
         </div>
 

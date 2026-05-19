@@ -1,5 +1,5 @@
 import uuid
-from datetime import datetime, timezone
+from datetime import datetime, timedelta, timezone
 from unittest.mock import AsyncMock, patch
 
 from app.jobs.monitoring_run import (
@@ -13,7 +13,7 @@ from app.models.thesis import Thesis
 from app.models.thesis_review import ThesisReview
 from app.models.user import User
 from app.services.auth import hash_password
-from app.services.market_data import CompanyData, InsiderTransaction, NewsItem, TranscriptSignal
+from app.services.market_data import CompanyData, InsiderTransaction, NewsItem, TranscriptSignal, shortlist_qualitative_candidates
 from app.services.monitoring import (
     DEFAULT_PRICE_THRESHOLD_PCT,
     check_metric_watch_hints,
@@ -35,6 +35,19 @@ def test_metric_breach_detected():
     assert results[0].breached is True
 
 
+def test_metric_breach_accepts_string_thresholds():
+    interpretation = {
+        "watch_hints": [
+            {"kind": "metric_threshold", "metric": "revenue_growth_yoy", "operator": ">=", "threshold": "0.15", "rationale": "Growth driver"}
+        ]
+    }
+    market_values = {"revenue_growth_yoy": 0.08}
+    results = check_metric_watch_hints(interpretation, market_values)
+    assert len(results) == 1
+    assert results[0].threshold == 0.15
+    assert results[0].breached is True
+
+
 def test_price_move_detection():
     assert check_price_move(current_price=110.0, previous_price=100.0, threshold_pct=10.0) is True
     assert check_price_move(current_price=105.0, previous_price=100.0, threshold_pct=10.0) is False
@@ -45,6 +58,11 @@ def test_price_threshold_defaults_when_no_interpretation():
     assert get_price_watch_threshold(None) == DEFAULT_PRICE_THRESHOLD_PCT
     assert get_price_watch_threshold({"watch_hints": []}) == DEFAULT_PRICE_THRESHOLD_PCT
     assert DEFAULT_PRICE_THRESHOLD_PCT == 5.0
+
+
+def test_price_threshold_accepts_string_threshold():
+    interpretation = {"watch_hints": [{"kind": "price_move_pct", "threshold": "7.5"}]}
+    assert get_price_watch_threshold(interpretation) == 7.5
 
 
 def test_generate_monitoring_candidates_combines_quant_and_qualitative_signals():
@@ -162,6 +180,8 @@ def test_generate_monitoring_candidates_ignores_irrelevant_news():
 
 
 async def test_run_monitoring_creates_multiple_events_and_flags_review(db, job_session_factory):
+    reference_now = datetime.now(timezone.utc)
+
     user = User(email="monitor@example.com", password_hash=hash_password("testpass123"))
     db.add(user)
     await db.flush()
@@ -211,7 +231,7 @@ async def test_run_monitoring_creates_multiple_events_and_flags_review(db, job_s
         dividend_yield=None,
         description="",
         recent_news=["Apple issues new guidance"],
-        upcoming_earnings_date=datetime(2026, 5, 14, tzinfo=timezone.utc),
+        upcoming_earnings_date=reference_now + timedelta(days=2),
         recent_earnings_surprise_pct=6.0,
         news_items=[],
         earnings_call=TranscriptSignal(
@@ -250,7 +270,7 @@ async def test_run_monitoring_creates_multiple_events_and_flags_review(db, job_s
         mock_settings.market_data_provider = "alpha_vantage"
         with patch("app.jobs.monitoring_run.async_session", job_session_factory):
             with patch("app.jobs.monitoring_run.fetch_company_data", new_callable=AsyncMock, return_value=company_data):
-                with patch("app.jobs.monitoring_run.classify_event", new_callable=AsyncMock, side_effect=classifications):
+                with patch("app.services.monitoring_pipeline.classify_event", new_callable=AsyncMock, side_effect=classifications):
                     await run_monitoring()
 
     events = (await db.execute(MonitoringEvent.__table__.select())).all()
@@ -440,6 +460,42 @@ def test_founder_news_keyword_matches():
     assert news_candidates[0]["evidence"]["url"] == "https://example.com/apple-ceo"
 
 
+def test_shortlist_qualitative_candidates_prefers_newer_news_with_same_priority():
+    now = datetime(2026, 5, 11, 12, 0, tzinfo=timezone.utc)
+    candidates = shortlist_qualitative_candidates(
+        news_items=[
+            NewsItem(
+                id="older",
+                headline="Apple updates guidance",
+                summary="Management adjusted expectations.",
+                published_at=now - timedelta(hours=20),
+                source="Reuters",
+                url="https://example.com/older",
+                sentiment=0.1,
+                topics=["earnings"],
+                ticker_relevance=0.8,
+            ),
+            NewsItem(
+                id="newer",
+                headline="Apple CFO discusses new guidance",
+                summary="The executive team outlined revised expectations.",
+                published_at=now - timedelta(hours=1),
+                source="Bloomberg",
+                url="https://example.com/newer",
+                sentiment=0.1,
+                topics=["earnings"],
+                ticker_relevance=0.8,
+            ),
+        ],
+        recent_earnings_surprise_pct=None,
+        upcoming_earnings_date=None,
+        now=now,
+        max_candidates=1,
+    )
+    assert len(candidates) == 1
+    assert candidates[0]["evidence"]["article_id"] == "newer"
+
+
 async def test_run_monitoring_warns_when_no_api_key(db, job_session_factory):
     """When no Alpha Vantage key is set, a warning event is created."""
     user = User(email="nokey@example.com", password_hash=hash_password("testpass123"))
@@ -481,6 +537,67 @@ async def test_run_monitoring_warns_when_no_api_key(db, job_session_factory):
     assert len(events) == 1
     assert events[0].event_type == "monitoring_inactive"
     assert "Alpha Vantage" in events[0].summary
+
+
+async def test_run_monitoring_does_not_emit_inactive_warning_for_yfinance(db, job_session_factory):
+    user = User(email="yfinance@example.com", password_hash=hash_password("testpass123"))
+    db.add(user)
+    await db.flush()
+
+    holding = Holding(
+        user_id=user.id,
+        ticker="AAPL",
+        name="Apple",
+        quantity=10,
+        average_cost_basis=100,
+        current_price=100,
+        current_value=1000,
+    )
+    db.add(holding)
+    await db.flush()
+
+    thesis = Thesis(
+        user_id=user.id,
+        holding_id=holding.id,
+        status="active",
+        thesis_kind="company",
+        why_own_it="I like Apple.",
+        confidence="medium",
+        review_cadence_days=7,
+        source="user",
+    )
+    db.add(thesis)
+    await db.commit()
+
+    company_data = CompanyData(
+        ticker="AAPL",
+        name="Apple",
+        sector="Technology",
+        industry="Consumer Electronics",
+        current_price=100.0,
+        market_cap=None,
+        pe_ratio=None,
+        revenue_growth_yoy=None,
+        earnings_growth_yoy=None,
+        dividend_yield=None,
+        description="",
+        recent_news=[],
+        upcoming_earnings_date=None,
+        recent_earnings_surprise_pct=None,
+        news_items=[],
+        provider_payload={"provider": "yfinance"},
+    )
+
+    with patch("app.jobs.monitoring_run.async_session", job_session_factory):
+        with patch("app.jobs.monitoring_run.settings") as mock_settings:
+            mock_settings.alpha_vantage_api_key = ""
+            mock_settings.market_data_provider = "yfinance"
+            with patch("app.jobs.monitoring_run.fetch_company_data", new_callable=AsyncMock, return_value=company_data) as fetch_mock:
+                await run_monitoring()
+
+    events = (await db.execute(MonitoringEvent.__table__.select())).all()
+    assert events == []
+    fetch_mock.assert_awaited_once_with("AAPL")
 
 
 def test_extract_proxy_tickers_returns_valid_entries():
@@ -710,7 +827,7 @@ async def test_run_monitoring_fetches_proxy_tickers_and_creates_events(db, job_s
         mock_settings.market_data_provider = "alpha_vantage"
         with patch("app.jobs.monitoring_run.async_session", job_session_factory):
             with patch("app.jobs.monitoring_run.fetch_company_data", new_callable=AsyncMock, side_effect=mock_fetch):
-                with patch("app.jobs.monitoring_run.classify_event", classify_mock):
+                with patch("app.services.monitoring_pipeline.classify_event", classify_mock):
                     await run_monitoring()
 
     events = (await db.execute(MonitoringEvent.__table__.select())).all()
@@ -800,7 +917,7 @@ async def test_run_monitoring_deduplicates_across_direct_and_proxy(db, job_sessi
         mock_settings.market_data_provider = "alpha_vantage"
         with patch("app.jobs.monitoring_run.async_session", job_session_factory):
             with patch("app.jobs.monitoring_run.fetch_company_data", new_callable=AsyncMock, side_effect=mock_fetch):
-                with patch("app.jobs.monitoring_run.classify_event", new_callable=AsyncMock, return_value=classification):
+                with patch("app.services.monitoring_pipeline.classify_event", new_callable=AsyncMock, return_value=classification):
                     await run_monitoring()
 
     events = (await db.execute(MonitoringEvent.__table__.select())).all()
@@ -861,6 +978,11 @@ async def test_review_monitoring_event_lowers_confidence_and_returns_updated_the
     assert data["notes"] == "Less certain after the margin commentary."
     assert data["thesis"]["confidence"] == "medium"
     assert data["thesis"]["status"] == "active"
+
+    follow_up = await client.get(f"/api/monitoring/holdings/{holding_row.id}/events", headers=auth_headers)
+    assert follow_up.status_code == 200
+    assert follow_up.json()[0]["review_action"] == "lowered_confidence"
+    assert follow_up.json()[0]["review_notes"] == "Less certain after the margin commentary."
 
 
 async def test_get_events_for_holding_includes_latest_review_state(client, auth_headers, db, test_user):

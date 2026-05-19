@@ -126,3 +126,20 @@ async def test_simulate_endpoint(client, auth_headers, test_user, db: AsyncSessi
     assert data["before"]["holdings_count"] == 1
     assert data["after"]["holdings_count"] == 2
     assert len(data["warnings"]) >= 0
+
+
+@pytest.mark.asyncio
+async def test_simulate_existing_ticker_respects_zero_current_value(db: AsyncSession, test_user):
+    holding = Holding(
+        id=uuid.uuid4(), ticker="AAPL", name="Apple Inc",
+        quantity=10, average_cost_basis=150, currency="GBP",
+        current_price=0, current_value=0,
+        user_id=test_user.id,
+    )
+    db.add(holding)
+    await db.commit()
+
+    result = await simulate_trade(test_user.id, "AAPL", 5, 20.0, db)
+
+    assert result.before.total_value == 0
+    assert result.after.total_value == 100.0

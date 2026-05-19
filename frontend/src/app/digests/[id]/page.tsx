@@ -2,11 +2,9 @@
 
 import { useEffect, useState } from "react";
 import { useParams } from "next/navigation";
+import Link from "next/link";
 import { api } from "@/lib/api";
-import { AuthGuard } from "@/components/layout/auth-guard";
-import { Navbar } from "@/components/layout/navbar";
-import { Badge } from "@/components/ui/badge";
-import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
+import { AppShell } from "@/components/layout/app-shell";
 import { formatDate } from "@/lib/utils";
 import type { Digest } from "@/types";
 
@@ -18,72 +16,134 @@ export default function DigestDetailPage() {
     api.get<Digest>(`/api/digests/${id}`).then(setDigest);
   }, [id]);
 
-  if (!digest) return <p>Loading...</p>;
+  if (!digest) {
+    return (
+      <AppShell>
+        <div className="flex items-center justify-center min-h-[calc(100vh-52px)]">
+          <p className="font-mono text-[10px] uppercase tracking-[0.2em] text-muted-foreground animate-pulse">
+            Loading…
+          </p>
+        </div>
+      </AppShell>
+    );
+  }
+
+  const hasStats = digest.content.summary_points?.length ||
+    digest.content.missing_theses_count ||
+    digest.content.stale_theses_count ||
+    digest.content.concentration_warning;
 
   return (
-    <AuthGuard>
-      <Navbar />
-      <main className="mx-auto max-w-4xl px-4 py-6">
-        <Card className="mb-6 border-0 bg-[linear-gradient(135deg,rgba(23,28,42,0.98),rgba(36,67,56,0.94)_55%,rgba(225,231,214,0.96))] text-white ring-0">
-          <CardHeader className="gap-3">
-            <div className="flex flex-wrap items-center gap-2">
-              <Badge className="bg-white/12 text-white">{digest.status}</Badge>
-              <Badge className="bg-white/12 text-white">{digest.content.events_count || 0} events</Badge>
-              <Badge className="bg-white/12 text-white">{digest.content.holdings_count || 0} holdings</Badge>
-            </div>
-            <CardTitle className="text-3xl font-semibold tracking-tight text-white">
-              {digest.content.headline || `Digest: ${formatDate(digest.period_start)} — ${formatDate(digest.period_end)}`}
-            </CardTitle>
-            <CardDescription className="text-white/80">
-              {digest.sent_at ? `Sent ${formatDate(digest.sent_at)}` : "Not sent"} • Review window {formatDate(digest.period_start)} — {formatDate(digest.period_end)}
-            </CardDescription>
-          </CardHeader>
-          {(digest.content.summary_points?.length || digest.content.missing_theses_count || digest.content.stale_theses_count || digest.content.concentration_warning) && (
-            <CardContent className="grid gap-4 md:grid-cols-[1.2fr_0.8fr]">
-              <div className="rounded-2xl border border-white/12 bg-white/8 p-4 backdrop-blur">
-                <p className="text-sm text-white/70">Key takeaways</p>
-                <div className="mt-3 space-y-2">
-                  {(digest.content.summary_points || []).map((point) => (
-                    <p key={point} className="text-sm text-white/85">
-                      {point}
-                    </p>
-                  ))}
-                </div>
-              </div>
-              <div className="rounded-2xl border border-white/12 bg-white/8 p-4 backdrop-blur">
-                <p className="text-sm text-white/70">Digest stats</p>
-                <div className="mt-3 grid grid-cols-2 gap-3 text-sm">
-                  <div>
-                    <p className="text-white/65">Stable holdings</p>
-                    <p className="mt-1 text-lg font-semibold">{digest.content.stable_holdings_count || 0}</p>
-                  </div>
-                  <div>
-                    <p className="text-white/65">Missing theses</p>
-                    <p className="mt-1 text-lg font-semibold">{digest.content.missing_theses_count || 0}</p>
-                  </div>
-                  <div>
-                    <p className="text-white/65">Stale theses</p>
-                    <p className="mt-1 text-lg font-semibold">{digest.content.stale_theses_count || 0}</p>
-                  </div>
-                  <div>
-                    <p className="text-white/65">Concentration</p>
-                    <p className="mt-1 text-sm">{digest.content.concentration_warning || "No high concentration warning"}</p>
-                  </div>
-                </div>
-              </div>
-            </CardContent>
-          )}
-        </Card>
-        <Card>
-          <CardContent className="py-6">
-            {digest.content.html ? (
-              <div dangerouslySetInnerHTML={{ __html: digest.content.html }} />
-            ) : (
-              <p className="text-muted-foreground">Digest content unavailable.</p>
+    <AppShell>
+      <div className="max-w-4xl mx-auto px-8 py-10">
+
+        {/* Back link */}
+        <Link
+          href="/digests"
+          className="font-mono text-[10px] uppercase tracking-[0.2em] text-muted-foreground hover:text-primary transition-colors mb-8 block"
+        >
+          ← Digests
+        </Link>
+
+        {/* Header */}
+        <div className="border-b border-border pb-7 mb-8 space-y-3">
+          {/* Badges row */}
+          <div className="flex flex-wrap items-center gap-3">
+            <span className={`font-mono text-[10px] uppercase tracking-[0.2em] ${digest.status === "sent" ? "text-emerald-700" : "text-amber-700"}`}>
+              ● {digest.status}
+            </span>
+            {digest.content.digest_mode && (
+              <span className="font-mono text-[10px] uppercase tracking-[0.15em] text-muted-foreground/60">
+                {digest.content.digest_mode.replace("_", " ")}
+              </span>
             )}
-          </CardContent>
-        </Card>
-      </main>
-    </AuthGuard>
+            <span className="font-mono text-[10px] text-muted-foreground/60">
+              {digest.content.events_count || 0} events · {digest.content.holdings_count || 0} holdings
+            </span>
+          </div>
+
+          {/* Headline */}
+          <h1 className="font-display italic text-[2.25rem] leading-tight text-foreground">
+            {digest.content.headline || `Digest: ${formatDate(digest.period_start)} — ${formatDate(digest.period_end)}`}
+          </h1>
+
+          {/* Meta */}
+          <p className="font-mono text-[10px] uppercase tracking-[0.2em] text-muted-foreground/60">
+            {digest.sent_at ? `Sent ${formatDate(digest.sent_at)}` : "Not yet sent"}
+            {" · "}Review window {formatDate(digest.period_start)} — {formatDate(digest.period_end)}
+          </p>
+        </div>
+
+        {/* Summary stats */}
+        {hasStats && (
+          <div className="grid gap-5 md:grid-cols-[1.2fr_0.8fr] mb-10">
+            {/* Key takeaways */}
+            <div className="border border-border/60 bg-card p-5 space-y-3">
+              <p className="font-mono text-[9px] uppercase tracking-[0.25em] text-muted-foreground/60">
+                Key takeaways
+              </p>
+              <div className="space-y-2">
+                {(digest.content.summary_points || []).map((point) => (
+                  <p key={point} className="font-sans text-sm text-foreground/80 leading-relaxed">
+                    {point}
+                  </p>
+                ))}
+                {digest.content.next_earnings && (
+                  <p className="font-sans text-sm text-foreground/80 leading-relaxed">
+                    Next earnings: {digest.content.next_earnings.ticker} reports {formatDate(digest.content.next_earnings.report_date)}.
+                  </p>
+                )}
+                {digest.content.quiet_nudge && (
+                  <p className="font-sans italic text-sm text-muted-foreground leading-relaxed">
+                    {digest.content.quiet_nudge}
+                  </p>
+                )}
+              </div>
+            </div>
+
+            {/* Stats */}
+            <div className="border border-border/60 bg-card p-5 space-y-4">
+              <p className="font-mono text-[9px] uppercase tracking-[0.25em] text-muted-foreground/60">
+                Digest stats
+              </p>
+              <div className="grid grid-cols-2 gap-4">
+                {[
+                  { label: "Stable", value: String(digest.content.stable_holdings_count || 0) },
+                  { label: "Missing thesis", value: String(digest.content.missing_theses_count || 0), warn: (digest.content.missing_theses_count ?? 0) > 0 },
+                  { label: "Stale thesis", value: String(digest.content.stale_theses_count || 0), warn: (digest.content.stale_theses_count ?? 0) > 0 },
+                ].map(({ label, value, warn }) => (
+                  <div key={label}>
+                    <p className="font-mono text-[9px] uppercase tracking-[0.2em] text-muted-foreground/50">{label}</p>
+                    <p className={`font-mono text-xl tabular-nums mt-1 ${warn ? "text-amber-700" : "text-foreground/80"}`}>{value}</p>
+                  </div>
+                ))}
+              </div>
+              {digest.content.concentration_warning && (
+                <p className="font-sans text-xs text-amber-700/80 border-t border-border/60 pt-3 leading-relaxed">
+                  {digest.content.concentration_warning}
+                </p>
+              )}
+              {digest.content.monitoring_receipt && (
+                <p className="font-mono text-[9px] text-muted-foreground/50 leading-relaxed">
+                  {digest.content.monitoring_receipt}
+                </p>
+              )}
+            </div>
+          </div>
+        )}
+
+        {/* Digest HTML content */}
+        <div className="border-t border-border/60 pt-8">
+          {digest.content.html ? (
+            <div
+              className="prose prose-invert prose-sm max-w-none prose-headings:font-display prose-headings:italic prose-headings:font-normal prose-a:text-primary prose-strong:text-foreground/90"
+              dangerouslySetInnerHTML={{ __html: digest.content.html }}
+            />
+          ) : (
+            <p className="font-sans italic text-muted-foreground">Digest content unavailable.</p>
+          )}
+        </div>
+      </div>
+    </AppShell>
   );
 }

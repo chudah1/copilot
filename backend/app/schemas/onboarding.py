@@ -1,3 +1,6 @@
+import uuid
+from datetime import datetime
+
 from pydantic import BaseModel
 
 
@@ -10,3 +13,66 @@ class OnboardingStatusResponse(BaseModel):
     completed: bool
     current_step: str | None
     steps: dict[str, OnboardingStepStatus]
+
+
+class OnboardingStateResponse(BaseModel):
+    portfolio_connected: bool
+    drafts_generated_at: datetime | None
+    drafts_reviewed_at: datetime | None
+    wizard_skipped_at: datetime | None
+    wizard_completed_at: datetime | None
+    reasons_written_count: int
+
+    model_config = {"from_attributes": True}
+
+
+class DraftItemResponse(BaseModel):
+    draft_id: uuid.UUID
+    holding_id: uuid.UUID
+    ticker: str
+    name: str
+    status: str  # pending | ready | failed | reviewed
+    thesis_id: uuid.UUID | None
+    why_own_it: str | None = None
+    must_remain_true: str | None = None
+    what_would_change_my_mind: str | None = None
+
+    model_config = {"from_attributes": True}
+
+
+class DraftStatusResponse(BaseModel):
+    total: int
+    ready: int
+    pending: int
+    failed: int
+    reviewed: int
+    drafts: list[DraftItemResponse]
+
+
+class SynthesisRequest(BaseModel):
+    holding_id: uuid.UUID
+    question1: str
+    answer1: str
+    question2: str
+    answer2: str
+
+
+class SynthesisResponse(BaseModel):
+    thesis_id: uuid.UUID
+    why_own_it: str
+    must_remain_true: str
+    what_would_change_my_mind: str
+    ai_summary: str
+
+
+class HoldingContextResponse(BaseModel):
+    holding_id: uuid.UUID
+    ticker: str
+    name: str
+    sector: str | None
+    current_price: float | None
+    current_value: float | None
+    quantity: float
+    average_cost_basis: float
+
+    model_config = {"from_attributes": True}

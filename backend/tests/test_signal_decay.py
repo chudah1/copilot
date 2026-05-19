@@ -1,4 +1,5 @@
 import uuid
+from datetime import datetime, timezone
 
 import pytest
 
@@ -256,3 +257,26 @@ async def test_already_inactive_signal_not_double_deactivated(db):
     await db.refresh(signal)
     assert signal.consecutive_ignores == 6
     assert signal.active is False
+
+
+@pytest.mark.asyncio
+async def test_review_monitoring_event_uses_explicit_now_for_invalidation(db):
+    user, holding, thesis, signal, claim = await _setup_holding_with_signal(db)
+
+    event = _make_event(holding, thesis, signal, claim_id=claim.id)
+    db.add(event)
+    await db.commit()
+
+    review_time = datetime(2026, 5, 18, 9, 30, tzinfo=timezone.utc)
+    review = await review_monitoring_event(
+        db,
+        event=event,
+        thesis=thesis,
+        action="invalidated",
+        notes=None,
+        now=review_time,
+    )
+
+    assert review.created_at == review_time
+    assert thesis.invalidated_at == review_time
+    assert thesis.updated_at == review_time

@@ -1,8 +1,11 @@
 import uuid
+from datetime import datetime, timezone
+
 from fastapi import APIRouter, Depends, HTTPException, status
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.orm import selectinload
+
 from app.database import get_db
 from app.dependencies import get_current_user
 from app.models.conviction_log_entry import ConvictionLogEntry
@@ -24,6 +27,97 @@ from app.services.monitoring_review import review_monitoring_event
 router = APIRouter(prefix="/api/monitoring", tags=["monitoring"])
 
 
+def _normalize_datetime(value: datetime) -> datetime:
+    return value if value.tzinfo is not None else value.replace(tzinfo=timezone.utc)
+
+
+def _latest_review(event: MonitoringEvent):
+    return event.reviews[0] if event.reviews else None
+
+
+def _to_event_response(
+    event: MonitoringEvent,
+    *,
+    signal_labels: dict[uuid.UUID, str | None],
+) -> MonitoringEventResponse:
+    latest_review = _latest_review(event)
+    return MonitoringEventResponse(
+        id=event.id,
+        holding_id=event.holding_id,
+        thesis_id=event.thesis_id,
+        event_type=event.event_type,
+        severity=event.severity,
+        title=event.title,
+        summary=event.summary,
+        source_url=event.source_url,
+        ai_analysis=event.ai_analysis,
+        review_action=latest_review.action if latest_review else None,
+        review_notes=latest_review.notes if latest_review else None,
+        claim_id=event.claim_id,
+        signal_id=event.signal_id,
+        signal_label=signal_labels.get(event.signal_id) if event.signal_id else None,
+        evidence_type=event.evidence_type,
+        evidence_summary=event.evidence_summary,
+        verdict=event.verdict,
+        created_at=event.created_at,
+    )
+
+
+async def _load_signal_labels(
+    db: AsyncSession,
+    *,
+    events: list[MonitoringEvent],
+) -> dict[uuid.UUID, str | None]:
+    signal_ids = {event.signal_id for event in events if event.signal_id is not None}
+    if not signal_ids:
+        return {}
+
+    signals_result = await db.execute(
+        select(ThesisSignal).where(ThesisSignal.id.in_(signal_ids))
+    )
+    return {signal.id: signal.signal_label for signal in signals_result.scalars().all()}
+
+
+async def _load_reviewable_event(
+    db: AsyncSession,
+    *,
+    event_id: uuid.UUID,
+    user_id: uuid.UUID,
+) -> MonitoringEvent | None:
+    event_result = await db.execute(
+        select(MonitoringEvent)
+        .join(Thesis, Thesis.id == MonitoringEvent.thesis_id)
+        .where(
+            MonitoringEvent.id == event_id,
+            Thesis.user_id == user_id,
+        )
+        .options(selectinload(MonitoringEvent.thesis))
+    )
+    return event_result.scalar_one_or_none()
+
+
+async def _reason_age_days_for_thesis(
+    db: AsyncSession,
+    *,
+    thesis_id: uuid.UUID,
+) -> int | None:
+    first_entry_result = await db.execute(
+        select(ConvictionLogEntry)
+        .where(
+            ConvictionLogEntry.thesis_id == thesis_id,
+            ConvictionLogEntry.entry_type == REASON_CREATED,
+        )
+        .order_by(ConvictionLogEntry.created_at.asc())
+        .limit(1)
+    )
+    first_entry = first_entry_result.scalar_one_or_none()
+    if first_entry is None:
+        return None
+
+    created = _normalize_datetime(first_entry.created_at)
+    return (datetime.now(timezone.utc) - created).days
+
+
 @router.get("/holdings/{holding_id}/events", response_model=list[MonitoringEventResponse])
 async def get_events_for_holding(holding_id: uuid.UUID, user: User = Depends(get_current_user), db: AsyncSession = Depends(get_db)):
     result = await db.execute(
@@ -37,40 +131,8 @@ async def get_events_for_holding(holding_id: uuid.UUID, user: User = Depends(get
         .limit(50)
     )
     events = result.scalars().all()
-
-    # Batch-load signal labels for all events that have a signal_id
-    signal_ids = {event.signal_id for event in events if event.signal_id is not None}
-    signal_labels: dict[uuid.UUID, str | None] = {}
-    if signal_ids:
-        signals_result = await db.execute(
-            select(ThesisSignal).where(ThesisSignal.id.in_(signal_ids))
-        )
-        for signal in signals_result.scalars().all():
-            signal_labels[signal.id] = signal.signal_label
-
-    return [
-        MonitoringEventResponse(
-            id=event.id,
-            holding_id=event.holding_id,
-            thesis_id=event.thesis_id,
-            event_type=event.event_type,
-            severity=event.severity,
-            title=event.title,
-            summary=event.summary,
-            source_url=event.source_url,
-            ai_analysis=event.ai_analysis,
-            review_action=event.reviews[0].action if event.reviews else None,
-            review_notes=event.reviews[0].notes if event.reviews else None,
-            claim_id=event.claim_id,
-            signal_id=event.signal_id,
-            signal_label=signal_labels.get(event.signal_id) if event.signal_id else None,
-            evidence_type=event.evidence_type,
-            evidence_summary=event.evidence_summary,
-            verdict=event.verdict,
-            created_at=event.created_at,
-        )
-        for event in events
-    ]
+    signal_labels = await _load_signal_labels(db, events=events)
+    return [_to_event_response(event, signal_labels=signal_labels) for event in events]
 
 
 @router.post("/events/{event_id}/review", response_model=MonitoringEventReviewResponse)
@@ -80,16 +142,7 @@ async def review_event(
     user: User = Depends(get_current_user),
     db: AsyncSession = Depends(get_db),
 ):
-    event_result = await db.execute(
-        select(MonitoringEvent)
-        .join(Thesis, Thesis.id == MonitoringEvent.thesis_id)
-        .where(
-            MonitoringEvent.id == event_id,
-            Thesis.user_id == user.id,
-        )
-        .options(selectinload(MonitoringEvent.thesis))
-    )
-    event = event_result.scalar_one_or_none()
+    event = await _load_reviewable_event(db, event_id=event_id, user_id=user.id)
     if event is None:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Monitoring event not found")
     if event.thesis is None:
@@ -106,24 +159,10 @@ async def review_event(
     except ValueError as exc:
         raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=str(exc)) from exc
 
-    # Compute reason_age_days from conviction log
-    reason_age_days = None
-    first_entry_result = await db.execute(
-        select(ConvictionLogEntry)
-        .where(
-            ConvictionLogEntry.thesis_id == event.thesis.id,
-            ConvictionLogEntry.entry_type == REASON_CREATED,
-        )
-        .order_by(ConvictionLogEntry.created_at.asc())
-        .limit(1)
-    )
-    first_entry = first_entry_result.scalar_one_or_none()
-    if first_entry is not None:
-        from datetime import datetime, timezone
-        created = first_entry.created_at
-        if created.tzinfo is None:
-            created = created.replace(tzinfo=timezone.utc)
-        reason_age_days = (datetime.now(timezone.utc) - created).days
+    await db.commit()
+    await db.refresh(review)
+    await db.refresh(event.thesis)
+    reason_age_days = await _reason_age_days_for_thesis(db, thesis_id=event.thesis.id)
 
     return MonitoringEventReviewResponse(
         id=review.id,

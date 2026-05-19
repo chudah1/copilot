@@ -2,7 +2,7 @@ from __future__ import annotations
 
 import uuid
 from dataclasses import dataclass
-from datetime import datetime, timezone
+from datetime import datetime, timedelta, timezone
 from decimal import Decimal
 
 from sqlalchemy import select
@@ -33,15 +33,32 @@ class QuarterlyReviewHoldingItem:
     reviewed_at: datetime | None
 
 
+def _normalize_datetime(value: datetime) -> datetime:
+    return value if value.tzinfo is not None else value.replace(tzinfo=timezone.utc)
+
+
 def current_quarter_key(now: datetime | None = None) -> str:
     reference = now or datetime.now(timezone.utc)
     quarter = ((reference.month - 1) // 3) + 1
     return f"{reference.year}-Q{quarter}"
 
 
-def _age_in_days(timestamp: datetime) -> int:
-    normalized = timestamp if timestamp.tzinfo is not None else timestamp.replace(tzinfo=timezone.utc)
-    return (datetime.now(timezone.utc) - normalized).days
+def quarterly_review_release_at(now: datetime | None = None) -> datetime:
+    reference = now or datetime.now(timezone.utc)
+    quarter_start_month = (((reference.month - 1) // 3) * 3) + 1
+    release = datetime(reference.year, quarter_start_month, 1, 8, 0, 0, tzinfo=timezone.utc)
+    while release.weekday() != 0:
+        release += timedelta(days=1)
+    return release
+
+
+def is_quarterly_review_open(now: datetime | None = None) -> bool:
+    reference = now or datetime.now(timezone.utc)
+    return reference >= quarterly_review_release_at(reference)
+
+
+def _age_in_days(timestamp: datetime, *, now: datetime) -> int:
+    return (_normalize_datetime(now) - _normalize_datetime(timestamp)).days
 
 
 def _to_float(value: Decimal | float | int | None) -> float | None:
@@ -62,8 +79,107 @@ def _response_label(response: str) -> str:
     return response.replace("_", " ")
 
 
-async def get_or_create_current_review(db: AsyncSession, *, user_id: uuid.UUID) -> QuarterlyReview:
-    quarter = current_quarter_key()
+async def _load_current_holdings(db: AsyncSession, *, user_id: uuid.UUID) -> list[Holding]:
+    holdings_result = await db.execute(
+        select(Holding)
+        .where(Holding.user_id == user_id)
+        .order_by(Holding.current_value.desc().nulls_last(), Holding.ticker.asc())
+    )
+    return list(holdings_result.scalars().all())
+
+
+async def _load_current_theses_by_holding(
+    db: AsyncSession,
+    *,
+    user_id: uuid.UUID,
+    holding_ids: list[uuid.UUID],
+) -> dict[uuid.UUID, Thesis]:
+    if not holding_ids:
+        return {}
+
+    theses_result = await db.execute(
+        select(Thesis)
+        .where(
+            Thesis.user_id == user_id,
+            Thesis.holding_id.in_(holding_ids),
+            Thesis.status.in_(list(ACTIVE_THESIS_STATUSES)),
+        )
+        .order_by(Thesis.created_at.desc())
+    )
+    theses = theses_result.scalars().all()
+
+    current_thesis_by_holding: dict[uuid.UUID, Thesis] = {}
+    for thesis in theses:
+        current_thesis_by_holding.setdefault(thesis.holding_id, thesis)
+    return current_thesis_by_holding
+
+
+async def _load_responses_by_holding(
+    db: AsyncSession,
+    *,
+    review_id: uuid.UUID,
+) -> dict[uuid.UUID, QuarterlyReviewResponse]:
+    responses_result = await db.execute(
+        select(QuarterlyReviewResponse).where(QuarterlyReviewResponse.review_id == review_id)
+    )
+    responses = responses_result.scalars().all()
+    return {response.holding_id: response for response in responses}
+
+
+def _build_review_items(
+    *,
+    holdings: list[Holding],
+    thesis_by_holding: dict[uuid.UUID, Thesis],
+    response_by_holding: dict[uuid.UUID, QuarterlyReviewResponse],
+    now: datetime,
+) -> list[QuarterlyReviewHoldingItem]:
+    items: list[QuarterlyReviewHoldingItem] = []
+    for holding in holdings:
+        thesis = thesis_by_holding.get(holding.id)
+        if thesis is None:
+            continue
+
+        response = response_by_holding.get(holding.id)
+        items.append(
+            QuarterlyReviewHoldingItem(
+                holding_id=holding.id,
+                thesis_id=thesis.id,
+                ticker=holding.ticker,
+                name=holding.name,
+                currency=holding.currency,
+                current_price=_resolve_price(holding),
+                reason_age_days=_age_in_days(thesis.created_at, now=now),
+                why_own_it=thesis.why_own_it,
+                response=response.response if response is not None else None,
+                response_notes=response.notes if response is not None else None,
+                reviewed_at=response.created_at if response is not None else None,
+            )
+        )
+    return items
+
+
+def _pending_count(items: list[QuarterlyReviewHoldingItem]) -> int:
+    return sum(1 for item in items if item.response is None)
+
+
+def _update_review_status(review: QuarterlyReview, items: list[QuarterlyReviewHoldingItem]) -> None:
+    review.status = "completed" if not items or _pending_count(items) == 0 else "pending"
+
+
+def _apply_thesis_status_transition(*, thesis: Thesis, response_value: str) -> None:
+    if response_value in {"yes_absolutely", "probably"} and thesis.status == "needs_review":
+        thesis.status = "active"
+    elif response_value in {"not_sure", "no"} and thesis.status in {"active", "draft"}:
+        thesis.status = "needs_review"
+
+
+async def get_or_create_current_review(
+    db: AsyncSession,
+    *,
+    user_id: uuid.UUID,
+    now: datetime | None = None,
+) -> QuarterlyReview:
+    quarter = current_quarter_key(now)
     result = await db.execute(
         select(QuarterlyReview).where(
             QuarterlyReview.user_id == user_id,
@@ -81,61 +197,25 @@ async def get_or_create_current_review(db: AsyncSession, *, user_id: uuid.UUID) 
 
 
 async def build_current_review_snapshot(
-    db: AsyncSession, *, user_id: uuid.UUID
+    db: AsyncSession, *, user_id: uuid.UUID, now: datetime | None = None
 ) -> tuple[QuarterlyReview, list[QuarterlyReviewHoldingItem]]:
-    review = await get_or_create_current_review(db, user_id=user_id)
-
-    holdings_result = await db.execute(
-        select(Holding)
-        .where(Holding.user_id == user_id)
-        .order_by(Holding.current_value.desc().nulls_last(), Holding.ticker.asc())
+    reference_now = now or datetime.now(timezone.utc)
+    review = await get_or_create_current_review(db, user_id=user_id, now=reference_now)
+    holdings = await _load_current_holdings(db, user_id=user_id)
+    holding_ids = [holding.id for holding in holdings]
+    current_thesis_by_holding = await _load_current_theses_by_holding(
+        db,
+        user_id=user_id,
+        holding_ids=holding_ids,
     )
-    holdings = holdings_result.scalars().all()
-
-    theses_result = await db.execute(
-        select(Thesis)
-        .where(
-            Thesis.user_id == user_id,
-            Thesis.status.in_(list(ACTIVE_THESIS_STATUSES)),
-        )
-        .order_by(Thesis.created_at.desc())
+    response_by_holding = await _load_responses_by_holding(db, review_id=review.id)
+    items = _build_review_items(
+        holdings=holdings,
+        thesis_by_holding=current_thesis_by_holding,
+        response_by_holding=response_by_holding,
+        now=reference_now,
     )
-    theses = theses_result.scalars().all()
-
-    current_thesis_by_holding: dict[uuid.UUID, Thesis] = {}
-    for thesis in theses:
-        current_thesis_by_holding.setdefault(thesis.holding_id, thesis)
-
-    responses_result = await db.execute(
-        select(QuarterlyReviewResponse).where(QuarterlyReviewResponse.review_id == review.id)
-    )
-    responses = responses_result.scalars().all()
-    response_by_holding = {response.holding_id: response for response in responses}
-
-    items: list[QuarterlyReviewHoldingItem] = []
-    for holding in holdings:
-        thesis = current_thesis_by_holding.get(holding.id)
-        if thesis is None:
-            continue
-        response = response_by_holding.get(holding.id)
-        items.append(
-            QuarterlyReviewHoldingItem(
-                holding_id=holding.id,
-                thesis_id=thesis.id,
-                ticker=holding.ticker,
-                name=holding.name,
-                currency=holding.currency,
-                current_price=_resolve_price(holding),
-                reason_age_days=_age_in_days(thesis.created_at),
-                why_own_it=thesis.why_own_it,
-                response=response.response if response is not None else None,
-                response_notes=response.notes if response is not None else None,
-                reviewed_at=response.created_at if response is not None else None,
-            )
-        )
-
-    completed_count = sum(1 for item in items if item.response is not None)
-    review.status = "completed" if not items or completed_count == len(items) else "pending"
+    _update_review_status(review, items)
     await db.flush()
     return review, items
 
@@ -147,11 +227,13 @@ async def submit_quarterly_review_response(
     holding_id: uuid.UUID,
     response_value: str,
     notes: str | None = None,
+    now: datetime | None = None,
 ) -> tuple[QuarterlyReviewResponse, Thesis, int]:
     if response_value not in VALID_RESPONSES:
         raise ValueError("Invalid quarterly review response")
 
-    review, items = await build_current_review_snapshot(db, user_id=user_id)
+    reference_now = now or datetime.now(timezone.utc)
+    review, items = await build_current_review_snapshot(db, user_id=user_id, now=reference_now)
     item_by_holding = {item.holding_id: item for item in items}
     item = item_by_holding.get(holding_id)
     if item is None:
@@ -193,12 +275,9 @@ async def submit_quarterly_review_response(
         review_response.response = response_value
         review_response.price_at_review = _resolve_price(holding)
         review_response.notes = notes
-        review_response.created_at = datetime.now(timezone.utc)
+        review_response.created_at = reference_now
 
-    if response_value in {"yes_absolutely", "probably"} and thesis.status == "needs_review":
-        thesis.status = "active"
-    elif response_value in {"not_sure", "no"} and thesis.status in {"active", "draft"}:
-        thesis.status = "needs_review"
+    _apply_thesis_status_transition(thesis=thesis, response_value=response_value)
 
     price_text = (
         f"{holding.currency} {review_response.price_at_review:,.2f}"
@@ -220,7 +299,7 @@ async def submit_quarterly_review_response(
         },
     )
 
+    pending_count = max(_pending_count(items) - (1 if item.response is None else 0), 0)
+    review.status = "completed" if pending_count == 0 else "pending"
     await db.flush()
-    _, refreshed_items = await build_current_review_snapshot(db, user_id=user_id)
-    pending_count = sum(1 for item in refreshed_items if item.response is None)
     return review_response, thesis, pending_count

@@ -5,6 +5,7 @@ from unittest.mock import AsyncMock, patch
 from app.models.holding import Holding
 from app.models.monitoring_event import MonitoringEvent
 from app.models.thesis import Thesis
+from app.services.check_now import run_check_now
 from app.services.market_data import CompanyData
 
 
@@ -73,7 +74,7 @@ async def test_check_now_creates_monitoring_events(client, auth_headers, db, tes
         return_value=company_data,
     ):
         with patch(
-            "app.services.check_now.classify_event",
+            "app.services.monitoring_pipeline.classify_event",
             new_callable=AsyncMock,
             return_value=classification,
         ):
@@ -167,3 +168,59 @@ async def test_check_now_requires_auth(client, db):
     fake_id = uuid.uuid4()
     response = await client.post(f"/api/monitoring/holdings/{fake_id}/check-now")
     assert response.status_code in (401, 403)
+
+
+async def test_run_check_now_returns_created_event_ids(db, test_user):
+    holding = Holding(
+        user_id=test_user.id,
+        ticker="AAPL",
+        name="Apple",
+        quantity=10,
+        average_cost_basis=100,
+        current_price=100,
+        current_value=1000,
+    )
+    db.add(holding)
+    await db.flush()
+
+    thesis = Thesis(
+        user_id=test_user.id,
+        holding_id=holding.id,
+        status="active",
+        thesis_kind="company",
+        why_own_it="Strong ecosystem.",
+        must_remain_true="Revenue keeps growing.",
+        what_would_change_my_mind="A major revenue miss.",
+        confidence="high",
+        review_cadence_days=7,
+        interpretation={
+            "watch_hints": [
+                {"kind": "price_move_pct", "threshold": 10.0, "rationale": "Large moves."}
+            ]
+        },
+        source="ai_assisted",
+    )
+    db.add(thesis)
+    await db.commit()
+
+    company_data = _make_company_data(current_price=120.0)
+    classification = type(
+        "Classification", (), {"severity": "warning", "analysis": "Price moved."}
+    )()
+
+    with patch(
+        "app.services.check_now.fetch_company_data",
+        new_callable=AsyncMock,
+        return_value=company_data,
+    ):
+        with patch(
+            "app.services.monitoring_pipeline.classify_event",
+            new_callable=AsyncMock,
+            return_value=classification,
+        ):
+            result = await run_check_now(holding, thesis, db)
+
+    assert result.status == "completed"
+    assert result.events_created == len(result.created_event_ids)
+    assert result.created_event_ids
+    assert all(event_id is not None for event_id in result.created_event_ids)

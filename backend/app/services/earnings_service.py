@@ -19,6 +19,12 @@ STALE_AFTER_DAYS = 7
 
 
 def _is_stale(entry: EarningsCalendar) -> bool:
+    report_date = entry.report_date
+    if report_date is not None:
+        normalized_report = report_date if report_date.tzinfo is not None else report_date.replace(tzinfo=timezone.utc)
+        if normalized_report.date() < datetime.now(timezone.utc).date():
+            return True
+
     last = entry.last_refreshed_at
     if last.tzinfo is None:
         last = last.replace(tzinfo=timezone.utc)

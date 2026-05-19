@@ -123,6 +123,37 @@ async def test_health_check_detects_breached_watch_hint(mock_classify, mock_fetc
 
 
 @pytest.mark.asyncio
+@patch("app.services.health_check.generate_monitoring_candidates")
+@patch("app.services.health_check.fetch_company_data")
+@patch("app.services.health_check.classify_event")
+async def test_health_check_graceful_on_classification_failure(mock_classify, mock_fetch, mock_candidates):
+    mock_fetch.return_value = _make_company_data()
+    mock_candidates.return_value = [
+        {"event_type": "price_move", "description": "Price moved 8% since the last check."}
+    ]
+    mock_classify.side_effect = RuntimeError("LLM timeout")
+
+    holding = Holding(
+        id=uuid.uuid4(), ticker="AAPL", name="Apple Inc",
+        quantity=20, average_cost_basis=96, currency="GBP",
+        current_price=190.0, user_id=uuid.uuid4(),
+    )
+    thesis = Thesis(
+        id=uuid.uuid4(), holding_id=holding.id, user_id=holding.user_id,
+        status="active", why_own_it="AI hardware play",
+        confidence="medium",
+    )
+
+    result = await run_health_check(thesis, holding)
+
+    assert len(result.candidates) == 1
+    assert result.candidates[0].event_type == "price_move"
+    assert result.candidates[0].severity is None
+    assert result.candidates[0].ai_analysis is None
+    assert result.thesis_assessment == "watch"
+
+
+@pytest.mark.asyncio
 async def test_health_check_endpoint_404(client, auth_headers):
     fake_id = str(uuid.uuid4())
     resp = await client.post(f"/api/theses/{fake_id}/health-check", headers=auth_headers)

@@ -1,7 +1,7 @@
 import uuid
 from datetime import datetime, timezone
 
-from fastapi import APIRouter, Depends, HTTPException, UploadFile, File, status
+from fastapi import APIRouter, BackgroundTasks, Depends, HTTPException, UploadFile, File, status
 from sqlalchemy import select, and_
 from sqlalchemy.ext.asyncio import AsyncSession
 
@@ -13,6 +13,7 @@ from app.models.holding import Holding
 from app.models.thesis import Thesis
 from app.models.user import User
 from app.schemas.broker_connection import ConnectBrokerRequest, BrokerConnectionResponse
+from app.schemas.onboarding import DraftItemResponse, DraftStatusResponse
 from app.schemas.holding import (
     ConvictionLogEntryResponse,
     ConvictionLogResponse,
@@ -42,7 +43,7 @@ def _age_in_days(timestamp: datetime) -> int:
 
 def _days_until(timestamp: datetime) -> int:
     normalized = timestamp if timestamp.tzinfo is not None else timestamp.replace(tzinfo=timezone.utc)
-    return max(0, (normalized.date() - datetime.now(timezone.utc).date()).days)
+    return (normalized.date() - datetime.now(timezone.utc).date()).days
 
 
 def _holding_value(holding: Holding) -> float:
@@ -88,6 +89,24 @@ def _priority_reason(holding: Holding, thesis: Thesis | None, thesis_age_days: i
     return None
 
 
+def _requires_market_data_key() -> bool:
+    return settings.market_data_provider == "alpha_vantage"
+
+
+def _monitoring_status_message(*, holdings_with_current_theses_count: int) -> tuple[bool, str]:
+    monitoring_ready = bool(
+        settings.enable_scheduler
+        and (not _requires_market_data_key() or settings.alpha_vantage_api_key)
+    )
+    if not settings.enable_scheduler:
+        return False, "Monitoring is disabled in this environment."
+    if _requires_market_data_key() and not settings.alpha_vantage_api_key:
+        return False, "Monitoring is not active yet. Add ALPHA_VANTAGE_API_KEY to enable daily portfolio monitoring."
+    if holdings_with_current_theses_count == 0:
+        return monitoring_ready, "Monitoring is live, but you need at least one current thesis before it can watch anything meaningful."
+    return monitoring_ready, "Daily monitoring is active. We check your current theses each morning and send a weekly digest on Sunday."
+
+
 @router.post("/connect", response_model=BrokerConnectionResponse, status_code=status.HTTP_201_CREATED)
 async def connect_broker(
     body: ConnectBrokerRequest,
@@ -118,6 +137,7 @@ async def connect_broker(
 @router.post("/sync/{connection_id}", response_model=list[HoldingResponse])
 async def sync_broker(
     connection_id: uuid.UUID,
+    background_tasks: BackgroundTasks,
     current_user: User = Depends(get_current_user),
     db: AsyncSession = Depends(get_db),
 ):
@@ -198,10 +218,16 @@ async def sync_broker(
         synced_holdings.append(holding)
 
     connection.last_synced_at = datetime.now(timezone.utc)
+    from app.services.onboarding import mark_portfolio_connected
+    await mark_portfolio_connected(db, current_user.id)
     await db.commit()
 
     for h in synced_holdings:
         await db.refresh(h)
+
+    from app.services.ai_thesis import generate_draft_theses_for_user
+    new_holding_ids = [h.id for h in synced_holdings]
+    background_tasks.add_task(generate_draft_theses_for_user, current_user.id, new_holding_ids)
 
     return synced_holdings
 
@@ -253,6 +279,7 @@ async def list_unthesised_holdings(
 @router.post("/holdings", response_model=HoldingResponse, status_code=status.HTTP_201_CREATED)
 async def add_manual_holding(
     body: ManualHoldingRequest,
+    background_tasks: BackgroundTasks,
     current_user: User = Depends(get_current_user),
     db: AsyncSession = Depends(get_db),
 ):
@@ -292,6 +319,10 @@ async def add_manual_holding(
     await mark_portfolio_connected(db, current_user.id)
     await db.commit()
     await db.refresh(holding)
+
+    from app.services.ai_thesis import generate_draft_theses_for_user
+    background_tasks.add_task(generate_draft_theses_for_user, current_user.id, [holding.id])
+
     return holding
 
 
@@ -335,6 +366,7 @@ async def enrich_holdings(
 
 @router.post("/upload-csv", response_model=list[HoldingResponse], status_code=status.HTTP_201_CREATED)
 async def upload_csv(
+    background_tasks: BackgroundTasks,
     file: UploadFile = File(...),
     current_user: User = Depends(get_current_user),
     db: AsyncSession = Depends(get_db),
@@ -384,9 +416,15 @@ async def upload_csv(
 
         created.append(holding)
 
+    from app.services.onboarding import mark_portfolio_connected
+    await mark_portfolio_connected(db, current_user.id)
     await db.commit()
     for h in created:
         await db.refresh(h)
+
+    from app.services.ai_thesis import generate_draft_theses_for_user
+    new_ids = [h.id for h in created]
+    background_tasks.add_task(generate_draft_theses_for_user, current_user.id, new_ids)
 
     return created
 
@@ -410,10 +448,57 @@ async def portfolio_pulse(
                 "latest_event_summary": p.latest_event_summary,
                 "days_since_thesis_update": p.days_since_thesis_update,
                 "has_thesis": p.has_thesis,
+                "pnl_pct": p.pnl_pct,
+                "last_checked_at": p.last_checked_at,
+                "recent_event_count": p.recent_event_count,
             }
             for p in pulses
         ],
         next_digest_at=next_digest_at,
+    )
+
+
+@router.get("/draft-status", response_model=DraftStatusResponse)
+async def draft_status(
+    current_user: User = Depends(get_current_user),
+    db: AsyncSession = Depends(get_db),
+):
+    from collections import Counter
+    from app.models.onboarding_draft import OnboardingDraft
+
+    result = await db.execute(
+        select(OnboardingDraft, Holding, Thesis)
+        .join(Holding, OnboardingDraft.holding_id == Holding.id)
+        .outerjoin(Thesis, OnboardingDraft.thesis_id == Thesis.id)
+        .where(OnboardingDraft.user_id == current_user.id)
+        .order_by(OnboardingDraft.created_at.desc())
+        .limit(50)
+    )
+    rows = result.all()
+
+    drafts = [
+        DraftItemResponse(
+            draft_id=draft.id,
+            holding_id=draft.holding_id,
+            ticker=holding.ticker,
+            name=holding.name,
+            status=draft.status,
+            thesis_id=draft.thesis_id,
+            why_own_it=thesis.why_own_it if thesis else None,
+            must_remain_true=thesis.must_remain_true if thesis else None,
+            what_would_change_my_mind=thesis.what_would_change_my_mind if thesis else None,
+        )
+        for draft, holding, thesis in rows
+    ]
+
+    counts = Counter(d.status for d in drafts)
+    return DraftStatusResponse(
+        total=len(drafts),
+        ready=counts["ready"],
+        pending=counts["pending"],
+        failed=counts["failed"],
+        reviewed=counts["reviewed"],
+        drafts=drafts,
     )
 
 
@@ -578,15 +663,9 @@ async def portfolio_summary(
 
     attention_candidates.sort(key=lambda item: (item[0], item[1]), reverse=True)
     attention_queue = [item[2] for item in attention_candidates[:3]]
-    monitoring_ready = bool(settings.enable_scheduler and settings.alpha_vantage_api_key)
-    if not settings.enable_scheduler:
-        monitoring_message = "Monitoring is disabled in this environment."
-    elif not settings.alpha_vantage_api_key:
-        monitoring_message = "Monitoring is not active yet. Add ALPHA_VANTAGE_API_KEY to enable daily portfolio monitoring."
-    elif len(holdings_with_current_theses) == 0:
-        monitoring_message = "Monitoring is live, but you need at least one current thesis before it can watch anything meaningful."
-    else:
-        monitoring_message = "Daily monitoring is active. We check your current theses each morning and send a weekly digest on Sunday."
+    monitoring_ready, monitoring_message = _monitoring_status_message(
+        holdings_with_current_theses_count=len(holdings_with_current_theses),
+    )
 
     thesis_cov = round((thesis_coverage_value / total_value * 100), 2) if total_value > 0 else 0.0
     monitorable_cov = round((monitorable_coverage_value / total_value * 100), 2) if total_value > 0 else 0.0
@@ -713,7 +792,7 @@ async def get_conviction_log(
     db: AsyncSession = Depends(get_db),
 ):
     from app.models.conviction_log_entry import ConvictionLogEntry
-    from app.services.conviction_log import EVIDENCE_REVIEWED
+    from app.services.conviction_log import EVIDENCE_REVIEWED, POST_EARNINGS_REVIEW, QUARTERLY_REVIEW
 
     # Verify holding belongs to user
     holding_result = await db.execute(
@@ -731,14 +810,25 @@ async def get_conviction_log(
     )
     entries = entries_result.scalars().all()
 
-    # Compute reason age: days since first reason_created entry
+    # Compute reason age: days since first reason_created entry (fall back to earliest thesis)
     reason_age_days = None
     for entry in reversed(entries):
         if entry.entry_type == "reason_created":
             reason_age_days = _age_in_days(entry.created_at)
             break
+    if reason_age_days is None:
+        earliest_thesis_result = await db.execute(
+            select(Thesis.created_at)
+            .where(Thesis.holding_id == holding_id)
+            .order_by(Thesis.created_at.asc())
+            .limit(1)
+        )
+        earliest_thesis_date = earliest_thesis_result.scalar_one_or_none()
+        if earliest_thesis_date is not None:
+            reason_age_days = _age_in_days(earliest_thesis_date)
 
-    review_count = sum(1 for e in entries if e.entry_type == EVIDENCE_REVIEWED)
+    review_types = {EVIDENCE_REVIEWED, POST_EARNINGS_REVIEW, QUARTERLY_REVIEW}
+    review_count = sum(1 for e in entries if e.entry_type in review_types)
 
     return ConvictionLogResponse(
         entries=entries,
@@ -774,7 +864,7 @@ async def add_manual_note(
             Thesis.holding_id == holding_id,
             Thesis.user_id == current_user.id,
             Thesis.status.in_(["draft", "active", "needs_review"]),
-        )
+        ).order_by(Thesis.created_at.desc()).limit(1)
     )
     thesis = thesis_result.scalar_one_or_none()
     if thesis is None:

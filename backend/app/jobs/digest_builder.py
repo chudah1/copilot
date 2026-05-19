@@ -21,9 +21,12 @@ from app.services.email import send_digest_email
 logger = logging.getLogger(__name__)
 
 
-def _age_in_days(timestamp: datetime) -> int:
-    normalized = timestamp if timestamp.tzinfo is not None else timestamp.replace(tzinfo=timezone.utc)
-    return (datetime.now(timezone.utc) - normalized).days
+def _normalize_datetime(timestamp: datetime) -> datetime:
+    return timestamp if timestamp.tzinfo is not None else timestamp.replace(tzinfo=timezone.utc)
+
+
+def _age_in_days(timestamp: datetime, *, now: datetime) -> int:
+    return (now - _normalize_datetime(timestamp)).days
 
 
 def _digest_headline(events_count: int, stale_count: int, missing_count: int, stable_count: int) -> str:
@@ -48,7 +51,7 @@ def _digest_subject(events_count: int, stable_count: int) -> str:
     return "0 of your reasons changed this week"
 
 
-def _digest_summary_points(events_data: list[dict], observations: dict) -> list[str]:
+def _digest_summary_points(events_data: list[dict], observations: dict, next_earnings: dict | None = None) -> list[str]:
     points: list[str] = []
     if events_data:
         first = events_data[0]
@@ -62,6 +65,14 @@ def _digest_summary_points(events_data: list[dict], observations: dict) -> list[
     stable = observations.get("stable_holdings", [])
     if stable and not points:
         points.append(f"Stable holdings: {', '.join(item['ticker'] for item in stable[:3])}")
+    if next_earnings and len(points) < 3:
+        days = next_earnings["days_until"]
+        if days == 0:
+            points.append(f"Upcoming: {next_earnings['ticker']} reports today")
+        elif days == 1:
+            points.append(f"Upcoming: {next_earnings['ticker']} reports tomorrow")
+        else:
+            points.append(f"Upcoming: {next_earnings['ticker']} reports in {days} days")
     return points[:3]
 
 
@@ -135,6 +146,233 @@ def _oldest_reason_nudge(theses: list[dict]) -> str | None:
         f'You wrote your reason for holding {oldest["name"]} {oldest["reason_age_days"]} days ago. '
         f'Would you still buy it today for the same reason?'
     )
+
+
+async def _should_skip_user_digest(db, user: User, *, now: datetime) -> bool:
+    prefs = user.preferences or {}
+    if not prefs.get("email_enabled", True):
+        return True
+
+    frequency = prefs.get("digest_frequency", "weekly")
+    if frequency == "none":
+        return True
+
+    if frequency not in {"fortnightly", "monthly"}:
+        return False
+
+    min_days = 13 if frequency == "fortnightly" else 27
+    last_digest_result = await db.execute(
+        select(Digest)
+        .where(Digest.user_id == user.id, Digest.status == "sent")
+        .order_by(Digest.period_end.desc())
+        .limit(1)
+    )
+    last_digest = last_digest_result.scalar_one_or_none()
+    if last_digest is None or last_digest.period_end is None:
+        return False
+
+    last_end = _normalize_datetime(last_digest.period_end)
+    return (now - last_end).days < min_days
+
+
+async def _load_user_holdings(db, user_id: uuid.UUID) -> list[Holding]:
+    holdings_result = await db.execute(select(Holding).where(Holding.user_id == user_id))
+    return list(holdings_result.scalars().all())
+
+
+async def _load_latest_theses_by_holding(db, holding_ids: list[uuid.UUID]) -> dict[str, Thesis]:
+    if not holding_ids:
+        return {}
+
+    all_theses_result = await db.execute(
+        select(Thesis)
+        .where(
+            Thesis.holding_id.in_(holding_ids),
+            Thesis.status.in_(["draft", "active", "needs_review"]),
+        )
+        .order_by(Thesis.created_at.desc())
+    )
+
+    thesis_by_holding: dict[str, Thesis] = {}
+    for thesis in all_theses_result.scalars().all():
+        thesis_by_holding.setdefault(str(thesis.holding_id), thesis)
+    return thesis_by_holding
+
+
+def _build_holding_snapshots(
+    holdings: list[Holding],
+    thesis_by_holding: dict[str, Thesis],
+    *,
+    now: datetime,
+) -> tuple[list[dict], list[str], list[str], list[uuid.UUID], dict[str, dict]]:
+    snapshots: list[dict] = []
+    missing_theses: list[str] = []
+    stale_theses: list[str] = []
+    thesis_ids: list[uuid.UUID] = []
+
+    for holding in holdings:
+        thesis = thesis_by_holding.get(str(holding.id))
+        snapshot = {
+            "ticker": holding.ticker,
+            "name": holding.name,
+            "holding_id": str(holding.id),
+        }
+        if thesis:
+            reason_age_days = _age_in_days(thesis.updated_at, now=now)
+            snapshot.update(
+                {
+                    "thesis_id": str(thesis.id),
+                    "why_own_it": thesis.why_own_it,
+                    "must_remain_true": thesis.must_remain_true,
+                    "what_would_change_my_mind": thesis.what_would_change_my_mind,
+                    "ai_summary": thesis.ai_summary,
+                    "thesis_status": thesis.status,
+                    "thesis_updated_at": thesis.updated_at,
+                    "reason_age_days": reason_age_days,
+                }
+            )
+            if reason_age_days > 90:
+                stale_theses.append(holding.ticker)
+            thesis_ids.append(thesis.id)
+        else:
+            missing_theses.append(holding.ticker)
+
+        snapshots.append(snapshot)
+
+    snapshot_by_holding_id = {snapshot["holding_id"]: snapshot for snapshot in snapshots}
+    return snapshots, missing_theses, stale_theses, thesis_ids, snapshot_by_holding_id
+
+
+async def _load_events_data(
+    db,
+    *,
+    user_id: uuid.UUID,
+    holdings_by_id: dict[uuid.UUID, Holding],
+    snapshot_by_holding_id: dict[str, dict],
+    signal_counts: dict[str, tuple[int, int]],
+    period_start: datetime,
+    period_end: datetime,
+) -> tuple[list[MonitoringEvent], list[dict], set[str]]:
+    events_result = await db.execute(
+        select(MonitoringEvent)
+        .join(Holding)
+        .where(
+            Holding.user_id == user_id,
+            MonitoringEvent.created_at >= period_start,
+            MonitoringEvent.created_at <= period_end,
+        )
+        .order_by(MonitoringEvent.created_at.desc())
+    )
+    events = list(events_result.scalars().all())
+    event_holding_ids: set[str] = set()
+    events_data: list[dict] = []
+
+    for event in events:
+        holding = holdings_by_id.get(event.holding_id)
+        holding_id_str = str(event.holding_id)
+        event_holding_ids.add(holding_id_str)
+        snapshot = snapshot_by_holding_id.get(holding_id_str, {})
+        thesis_id_str = snapshot.get("thesis_id")
+        intact, weakening = signal_counts.get(str(thesis_id_str or ""), (0, 0))
+
+        events_data.append(
+            {
+                "ticker": holding.ticker if holding else "Unknown",
+                "name": holding.name if holding else "Unknown",
+                "severity": event.severity,
+                "title": event.title,
+                "summary": event.summary,
+                "ai_analysis": event.ai_analysis,
+                "why_own_it": snapshot.get("why_own_it"),
+                "verdict": event.verdict,
+                "evidence_summary": event.evidence_summary,
+                "signal_status_text": _signal_status_text(intact, weakening),
+            }
+        )
+
+    return events, events_data, event_holding_ids
+
+
+def _build_stable_holdings(
+    holdings_with_theses: list[dict],
+    *,
+    event_holding_ids: set[str],
+    stale_tickers: set[str],
+) -> list[dict]:
+    stable_holdings: list[dict] = []
+    for snapshot in holdings_with_theses:
+        if snapshot["holding_id"] in event_holding_ids or not snapshot.get("why_own_it"):
+            continue
+        stable_holdings.append(
+            {
+                "ticker": snapshot["ticker"],
+                "name": snapshot["name"],
+                "thesis_status": snapshot.get("thesis_status", "draft"),
+                "stale": snapshot["ticker"] in stale_tickers,
+                "why_own_it": snapshot["why_own_it"],
+            }
+        )
+    return stable_holdings
+
+
+async def _load_upcoming_earnings(
+    db,
+    *,
+    tickers: list[str],
+    now: datetime,
+    upcoming_window: datetime,
+) -> list[dict]:
+    if not tickers:
+        return []
+
+    earnings_result = await db.execute(
+        select(EarningsCalendar)
+        .where(
+            EarningsCalendar.ticker.in_(tickers),
+            EarningsCalendar.report_date >= now,
+            EarningsCalendar.report_date <= upcoming_window,
+        )
+        .order_by(EarningsCalendar.report_date)
+    )
+
+    upcoming_earnings: list[dict] = []
+    for earnings in earnings_result.scalars().all():
+        report_date = _normalize_datetime(earnings.report_date)
+        days_until = (report_date - now).days
+        upcoming_earnings.append(
+            {
+                "ticker": earnings.ticker,
+                "report_date": report_date.isoformat(),
+                "days_until": max(0, days_until),
+            }
+        )
+    return upcoming_earnings
+
+
+def _concentration_warning(holdings: list[Holding]) -> str:
+    total_value = sum(float(holding.current_value or 0) for holding in holdings)
+    if total_value <= 0:
+        return ""
+
+    sector_pcts: dict[str, float] = {}
+    for holding in holdings:
+        sector = holding.sector or "Unknown"
+        sector_pcts[sector] = sector_pcts.get(sector, 0.0) + float(holding.current_value or 0) / total_value * 100
+
+    high_conc = {sector: round(pct, 1) for sector, pct in sector_pcts.items() if pct > 30}
+    if not high_conc:
+        return ""
+    return ", ".join(f"{sector}: {pct}%" for sector, pct in high_conc.items())
+
+
+def _update_quiet_streak(user: User, *, has_events: bool) -> int:
+    prefs = dict(user.preferences) if user.preferences else {}
+    quiet_streak = prefs.get("consecutive_quiet_weeks", 0)
+    quiet_streak = 0 if has_events else quiet_streak + 1
+    if prefs.get("consecutive_quiet_weeks") != quiet_streak:
+        prefs["consecutive_quiet_weeks"] = quiet_streak
+        user.preferences = prefs
+    return quiet_streak
 
 
 def _render_digest_html(
@@ -281,169 +519,54 @@ async def run_digest_builder():
     upcoming_window = now + timedelta(days=14)
 
     async with async_session() as db:
-        users_result = await db.execute(select(User))
-        users = users_result.scalars().all()
+        users_result = await db.execute(select(User.id))
+        user_ids = list(users_result.scalars().all())
 
-        for user in users:
+        for user_id in user_ids:
+            user = await db.get(User, user_id)
+            if user is None:
+                continue
             try:
-                prefs = user.preferences or {}
-                if not prefs.get("email_enabled", True):
-                    continue
-                frequency = prefs.get("digest_frequency", "weekly")
-                if frequency == "none":
+                if await _should_skip_user_digest(db, user, now=now):
                     continue
 
-                # Fortnightly / monthly: skip if not enough time since last digest
-                if frequency in ("fortnightly", "monthly"):
-                    min_days = 13 if frequency == "fortnightly" else 27
-                    last_digest_result = await db.execute(
-                        select(Digest)
-                        .where(Digest.user_id == user.id, Digest.status == "sent")
-                        .order_by(Digest.period_end.desc())
-                        .limit(1)
-                    )
-                    last_digest = last_digest_result.scalar_one_or_none()
-                    if last_digest is not None and last_digest.period_end is not None:
-                        last_end = last_digest.period_end
-                        if not last_end.tzinfo:
-                            last_end = last_end.replace(tzinfo=timezone.utc)
-                        if (now - last_end).days < min_days:
-                            continue
-
-                holdings_result = await db.execute(
-                    select(Holding).where(Holding.user_id == user.id)
-                )
-                holdings = holdings_result.scalars().all()
+                holdings = await _load_user_holdings(db, user_id)
                 if not holdings:
                     continue
 
-                holdings_with_theses = []
-                missing_theses = []
-                stale_theses = []
-                stable_holdings = []
-                thesis_ids: list[uuid.UUID] = []
-
-                holding_ids = [h.id for h in holdings]
-                all_theses_result = await db.execute(
-                    select(Thesis)
-                    .where(
-                        Thesis.holding_id.in_(holding_ids),
-                        Thesis.status.in_(["draft", "active", "needs_review"]),
-                    )
-                    .order_by(Thesis.created_at.desc())
+                holdings_by_id = {holding.id: holding for holding in holdings}
+                thesis_by_holding = await _load_latest_theses_by_holding(db, list(holdings_by_id))
+                holdings_with_theses, missing_theses, stale_theses, thesis_ids, snapshot_by_holding_id = _build_holding_snapshots(
+                    holdings,
+                    thesis_by_holding,
+                    now=now,
                 )
-                thesis_by_holding: dict[str, Thesis] = {}
-                for t in all_theses_result.scalars().all():
-                    hid = str(t.holding_id)
-                    if hid not in thesis_by_holding:
-                        thesis_by_holding[hid] = t
-
-                for h in holdings:
-                    thesis = thesis_by_holding.get(str(h.id))
-
-                    entry = {"ticker": h.ticker, "name": h.name, "holding_id": str(h.id)}
-                    if thesis:
-                        entry["thesis_id"] = str(thesis.id)
-                        entry["why_own_it"] = thesis.why_own_it
-                        entry["must_remain_true"] = thesis.must_remain_true
-                        entry["what_would_change_my_mind"] = thesis.what_would_change_my_mind
-                        entry["ai_summary"] = thesis.ai_summary
-                        entry["thesis_status"] = thesis.status
-                        entry["thesis_updated_at"] = thesis.updated_at
-                        entry["reason_age_days"] = _age_in_days(thesis.updated_at)
-                        if entry["reason_age_days"] > 90:
-                            stale_theses.append(h.ticker)
-                        thesis_ids.append(thesis.id)
-                    else:
-                        missing_theses.append(h.ticker)
-
-                    holdings_with_theses.append(entry)
-
-                # Load signal counts per thesis in a single batch query
                 signal_counts = await _load_signal_counts(db, thesis_ids)
-
-                events_result = await db.execute(
-                    select(MonitoringEvent)
-                    .join(Holding)
-                    .where(
-                        Holding.user_id == user.id,
-                        MonitoringEvent.created_at >= period_start,
-                        MonitoringEvent.created_at <= period_end,
-                    )
-                    .order_by(MonitoringEvent.created_at.desc())
+                events, events_data, event_holding_ids = await _load_events_data(
+                    db,
+                    user_id=user_id,
+                    holdings_by_id=holdings_by_id,
+                    snapshot_by_holding_id=snapshot_by_holding_id,
+                    signal_counts=signal_counts,
+                    period_start=period_start,
+                    period_end=period_end,
                 )
-                events = events_result.scalars().all()
+                stable_holdings = _build_stable_holdings(
+                    holdings_with_theses,
+                    event_holding_ids=event_holding_ids,
+                    stale_tickers=set(stale_theses),
+                )
 
-                events_data = []
-                event_holding_ids = set()
-                for e in events:
-                    holding = next((h for h in holdings if h.id == e.holding_id), None)
-                    event_holding_ids.add(e.holding_id)
-                    related_holding = holding
-                    related_reason = None
-                    thesis_id_str = None
-                    if related_holding is not None:
-                        matching_entry = next((item for item in holdings_with_theses if item["holding_id"] == str(related_holding.id)), None)
-                        if matching_entry:
-                            related_reason = matching_entry.get("why_own_it")
-                            thesis_id_str = matching_entry.get("thesis_id")
-
-                    intact, weakening = signal_counts.get(thesis_id_str or "", (0, 0))
-                    events_data.append({
-                        "ticker": holding.ticker if holding else "Unknown",
-                        "name": holding.name if holding else "Unknown",
-                        "severity": e.severity,
-                        "title": e.title,
-                        "summary": e.summary,
-                        "ai_analysis": e.ai_analysis,
-                        "why_own_it": related_reason,
-                        "verdict": e.verdict,
-                        "evidence_summary": e.evidence_summary,
-                        "signal_status_text": _signal_status_text(intact, weakening),
-                    })
-
-                for entry in holdings_with_theses:
-                    holding_id = entry["holding_id"]
-                    if holding_id in {str(hid) for hid in event_holding_ids}:
-                        continue
-                    if entry.get("why_own_it"):
-                        stable_holdings.append(
-                            {
-                                "ticker": entry["ticker"],
-                                "name": entry["name"],
-                                "thesis_status": entry.get("thesis_status", "draft"),
-                                "stale": entry["ticker"] in stale_theses,
-                                "why_own_it": entry["why_own_it"],
-                            }
-                        )
-
-                # Load upcoming earnings for quiet week mode
-                upcoming_earnings: list[dict] = []
+                upcoming_earnings = []
                 if not events_data:
-                    tickers = [h.ticker for h in holdings]
-                    earnings_result = await db.execute(
-                        select(EarningsCalendar)
-                        .where(
-                            EarningsCalendar.ticker.in_(tickers),
-                            EarningsCalendar.report_date >= now,
-                            EarningsCalendar.report_date <= upcoming_window,
-                        )
-                        .order_by(EarningsCalendar.report_date)
+                    upcoming_earnings = await _load_upcoming_earnings(
+                        db,
+                        tickers=[holding.ticker for holding in holdings],
+                        now=now,
+                        upcoming_window=upcoming_window,
                     )
-                    for ec in earnings_result.scalars().all():
-                        days_until = (ec.report_date.replace(tzinfo=timezone.utc) - now).days
-                        upcoming_earnings.append({"ticker": ec.ticker, "days_until": max(0, days_until)})
 
-                total_value = sum(float(h.current_value or 0) for h in holdings)
-                concentration_warnings = ""
-                if total_value > 0:
-                    sector_pcts = {}
-                    for h in holdings:
-                        s = h.sector or "Unknown"
-                        sector_pcts[s] = sector_pcts.get(s, 0) + float(h.current_value or 0) / total_value * 100
-                    high_conc = {k: round(v, 1) for k, v in sector_pcts.items() if v > 30}
-                    if high_conc:
-                        concentration_warnings = ", ".join(f"{k}: {v}%" for k, v in high_conc.items())
+                concentration_warnings = _concentration_warning(holdings)
 
                 observations = {
                     "concentration_warnings": concentration_warnings,
@@ -465,17 +588,9 @@ async def run_digest_builder():
                     upcoming_earnings_count=len(upcoming_earnings),
                 )
                 quiet_nudge = _oldest_reason_nudge(holdings_with_theses) if not events_data else None
+                next_earnings = upcoming_earnings[0] if upcoming_earnings else None
 
-                # Track consecutive quiet weeks and suggest frequency change
-                prefs = dict(user.preferences) if user.preferences else {}
-                quiet_streak = prefs.get("consecutive_quiet_weeks", 0)
-                if not events_data:
-                    quiet_streak += 1
-                else:
-                    quiet_streak = 0
-                if prefs.get("consecutive_quiet_weeks") != quiet_streak:
-                    prefs["consecutive_quiet_weeks"] = quiet_streak
-                    user.preferences = prefs
+                quiet_streak = _update_quiet_streak(user, has_events=bool(events_data))
 
                 html_content = _render_digest_html(
                     holdings_with_theses=holdings_with_theses,
@@ -499,13 +614,14 @@ async def run_digest_builder():
                         "holdings_count": len(holdings),
                         "stable_holdings_count": len(stable_holdings),
                         "headline": headline,
-                        "summary_points": _digest_summary_points(events_data, observations),
+                        "summary_points": _digest_summary_points(events_data, observations, next_earnings),
                         "missing_theses_count": len(missing_theses),
                         "stale_theses_count": len(stale_theses),
                         "concentration_warning": concentration_warnings,
                         "monitoring_receipt": receipt,
                         "quiet_nudge": quiet_nudge,
                         "consecutive_quiet_weeks": quiet_streak,
+                        "next_earnings": next_earnings,
                     },
                     status="pending",
                 )
@@ -525,15 +641,16 @@ async def run_digest_builder():
                     digest.sent_at = datetime.now(timezone.utc) if sent else None
                     if sent:
                         from app.services.onboarding import mark_digest_received
-                        await mark_digest_received(db, user.id)
+                        await mark_digest_received(db, user_id)
                 else:
                     digest.status = "failed"
 
                 await db.commit()
-                logger.info(f"Digest {'sent' if digest.status == 'sent' else 'failed'} for user {user.id}")
+                logger.info("Digest %s for user %s", "sent" if digest.status == "sent" else "failed", user_id)
 
-            except Exception as e:
-                logger.error(f"Digest build failed for user {user.id}: {e}")
+            except Exception:
+                await db.rollback()
+                logger.exception("Digest build failed for user %s", user_id)
                 continue
 
     logger.info("Weekly digest builder complete")

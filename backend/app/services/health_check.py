@@ -51,6 +51,53 @@ def _assess(candidates: list[ClassifiedCandidate]) -> str:
     return "all_clear"
 
 
+def _market_values(company_data: CompanyData) -> dict[str, float]:
+    market_values = {
+        "revenue_growth_yoy": company_data.revenue_growth_yoy,
+        "earnings_growth_yoy": company_data.earnings_growth_yoy,
+        "pe_ratio": company_data.pe_ratio,
+        "dividend_yield": company_data.dividend_yield,
+    }
+    return {key: value for key, value in market_values.items() if value is not None}
+
+
+async def _classify_candidates(
+    thesis: Thesis,
+    raw_candidates: list[dict],
+) -> list[ClassifiedCandidate]:
+    classified: list[ClassifiedCandidate] = []
+    for candidate in raw_candidates:
+        description = candidate.get("description", "")
+        severity = None
+        ai_analysis = None
+
+        try:
+            result = await classify_event(
+                why_own_it=thesis.why_own_it,
+                must_remain_true=thesis.must_remain_true,
+                what_would_change_my_mind=thesis.what_would_change_my_mind,
+                ai_summary=thesis.ai_summary,
+                event_description=description,
+            )
+        except Exception:
+            logger.exception("Health check classification failed for thesis %s", thesis.id)
+            result = None
+
+        if result:
+            severity = result.severity
+            ai_analysis = result.analysis
+
+        classified.append(
+            ClassifiedCandidate(
+                event_type=candidate.get("event_type", "unknown"),
+                description=description,
+                severity=severity,
+                ai_analysis=ai_analysis,
+            )
+        )
+    return classified
+
+
 async def run_health_check(thesis: Thesis, holding: Holding) -> HealthCheckResult:
     """Run a stateless health check for a single thesis against live market data."""
     company_data: CompanyData | None = None
@@ -62,47 +109,14 @@ async def run_health_check(thesis: Thesis, holding: Holding) -> HealthCheckResul
     if company_data is None:
         return HealthCheckResult(ticker=holding.ticker)
 
-    # Generate monitoring candidates using existing logic
     raw_candidates = generate_monitoring_candidates(
         thesis.interpretation,
         company_data,
         holding.current_price,
     )
 
-    # Classify each candidate with AI
-    classified: list[ClassifiedCandidate] = []
-    for candidate in raw_candidates:
-        description = candidate.get("description", "")
-        severity = None
-        ai_analysis = None
-
-        result = await classify_event(
-            why_own_it=thesis.why_own_it,
-            must_remain_true=thesis.must_remain_true,
-            what_would_change_my_mind=thesis.what_would_change_my_mind,
-            ai_summary=thesis.ai_summary,
-            event_description=description,
-        )
-        if result:
-            severity = result.severity
-            ai_analysis = result.analysis
-
-        classified.append(ClassifiedCandidate(
-            event_type=candidate.get("event_type", "unknown"),
-            description=description,
-            severity=severity,
-            ai_analysis=ai_analysis,
-        ))
-
-    # Check watch hint metrics
-    market_values = {
-        "revenue_growth_yoy": company_data.revenue_growth_yoy,
-        "earnings_growth_yoy": company_data.earnings_growth_yoy,
-        "pe_ratio": company_data.pe_ratio,
-        "dividend_yield": company_data.dividend_yield,
-    }
-    market_values = {k: v for k, v in market_values.items() if v is not None}
-    watch_hints_status = check_metric_watch_hints(thesis.interpretation, market_values)
+    classified = await _classify_candidates(thesis, raw_candidates)
+    watch_hints_status = check_metric_watch_hints(thesis.interpretation, _market_values(company_data))
 
     return HealthCheckResult(
         ticker=holding.ticker,

@@ -27,15 +27,15 @@ function gradeTheTrade(result: SimulateTradeResponse): {
   const concDelta = concAfter - result.before.top_3_concentration_pct;
 
   if (w.length === 0 && concDelta <= 2) {
-    return { grade: "A", color: "text-emerald-700", bg: "bg-emerald-50", border: "border-emerald-200", headline: "Clean entry", detail: "No concentration warnings. This fits your portfolio well." };
+    return { grade: "A", color: "text-emerald-700", bg: "bg-emerald-500/8", border: "border-emerald-500/25", headline: "Clean entry", detail: "No concentration warnings. This fits your portfolio well." };
   }
   if (w.length <= 1 && concDelta <= 5) {
-    return { grade: "B", color: "text-blue-700", bg: "bg-blue-50", border: "border-blue-200", headline: "Looks reasonable", detail: "Minor considerations but nothing alarming." };
+    return { grade: "B", color: "text-blue-700", bg: "bg-blue-500/8", border: "border-blue-500/25", headline: "Looks reasonable", detail: "Minor considerations but nothing alarming." };
   }
   if (w.some((x) => x.warning_type === "concentration_risk")) {
-    return { grade: "C", color: "text-amber-700", bg: "bg-amber-50", border: "border-amber-200", headline: "Concentration risk", detail: `This would make your top positions drive ${pct(concAfter)} of your portfolio.` };
+    return { grade: "C", color: "text-amber-700", bg: "bg-amber-500/8", border: "border-amber-500/25", headline: "Concentration risk", detail: `This would make your top positions drive ${pct(concAfter)} of your portfolio.` };
   }
-  return { grade: "D", color: "text-red-700", bg: "bg-red-50", border: "border-red-200", headline: "Proceed with caution", detail: `${w.length} warning${w.length !== 1 ? "s" : ""} flagged. Think this through.` };
+  return { grade: "D", color: "text-red-600", bg: "bg-red-500/8", border: "border-red-500/25", headline: "Proceed with caution", detail: `${w.length} warning${w.length !== 1 ? "s" : ""} flagged. Think this through.` };
 }
 
 // --- Donut chart -------------------------------------------------------------
@@ -46,12 +46,12 @@ function DonutChart({ breakdown, label, size = 112 }: { breakdown: Record<string
   const sorted = Object.entries(breakdown).sort(([, a], [, b]) => b - a);
   if (sorted.length === 0) return null;
 
-  let cum = 0;
-  const stops = sorted.map(([, val], i) => {
-    const start = cum;
-    cum += val;
-    return `${PALETTE[i % PALETTE.length]} ${start}% ${cum}%`;
-  });
+  const stops = sorted.reduce<string[]>((segments, [, val], i) => {
+    const start = sorted.slice(0, i).reduce((total, [, current]) => total + current, 0);
+    const end = start + val;
+    segments.push(`${PALETTE[i % PALETTE.length]} ${start}% ${end}%`);
+    return segments;
+  }, []);
 
   return (
     <div className="flex flex-col items-center gap-2">
@@ -164,10 +164,8 @@ export default function SimulatePage() {
     .slice(0, 5);
 
   // Sectors the user doesn't have yet
-  const existingSectors = new Set(holdings.map((h) => h.sector).filter(Boolean));
-
   return (
-    <div className="max-w-2xl mx-auto">
+    <div className="max-w-2xl mx-auto px-6 py-8">
       {/* Header */}
       <div className="mb-8">
         <h1 className="text-3xl font-bold tracking-tight">What if&hellip;</h1>
@@ -299,7 +297,7 @@ export default function SimulatePage() {
           {result.warnings.length > 0 && (
             <div className="space-y-2">
               {result.warnings.map((w, i) => (
-                <div key={i} className={`rounded-lg border px-4 py-2.5 text-sm ${w.warning_type === "missing_thesis" ? "border-blue-200 bg-blue-50/50 text-blue-800" : "border-amber-200 bg-amber-50/50 text-amber-800"}`}>
+                <div key={i} className={`rounded-lg border px-4 py-2.5 text-sm ${w.warning_type === "missing_thesis" ? "border-blue-500/25 bg-blue-500/8 text-blue-700" : "border-amber-500/25 bg-amber-500/8 text-amber-700"}`}>
                   {w.message}
                 </div>
               ))}

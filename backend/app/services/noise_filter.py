@@ -48,6 +48,21 @@ def _get_evidence_type(event_type: str) -> str:
     return EVIDENCE_TYPE_MAP.get(event_type, event_type)
 
 
+def _normalize_datetime(timestamp: datetime) -> datetime:
+    return timestamp if timestamp.tzinfo is not None else timestamp.replace(tzinfo=timezone.utc)
+
+
+def _event_evidence_type(event_type: str | None, raw_data: dict[str, Any] | None) -> str | None:
+    if event_type:
+        return event_type
+    if not raw_data or not isinstance(raw_data, dict):
+        return None
+    candidate_type = raw_data.get("candidate_type")
+    if isinstance(candidate_type, str):
+        return _get_evidence_type(candidate_type)
+    return None
+
+
 async def _load_recent_evidence_keys(
     db: AsyncSession,
     holding_id: uuid.UUID,
@@ -56,20 +71,21 @@ async def _load_recent_evidence_keys(
     """Load (evidence_type, source_id) pairs from recent events for this holding."""
     cutoff = datetime.now(timezone.utc) - timedelta(days=days)
     result = await db.execute(
-        select(MonitoringEvent.evidence_type, MonitoringEvent.raw_data)
+        select(MonitoringEvent.evidence_type, MonitoringEvent.raw_data, MonitoringEvent.event_type)
         .where(
             MonitoringEvent.holding_id == holding_id,
             MonitoringEvent.created_at >= cutoff,
         )
     )
     keys: set[tuple[str, str]] = set()
-    for ev_type, raw_data in result:
+    for ev_type, raw_data, event_type in result:
         if not raw_data or not isinstance(raw_data, dict):
             continue
         evidence = raw_data.get("evidence", {})
         source_id = _get_evidence_source_id(evidence)
-        if source_id and ev_type:
-            keys.add((ev_type, source_id))
+        normalized_type = _event_evidence_type(ev_type, raw_data) or _get_evidence_type(event_type)
+        if source_id and normalized_type:
+            keys.add((normalized_type, source_id))
     return keys
 
 
@@ -115,7 +131,7 @@ def _apply_signal_cooldown(
 
         evidence_type = _get_evidence_type(candidate.get("event_type", ""))
         cooldown_hours = COOLDOWN_HOURS.get(evidence_type, DEFAULT_COOLDOWN_HOURS)
-        cooldown_end = signal.last_fired_at + timedelta(hours=cooldown_hours)
+        cooldown_end = _normalize_datetime(signal.last_fired_at) + timedelta(hours=cooldown_hours)
 
         if now < cooldown_end:
             logger.debug(

@@ -12,16 +12,16 @@ interface SmartMetricCardProps {
 
 const COLOR_MAP = {
   green: {
-    border: "border-emerald-200",
-    label: "text-emerald-800",
-    value: "text-emerald-800",
-    verdict: "text-emerald-700",
+    border: "border-emerald-500/30",
+    label: "text-emerald-700",
+    value: "text-emerald-700",
+    verdict: "text-emerald-700/80",
   },
   amber: {
-    border: "border-amber-200",
-    label: "text-amber-800",
-    value: "text-amber-800",
-    verdict: "text-amber-700",
+    border: "border-amber-500/30",
+    label: "text-amber-700",
+    value: "text-amber-700",
+    verdict: "text-amber-700/80",
   },
   neutral: {
     border: "border-border",
@@ -41,7 +41,7 @@ export function SmartMetricCard({ label, value, verdict, color, trend }: SmartMe
         <p className={`text-2xl font-bold mt-1 ${c.value}`}>{value}</p>
         <p className={`text-xs mt-1 ${c.verdict}`}>{verdict}</p>
         {trend && (
-          <p className={`text-[11px] mt-1.5 ${trend.improving ? "text-emerald-600" : "text-red-500"}`}>
+          <p className={`text-[11px] mt-1.5 ${trend.improving ? "text-emerald-700" : "text-red-600"}`}>
             {trend.improving ? "↓" : "↑"} was {trend.previous} last week
           </p>
         )}

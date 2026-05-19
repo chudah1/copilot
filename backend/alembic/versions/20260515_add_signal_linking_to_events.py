@@ -8,6 +8,8 @@ Create Date: 2026-05-15
 from alembic import op
 import sqlalchemy as sa
 
+from app.database import UUIDType
+
 
 revision = "20260515_signal_linking"
 down_revision = "20260513_add_thesis_reviews"
@@ -16,8 +18,8 @@ depends_on = None
 
 
 def upgrade() -> None:
-    op.add_column("monitoring_events", sa.Column("claim_id", sa.String(length=36), nullable=True))
-    op.add_column("monitoring_events", sa.Column("signal_id", sa.String(length=36), nullable=True))
+    op.add_column("monitoring_events", sa.Column("claim_id", UUIDType(), nullable=True))
+    op.add_column("monitoring_events", sa.Column("signal_id", UUIDType(), nullable=True))
     op.add_column("monitoring_events", sa.Column("evidence_type", sa.String(length=30), nullable=True))
     op.add_column("monitoring_events", sa.Column("evidence_summary", sa.Text(), nullable=True))
     op.add_column("monitoring_events", sa.Column("verdict", sa.String(length=20), nullable=True))

@@ -15,6 +15,7 @@ from app.services.onboarding import (
     mark_portfolio_connected,
     mark_reason_written,
     mark_digest_received,
+    mark_onboarding_completed,
     is_onboarding_complete,
     coverage_pct,
 )
@@ -78,6 +79,20 @@ async def test_mark_digest_received_sets_completed(db, test_user):
     state = await get_or_create_state(db, test_user.id)
     assert state.first_digest_received_at is not None
     assert state.onboarding_completed_at is not None
+    await db.refresh(test_user)
+    assert test_user.onboarding_completed_at is not None
+
+
+@pytest.mark.asyncio
+async def test_mark_onboarding_completed_sets_state_and_user(db, test_user):
+    completed_at = datetime.now(timezone.utc)
+    await mark_onboarding_completed(db, user_id=test_user.id, completed_at=completed_at)
+    await db.commit()
+
+    state = await get_or_create_state(db, test_user.id)
+    assert state.onboarding_completed_at.replace(tzinfo=timezone.utc) == completed_at
+    await db.refresh(test_user)
+    assert test_user.onboarding_completed_at == completed_at
 
 
 @pytest.mark.asyncio
@@ -351,6 +366,49 @@ async def test_drip_sends_day5_email_when_low_coverage(db, job_session_factory):
 
     state_after = (await db.execute(select(OnboardingState).where(OnboardingState.user_id == user.id))).scalar_one()
     assert state_after.day5_email_sent_at is not None
+
+
+@pytest.mark.asyncio
+async def test_drip_marks_completion_on_state_and_user_when_coverage_reaches_half(db, job_session_factory):
+    user = User(email="drip_complete_threshold@example.com", password_hash=hash_password("pass"))
+    db.add(user)
+    await db.flush()
+
+    for ticker, name in [("AAPL", "Apple"), ("MSFT", "Microsoft")]:
+        db.add(Holding(user_id=user.id, ticker=ticker, name=name, quantity=5, average_cost_basis=100))
+    await db.flush()
+
+    db.add(
+        Thesis(
+            user_id=user.id,
+            holding_id=(await db.execute(select(Holding.id).where(Holding.user_id == user.id).limit(1))).scalar_one(),
+            status="active",
+            thesis_kind="company",
+            why_own_it="Apple ecosystem.",
+            confidence="high",
+            review_cadence_days=7,
+            source="user",
+        )
+    )
+    state = OnboardingState(
+        user_id=user.id,
+        portfolio_connected_at=datetime.now(timezone.utc) - timedelta(days=6),
+        first_reason_written_at=datetime.now(timezone.utc) - timedelta(days=5),
+        reasons_written_count=1,
+        day1_email_sent_at=datetime.now(timezone.utc) - timedelta(days=4),
+        last_email_sent_at=datetime.now(timezone.utc) - timedelta(days=2),
+    )
+    db.add(state)
+    await db.commit()
+
+    with patch("app.jobs.onboarding_drip.async_session", job_session_factory):
+        with patch("app.jobs.onboarding_drip.send_onboarding_email", new_callable=AsyncMock, return_value=True):
+            await run_onboarding_drip()
+
+    await db.refresh(user)
+    state_after = (await db.execute(select(OnboardingState).where(OnboardingState.user_id == user.id))).scalar_one()
+    assert state_after.onboarding_completed_at is not None
+    assert user.onboarding_completed_at is not None
 
 
 # --- Hook integration tests ---

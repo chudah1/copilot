@@ -20,8 +20,13 @@ class Settings(BaseSettings):
     resend_api_key: str = ""
     trading212_base_url: str = "https://live.trading212.com/api/v0"
     alpha_vantage_api_key: str = ""
-    market_data_provider: str = "alpha_vantage"
+    market_data_provider: str = "yfinance"
     frontend_url: str = "http://localhost:3000"
+
+    # LLM optimizations / reliability
+    llm_response_cache_ttl_seconds: int = 15 * 60
+    openai_prompt_cache_key: str = "thesis_decompose_v3"
+    openai_prompt_cache_retention: str = "24h"  # "in_memory" | "24h"
 
     model_config = {"env_file": ".env", "env_file_encoding": "utf-8"}
 

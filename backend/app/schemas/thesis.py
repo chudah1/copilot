@@ -29,6 +29,16 @@ class AssistThesisResponse(BaseModel):
     source: str = "ai_assisted"
 
 
+class DraftThesisRequest(BaseModel):
+    ticker: str
+
+
+class DraftThesisResponse(BaseModel):
+    why_own_it: str
+    must_remain_true: str
+    what_would_change_my_mind: str
+
+
 class ThesisSignalResponse(BaseModel):
     id: uuid.UUID
     signal_type: str

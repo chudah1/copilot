@@ -120,6 +120,24 @@ async def test_upload_csv_upserts_existing(client, auth_headers):
     assert len(holdings.json()) == 1
 
 
+async def test_upload_csv_marks_portfolio_connected_for_onboarding(client, auth_headers):
+    csv_content = b"ticker,name,quantity,average_cost_basis\nAAPL,Apple Inc,10,150.50"
+
+    response = await client.post(
+        "/api/portfolio/upload-csv",
+        files={"file": ("portfolio.csv", csv_content, "text/csv")},
+        headers=auth_headers,
+    )
+    assert response.status_code == 201
+
+    onboarding = await client.get("/api/onboarding/status", headers=auth_headers)
+    assert onboarding.status_code == 200
+    data = onboarding.json()
+    assert data["steps"]["import_holdings"]["done"] is True
+    assert data["steps"]["import_holdings"]["count"] == 1
+    assert data["current_step"] == "write_first_thesis"
+
+
 async def test_upload_csv_requires_auth(client):
     csv_content = b"ticker,name,quantity,average_cost_basis\nAAPL,Apple,10,150"
     response = await client.post(

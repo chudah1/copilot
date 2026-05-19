@@ -2,9 +2,6 @@
 
 import Link from "next/link";
 import { formatCurrency, formatPercent } from "@/lib/utils";
-import { Badge } from "@/components/ui/badge";
-import { Card, CardContent } from "@/components/ui/card";
-import { Line, LineChart, ResponsiveContainer } from "recharts";
 import type { Holding, Thesis, HoldingPulse, UpcomingEarnings } from "@/types";
 
 interface Props {
@@ -13,101 +10,80 @@ interface Props {
   pulse?: HoldingPulse;
   earnings?: UpcomingEarnings;
   onGenerateDraft?: () => void;
+  index?: number;
 }
 
-const PULSE_COLORS: Record<string, string> = {
-  intact: "bg-emerald-500",
-  watch: "bg-amber-500",
-  review: "bg-red-500",
-};
+function statusStyle(pulse: HoldingPulse | undefined, hasThesis: boolean) {
+  if (!hasThesis) return { dot: "text-border", label: "No thesis", text: "text-muted-foreground/60" };
+  const s = pulse?.pulse_status ?? "intact";
+  if (s === "review") return { dot: "text-red-600", label: "Needs review", text: "text-red-600" };
+  if (s === "watch") return { dot: "text-amber-700", label: "Watching", text: "text-amber-700" };
+  return { dot: "text-emerald-700", label: "Intact", text: "text-emerald-700" };
+}
 
-export function HoldingCard({ holding, thesis, pulse, earnings, onGenerateDraft }: Props) {
+export function HoldingCard({ holding, thesis, pulse, earnings, onGenerateDraft, index = 0 }: Props) {
   const cost = holding.quantity * holding.average_cost_basis;
-  const value = holding.current_value || 0;
+  const value = holding.current_value ?? 0;
   const pnl = value - cost;
   const pnlPct = cost > 0 ? (pnl / cost) * 100 : 0;
-  
-  const pulseStatus = pulse?.pulse_status ?? "intact";
+
   const hasThesis = !!thesis;
-  
-  // Mock sparkline data - in reality this would come from a price history endpoint
-  const mockSparklineData = Array.from({length: 14}, () => holding.current_price ? holding.current_price * (1 + (Math.random() - 0.5) * 0.05) : 100);
+  const { label, text } = statusStyle(pulse, hasThesis);
+  const displayName = holding.name !== holding.ticker ? holding.name : holding.ticker;
+  const thesisText = pulse?.reason ?? thesis?.why_own_it;
 
   return (
-    <Card className="overflow-hidden hover:shadow-md transition-shadow">
-      <CardContent className="p-0">
-        <div className="flex flex-col md:flex-row items-start md:items-center justify-between p-5 gap-4">
-          
-          <div className="flex items-center gap-4 min-w-[200px]">
-             <div className={`w-2 h-2 rounded-full ${hasThesis ? PULSE_COLORS[pulseStatus] : "bg-stone-300"}`} />
-             <div>
-               <Link href={`/dashboard/positions/${holding.ticker}`} className="text-lg font-semibold hover:underline">
-                 {holding.ticker}
-               </Link>
-               <p className="text-sm text-muted-foreground line-clamp-1">{holding.name}</p>
-             </div>
+    <Link
+      href={`/dashboard/positions/${holding.ticker}`}
+      className="group block border-b border-border/60 py-5 transition-colors hover:bg-muted"
+      style={{ animationDelay: `${index * 40}ms` }}
+    >
+      <div className="flex items-start gap-4 justify-between">
+
+        {/* Left: ticker + name + thesis quote */}
+        <div className="flex-1 min-w-0 space-y-1.5">
+          <div className="flex items-baseline gap-3 flex-wrap">
+            <span className="font-mono text-[11px] font-bold uppercase tracking-[0.2em] text-primary">
+              {holding.ticker}
+            </span>
+            <span className="font-sans text-[15px] text-foreground leading-tight">
+              {displayName}
+            </span>
+            {earnings && earnings.days_until <= 7 && (
+              <span className="font-mono text-[10px] tracking-wide text-violet-700">
+                earnings {earnings.days_until === 0 ? "today" : earnings.days_until === 1 ? "tomorrow" : `in ${earnings.days_until}d`}
+              </span>
+            )}
           </div>
 
-          <div className="hidden md:block w-32 h-10 opacity-70">
-            <ResponsiveContainer width="100%" height="100%">
-              <LineChart data={mockSparklineData.map((v, i) => ({ val: v, index: i }))}>
-                <Line 
-                  type="monotone" 
-                  dataKey="val" 
-                  stroke={pnl >= 0 ? "#10b981" : "#ef4444"} 
-                  strokeWidth={2} 
-                  dot={false} 
-                  isAnimationActive={false} 
-                />
-              </LineChart>
-            </ResponsiveContainer>
-          </div>
+          {hasThesis && thesisText ? (
+            <p className="font-sans italic text-sm text-muted-foreground leading-relaxed line-clamp-2 max-w-xl">
+              &ldquo;{thesisText}&rdquo;
+            </p>
+          ) : !hasThesis ? (
+            <button
+              onClick={(e) => { e.preventDefault(); e.stopPropagation(); onGenerateDraft?.(); }}
+              className="font-mono text-[10px] uppercase tracking-[0.15em] text-primary/50 hover:text-primary transition-colors"
+            >
+              + Draft thesis with AI
+            </button>
+          ) : null}
+        </div>
 
-          <div className="text-right min-w-[120px]">
-             <p className="font-medium">{formatCurrency(value, holding.currency)}</p>
-             <p className={`text-sm ${pnl >= 0 ? "text-emerald-600" : "text-red-600"}`}>
-               {pnl >= 0 ? "+" : ""}{formatCurrency(pnl, holding.currency)} ({formatPercent(pnlPct)})
-             </p>
-          </div>
-          
+        {/* Right: value, P&L, status */}
+        <div className="text-right shrink-0 space-y-1 pl-4">
+          <p className="font-mono text-base tabular-nums text-foreground">
+            {formatCurrency(value, holding.currency)}
+          </p>
+          <p className={`font-mono text-sm tabular-nums ${pnl >= 0 ? "text-emerald-700" : "text-red-600"}`}>
+            {pnl >= 0 ? "+" : ""}{formatCurrency(pnl, holding.currency)}{" "}
+            <span className="text-xs opacity-70">({formatPercent(pnlPct)})</span>
+          </p>
+          <p className={`font-mono text-[11px] ${text}`}>
+            ● {label}
+          </p>
         </div>
-        
-        <div className="bg-stone-50/50 border-t px-5 py-3 flex items-center justify-between gap-3">
-          {!hasThesis ? (
-            <div className="flex items-center gap-3 flex-1 min-w-0">
-              <span className="text-sm text-stone-500">No thesis recorded.</span>
-              <button
-                onClick={onGenerateDraft}
-                className="text-sm text-emerald-600 font-medium hover:underline flex items-center gap-1"
-              >
-                ✨ 1-Click AI Draft
-              </button>
-            </div>
-          ) : (
-            <div className="flex items-center gap-3 flex-1 min-w-0">
-              <Badge variant="outline" className={
-                pulseStatus === "review" ? "border-red-200 text-red-700 bg-red-50" :
-                pulseStatus === "watch" ? "border-amber-200 text-amber-700 bg-amber-50" :
-                "border-emerald-200 text-emerald-700 bg-emerald-50"
-              }>
-                {pulseStatus === "review" ? "Needs Review" : pulseStatus === "watch" ? "Watching" : "Thesis Intact"}
-              </Badge>
-              <p className="text-sm text-stone-600 line-clamp-1 flex-1 min-w-0">
-                {thesis.why_own_it}
-              </p>
-            </div>
-          )}
-          {earnings && earnings.days_until <= 7 && (
-            <Badge variant="outline" className="shrink-0 border-violet-200 text-violet-700 bg-violet-50 whitespace-nowrap">
-              {earnings.days_until === 0
-                ? "Earnings today"
-                : earnings.days_until === 1
-                ? "Earnings tomorrow"
-                : `Earnings in ${earnings.days_until}d`}
-            </Badge>
-          )}
-        </div>
-      </CardContent>
-    </Card>
+      </div>
+    </Link>
   );
 }

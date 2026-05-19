@@ -18,31 +18,31 @@ interface Props {
 }
 
 const severityColors: Record<string, string> = {
-  info: "bg-blue-100 text-blue-800",
-  warning: "bg-orange-100 text-orange-800",
-  thesis_breaking: "bg-red-100 text-red-800",
+  info: "bg-blue-500/15 text-blue-700",
+  warning: "bg-orange-500/15 text-orange-600",
+  thesis_breaking: "bg-red-500/15 text-red-600",
 };
 
 const verdictConfig: Record<string, { label: string; sentence: string; className: string }> = {
   supports: {
     label: "Supports",
     sentence: "This evidence supports your reason.",
-    className: "bg-emerald-100 text-emerald-800",
+    className: "bg-emerald-500/15 text-emerald-700",
   },
   threatens: {
     label: "Threatens",
     sentence: "This evidence threatens your reason.",
-    className: "bg-red-100 text-red-800",
+    className: "bg-red-500/15 text-red-600",
   },
   review: {
     label: "Review",
     sentence: "This evidence warrants a closer look at your reason.",
-    className: "bg-amber-100 text-amber-800",
+    className: "bg-amber-500/15 text-amber-700",
   },
   neutral: {
     label: "Neutral",
     sentence: "This evidence is neutral — it doesn't directly affect your reason.",
-    className: "bg-stone-100 text-stone-700",
+    className: "bg-muted text-muted-foreground",
   },
 };
 
@@ -135,7 +135,7 @@ export function EventTimeline({ events, onReview, onEditReason, reviewingEventId
               {/* Your reason mentioned */}
               {youSaid && (
                 <blockquote className="mt-2 border-l-2 border-muted pl-3 text-sm italic text-muted-foreground">
-                  "{youSaid}"
+                  &quot;{youSaid}&quot;
                 </blockquote>
               )}
 

@@ -3,7 +3,6 @@ import logging
 from app.services.reasoning.normalizers import normalize_decomposition_output
 from app.services.reasoning.providers import (
     AnthropicReasoningProvider,
-    GeminiReasoningProvider,
     OpenAIReasoningProvider,
 )
 from app.services.reasoning.types import ReasoningRequest, ReasoningResult, ReasoningTaskType
@@ -20,7 +19,7 @@ class ThesisReasoningGateway:
         self.providers = providers or [
             OpenAIReasoningProvider(),
             AnthropicReasoningProvider(),
-            GeminiReasoningProvider(),
+            # GeminiReasoningProvider(),  # Temporarily disabled due to timeout issues
         ]
 
     async def run(self, request: ReasoningRequest) -> ReasoningResult:

@@ -21,4 +21,9 @@ class OnboardingState(Base):
     day1_email_sent_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
     day5_email_sent_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
     last_email_sent_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
+    # wizard activation tracking
+    drafts_generated_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
+    drafts_reviewed_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
+    wizard_skipped_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
+    wizard_completed_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now())

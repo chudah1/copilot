@@ -51,11 +51,20 @@ class HoldingPulseResponse(BaseModel):
     has_thesis: bool
     pnl_pct: float | None = None
     last_checked_at: datetime | None = None
+    recent_event_count: int = 0
 
 
 class PortfolioPulseResponse(BaseModel):
     pulses: list[HoldingPulseResponse]
     next_digest_at: datetime | None = None
+
+
+class UpcomingEarningsResponse(BaseModel):
+    holding_id: uuid.UUID
+    ticker: str
+    name: str
+    report_date: datetime
+    days_until: int
 
 
 class PortfolioSummary(BaseModel):

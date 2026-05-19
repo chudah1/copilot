@@ -35,7 +35,7 @@ export function SinceLastVisit({ summary, trend, recentEventCount }: SinceLastVi
   }
 
   return (
-    <div className="rounded-lg border border-emerald-200 bg-emerald-50 px-4 py-2.5 text-sm text-emerald-800">
+    <div className="rounded-lg border border-emerald-500/25 bg-emerald-500/8 px-4 py-2.5 text-sm text-emerald-700">
       <span className="font-medium">Since last visit ({daysLabel}):</span>{" "}
       {changes.join(", ")}
     </div>

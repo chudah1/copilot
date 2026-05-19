@@ -10,6 +10,22 @@ OPERATORS = {
 }
 
 
+def _coerce_float(value: Any) -> float | None:
+    if isinstance(value, bool) or value is None:
+        return None
+    if isinstance(value, (int, float)):
+        return float(value)
+    if isinstance(value, str):
+        stripped = value.strip()
+        if not stripped:
+            return None
+        try:
+            return float(stripped)
+        except ValueError:
+            return None
+    return None
+
+
 @dataclass
 class RuleCheckResult:
     metric: str
@@ -42,11 +58,11 @@ def check_metric_watch_hints(
         metric_name = hint.get("metric")
         if metric_name not in market_values:
             continue
-        actual = market_values[metric_name]
+        actual = _coerce_float(market_values[metric_name])
         op_str = hint.get("operator")
-        threshold = hint.get("threshold")
+        threshold = _coerce_float(hint.get("threshold"))
         op_func = OPERATORS.get(op_str)
-        if op_func is None or threshold is None:
+        if op_func is None or threshold is None or actual is None:
             continue
         met = op_func(actual, threshold)
         results.append(
@@ -86,10 +102,10 @@ def get_price_watch_info(interpretation: dict[str, Any] | None, default: float =
     hints = extract_watch_hints(interpretation)
     for hint in hints:
         if hint.get("kind") == "price_move_pct":
-            threshold = hint.get("threshold")
-            if isinstance(threshold, (int, float)):
+            threshold = _coerce_float(hint.get("threshold"))
+            if threshold is not None:
                 return PriceWatchInfo(
-                    threshold=float(threshold),
+                    threshold=threshold,
                     signal_id=hint.get("signal_id"),
                     claim_id=hint.get("claim_id"),
                 )

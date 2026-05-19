@@ -122,3 +122,69 @@ async def test_pulse_watch_on_warning_event(client, auth_headers, test_user, db:
     pulses = resp.json()["pulses"]
     assert len(pulses) == 1
     assert pulses[0]["pulse_status"] == "watch"
+
+
+@pytest.mark.asyncio
+async def test_pulse_batches_same_day_events_into_one_summary(client, auth_headers, test_user, db: AsyncSession):
+    holding = Holding(
+        id=uuid.uuid4(), ticker="NVDA", name="NVIDIA",
+        quantity=4, average_cost_basis=800, currency="GBP",
+        user_id=test_user.id,
+    )
+    db.add(holding)
+    await db.commit()
+
+    thesis = Thesis(
+        id=uuid.uuid4(), holding_id=holding.id, user_id=test_user.id,
+        status="active", why_own_it="AI infrastructure demand", confidence="high",
+    )
+    db.add(thesis)
+    await db.commit()
+
+    now = datetime.now(timezone.utc)
+    db.add_all([
+        MonitoringEvent(
+            id=uuid.uuid4(), holding_id=holding.id, thesis_id=thesis.id,
+            event_type="earnings_surprise", severity="warning",
+            title="Earnings beat", summary="Revenue beat expectations.",
+            evidence_type="earnings_surprise",
+            created_at=now,
+        ),
+        MonitoringEvent(
+            id=uuid.uuid4(), holding_id=holding.id, thesis_id=thesis.id,
+            event_type="earnings_call_transcript", severity="warning",
+            title="Transcript review", summary="Management highlighted supply constraints.",
+            evidence_type="earnings_call_transcript",
+            created_at=now - timedelta(hours=1),
+        ),
+    ])
+    await db.commit()
+
+    resp = await client.get("/api/portfolio/pulse", headers=auth_headers)
+    assert resp.status_code == 200
+    pulse = resp.json()["pulses"][0]
+    assert pulse["recent_event_count"] == 2
+    assert pulse["latest_event_summary"].startswith("2 new signals today:")
+
+
+@pytest.mark.asyncio
+async def test_pulse_respects_zero_current_value_for_pnl(client, auth_headers, test_user, db: AsyncSession):
+    holding = Holding(
+        id=uuid.uuid4(), ticker="XYZ", name="Example Co",
+        quantity=10, average_cost_basis=100, current_value=0, currency="GBP",
+        user_id=test_user.id,
+    )
+    db.add(holding)
+    await db.commit()
+
+    thesis = Thesis(
+        id=uuid.uuid4(), holding_id=holding.id, user_id=test_user.id,
+        status="active", why_own_it="Turnaround bet", confidence="medium",
+    )
+    db.add(thesis)
+    await db.commit()
+
+    resp = await client.get("/api/portfolio/pulse", headers=auth_headers)
+    assert resp.status_code == 200
+    pulse = resp.json()["pulses"][0]
+    assert pulse["pnl_pct"] == -100.0

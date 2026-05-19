@@ -21,12 +21,12 @@ interface Props {
 }
 
 const statusTone: Record<string, string> = {
-  draft: "bg-sky-100 text-sky-800",
-  confirmed: "bg-emerald-100 text-emerald-800",
-  partially_confirmed: "bg-amber-100 text-amber-800",
-  rejected: "bg-rose-100 text-rose-800",
-  pending: "bg-stone-200 text-stone-800",
-  failed: "bg-red-100 text-red-800",
+  draft: "bg-sky-500/15 text-sky-700",
+  confirmed: "bg-emerald-500/15 text-emerald-700",
+  partially_confirmed: "bg-amber-500/15 text-amber-700",
+  rejected: "bg-red-500/15 text-red-600",
+  pending: "bg-muted text-muted-foreground",
+  failed: "bg-red-500/15 text-red-600",
 };
 
 function collectInitialSelections(envelope: ThesisDecompositionEnvelope | null) {
@@ -193,7 +193,6 @@ export function ThesisDecompositionReview({ envelope, loading, saving, onGenerat
           <CardTitle className="text-base">Suggested signals</CardTitle>
           <Badge className={statusTone[envelope.status] ?? statusTone.draft}>{envelope.status.replaceAll("_", " ")}</Badge>
           {decomposition.monitorability && <Badge variant="outline">{decomposition.monitorability} monitorability</Badge>}
-          {decomposition.provider && <Badge variant="outline">{decomposition.provider}</Badge>}
         </div>
         <CardDescription>
           Confirm what should actually be monitored. Direct company signals can stay on; speculative ones should earn their place.
@@ -217,7 +216,7 @@ export function ThesisDecompositionReview({ envelope, loading, saving, onGenerat
                         {entity.entity_ticker ? ` (${entity.entity_ticker})` : ""}
                       </p>
                       {entity.entity_type && <Badge variant="outline">{entity.entity_type.replaceAll("_", " ")}</Badge>}
-                      <Badge className={selectedCount > 0 ? "bg-emerald-100 text-emerald-800" : "bg-stone-200 text-stone-800"}>
+                      <Badge className={selectedCount > 0 ? "bg-emerald-500/15 text-emerald-700" : "bg-muted text-muted-foreground"}>
                         {selectedCount > 0 ? `${selectedCount} active` : "inactive"}
                       </Badge>
                     </div>
@@ -228,7 +227,7 @@ export function ThesisDecompositionReview({ envelope, loading, saving, onGenerat
                         return (
                           <label
                             key={signal.id}
-                            className={`flex cursor-pointer items-start gap-3 rounded-lg border p-3 transition ${selected ? "border-emerald-300 bg-emerald-50/70" : "border-border bg-background"}`}
+                            className={`flex cursor-pointer items-start gap-3 rounded-lg border p-3 transition ${selected ? "border-emerald-500/40 bg-emerald-500/8" : "border-border bg-background"}`}
                           >
                             <input
                               type="checkbox"
@@ -240,7 +239,7 @@ export function ThesisDecompositionReview({ envelope, loading, saving, onGenerat
                               <div className="flex flex-wrap items-center gap-2">
                                 <p className="font-medium">{signal.signal_label ?? signal.signal_type.replaceAll("_", " ")}</p>
                                 <Badge variant="outline">{signal.signal_type.replaceAll("_", " ")}</Badge>
-                                {signal.confirmation_required && <Badge className="bg-amber-100 text-amber-800">Needs confirmation</Badge>}
+                                {signal.confirmation_required && <Badge className="bg-amber-500/15 text-amber-700">Needs confirmation</Badge>}
                               </div>
                               <p className="mt-1 text-sm text-muted-foreground">{signal.rationale ?? signalMeta(entity, selected)}</p>
                             </div>
@@ -260,7 +259,7 @@ export function ThesisDecompositionReview({ envelope, loading, saving, onGenerat
             <div>
               <p className="font-medium">Review state</p>
               <p className="mt-1 text-sm text-muted-foreground">
-                Generated {formatDate(decomposition.created_at)} with {decomposition.provider ?? "an LLM provider"}.
+                Generated {formatDate(decomposition.created_at)} by AI.
               </p>
             </div>
             <div className="flex flex-wrap gap-2">

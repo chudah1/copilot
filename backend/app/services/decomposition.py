@@ -154,9 +154,9 @@ def _signal_is_direct_and_auto_activatable(
 
 def _watch_hint_from_signal(signal: ThesisSignal, *, override_claim_id: str | None = None) -> dict | None:
     config = signal.signal_config_json or {}
-    # Use explicit claim_id if provided (avoids lazy-load on freshly constructed signals),
-    # otherwise derive from eagerly loaded entity relationship.
-    claim_id = override_claim_id or (str(signal.entity.claim_id) if signal.entity else None)
+    # Only use the explicit claim id passed from the enclosing persistence loop.
+    # Reaching through signal.entity here can trigger async lazy loading.
+    claim_id = override_claim_id
     signal_id = str(signal.id)
 
     if signal.signal_type == "price_move":

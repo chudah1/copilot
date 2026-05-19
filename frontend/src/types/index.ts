@@ -250,6 +250,11 @@ export interface Digest {
     monitoring_receipt?: string;
     quiet_nudge?: string | null;
     consecutive_quiet_weeks?: number;
+    next_earnings?: {
+      ticker: string;
+      report_date: string;
+      days_until: number;
+    } | null;
   };
   status: string;
 }
@@ -265,6 +270,7 @@ export interface HoldingPulse {
   has_thesis: boolean;
   pnl_pct: number | null;
   last_checked_at: string | null;
+  recent_event_count: number;
 }
 
 export interface PortfolioPulse {
@@ -278,6 +284,16 @@ export interface UpcomingEarnings {
   name: string;
   report_date: string;
   days_until: number;
+}
+
+export interface UserPreferences {
+  digest_frequency: string;
+  digest_day: string;
+  digest_time: string;
+  earnings_alerts: boolean;
+  quarterly_review_reminders: boolean;
+  email_enabled: boolean;
+  notification_sensitivity: string;
 }
 
 export interface UserNotification {
@@ -413,4 +429,61 @@ export interface CounterThesisResponse {
   blind_spots: string[];
   suggested_additions: string[];
   generated_at: string;
+}
+
+export interface OnboardingState {
+  portfolio_connected: boolean;
+  drafts_generated_at: string | null;
+  drafts_reviewed_at: string | null;
+  wizard_skipped_at: string | null;
+  wizard_completed_at: string | null;
+  reasons_written_count: number;
+}
+
+export interface DraftItem {
+  draft_id: string;
+  holding_id: string;
+  ticker: string;
+  name: string;
+  status: "pending" | "ready" | "failed" | "reviewed";
+  thesis_id: string | null;
+  why_own_it: string | null;
+  must_remain_true: string | null;
+  what_would_change_my_mind: string | null;
+}
+
+export interface DraftStatus {
+  total: number;
+  ready: number;
+  pending: number;
+  failed: number;
+  reviewed: number;
+  drafts: DraftItem[];
+}
+
+export interface HoldingContext {
+  holding_id: string;
+  ticker: string;
+  name: string;
+  sector: string | null;
+  current_price: number | null;
+  current_value: number | null;
+  quantity: number;
+  average_cost_basis: number;
+}
+
+export interface SynthesisRequest {
+  holding_id: string;
+  question1: string;
+  answer1: string;
+  question2: string;
+  answer2: string;
+}
+
+export interface SynthesisResponse {
+  thesis_id: string;
+  why_own_it: string;
+  must_remain_true: string;
+  what_would_change_my_mind: string;
+  ai_summary: string;
 }

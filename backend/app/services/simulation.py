@@ -40,6 +40,14 @@ class SimulationResult:
     warnings: list[SimulationWarning] = field(default_factory=list)
 
 
+def _holding_cost(holding: Holding) -> float:
+    return float(holding.quantity) * float(holding.average_cost_basis)
+
+
+def _holding_value(holding: Holding) -> float:
+    return float(holding.current_value) if holding.current_value is not None else _holding_cost(holding)
+
+
 def _compute_snapshot(
     holdings: list[Holding],
 ) -> PortfolioSnapshot:
@@ -48,15 +56,15 @@ def _compute_snapshot(
     sector_totals: dict[str, float] = {}
 
     for h in holdings:
-        cost = float(h.quantity) * float(h.average_cost_basis)
-        value = float(h.current_value) if h.current_value is not None else cost
+        cost = _holding_cost(h)
+        value = _holding_value(h)
         total_value += value
         total_cost += cost
         sector = h.sector or "Unknown"
         sector_totals[sector] = sector_totals.get(sector, 0.0) + value
 
     sorted_values = sorted(
-        (float(h.current_value) if h.current_value is not None else float(h.quantity) * float(h.average_cost_basis) for h in holdings),
+        (_holding_value(h) for h in holdings),
         reverse=True,
     )
     top_3_value = sum(sorted_values[:3])
@@ -116,7 +124,7 @@ async def simulate_trade(
                 quantity=float(h.quantity) + quantity,
                 average_cost_basis=h.average_cost_basis,
                 current_price=price_per_share,
-                current_value=(float(h.current_value) if h.current_value else float(h.quantity) * float(h.average_cost_basis)) + sim_value,
+                current_value=_holding_value(h) + sim_value,
                 sector=h.sector, geography=h.geography, currency=h.currency,
             )
             virtual_holdings.append(clone)
@@ -152,7 +160,7 @@ async def simulate_trade(
     warnings: list[SimulationWarning] = []
 
     # Single holding > 20% of after portfolio
-    sim_after_value = sim_value + (float(existing.current_value) if existing and existing.current_value else 0)
+    sim_after_value = sim_value + (_holding_value(existing) if existing is not None else 0)
     if after.total_value > 0 and (sim_after_value / after.total_value * 100) > 20:
         pct = round(sim_after_value / after.total_value * 100, 1)
         warnings.append(SimulationWarning(

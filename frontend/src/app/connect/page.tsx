@@ -42,7 +42,7 @@ export default function ConnectPage() {
         api_key: apiKey,
       });
       await api.post(`/api/portfolio/sync/${conn.id}`);
-      router.push("/dashboard");
+      router.push("/onboarding?source=import");
     } catch (error: unknown) {
       setBrokerError(getErrorMessage(error, "Failed to connect"));
     } finally {
@@ -65,7 +65,7 @@ export default function ConnectPage() {
       setName("");
       setQuantity("");
       setAvgCost("");
-      router.push("/dashboard");
+      router.push("/onboarding?source=import");
     } catch (error: unknown) {
       setManualError(getErrorMessage(error, "Failed to add holding"));
     } finally {
@@ -95,7 +95,7 @@ export default function ConnectPage() {
       }
       const holdings: Holding[] = await res.json();
       setCsvResult(`Imported ${holdings.length} holding${holdings.length !== 1 ? "s" : ""} successfully.`);
-      setTimeout(() => router.push("/dashboard"), 1500);
+      setTimeout(() => router.push("/onboarding?source=import"), 1500);
     } catch (error: unknown) {
       setCsvError(getErrorMessage(error, "CSV upload failed"));
     } finally {
@@ -107,31 +107,28 @@ export default function ConnectPage() {
     <AuthGuard>
       <Navbar />
       <main className="mx-auto max-w-2xl px-4 py-10">
-        <Card className="mb-6 border-0 bg-[linear-gradient(135deg,rgba(18,26,36,0.98),rgba(23,58,52,0.94)_52%,rgba(225,232,215,0.96))] text-white ring-0">
-          <CardHeader className="gap-3">
-            <CardTitle className="text-3xl font-semibold tracking-tight text-white">Connect your portfolio</CardTitle>
-            <CardDescription className="max-w-2xl text-white/80">
-              Start by importing what you actually own. Then we help you capture why each important position exists, what must remain true, and what should trigger a review.
-            </CardDescription>
-          </CardHeader>
-          <CardContent className="grid gap-4 md:grid-cols-3">
-            <div className="rounded-2xl border border-white/12 bg-white/8 p-4 backdrop-blur">
-              <p className="text-sm text-white/70">Step 1</p>
-              <p className="mt-2 font-medium">Import holdings</p>
-              <p className="mt-1 text-sm text-white/75">Use CSV, manual entry, or Trading 212.</p>
-            </div>
-            <div className="rounded-2xl border border-white/12 bg-white/8 p-4 backdrop-blur">
-              <p className="text-sm text-white/70">Step 2</p>
-              <p className="mt-2 font-medium">Write top theses</p>
-              <p className="mt-1 text-sm text-white/75">Start with your biggest or least-clear positions.</p>
-            </div>
-            <div className="rounded-2xl border border-white/12 bg-white/8 p-4 backdrop-blur">
-              <p className="text-sm text-white/70">Step 3</p>
-              <p className="mt-2 font-medium">Get monitored</p>
-              <p className="mt-1 text-sm text-white/75">We watch for changes that matter to your own reasoning.</p>
-            </div>
-          </CardContent>
-        </Card>
+        <div className="mb-8 border-b border-foreground/20 pb-6">
+          <p className="font-mono text-[10px] uppercase tracking-[0.3em] text-muted-foreground mb-3">Getting started</p>
+          <h1 className="font-display italic text-[2.5rem] leading-tight text-foreground tracking-tight mb-3">
+            Connect your portfolio.
+          </h1>
+          <p className="font-sans text-sm text-muted-foreground leading-relaxed max-w-lg">
+            Start by importing what you actually own. Then capture why each important position exists, what must remain true, and what would trigger a review.
+          </p>
+          <div className="grid grid-cols-3 gap-px mt-6 border border-border">
+            {[
+              { n: "01", title: "Import holdings", body: "CSV, manual entry, or Trading 212." },
+              { n: "02", title: "Write top theses", body: "Start with your biggest positions." },
+              { n: "03", title: "Get monitored", body: "We watch for changes that matter to your reasoning." },
+            ].map(({ n, title, body }) => (
+              <div key={n} className="bg-muted/40 px-4 py-4">
+                <p className="font-mono text-[10px] tracking-[0.2em] text-primary mb-2">{n}</p>
+                <p className="font-sans text-sm font-medium text-foreground">{title}</p>
+                <p className="font-sans text-xs text-muted-foreground mt-1 leading-relaxed">{body}</p>
+              </div>
+            ))}
+          </div>
+        </div>
 
         <Card className="mb-6">
           <CardHeader>
