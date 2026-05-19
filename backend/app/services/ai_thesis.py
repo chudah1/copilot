@@ -518,23 +518,22 @@ async def generate_counter_thesis(
 
 
 DRAFT_THESIS_PROMPT = """You are a smart investing assistant helping a retail investor draft a thesis for a specific stock.
-Write a crisp, specific bull case using concrete numbers and named conditions — not generic language.
+Write a crisp, specific bull case with named conditions — not generic language.
 
 Rules:
-- Use specific metrics: revenue growth rates, margins, market share percentages, P/E or EV/EBITDA ranges, unit economics.
-- Name the key driver (product cycle, regulatory moat, network effects, etc.) rather than describing it generically.
-- must_remain_true must contain at least one measurable threshold (e.g. "revenue growth above 15% YoY", "gross margin above 60%", "FCF positive by FY2026").
-- what_would_change_my_mind must name a specific event or threshold breach (e.g. "market share falls below 40%", "operating margin compresses below 10%", "loses key customer accounting for >20% of revenue").
-- Do NOT write phrases like "maintains competitive advantage", "long-term potential", or "solid fundamentals" — these are too vague to monitor.
+- Name the specific business driver (e.g. AI inference demand, government contract backlog, network effects, regulatory moat) rather than describing it vaguely.
+- must_remain_true must state a specific, observable condition — not platitudes like "maintains competitive advantage" or "continues to grow".
+- what_would_change_my_mind must name a specific event or scenario that would signal the thesis is broken.
+- Do NOT use phrases like "long-term potential", "solid fundamentals", or "maintains market position" — these cannot be monitored.
 
 Ticker: {ticker}
 {market_data_section}
 
 Output valid JSON with this exact structure:
 {{
-    "why_own_it": "2-3 sentences citing the specific business driver and supporting metrics (include at least one number).",
-    "must_remain_true": "The concrete, measurable condition(s) that must hold for the thesis to stay valid.",
-    "what_would_change_my_mind": "The specific event or threshold breach that would trigger a sell."
+    "why_own_it": "2-3 sentences citing the specific business driver and why it holds today.",
+    "must_remain_true": "The specific condition(s) that must hold for the thesis to stay valid.",
+    "what_would_change_my_mind": "The specific event or scenario that would cause a sell."
 }}
 
 Output ONLY valid JSON, no markdown fences."""
@@ -542,9 +541,9 @@ Output ONLY valid JSON, no markdown fences."""
 async def generate_initial_draft(ticker: str) -> dict[str, str]:
     if not settings.anthropic_api_key:
         return {
-            "why_own_it": f"A solid holding in the portfolio. Believing in the long-term growth and market position of {ticker}.",
-            "must_remain_true": "The core business continues to grow and maintain its competitive advantage.",
-            "what_would_change_my_mind": "A fundamental shift in the industry or consistent revenue decline.",
+            "why_own_it": f"Holding {ticker} as a core position in the portfolio.",
+            "must_remain_true": "Edit this — add the specific condition that must remain true (e.g. revenue growth stays positive, key contract renewals hold).",
+            "what_would_change_my_mind": "Edit this — add the specific event that would trigger a sell (e.g. major customer loss, margin collapse).",
         }
 
     try:
@@ -569,9 +568,9 @@ async def generate_initial_draft(ticker: str) -> dict[str, str]:
     except Exception as e:
         logger.error(f"Draft thesis generation failed for {ticker}: {e}")
         return {
-            "why_own_it": f"Investing in {ticker} for its long term potential.",
-            "must_remain_true": "The company maintains its market position.",
-            "what_would_change_my_mind": "A fundamental change in the business model.",
+            "why_own_it": f"Holding {ticker} as a core position in the portfolio.",
+            "must_remain_true": "Edit this — add the specific condition that must remain true (e.g. revenue growth stays positive, key contract renewals hold).",
+            "what_would_change_my_mind": "Edit this — add the specific event that would trigger a sell (e.g. major customer loss, margin collapse).",
         }
 
 
