@@ -1,13 +1,30 @@
 import uuid as _uuid
 from datetime import datetime, timezone
 
-from sqlalchemy import String, types
+from sqlalchemy import String, event, types
 from sqlalchemy.ext.asyncio import async_sessionmaker, create_async_engine, AsyncSession
 from sqlalchemy.orm import DeclarativeBase
 
 from app.config import settings
 
-engine = create_async_engine(settings.database_url, echo=False)
+
+def _make_engine():
+    url = settings.database_url
+    if url.startswith("sqlite"):
+        # timeout: busy_timeout in seconds — writers wait instead of immediately
+        # raising "database is locked" when concurrent requests contend for the DB.
+        eng = create_async_engine(url, echo=False, connect_args={"timeout": 5})
+
+        @event.listens_for(eng.sync_engine, "connect")
+        def _set_sqlite_pragmas(dbapi_conn, _record):
+            dbapi_conn.execute("PRAGMA journal_mode=WAL")
+            dbapi_conn.execute("PRAGMA synchronous=NORMAL")
+
+        return eng
+    return create_async_engine(url, echo=False)
+
+
+engine = _make_engine()
 async_session = async_sessionmaker(engine, class_=AsyncSession, expire_on_commit=False)
 
 
