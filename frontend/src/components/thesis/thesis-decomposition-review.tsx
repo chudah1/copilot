@@ -172,7 +172,7 @@ export function ThesisDecompositionReview({ envelope, loading, saving, onGenerat
         </CardHeader>
         <CardContent className="flex flex-wrap items-center justify-between gap-3">
           <p className="max-w-2xl text-sm text-muted-foreground">
-            Your thesis is saved. Try again once the provider path is available or after you tighten the reasoning.
+            Your thesis is saved. Edit it to include specific numbers (growth rates, margins, market share) and retry.
           </p>
           <Button onClick={onGenerate} variant="outline">
             Retry decomposition

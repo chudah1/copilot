@@ -517,17 +517,24 @@ async def generate_counter_thesis(
         )
 
 
-DRAFT_THESIS_PROMPT = """You are a smart investing assistant helping a retail investor draft a thesis for why they own a specific stock.
-They want a realistic, standard starting thesis based on current market sentiment and fundamentals that they can then edit.
+DRAFT_THESIS_PROMPT = """You are a smart investing assistant helping a retail investor draft a thesis for a specific stock.
+Write a crisp, specific bull case using concrete numbers and named conditions — not generic language.
+
+Rules:
+- Use specific metrics: revenue growth rates, margins, market share percentages, P/E or EV/EBITDA ranges, unit economics.
+- Name the key driver (product cycle, regulatory moat, network effects, etc.) rather than describing it generically.
+- must_remain_true must contain at least one measurable threshold (e.g. "revenue growth above 15% YoY", "gross margin above 60%", "FCF positive by FY2026").
+- what_would_change_my_mind must name a specific event or threshold breach (e.g. "market share falls below 40%", "operating margin compresses below 10%", "loses key customer accounting for >20% of revenue").
+- Do NOT write phrases like "maintains competitive advantage", "long-term potential", or "solid fundamentals" — these are too vague to monitor.
 
 Ticker: {ticker}
 {market_data_section}
 
 Output valid JSON with this exact structure:
 {{
-    "why_own_it": "2-3 friendly sentences explaining the main bull case for this stock right now.",
-    "must_remain_true": "1 sentence on the key assumption that must hold (e.g. 'Revenue growth stays above 20%').",
-    "what_would_change_my_mind": "1 sentence on what would cause you to sell (e.g. 'Margins compress due to increased competition')."
+    "why_own_it": "2-3 sentences citing the specific business driver and supporting metrics (include at least one number).",
+    "must_remain_true": "The concrete, measurable condition(s) that must hold for the thesis to stay valid.",
+    "what_would_change_my_mind": "The specific event or threshold breach that would trigger a sell."
 }}
 
 Output ONLY valid JSON, no markdown fences."""

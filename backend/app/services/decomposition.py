@@ -407,7 +407,16 @@ async def generate_decomposition_for_thesis(
 
     decomposition = await _persist_pending_decomposition(db, thesis, result)
     status = decomposition.status
-    message = "We saved your thesis and are retrying decomposition." if status == "pending" else "We could not decompose this thesis right now."
+    if status == "pending":
+        message = "We saved your thesis and are retrying decomposition."
+    elif result.failure_reason and "confidence too low" in result.failure_reason.lower():
+        message = (
+            "Your thesis needs more specific language to be monitorable. "
+            "Add concrete metrics — e.g. 'Revenue growth above 15% YoY', 'Gross margin holds above 60%', "
+            "or 'Market share stays above 40%' — then retry."
+        )
+    else:
+        message = "We could not decompose this thesis right now."
     logger.warning("Decomposition unavailable for thesis %s: %s", thesis.id, result.failure_reason)
     return PersistedDecompositionResult(status=status, message=message, decomposition=None)
 
