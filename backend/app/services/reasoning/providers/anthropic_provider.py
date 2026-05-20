@@ -1,8 +1,11 @@
 import json
+import logging
 import time
 from hashlib import sha256
 
 import anthropic
+
+logger = logging.getLogger(__name__)
 
 from app.config import settings
 from app.services.reasoning.prompts import (
@@ -39,7 +42,7 @@ class AnthropicReasoningProvider:
             client = anthropic.AsyncAnthropic(api_key=settings.anthropic_api_key)
             async with client.messages.stream(
                 model=self.model,
-                max_tokens=3000,
+                max_tokens=6000,
                 tools=[
                     {
                         "name": "record_thesis_decomposition",
@@ -54,6 +57,8 @@ class AnthropicReasoningProvider:
                 timeout=self.timeout_seconds,
             ) as stream:
                 response = await stream.get_final_message()
+            if response.stop_reason == "max_tokens":
+                logger.warning("Anthropic hit max_tokens during decomposition — output may be truncated")
             raw = None
             for block in response.content:
                 if getattr(block, "type", None) == "tool_use":

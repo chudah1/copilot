@@ -93,6 +93,12 @@ class ThesisReasoningGateway:
                 original_text=original_text,
             )
             if escalate:
+                logger.warning(
+                    "Provider %s escalation (%s) — raw_output: %s",
+                    provider.name,
+                    escalation_reason,
+                    result.raw_output,
+                )
                 last_failure = ReasoningResult(
                     success=False,
                     status="failed",
