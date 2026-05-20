@@ -1,7 +1,7 @@
 import uuid
 from datetime import datetime
 
-from sqlalchemy import DateTime, ForeignKey, Integer
+from sqlalchemy import DateTime, ForeignKey, Integer, String
 from sqlalchemy.orm import Mapped, mapped_column
 from sqlalchemy.sql import func
 
@@ -26,4 +26,5 @@ class OnboardingState(Base):
     drafts_reviewed_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
     wizard_skipped_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
     wizard_completed_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
+    investor_profile: Mapped[str | None] = mapped_column(String(32), nullable=True)
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now())

@@ -9,6 +9,16 @@ import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { getErrorMessage } from "@/lib/errors";
 import type { Thesis, ThesisAssistResponse } from "@/types";
 
+interface ThesisDraftFields {
+  why_own_it: string;
+  must_remain_true: string;
+  what_would_change_my_mind: string;
+}
+
+function asText(value: unknown): string {
+  return typeof value === "string" ? value : "";
+}
+
 interface Props {
   thesis?: Thesis | null;
   onSave: (data: {
@@ -23,16 +33,16 @@ interface Props {
     source: "user" | "ai_assisted";
     status: "active";
   }) => void;
-  onAssist: (draftText: string) => Promise<ThesisAssistResponse>;
+  onAssist: (draft: ThesisDraftFields) => Promise<ThesisAssistResponse>;
   onCancel: () => void;
 }
 
 export function ThesisEditor({ thesis, onSave, onAssist, onCancel }: Props) {
-  const [whyOwnIt, setWhyOwnIt] = useState(thesis?.why_own_it ?? "");
-  const [mustRemainTrue, setMustRemainTrue] = useState(thesis?.must_remain_true ?? "");
-  const [changeMind, setChangeMind] = useState(thesis?.what_would_change_my_mind ?? "");
+  const [whyOwnIt, setWhyOwnIt] = useState(asText(thesis?.why_own_it));
+  const [mustRemainTrue, setMustRemainTrue] = useState(asText(thesis?.must_remain_true));
+  const [changeMind, setChangeMind] = useState(asText(thesis?.what_would_change_my_mind));
   const [confidence, setConfidence] = useState<"high" | "medium" | "low">(thesis?.confidence ?? "medium");
-  const [aiSummary, setAiSummary] = useState(thesis?.ai_summary ?? "");
+  const [aiSummary, setAiSummary] = useState(asText(thesis?.ai_summary));
   const [interpretation, setInterpretation] = useState<Record<string, unknown> | null>(thesis?.interpretation ?? null);
   const [assisting, setAssisting] = useState(false);
   const [assistError, setAssistError] = useState("");
@@ -68,8 +78,15 @@ export function ThesisEditor({ thesis, onSave, onAssist, onCancel }: Props) {
     setAssisting(true);
     setAssistError("");
     try {
-      const result = await onAssist(whyOwnIt);
-      setAiSummary(result.ai_summary);
+      const result = await onAssist({
+        why_own_it: whyOwnIt,
+        must_remain_true: mustRemainTrue,
+        what_would_change_my_mind: changeMind,
+      });
+      setWhyOwnIt(asText(result.why_own_it) || whyOwnIt);
+      setMustRemainTrue(asText(result.must_remain_true) || mustRemainTrue);
+      setChangeMind(asText(result.what_would_change_my_mind) || changeMind);
+      setAiSummary(asText(result.ai_summary));
       setInterpretation(result.interpretation);
     } catch (error: unknown) {
       setAssistError(getErrorMessage(error, "Failed to assist thesis draft"));

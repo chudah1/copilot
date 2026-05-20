@@ -3,7 +3,6 @@
 import { useState } from "react";
 import { api } from "@/lib/api";
 import { formatCurrency } from "@/lib/utils";
-import { Button } from "@/components/ui/button";
 import type { CheckNowResponse, MarketSnapshot } from "@/types";
 
 interface CheckNowButtonProps {
@@ -13,6 +12,10 @@ interface CheckNowButtonProps {
   onComplete: () => void;
 }
 
+function cleanTicker(ticker: string): string {
+  return ticker.replace(/(?:_US)?_EQ$/i, "").replace(/([A-Z])([a-z]+)$/, "$1");
+}
+
 function formatLargeNumber(n: number): string {
   if (n >= 1e12) return `$${(n / 1e12).toFixed(1)}T`;
   if (n >= 1e9) return `$${(n / 1e9).toFixed(1)}B`;
@@ -20,9 +23,9 @@ function formatLargeNumber(n: number): string {
   return `$${n.toLocaleString()}`;
 }
 
-function SnapshotCard({ snapshot, ticker, currency }: { snapshot: MarketSnapshot; ticker: string; currency: string }) {
-  const pnlColor = (snapshot.pnl ?? 0) >= 0 ? "text-emerald-600" : "text-red-600";
-  const priceChangeColor = (snapshot.price_change_pct ?? 0) >= 0 ? "text-emerald-600" : "text-red-600";
+function SnapshotCard({ snapshot, ticker, currency, eventsCreated }: { snapshot: MarketSnapshot; ticker: string; currency: string; eventsCreated: number }) {
+  const pnlPositive = (snapshot.pnl ?? 0) >= 0;
+  const priceUp = (snapshot.price_change_pct ?? 0) >= 0;
   const hintsOk = snapshot.watch_hints_ok === snapshot.watch_hints_total && snapshot.watch_hints_total > 0;
   const checkedAt = snapshot.checked_at ? new Date(snapshot.checked_at).getTime() : null;
 
@@ -34,68 +37,78 @@ function SnapshotCard({ snapshot, ticker, currency }: { snapshot: MarketSnapshot
     : null;
 
   return (
-    <div className="mt-4 rounded-xl border bg-card p-4 animate-in fade-in slide-in-from-bottom-2 duration-300">
-      <div className="flex items-center gap-2 mb-3">
-        <span className="inline-block h-2 w-2 rounded-full bg-emerald-500" />
-        <p className="text-sm font-medium">Thesis holding — {ticker} checked just now</p>
+    <div className="mt-4 border border-border bg-card animate-in fade-in slide-in-from-bottom-2 duration-300">
+      <div className="flex items-center gap-2 px-4 py-3 border-b border-border/40">
+        <span className="h-1.5 w-1.5 rounded-full bg-emerald-500 shrink-0" />
+        <p className="font-mono text-[10px] uppercase tracking-[0.2em] text-muted-foreground">
+          {cleanTicker(ticker)} — checked just now
+        </p>
       </div>
 
-      <div className="grid grid-cols-2 gap-3 sm:grid-cols-4">
+      <div className="grid grid-cols-2 gap-0 sm:grid-cols-4 divide-x divide-border/40">
         {snapshot.current_price != null && (
-          <div>
-            <p className="text-[11px] text-muted-foreground">Price</p>
-            <p className="text-base font-semibold">{formatCurrency(snapshot.current_price, currency)}</p>
+          <div className="px-4 py-3">
+            <p className="font-mono text-[9px] uppercase tracking-[0.2em] text-muted-foreground mb-1">Price</p>
+            <p className="font-mono text-sm font-medium tabular-nums">{formatCurrency(snapshot.current_price, currency)}</p>
             {snapshot.price_change_pct != null && (
-              <p className={`text-xs ${priceChangeColor}`}>
-                {snapshot.price_change_pct >= 0 ? "+" : ""}{snapshot.price_change_pct.toFixed(2)}% since last check
+              <p className={`font-mono text-[10px] tabular-nums ${priceUp ? "text-emerald-600" : "text-red-600"}`}>
+                {priceUp ? "+" : ""}{snapshot.price_change_pct.toFixed(2)}%
               </p>
             )}
           </div>
         )}
 
         {snapshot.pnl != null && (
-          <div>
-            <p className="text-[11px] text-muted-foreground">Your P&L</p>
-            <p className={`text-base font-semibold ${pnlColor}`}>
-              {formatCurrency(snapshot.pnl, currency)}
+          <div className="px-4 py-3">
+            <p className="font-mono text-[9px] uppercase tracking-[0.2em] text-muted-foreground mb-1">P&L</p>
+            <p className={`font-mono text-sm font-medium tabular-nums ${pnlPositive ? "text-emerald-600" : "text-red-600"}`}>
+              {formatCurrency(snapshot.pnl)}
             </p>
             {snapshot.pnl_pct != null && (
-              <p className={`text-xs ${pnlColor}`}>
-                {snapshot.pnl_pct >= 0 ? "+" : ""}{snapshot.pnl_pct.toFixed(1)}% vs cost
+              <p className={`font-mono text-[10px] tabular-nums ${pnlPositive ? "text-emerald-600" : "text-red-600"}`}>
+                {snapshot.pnl_pct >= 0 ? "+" : ""}{snapshot.pnl_pct.toFixed(1)}%
               </p>
             )}
           </div>
         )}
 
         {snapshot.pe_ratio != null && (
-          <div>
-            <p className="text-[11px] text-muted-foreground">P/E Ratio</p>
-            <p className="text-base font-semibold">{snapshot.pe_ratio.toFixed(1)}</p>
+          <div className="px-4 py-3">
+            <p className="font-mono text-[9px] uppercase tracking-[0.2em] text-muted-foreground mb-1">P/E</p>
+            <p className="font-mono text-sm font-medium tabular-nums">{snapshot.pe_ratio.toFixed(1)}</p>
             {snapshot.market_cap != null && (
-              <p className="text-xs text-muted-foreground">{formatLargeNumber(snapshot.market_cap)} cap</p>
+              <p className="font-mono text-[10px] text-muted-foreground">{formatLargeNumber(snapshot.market_cap)}</p>
             )}
           </div>
         )}
 
-        <div>
-          <p className="text-[11px] text-muted-foreground">Signals</p>
+        <div className="px-4 py-3">
+          <p className="font-mono text-[9px] uppercase tracking-[0.2em] text-muted-foreground mb-1">Signals</p>
           {snapshot.watch_hints_total > 0 ? (
-            <p className={`text-base font-semibold ${hintsOk ? "text-emerald-600" : "text-amber-600"}`}>
-              {snapshot.watch_hints_ok}/{snapshot.watch_hints_total} passing
+            <p className={`font-mono text-sm font-medium tabular-nums ${hintsOk ? "text-emerald-600" : "text-amber-600"}`}>
+              {snapshot.watch_hints_ok}/{snapshot.watch_hints_total}
             </p>
           ) : (
-            <p className="text-base font-semibold text-muted-foreground">None set</p>
+            <p className="font-mono text-sm text-muted-foreground">—</p>
           )}
-          <p className="text-xs text-muted-foreground">
-            {snapshot.recent_news_count} recent article{snapshot.recent_news_count !== 1 ? "s" : ""}
-          </p>
+          {snapshot.recent_news_count > 0 ? (
+            <p className="font-mono text-[10px] text-muted-foreground">
+              {eventsCreated > 0
+                ? `${snapshot.recent_news_count} article${snapshot.recent_news_count !== 1 ? "s" : ""} · ${eventsCreated} flagged`
+                : `${snapshot.recent_news_count} reviewed · none flagged`}
+            </p>
+          ) : (
+            <p className="font-mono text-[10px] text-muted-foreground">No recent articles</p>
+          )}
         </div>
       </div>
 
       {earningsDate && earningsDays != null && earningsDays > 0 && earningsDays <= 30 && (
-        <p className="mt-3 text-xs text-muted-foreground">
-          Earnings {earningsDate} ({earningsDays} day{earningsDays !== 1 ? "s" : ""} away)
-        </p>
+        <div className="px-4 py-2.5 border-t border-border/40">
+          <p className="font-mono text-[9px] text-muted-foreground/60">
+            Earnings {earningsDate} · {earningsDays} day{earningsDays !== 1 ? "s" : ""} away
+          </p>
+        </div>
       )}
     </div>
   );
@@ -127,29 +140,30 @@ export function CheckNowButton({ holdingId, ticker, currency = "GBP", onComplete
 
   return (
     <div>
-      <div className="flex items-center gap-3">
-        <Button
-          variant="outline"
-          size="sm"
+      <div className="flex items-center gap-4">
+        <button
           onClick={handleCheckNow}
           disabled={loading || isRateLimited}
+          className="font-mono text-[10px] uppercase tracking-[0.15em] border border-border text-foreground/70 hover:text-foreground px-4 py-2 transition-colors hover:border-border/80 disabled:opacity-40 disabled:cursor-not-allowed"
         >
-          {loading ? "Checking..." : "Check now"}
-        </Button>
+          {loading ? "Checking…" : "Check now"}
+        </button>
+
         {hasEvents && (
-          <span className="text-xs text-amber-600 font-medium">
-            {result!.events_created} event{result!.events_created !== 1 ? "s" : ""} found — review below
+          <span className="font-mono text-[10px] uppercase tracking-[0.15em] text-amber-700">
+            {result!.events_created} event{result!.events_created !== 1 ? "s" : ""} — review below
           </span>
         )}
+
         {isRateLimited && nextAvailable && (
-          <span className="text-xs text-muted-foreground">
-            Next available {nextAvailable.toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" })}
+          <span className="font-mono text-[10px] text-muted-foreground/60">
+            Next check {nextAvailable.toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" })}
           </span>
         )}
       </div>
 
-      {result?.status === "completed" && result.snapshot && !hasEvents && (
-        <SnapshotCard snapshot={result.snapshot} ticker={ticker} currency={currency} />
+      {result?.status === "completed" && result.snapshot && (
+        <SnapshotCard snapshot={result.snapshot} ticker={ticker} currency={currency} eventsCreated={result.events_created ?? 0} />
       )}
     </div>
   );

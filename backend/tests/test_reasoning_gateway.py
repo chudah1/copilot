@@ -217,3 +217,55 @@ async def test_gateway_escalates_when_first_provider_returns_odd_signal_mapping(
     result = await gateway.run(_request("Margins should expand as the product mix improves."))
     assert result.success is True
     assert result.provider == "anthropic"
+
+
+async def test_gateway_allows_earnings_growth_for_demand_claims():
+    gateway = ThesisReasoningGateway(
+        providers=[
+            StubProvider(
+                "openai",
+                ReasoningResult(
+                    success=True,
+                    status="success",
+                    provider="openai",
+                    model="test-model",
+                    prompt_version="v1",
+                    normalized_output=None,
+                    raw_output={
+                        "reason_type": "business_performance",
+                        "monitorability": "high",
+                        "decomposition_confidence": 0.9,
+                        "claims": [
+                            {
+                                "claim_text": "AI demand should keep driving datacenter growth.",
+                                "claim_type": "demand",
+                                "confidence": 0.9,
+                                "entities": [
+                                    {
+                                        "entity_name": "NVIDIA",
+                                        "entity_ticker": "NVDA",
+                                        "entity_type": "held_company",
+                                        "signals": [
+                                            {
+                                                "signal_type": "earnings_growth",
+                                                "signal_label": "Earnings growth",
+                                                "confidence": 0.9,
+                                                "confirmation_required": False,
+                                            }
+                                        ],
+                                    }
+                                ],
+                            }
+                        ],
+                    },
+                    confidence=None,
+                    latency_ms=50,
+                    failure_reason=None,
+                ),
+            )
+        ]
+    )
+
+    result = await gateway.run(_request("AI demand continues to drive strong datacenter GPU sales growth."))
+    assert result.success is True
+    assert result.provider == "openai"

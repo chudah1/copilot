@@ -18,11 +18,12 @@ from app.schemas.onboarding import (
     OnboardingStateResponse,
     OnboardingStatusResponse,
     OnboardingStepStatus,
+    SetInvestorProfileRequest,
     SynthesisRequest,
     SynthesisResponse,
 )
 from app.services.ai_thesis import synthesize_thesis_from_qa
-from app.services.onboarding import coverage_pct, get_or_create_state, mark_onboarding_completed
+from app.services.onboarding import coverage_pct, get_or_create_state, mark_onboarding_completed, set_investor_profile
 
 router = APIRouter(prefix="/api/onboarding", tags=["onboarding"])
 
@@ -241,6 +242,28 @@ async def wizard_state(
         wizard_skipped_at=state.wizard_skipped_at,
         wizard_completed_at=state.wizard_completed_at,
         reasons_written_count=state.reasons_written_count or 0,
+        investor_profile=state.investor_profile,
+    )
+
+
+@router.post("/profile", response_model=OnboardingStateResponse)
+async def wizard_profile(
+    body: SetInvestorProfileRequest,
+    current_user: User = Depends(get_current_user),
+    db: AsyncSession = Depends(get_db),
+):
+    if body.investor_profile not in {"thesis_driven", "hearsay_driven"}:
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="Invalid investor profile")
+    state = await set_investor_profile(db, current_user.id, body.investor_profile)
+    await db.commit()
+    return OnboardingStateResponse(
+        portfolio_connected=state.portfolio_connected_at is not None,
+        drafts_generated_at=state.drafts_generated_at,
+        drafts_reviewed_at=state.drafts_reviewed_at,
+        wizard_skipped_at=state.wizard_skipped_at,
+        wizard_completed_at=state.wizard_completed_at,
+        reasons_written_count=state.reasons_written_count or 0,
+        investor_profile=state.investor_profile,
     )
 
 

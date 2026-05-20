@@ -13,6 +13,7 @@ import { toast } from "sonner";
 import type {
   DraftStatus,
   Holding,
+  LivePrice,
   PortfolioSummary,
   Thesis,
   HoldingPulse,
@@ -69,13 +70,14 @@ interface PositionCardProps {
   thesis?: Thesis;
   pulse?: HoldingPulse;
   earnings?: UpcomingEarnings;
+  livePrice?: LivePrice;
   totalValue: number;
   onGenerateDraft?: () => void;
   index: number;
 }
 
-function PositionCard({ holding, thesis, pulse, earnings, totalValue, onGenerateDraft, index }: PositionCardProps) {
-  const value = holding.current_value ?? 0;
+function PositionCard({ holding, thesis, pulse, earnings, livePrice, totalValue, onGenerateDraft, index }: PositionCardProps) {
+  const value = livePrice?.current_value ?? holding.current_value ?? 0;
   const cost = holding.quantity * holding.average_cost_basis;
   const pnl = value - cost;
   const pnlPct = cost > 0 ? (pnl / cost) * 100 : 0;
@@ -129,10 +131,10 @@ function PositionCard({ holding, thesis, pulse, earnings, totalValue, onGenerate
           {/* Value + P&L */}
           <div>
             <p className="font-mono text-[1.05rem] tabular-nums text-foreground font-medium leading-tight">
-              {formatCurrency(value, holding.currency)}
+              {formatCurrency(value)}
             </p>
             <p className={`font-mono text-[11px] tabular-nums mt-0.5 ${pnl >= 0 ? "text-emerald-700" : "text-red-600"}`}>
-              {pnl >= 0 ? "+" : ""}{formatCurrency(pnl, holding.currency)}{" "}
+              {pnl >= 0 ? "+" : ""}{formatCurrency(pnl)}{" "}
               <span className="opacity-70">({formatPercent(pnlPct)})</span>
             </p>
           </div>
@@ -237,6 +239,16 @@ export default function DashboardPage() {
   const [loading, setLoading] = useState(true);
   const [loadError, setLoadError] = useState<string | null>(null);
   const [showAddForm, setShowAddForm] = useState(false);
+  const [livePrices, setLivePrices] = useState<Record<string, LivePrice>>({});
+
+  const fetchLivePrices = async () => {
+    try {
+      const prices = await api.get<LivePrice[]>("/api/portfolio/live-prices");
+      setLivePrices(Object.fromEntries(prices.map((p) => [p.ticker, p])));
+    } catch {
+      // Silently ignore — fall back to DB values
+    }
+  };
 
   const applyData = (data: DashboardData) => {
     setHoldings(data.holdings);
@@ -261,8 +273,21 @@ export default function DashboardPage() {
     fetchDashboardData()
       .then((data) => { if (!cancelled) { applyData(data); setLoadError(null); } })
       .catch((err) => { if (!cancelled) setLoadError(getErrorMessage(err, "Failed to load portfolio")); })
-      .finally(() => { if (!cancelled) setLoading(false); });
+      .finally(() => {
+        if (!cancelled) {
+          setLoading(false);
+          void fetchLivePrices();
+        }
+      });
     return () => { cancelled = true; };
+  }, []);
+
+  // Refresh live prices every 60 seconds while the tab is visible
+  useEffect(() => {
+    const interval = setInterval(() => {
+      if (!document.hidden) void fetchLivePrices();
+    }, 60_000);
+    return () => clearInterval(interval);
   }, []);
 
   const handleGenerateDraft = async (holdingId: string, ticker: string) => {
@@ -288,6 +313,16 @@ export default function DashboardPage() {
 
   // ── Derived state ─────────────────────────────────────────────────────
   const thesesByHolding = Object.fromEntries(currentTheses.map((t) => [t.holding_id, t]));
+
+  // Live portfolio total: sum current_value from live prices where available,
+  // fall back to DB value for holdings not yet refreshed.
+  const hasLivePrices = Object.keys(livePrices).length > 0;
+  const liveTotalValue = hasLivePrices
+    ? holdings.reduce((sum, h) => sum + (livePrices[h.ticker]?.current_value ?? h.current_value ?? 0), 0)
+    : null;
+  const displayTotalValue = liveTotalValue ?? summary?.total_value ?? 0;
+  const livePnl = liveTotalValue != null && summary ? liveTotalValue - summary.total_cost : null;
+  const livePnlPct = livePnl != null && summary && summary.total_cost > 0 ? (livePnl / summary.total_cost) * 100 : null;
   const pulseByHolding = Object.fromEntries((pulse?.pulses ?? []).map((p) => [p.holding_id, p]));
   const earningsByHolding = Object.fromEntries(upcomingEarnings.map((e) => [e.holding_id, e]));
 
@@ -398,11 +433,17 @@ export default function DashboardPage() {
               </p>
               <div className="flex items-baseline gap-3">
                 <span className="font-display italic text-[1.85rem] leading-none text-foreground tracking-tight">
-                  {formatCurrency(summary?.total_value ?? 0)}
+                  {formatCurrency(displayTotalValue)}
                 </span>
-                {summary && (
-                  <span className={`font-mono text-sm tabular-nums ${summary.total_pnl >= 0 ? "text-emerald-700" : "text-red-600"}`}>
-                    {summary.total_pnl >= 0 ? "+" : ""}{formatPercent(summary.total_pnl_pct)}
+                {(livePnlPct != null ? livePnlPct : summary?.total_pnl_pct) != null && (
+                  <span className={`font-mono text-sm tabular-nums ${(livePnl ?? summary?.total_pnl ?? 0) >= 0 ? "text-emerald-700" : "text-red-600"}`}>
+                    {(livePnl ?? summary?.total_pnl ?? 0) >= 0 ? "+" : ""}{formatPercent(livePnlPct ?? summary?.total_pnl_pct ?? 0)}
+                  </span>
+                )}
+                {hasLivePrices && (
+                  <span className="flex items-center gap-1 font-mono text-[9px] uppercase tracking-[0.15em] text-emerald-600">
+                    <span className="inline-block h-1.5 w-1.5 rounded-full bg-emerald-500 animate-pulse" />
+                    live
                   </span>
                 )}
               </div>
@@ -563,6 +604,7 @@ export default function DashboardPage() {
               thesis={thesesByHolding[h.id]}
               pulse={pulseByHolding[h.id]}
               earnings={earningsByHolding[h.id]}
+              livePrice={livePrices[h.ticker]}
               totalValue={summary?.total_value ?? 0}
               onGenerateDraft={() => handleGenerateDraft(h.id, h.ticker)}
               index={i}

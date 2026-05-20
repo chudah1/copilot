@@ -31,7 +31,7 @@ from app.schemas.holding import (
 from app.services.encryption import encrypt, decrypt
 from app.services.trading212 import Trading212Client, build_auth_header, detect_trading212_base_url
 from app.services.csv_parser import parse_csv
-from app.services.market_data import fetch_company_data, fetch_company_overview
+from app.services.market_data import detect_native_currency, fetch_company_data, fetch_company_overview, fetch_live_price, get_fx_rate
 
 router = APIRouter(prefix="/api/portfolio", tags=["portfolio"])
 
@@ -185,7 +185,12 @@ async def sync_broker(
         )
         holding = existing_result.scalar_one_or_none()
 
-        current_value = pos.quantity * pos.current_price if pos.current_price else None
+        # Determine native currency and convert all monetary values to GBP so
+        # portfolio totals are consistent with what T212 shows the user.
+        native_currency = detect_native_currency(pos.ticker)
+        fx_rate = await get_fx_rate(native_currency, "GBP")
+        avg_cost_gbp = pos.average_price * fx_rate
+        current_value_gbp = pos.quantity * pos.current_price * fx_rate if pos.current_price else None
 
         if holding is None:
             # Enrich new holdings with sector/geography from market data
@@ -207,9 +212,10 @@ async def sync_broker(
                 ticker=pos.ticker.upper(),
                 name=h_name,
                 quantity=pos.quantity,
-                average_cost_basis=pos.average_price,
-                current_price=pos.current_price,
-                current_value=current_value,
+                average_cost_basis=avg_cost_gbp,
+                current_price=pos.current_price,  # native currency per-share (informational)
+                current_value=current_value_gbp,   # account currency (GBP)
+                currency=native_currency,
                 sector=h_sector,
                 geography=h_geography,
                 last_updated_at=datetime.now(timezone.utc),
@@ -217,9 +223,10 @@ async def sync_broker(
             db.add(holding)
         else:
             holding.quantity = pos.quantity
-            holding.average_cost_basis = pos.average_price
-            holding.current_price = pos.current_price
-            holding.current_value = current_value
+            holding.average_cost_basis = avg_cost_gbp
+            holding.current_price = pos.current_price  # native currency per-share
+            holding.current_value = current_value_gbp   # GBP
+            holding.currency = native_currency
             holding.last_updated_at = datetime.now(timezone.utc)
             # Backfill sector/geography if missing
             if not holding.sector or not holding.geography:
@@ -447,6 +454,41 @@ async def upload_csv(
     background_tasks.add_task(generate_draft_theses_for_user, current_user.id, new_ids)
 
     return created
+
+
+@router.get("/live-prices")
+async def live_prices(
+    current_user: User = Depends(get_current_user),
+    db: AsyncSession = Depends(get_db),
+):
+    """Return fresh market prices for all holdings, bypassing the DB snapshot.
+
+    Prices are fetched via yfinance fast_info (60s cache) and converted to GBP.
+    The frontend overlays these on top of the stored values so the display stays
+    current without a full T212 sync.
+    """
+    result = await db.execute(
+        select(Holding).where(Holding.user_id == current_user.id)
+    )
+    holdings = result.scalars().all()
+
+    import asyncio as _asyncio
+
+    async def _price_for(holding: Holding) -> dict:
+        price = await fetch_live_price(holding.ticker)
+        if price is None or price <= 0:
+            return {"ticker": holding.ticker, "current_price": None, "current_value": None}
+        native_ccy = holding.currency or detect_native_currency(holding.ticker)
+        fx_rate = await get_fx_rate(native_ccy, "GBP")
+        current_value_gbp = float(holding.quantity) * price * fx_rate
+        return {
+            "ticker": holding.ticker,
+            "current_price": price,
+            "current_value": round(current_value_gbp, 2),
+        }
+
+    prices = await _asyncio.gather(*[_price_for(h) for h in holdings])
+    return [p for p in prices if p["current_price"] is not None]
 
 
 @router.get("/pulse", response_model=PortfolioPulseResponse)

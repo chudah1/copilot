@@ -33,6 +33,9 @@ class CounterThesisOutput:
 
 @dataclass
 class ThesisAssistOutput:
+    why_own_it: str
+    must_remain_true: str
+    what_would_change_my_mind: str
     ai_summary: str
     interpretation: dict
 
@@ -61,11 +64,63 @@ SUPPORTED_PROXY_METRICS = {
     "dividend_yield",
 }
 PROXY_TICKER_PATTERN = re.compile(r"^[A-Z][A-Z0-9.\-]{0,9}$")
+OPENAI_ASSIST_MODEL = "gpt-4.1-mini"
+
+THESIS_ASSIST_WATCH_HINT_SCHEMA = {
+    "type": "object",
+    "properties": {
+        "kind": {"type": "string", "enum": ["price_move_pct", "metric_threshold"]},
+        "threshold": {"type": "number"},
+        "metric": {"type": "string"},
+        "operator": {"type": "string"},
+        "rationale": {"type": "string"},
+    },
+    "required": ["kind", "threshold", "metric", "operator", "rationale"],
+    "additionalProperties": False,
+}
+
+THESIS_ASSIST_PROXY_SIGNAL_SCHEMA = {
+    "type": "object",
+    "properties": {
+        "ticker": {"type": "string"},
+        "rationale": {"type": "string"},
+        "signal_hint": {"type": "string"},
+        "allowed_metrics": {
+            "type": "array",
+            "items": {"type": "string"},
+        },
+    },
+    "required": ["ticker", "rationale", "signal_hint", "allowed_metrics"],
+    "additionalProperties": False,
+}
+
+THESIS_ASSIST_INTERPRETATION_SCHEMA = {
+    "type": "object",
+    "properties": {
+        "labels": {
+            "type": "array",
+            "items": {"type": "string"},
+        },
+        "monitorability": {"type": "string", "enum": ["high", "medium", "low"]},
+        "watch_hints": {
+            "type": "array",
+            "items": THESIS_ASSIST_WATCH_HINT_SCHEMA,
+        },
+        "proxy_signals": {
+            "type": "array",
+            "items": THESIS_ASSIST_PROXY_SIGNAL_SCHEMA,
+        },
+        "ambiguity_note": {"type": "string"},
+    },
+    "required": ["labels", "monitorability", "watch_hints", "proxy_signals", "ambiguity_note"],
+    "additionalProperties": False,
+}
 
 
-THESIS_PROMPT = """You are an investment thesis assistant helping a retail investor clarify why they own a position.
+THESIS_PROMPT = """You are an investment thesis assistant helping a retail investor refine why they own a position.
 
-Given the position, the user's rough draft, and any available market data, produce:
+Given the position, the user's current thesis draft, and any available market data, produce:
+- refined thesis text that preserves the investor's meaning while making it clearer and more monitorable
 - a concise summary of the likely thesis in plain English
 - a lightweight interpretation object that helps the product monitor or review the thesis
 
@@ -74,12 +129,17 @@ Position:
 - Name: {name}
 - Shares: {quantity}
 - Average cost: {average_cost}
-- User draft: {draft_text}
+- Own it because: {why_own_it}
+- Must remain true: {must_remain_true}
+- What would change their mind: {what_would_change_my_mind}
 
 {market_data_section}
 
 Output valid JSON with this exact structure:
 {{
+    "why_own_it": "Refined version of the investor's reason for owning the position.",
+    "must_remain_true": "Refined version of the key condition(s) that must stay true.",
+    "what_would_change_my_mind": "Refined version of the specific break condition or sell trigger.",
     "ai_summary": "2-3 sentences explaining the thesis in investor language.",
     "interpretation": {{
         "labels": ["theme_or_reason"],
@@ -106,15 +166,39 @@ Output valid JSON with this exact structure:
 }}
 
 Requirements:
+- Preserve the investor's core meaning and tone; refine, don't replace.
+- Make each field more concrete, specific, and monitorable when possible.
+- If one field is missing, infer a reasonable version from the others instead of leaving it blank.
 - If the user's draft is vague, say so directly in ambiguity_note
 - Include 0-3 watch_hints total
+- For structured output compatibility, every watch_hint must include metric and operator strings. Use empty strings when kind is price_move_pct and those fields do not apply.
 - Include 0-3 proxy_signals: other tickers (never the held ticker itself) whose news or earnings would inform whether this thesis holds.
 - For each proxy, include:
   - rationale: why it matters in the causal chain
   - signal_hint: the specific commentary, guidance, or operating signal to watch
   - allowed_metrics: only from revenue_growth_yoy, earnings_growth_yoy, pe_ratio, dividend_yield when they genuinely help
+- For structured output compatibility, every proxy_signal must include allowed_metrics. Use an empty array when no metric is needed.
 - Use price_move_pct only when a generic price review trigger is sensible
 - Output ONLY valid JSON, no markdown fences"""
+
+THESIS_ASSIST_JSON_SCHEMA = {
+    "type": "object",
+    "properties": {
+        "why_own_it": {"type": "string"},
+        "must_remain_true": {"type": "string"},
+        "what_would_change_my_mind": {"type": "string"},
+        "ai_summary": {"type": "string"},
+        "interpretation": THESIS_ASSIST_INTERPRETATION_SCHEMA,
+    },
+    "required": [
+        "why_own_it",
+        "must_remain_true",
+        "what_would_change_my_mind",
+        "ai_summary",
+        "interpretation",
+    ],
+    "additionalProperties": False,
+}
 
 
 
@@ -153,8 +237,60 @@ async def _call_anthropic_json(
     return json.loads(strip_code_fences(response.content[0].text))
 
 
-def _fallback_assist(ticker: str, draft_text: str | None) -> ThesisAssistOutput:
-    cleaned = (draft_text or "").strip()
+async def _call_openai_json(
+    *,
+    prompt: str,
+    model: str,
+    max_tokens: int,
+) -> dict[str, Any]:
+    from openai import AsyncOpenAI
+
+    client = AsyncOpenAI(api_key=settings.openai_api_key)
+    response = await client.chat.completions.create(
+        model=model,
+        response_format={
+            "type": "json_schema",
+            "json_schema": {
+                "name": "thesis_assist",
+                "strict": True,
+                "schema": THESIS_ASSIST_JSON_SCHEMA,
+            },
+        },
+        messages=[{"role": "user", "content": prompt}],
+        temperature=0,
+        timeout=30.0,
+        max_tokens=max_tokens,
+    )
+    return json.loads(strip_code_fences(response.choices[0].message.content or "{}"))
+
+
+def _coalesce_assist_fields(
+    *,
+    why_own_it: str | None,
+    must_remain_true: str | None,
+    what_would_change_my_mind: str | None,
+    draft_text: str | None,
+) -> tuple[str, str, str]:
+    primary = (why_own_it or draft_text or "").strip()
+    must = (must_remain_true or "").strip()
+    change = (what_would_change_my_mind or "").strip()
+    return primary, must, change
+
+
+def _fallback_assist(
+    ticker: str,
+    *,
+    why_own_it: str | None,
+    must_remain_true: str | None,
+    what_would_change_my_mind: str | None,
+    draft_text: str | None,
+) -> ThesisAssistOutput:
+    cleaned, must, change = _coalesce_assist_fields(
+        why_own_it=why_own_it,
+        must_remain_true=must_remain_true,
+        what_would_change_my_mind=what_would_change_my_mind,
+        draft_text=draft_text,
+    )
     if cleaned:
         lowered = cleaned.lower()
         is_vague = any(re.search(pattern, lowered) for pattern in VAGUE_PATTERNS) or len(cleaned.split()) < 5
@@ -199,6 +335,16 @@ def _fallback_assist(ticker: str, draft_text: str | None) -> ThesisAssistOutput:
             "proxy_signals": [],
             "ambiguity_note": "The reason is still vague and may need clarification before monitoring can be precise." if is_vague else "",
         }
+        refined_must = must or (
+            "Demand, execution, and the core business driver stay strong enough for the original reason to remain intact."
+            if is_vague
+            else "The specific business driver behind the thesis continues to hold."
+        )
+        refined_change = change or (
+            "New evidence shows the original reason for owning this is no longer intact."
+            if is_vague
+            else "A measurable deterioration in the key business driver or execution would break the thesis."
+        )
     else:
         ai_summary = f"No clear thesis draft was provided for {ticker}."
         interpretation = {
@@ -208,25 +354,61 @@ def _fallback_assist(ticker: str, draft_text: str | None) -> ThesisAssistOutput:
             "proxy_signals": [],
             "ambiguity_note": "The user has not given enough detail to monitor this thesis well.",
         }
-    return ThesisAssistOutput(ai_summary=ai_summary, interpretation=interpretation)
+        cleaned = f"I own {ticker} because it fits my investment strategy."
+        refined_must = "The underlying business case remains intact."
+        refined_change = "Evidence shows the original investment case is no longer valid."
+    return ThesisAssistOutput(
+        why_own_it=cleaned,
+        must_remain_true=refined_must,
+        what_would_change_my_mind=refined_change,
+        ai_summary=ai_summary,
+        interpretation=interpretation,
+    )
 
 
 async def _call_claude(prompt: str) -> ThesisAssistOutput:
     data = await _call_anthropic_json(
         prompt=prompt,
-        model="claude-sonnet-4-20250514",
+        model=settings.anthropic_model,
         max_tokens=1024,
     )
     return ThesisAssistOutput(
+        why_own_it=str(data["why_own_it"]),
+        must_remain_true=str(data["must_remain_true"]),
+        what_would_change_my_mind=str(data["what_would_change_my_mind"]),
+        ai_summary=data["ai_summary"],
+        interpretation=data["interpretation"],
+    )
+
+
+async def _call_openai_assist(prompt: str) -> ThesisAssistOutput:
+    data = await _call_openai_json(
+        prompt=prompt,
+        model=OPENAI_ASSIST_MODEL,
+        max_tokens=1024,
+    )
+    return ThesisAssistOutput(
+        why_own_it=str(data["why_own_it"]),
+        must_remain_true=str(data["must_remain_true"]),
+        what_would_change_my_mind=str(data["what_would_change_my_mind"]),
         ai_summary=data["ai_summary"],
         interpretation=data["interpretation"],
     )
 
 
 def _parse_assist_output(result: ThesisAssistOutput) -> ThesisAssistOutput:
-    if not result.ai_summary or not isinstance(result.interpretation, dict):
+    if (
+        not result.why_own_it.strip()
+        or not result.must_remain_true.strip()
+        or not result.what_would_change_my_mind.strip()
+        or not result.ai_summary
+        or not isinstance(result.interpretation, dict)
+    ):
         raise ValueError("Incomplete thesis output")
     return ThesisAssistOutput(
+        why_own_it=result.why_own_it.strip(),
+        must_remain_true=result.must_remain_true.strip(),
+        what_would_change_my_mind=result.what_would_change_my_mind.strip(),
         ai_summary=result.ai_summary,
         interpretation=_normalize_interpretation(result.interpretation),
     )
@@ -249,6 +431,26 @@ def _parse_counter_thesis_output(data: dict[str, Any]) -> CounterThesisOutput:
     )
 
 
+_STALE_ADMIN_PATTERNS: tuple[tuple[re.Pattern[str], str], ...] = (
+    (
+        re.compile(r"\bthe\s+biden\s+administration'?s?\b", re.IGNORECASE),
+        "U.S. federal policy",
+    ),
+    (
+        re.compile(r"\bbiden\s+administration'?s?\b", re.IGNORECASE),
+        "U.S. federal policy",
+    ),
+)
+
+
+def _sanitize_time_sensitive_references(text: str) -> str:
+    cleaned = text.strip()
+    for pattern, replacement in _STALE_ADMIN_PATTERNS:
+        cleaned = pattern.sub(replacement, cleaned)
+    cleaned = re.sub(r"\s{2,}", " ", cleaned)
+    return cleaned
+
+
 def _parse_draft_output(data: dict[str, Any], ticker: str) -> dict[str, str]:
     why_own_it = data.get("why_own_it")
     must_remain_true = data.get("must_remain_true")
@@ -256,9 +458,9 @@ def _parse_draft_output(data: dict[str, Any], ticker: str) -> dict[str, str]:
     if not all(isinstance(item, str) for item in (why_own_it, must_remain_true, what_would_change_my_mind)):
         raise ValueError("Invalid draft payload")
     return {
-        "why_own_it": why_own_it.strip() or f"Investing in {ticker} for its long term potential.",
-        "must_remain_true": must_remain_true.strip() or "The company maintains its market position.",
-        "what_would_change_my_mind": what_would_change_my_mind.strip() or "A fundamental change in the business model.",
+        "why_own_it": _sanitize_time_sensitive_references(why_own_it) or f"Investing in {ticker} for its long term potential.",
+        "must_remain_true": _sanitize_time_sensitive_references(must_remain_true) or "The company maintains its market position.",
+        "what_would_change_my_mind": _sanitize_time_sensitive_references(what_would_change_my_mind) or "A fundamental change in the business model.",
     }
 
 
@@ -366,7 +568,15 @@ async def assist_thesis(
     quantity: float,
     average_cost: float,
     draft_text: str | None,
+    why_own_it: str | None = None,
+    must_remain_true: str | None = None,
+    what_would_change_my_mind: str | None = None,
+    *,
+    allow_fallback: bool = True,
 ) -> ThesisAssistOutput | None:
+    from app.services.market_data import _normalize_ticker
+    clean_ticker = _normalize_ticker(ticker)
+
     try:
         market_data = await fetch_company_data(ticker)
     except Exception as e:
@@ -374,28 +584,59 @@ async def assist_thesis(
         market_data = None
     market_data_section = _build_market_data_section(market_data)
 
+    refined_why_own_it, refined_must_remain_true, refined_change_mind = _coalesce_assist_fields(
+        why_own_it=why_own_it,
+        must_remain_true=must_remain_true,
+        what_would_change_my_mind=what_would_change_my_mind,
+        draft_text=draft_text,
+    )
     prompt = THESIS_PROMPT.format(
-        ticker=ticker,
+        ticker=clean_ticker,
         name=name,
         quantity=quantity,
         average_cost=average_cost,
-        draft_text=(draft_text or "None provided"),
+        why_own_it=refined_why_own_it or "None provided",
+        must_remain_true=refined_must_remain_true or "None provided",
+        what_would_change_my_mind=refined_change_mind or "None provided",
         market_data_section=market_data_section,
     )
 
     try:
         if not settings.anthropic_api_key:
-            return _fallback_assist(ticker=ticker, draft_text=draft_text)
+            raise RuntimeError("Anthropic API key not configured")
+
         result = await _call_claude(prompt)
         return _parse_assist_output(result)
-    except Exception as e:
-        logger.error(f"Thesis generation failed for {ticker}: {e}")
+    except Exception as anthropic_error:
+        logger.error("Anthropic thesis assist failed for %s: %s", ticker, anthropic_error)
         try:
-            result = await _call_claude(prompt + "\n\nIMPORTANT: Output ONLY valid JSON.")
+            if not settings.anthropic_api_key:
+                raise RuntimeError("Anthropic API key not configured")
+            result = await _call_claude(
+                prompt
+                + "\n\nIMPORTANT: Return strictly valid JSON. Escape all quotes inside strings and do not emit markdown fences."
+            )
             return _parse_assist_output(result)
-        except Exception:
-            logger.error(f"Thesis generation retry failed for {ticker}")
-            return _fallback_assist(ticker=ticker, draft_text=draft_text)
+        except Exception as anthropic_retry_error:
+            logger.error("Anthropic thesis assist retry failed for %s: %s", ticker, anthropic_retry_error)
+        try:
+            if not settings.openai_api_key:
+                raise RuntimeError("OpenAI API key not configured")
+            result = await _call_openai_assist(prompt)
+            return _parse_assist_output(result)
+        except Exception as openai_error:
+            logger.error("OpenAI thesis assist failed for %s: %s", ticker, openai_error)
+            return (
+                _fallback_assist(
+                    ticker=ticker,
+                    why_own_it=why_own_it,
+                    must_remain_true=must_remain_true,
+                    what_would_change_my_mind=what_would_change_my_mind,
+                    draft_text=draft_text,
+                )
+                if allow_fallback
+                else None
+            )
 
 
 COUNTER_THESIS_PROMPT = """You are a devil's advocate investment analyst. Given a retail investor's thesis for holding a stock, generate a structured counter-argument to sharpen their thinking.
@@ -502,7 +743,7 @@ async def generate_counter_thesis(
     try:
         data = await _call_anthropic_json(
             prompt=prompt,
-            model="claude-sonnet-4-20250514",
+            model=settings.anthropic_model,
             max_tokens=1024,
         )
         return _parse_counter_thesis_output(data)
@@ -525,6 +766,7 @@ Rules:
 - must_remain_true must state a specific, observable condition — not platitudes like "maintains competitive advantage" or "continues to grow".
 - what_would_change_my_mind must name a specific event or scenario that would signal the thesis is broken.
 - Do NOT use phrases like "long-term potential", "solid fundamentals", or "maintains market position" — these cannot be monitored.
+- Avoid named politicians or named administrations unless the user explicitly mentioned them. Prefer neutral wording like "U.S. federal policy", "regulatory standards", or "government incentives".
 
 Ticker: {ticker}
 {market_data_section}
@@ -539,9 +781,12 @@ Output valid JSON with this exact structure:
 Output ONLY valid JSON, no markdown fences."""
 
 async def generate_initial_draft(ticker: str) -> dict[str, str]:
+    from app.services.market_data import _normalize_ticker
+    clean_ticker = _normalize_ticker(ticker)
+
     if not settings.anthropic_api_key:
         return {
-            "why_own_it": f"Holding {ticker} as a core position in the portfolio.",
+            "why_own_it": f"Holding {clean_ticker} as a core position in the portfolio.",
             "must_remain_true": "Edit this — add the specific condition that must remain true (e.g. revenue growth stays positive, key contract renewals hold).",
             "what_would_change_my_mind": "Edit this — add the specific event that would trigger a sell (e.g. major customer loss, margin collapse).",
         }
@@ -554,21 +799,21 @@ async def generate_initial_draft(ticker: str) -> dict[str, str]:
     market_data_section = _build_market_data_section(market_data)
 
     prompt = DRAFT_THESIS_PROMPT.format(
-        ticker=ticker,
+        ticker=clean_ticker,
         market_data_section=market_data_section,
     )
 
     try:
         data = await _call_anthropic_json(
             prompt=prompt,
-            model="claude-sonnet-4-20250514",
+            model=settings.anthropic_model,
             max_tokens=500,
         )
-        return _parse_draft_output(data, ticker)
+        return _parse_draft_output(data, clean_ticker)
     except Exception as e:
         logger.error(f"Draft thesis generation failed for {ticker}: {e}")
         return {
-            "why_own_it": f"Holding {ticker} as a core position in the portfolio.",
+            "why_own_it": f"Holding {clean_ticker} as a core position in the portfolio.",
             "must_remain_true": "Edit this — add the specific condition that must remain true (e.g. revenue growth stays positive, key contract renewals hold).",
             "what_would_change_my_mind": "Edit this — add the specific event that would trigger a sell (e.g. major customer loss, margin collapse).",
         }
@@ -698,7 +943,7 @@ async def synthesize_thesis_from_qa(
     try:
         data = await _call_anthropic_json(
             prompt=prompt,
-            model="claude-sonnet-4-20250514",
+            model=settings.anthropic_model,
             max_tokens=1024,
         )
         return _parse_synthesis_output(data, ticker)
@@ -732,96 +977,94 @@ async def generate_draft_theses_for_user(
     from app.models.onboarding_state import OnboardingState
     from app.models.thesis import Thesis
 
-    async with async_session() as db:
-        existing_thesis_sq = (
-            select(Thesis.id)
-            .where(Thesis.holding_id == Holding.id)
-            .where(Thesis.status != "invalidated")
-            .correlate(Holding)
-            .limit(1)
-        )
-        q = (
-            select(Holding)
-            .where(Holding.user_id == user_id)
-            .where(~existing_thesis_sq.exists())
-            .order_by(func.coalesce(Holding.current_value, 0).desc())
-            .limit(3)
-        )
-        if holding_ids:
-            q = q.where(Holding.id.in_(holding_ids))
+    try:
+        async with async_session() as db:
+            existing_thesis_sq = (
+                select(Thesis.id)
+                .where(Thesis.holding_id == Holding.id)
+                .where(Thesis.status != "invalidated")
+                .correlate(Holding)
+                .limit(1)
+            )
+            q = (
+                select(Holding)
+                .where(Holding.user_id == user_id)
+                .where(~existing_thesis_sq.exists())
+                .order_by(func.coalesce(Holding.current_value, 0).desc())
+                .limit(3)
+            )
+            if holding_ids:
+                q = q.where(Holding.id.in_(holding_ids))
 
-        result = await db.execute(q)
-        holdings = result.scalars().all()
+            result = await db.execute(q)
+            holdings = result.scalars().all()
 
-        if not holdings:
-            return
+            if not holdings:
+                return
 
-        now = datetime.now(timezone.utc)
+            now = datetime.now(timezone.utc)
 
-        # Phase 1 (sequential): create pending draft records and flush to get IDs before the
-        # concurrent AI phase. SQLAlchemy sessions are not concurrency-safe, so DB work must
-        # be sequential even though the AI calls run concurrently in Phase 2.
-        draft_records: list[tuple[Holding, OnboardingDraft]] = []
-        for holding in holdings:
-            draft = OnboardingDraft(user_id=user_id, holding_id=holding.id, status="pending")
-            db.add(draft)
-            await db.flush()
-            draft_records.append((holding, draft))
+            draft_records: list[tuple[Holding, OnboardingDraft]] = []
+            for holding in holdings:
+                draft = OnboardingDraft(user_id=user_id, holding_id=holding.id, status="pending")
+                db.add(draft)
+                await db.flush()
+                draft_records.append((holding, draft))
 
-        # Phase 2 (concurrent): AI calls are safe to parallelize since they don't touch the DB session.
-        async def _generate(holding: Holding) -> tuple[dict[str, str], ThesisAssistOutput | None] | Exception:
-            try:
-                draft_fields = await generate_initial_draft(holding.ticker)
-                assist_result = await assist_thesis(
-                    ticker=holding.ticker,
-                    name=holding.name,
-                    quantity=float(holding.quantity),
-                    average_cost=float(holding.average_cost_basis),
-                    draft_text=draft_fields["why_own_it"],
-                )
-                return (draft_fields, assist_result)
-            except Exception as exc:
-                return exc
+            async def _generate(holding: Holding) -> tuple[dict[str, str], ThesisAssistOutput | None] | Exception:
+                try:
+                    draft_fields = await generate_initial_draft(holding.ticker)
+                    assist_result = await assist_thesis(
+                        ticker=holding.ticker,
+                        name=holding.name,
+                        quantity=float(holding.quantity),
+                        average_cost=float(holding.average_cost_basis),
+                        draft_text=draft_fields["why_own_it"],
+                    )
+                    return (draft_fields, assist_result)
+                except Exception as exc:
+                    return exc
 
-        ai_results = await asyncio.gather(*[_generate(h) for h, _ in draft_records])
+            ai_results = await asyncio.gather(*[_generate(h) for h, _ in draft_records])
 
-        # Phase 3 (sequential): add all thesis objects first, then a single flush to assign IDs.
-        theses_to_link: list[tuple[OnboardingDraft, Thesis]] = []
-        for (holding, draft), ai_result in zip(draft_records, ai_results):
-            if isinstance(ai_result, Exception):
-                logger.error("Background draft failed for %s (%s): %s", holding.id, holding.ticker, ai_result)
-                draft.status = "failed"
-                draft.error_message = str(ai_result)[:500]
-                draft.updated_at = now
-            else:
-                draft_fields, assist_result = ai_result
-                thesis = Thesis(
-                    holding_id=holding.id,
-                    user_id=user_id,
-                    status="draft",
-                    source="ai_draft",
-                    confidence="medium",
-                    why_own_it=draft_fields["why_own_it"],
-                    must_remain_true=draft_fields["must_remain_true"],
-                    what_would_change_my_mind=draft_fields["what_would_change_my_mind"],
-                    ai_summary=assist_result.ai_summary if assist_result else None,
-                    interpretation=assist_result.interpretation if assist_result else None,
-                )
-                db.add(thesis)
-                theses_to_link.append((draft, thesis))
+            theses_to_link: list[tuple[OnboardingDraft, Thesis]] = []
+            for (holding, draft), ai_result in zip(draft_records, ai_results):
+                if isinstance(ai_result, Exception):
+                    logger.error("Background draft failed for %s (%s): %s", holding.id, holding.ticker, ai_result)
+                    draft.status = "failed"
+                    draft.error_message = str(ai_result)[:500]
+                    draft.updated_at = now
+                else:
+                    draft_fields, assist_result = ai_result
+                    thesis = Thesis(
+                        holding_id=holding.id,
+                        user_id=user_id,
+                        status="draft",
+                        source="ai_draft",
+                        confidence="medium",
+                        why_own_it=draft_fields["why_own_it"],
+                        must_remain_true=draft_fields["must_remain_true"],
+                        what_would_change_my_mind=draft_fields["what_would_change_my_mind"],
+                        ai_summary=assist_result.ai_summary if assist_result else None,
+                        interpretation=assist_result.interpretation if assist_result else None,
+                    )
+                    db.add(thesis)
+                    theses_to_link.append((draft, thesis))
 
-        if theses_to_link:
-            await db.flush()
-            for draft, thesis in theses_to_link:
-                draft.status = "ready"
-                draft.thesis_id = thesis.id
-                draft.updated_at = now
+            if theses_to_link:
+                await db.flush()
+                for draft, thesis in theses_to_link:
+                    draft.status = "ready"
+                    draft.thesis_id = thesis.id
+                    draft.updated_at = now
 
-        state_result = await db.execute(
-            select(OnboardingState).where(OnboardingState.user_id == user_id)
-        )
-        state = state_result.scalar_one_or_none()
-        if state is not None:
-            state.drafts_generated_at = now
+            state_result = await db.execute(
+                select(OnboardingState).where(OnboardingState.user_id == user_id)
+            )
+            state = state_result.scalar_one_or_none()
+            if state is not None:
+                state.drafts_generated_at = now
 
-        await db.commit()
+            await db.commit()
+    except Exception:
+        logger.exception("Background draft generation crashed for user %s", user_id)

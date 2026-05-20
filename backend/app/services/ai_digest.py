@@ -145,7 +145,7 @@ def _parse_digest_response(text: str) -> dict[str, Any]:
 async def _call_anthropic_digest(prompt: str) -> dict[str, Any]:
     client = anthropic.AsyncAnthropic(api_key=settings.anthropic_api_key)
     response = await client.messages.create(
-        model="claude-sonnet-4-20250514",
+        model=settings.anthropic_model,
         max_tokens=1024,
         messages=[{"role": "user", "content": prompt}],
         timeout=30.0,

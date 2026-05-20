@@ -8,11 +8,12 @@ from app.services.reasoning.types import ReasoningResult
 
 @pytest.fixture
 async def holding(client, auth_headers):
-    response = await client.post(
-        "/api/portfolio/holdings",
-        json={"ticker": "AAPL", "name": "Apple Inc", "quantity": 10, "average_cost_basis": 150.50},
-        headers=auth_headers,
-    )
+    with patch("app.services.ai_thesis.generate_draft_theses_for_user", new_callable=AsyncMock):
+        response = await client.post(
+            "/api/portfolio/holdings",
+            json={"ticker": "AAPL", "name": "Apple Inc", "quantity": 10, "average_cost_basis": 150.50},
+            headers=auth_headers,
+        )
     return response.json()
 
 
@@ -47,6 +48,9 @@ async def test_create_thesis(client, auth_headers, holding):
 
 async def test_assist_thesis_does_not_persist(client, auth_headers, holding):
     mock_output = ThesisAssistOutput(
+        why_own_it="Apple's ecosystem keeps users locked in and supports durable cash generation.",
+        must_remain_true="Services growth and retention stay strong.",
+        what_would_change_my_mind="A sustained ecosystem weakening or services slowdown.",
         ai_summary="Apple is held for ecosystem durability.",
         interpretation={
             "labels": ["quality"],
@@ -63,11 +67,25 @@ async def test_assist_thesis_does_not_persist(client, auth_headers, holding):
         )
     assert response.status_code == 200
     data = response.json()
+    assert data["why_own_it"].startswith("Apple")
+    assert data["must_remain_true"] == "Services growth and retention stay strong."
     assert data["ai_summary"] == "Apple is held for ecosystem durability."
 
     theses_response = await client.get(f"/api/theses/holding/{holding['id']}", headers=auth_headers)
     assert theses_response.status_code == 200
     assert theses_response.json() == []
+
+
+async def test_assist_thesis_returns_502_when_live_assist_fails(client, auth_headers, holding):
+    with patch("app.routes.thesis.assist_thesis", new_callable=AsyncMock, return_value=None):
+        response = await client.post(
+            "/api/theses/assist",
+            json={"holding_id": holding["id"], "draft_text": "I like the ecosystem"},
+            headers=auth_headers,
+        )
+
+    assert response.status_code == 502
+    assert response.json()["detail"] == "Failed to assist thesis draft"
 
 
 async def test_debug_decompose_returns_provider_and_gateway_results(client, auth_headers):

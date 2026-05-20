@@ -182,10 +182,20 @@ async def assist_thesis_endpoint(
         quantity=float(holding.quantity),
         average_cost=float(holding.average_cost_basis),
         draft_text=body.draft_text,
+        why_own_it=body.why_own_it,
+        must_remain_true=body.must_remain_true,
+        what_would_change_my_mind=body.what_would_change_my_mind,
+        allow_fallback=False,
     )
     if output is None:
         raise HTTPException(status_code=status.HTTP_502_BAD_GATEWAY, detail="Failed to assist thesis draft")
-    return AssistThesisResponse(ai_summary=output.ai_summary, interpretation=output.interpretation)
+    return AssistThesisResponse(
+        why_own_it=output.why_own_it,
+        must_remain_true=output.must_remain_true,
+        what_would_change_my_mind=output.what_would_change_my_mind,
+        ai_summary=output.ai_summary,
+        interpretation=output.interpretation,
+    )
 
 
 @router.post("/draft", response_model=DraftThesisResponse)

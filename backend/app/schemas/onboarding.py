@@ -22,8 +22,13 @@ class OnboardingStateResponse(BaseModel):
     wizard_skipped_at: datetime | None
     wizard_completed_at: datetime | None
     reasons_written_count: int
+    investor_profile: str | None
 
     model_config = {"from_attributes": True}
+
+
+class SetInvestorProfileRequest(BaseModel):
+    investor_profile: str
 
 
 class DraftItemResponse(BaseModel):

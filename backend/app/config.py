@@ -1,4 +1,13 @@
-from pydantic_settings import BaseSettings
+from pathlib import Path
+
+from pydantic_settings import BaseSettings, SettingsConfigDict
+
+
+PROJECT_ROOT = Path(__file__).resolve().parents[2]
+ENV_FILES = (
+    str(PROJECT_ROOT / ".env"),
+    str(PROJECT_ROOT / "backend" / ".env"),
+)
 
 
 class Settings(BaseSettings):
@@ -15,6 +24,7 @@ class Settings(BaseSettings):
     encryption_key: str = "change-me-32-byte-key-in-prod!!"  # Must be 32 bytes
 
     anthropic_api_key: str = ""
+    anthropic_model: str = "claude-sonnet-4-20250514"
     openai_api_key: str = ""
     gemini_api_key: str = ""
     resend_api_key: str = ""
@@ -28,7 +38,11 @@ class Settings(BaseSettings):
     openai_prompt_cache_key: str = "thesis_decompose_v3"
     openai_prompt_cache_retention: str = "24h"  # "in_memory" | "24h"
 
-    model_config = {"env_file": ".env", "env_file_encoding": "utf-8"}
+    model_config = SettingsConfigDict(
+        env_file=ENV_FILES,
+        env_file_encoding="utf-8",
+        extra="ignore",
+    )
 
 
 settings = Settings()

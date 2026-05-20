@@ -80,6 +80,9 @@ def _ensure_sqlite_dev_compatibility(conn) -> None:
             if col not in ob_columns:
                 conn.execute(text(f"ALTER TABLE onboarding_states ADD COLUMN {col} DATETIME"))
                 logger.info("Added missing onboarding_states.%s column for local SQLite compatibility", col)
+        if "investor_profile" not in ob_columns:
+            conn.execute(text("ALTER TABLE onboarding_states ADD COLUMN investor_profile VARCHAR(32)"))
+            logger.info("Added missing onboarding_states.investor_profile column for local SQLite compatibility")
 
 
 @asynccontextmanager

@@ -3,6 +3,7 @@ from datetime import date, datetime, timedelta, timezone
 from unittest.mock import patch
 
 import pytest
+from sqlalchemy.exc import OperationalError
 from sqlalchemy import text
 from sqlalchemy.ext.asyncio import AsyncSession
 
@@ -45,6 +46,27 @@ async def test_summary_does_not_duplicate_snapshot(client, auth_headers, test_us
     resp2 = await client.get("/api/portfolio/summary", headers=auth_headers)
     assert resp1.status_code == 200
     assert resp2.status_code == 200
+
+
+@pytest.mark.asyncio
+async def test_summary_survives_snapshot_lock_contention(client, auth_headers, test_user, db: AsyncSession):
+    holding = Holding(
+        id=uuid.uuid4(), ticker="AAPL", name="Apple Inc",
+        quantity=10, average_cost_basis=150, currency="GBP",
+        current_value=1600, user_id=test_user.id,
+    )
+    db.add(holding)
+    await db.commit()
+
+    with patch(
+        "app.routes.portfolio.AsyncSession.commit",
+        side_effect=OperationalError("INSERT INTO portfolio_snapshots", {}, Exception("database is locked")),
+    ):
+        resp = await client.get("/api/portfolio/summary", headers=auth_headers)
+
+    assert resp.status_code == 200
+    data = resp.json()
+    assert data["holdings_count"] == 1
 
 
 @pytest.mark.asyncio

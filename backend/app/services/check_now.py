@@ -11,7 +11,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from app.models.holding import Holding
 from app.models.monitoring_event import MonitoringEvent
 from app.models.thesis import Thesis
-from app.services.market_data import fetch_company_data
+from app.services.market_data import detect_native_currency, fetch_company_data, get_fx_rate
 from app.services.monitoring import check_metric_watch_hints, generate_monitoring_candidates
 from app.services.noise_filter import (
     apply_priority_suppression,
@@ -59,7 +59,7 @@ class CheckNowResult:
     snapshot: MarketSnapshot | None = None
 
 
-def _build_snapshot(
+async def _build_snapshot(
     company_data: "CompanyData | None",
     holding: Holding,
     previous_price: float | None,
@@ -84,12 +84,17 @@ def _build_snapshot(
             (company_data.current_price - previous_price) / previous_price * 100, 2
         )
 
-    # P&L vs cost basis
-    cost_basis = float(holding.average_cost_basis)
+    # P&L vs cost basis — average_cost_basis and current_value are stored in GBP
+    # (account currency); current_price from market data is in native currency.
+    # Convert current_price to GBP before computing P&L so both sides are the
+    # same currency.
+    cost_basis = float(holding.average_cost_basis)  # GBP
     snapshot.cost_basis = cost_basis
     if company_data.current_price is not None and cost_basis > 0:
+        native_ccy = detect_native_currency(holding.ticker)
+        fx_rate = await get_fx_rate(native_ccy, "GBP")
         total_cost = float(holding.quantity) * cost_basis
-        total_value = float(holding.quantity) * company_data.current_price
+        total_value = float(holding.quantity) * company_data.current_price * fx_rate
         snapshot.pnl = round(total_value - total_cost, 2)
         snapshot.pnl_pct = round((total_value - total_cost) / total_cost * 100, 2)
 
@@ -167,7 +172,7 @@ async def run_check_now(
     claims_by_id, signals_by_id = build_claim_signal_lookup(claims)
 
     # Build snapshot — always returned, even when 0 events
-    snapshot = _build_snapshot(company_data, holding, previous_price, thesis)
+    snapshot = await _build_snapshot(company_data, holding, previous_price, thesis)
 
     # Update holding price
     if company_data and company_data.current_price is not None:

@@ -21,9 +21,15 @@ class CreateThesisRequest(BaseModel):
 class AssistThesisRequest(BaseModel):
     holding_id: uuid.UUID
     draft_text: str | None = None
+    why_own_it: str | None = None
+    must_remain_true: str | None = None
+    what_would_change_my_mind: str | None = None
 
 
 class AssistThesisResponse(BaseModel):
+    why_own_it: str
+    must_remain_true: str
+    what_would_change_my_mind: str
     ai_summary: str
     interpretation: dict[str, Any]
     source: str = "ai_assisted"

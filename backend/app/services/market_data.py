@@ -50,6 +50,185 @@ class _TTLCache:
 
 _cache = _TTLCache()
 
+
+# Trading 212 exchange code (trailing letter before _EQ) → Yahoo Finance suffix.
+# T212 format: {BASE}{EXCHANGE_CODE}_EQ  e.g. ASMLA_EQ = ASML on Amsterdam.
+# US stocks use _US_EQ (no exchange code suffix needed).
+_T212_EXCHANGE_SUFFIXES: dict[str, str] = {
+    "A": ".AS",   # Euronext Amsterdam
+    "L": ".L",    # London Stock Exchange
+    "P": ".PA",   # Euronext Paris
+    "X": ".DE",   # Xetra (Frankfurt)
+    "I": ".MI",   # Borsa Italiana (Milan)
+    "E": ".MC",   # Bolsa de Madrid
+    "S": ".ST",   # Nasdaq Stockholm
+    "C": ".CO",   # Nasdaq Copenhagen
+    "H": ".HE",   # Nasdaq Helsinki
+    "W": ".VI",   # Wiener Börse (Vienna)
+    "B": ".BR",   # Euronext Brussels
+    "Z": ".SW",   # SIX Swiss Exchange
+    "N": ".OL",   # Oslo Børs
+    "T": ".T",    # Tokyo Stock Exchange
+}
+
+# Trading 212 exchange code → native trading currency (ISO 4217).
+_T212_EXCHANGE_CURRENCIES: dict[str, str] = {
+    "A": "EUR",   # Euronext Amsterdam
+    "L": "GBP",   # London Stock Exchange
+    "P": "EUR",   # Euronext Paris
+    "X": "EUR",   # Xetra (Frankfurt)
+    "I": "EUR",   # Borsa Italiana (Milan)
+    "E": "EUR",   # Bolsa de Madrid
+    "S": "SEK",   # Nasdaq Stockholm
+    "C": "DKK",   # Nasdaq Copenhagen
+    "H": "EUR",   # Nasdaq Helsinki
+    "W": "EUR",   # Wiener Börse (Vienna)
+    "B": "EUR",   # Euronext Brussels
+    "Z": "CHF",   # SIX Swiss Exchange
+    "N": "NOK",   # Oslo Børs
+    "T": "JPY",   # Tokyo Stock Exchange
+}
+
+
+def _normalize_ticker(ticker: str) -> str:
+    """Convert a Trading 212 ticker to a Yahoo Finance / Alpha Vantage symbol.
+
+    T212 formats:
+        NVDA_US_EQ  → NVDA          (US equity, no exchange suffix needed)
+        ASMLA_EQ    → ASML.AS       (Amsterdam: trailing A maps to .AS)
+        ASMLa_EQ    → ASML.AS       (same, lowercase variant)
+        VODL_EQ     → VOD.L         (London)
+        UNKNOWN_EQ  → UNKNOWN       (unrecognised code — fetcher retries)
+    """
+    upper = ticker.upper()
+
+    # US equities: strip _US_EQ, base ticker is already clean.
+    if upper.endswith("_US_EQ"):
+        return upper[: -len("_US_EQ")]
+
+    # Non-US equities: last letter before _EQ is the T212 exchange code.
+    if upper.endswith("_EQ"):
+        base_with_code = upper[: -len("_EQ")]       # e.g. "ASMLA"
+        if len(base_with_code) >= 2:
+            base = base_with_code[:-1]               # e.g. "ASML"
+            code = base_with_code[-1]                # e.g. "A"
+            suffix = _T212_EXCHANGE_SUFFIXES.get(code)
+            if suffix:
+                return f"{base}{suffix}"             # e.g. "ASML.AS"
+            # Unknown exchange code — return base without suffix.
+            # _fetch_yfinance_company_data will retry with last char stripped.
+            return base_with_code
+
+    # Already a clean ticker (or an unseen format) — return as-is.
+    return ticker
+
+
+def detect_native_currency(ticker: str) -> str:
+    """Return the ISO 4217 currency code for a T212 ticker's native exchange.
+
+    Examples:
+        NVDA_US_EQ  → "USD"
+        ASMLA_EQ    → "EUR"  (Amsterdam)
+        VODL_EQ     → "GBP"  (London)
+        NOVOL_EQ    → "NOK"  (Oslo)
+    Falls back to "GBP" for already-clean tickers (assumed LSE or manual holdings).
+    """
+    upper = ticker.upper()
+    if upper.endswith("_US_EQ"):
+        return "USD"
+    if upper.endswith("_EQ"):
+        base_with_code = upper[:-3]          # strip "_EQ"
+        if len(base_with_code) >= 2:
+            code = base_with_code[-1]
+            return _T212_EXCHANGE_CURRENCIES.get(code, "USD")
+    return "GBP"
+
+
+_CACHE_TTL_PRICE = 60  # live price — refresh every minute
+
+
+def _yfinance_fast_price_sync(ticker: str) -> float | None:
+    """Blocking call — fetch current price via fast_info (lightweight, no heavy info call)."""
+    import yfinance as yf
+
+    t = yf.Ticker(ticker)
+    try:
+        price = t.fast_info.last_price
+        return float(price) if price else None
+    except Exception:
+        return None
+
+
+async def fetch_live_price(ticker: str) -> float | None:
+    """Return the latest market price for a ticker, cached for 60 seconds.
+
+    Normalises the T212 ticker format first.  Returns None if yfinance cannot
+    find the symbol — callers should fall back to the stored DB price.
+    """
+    normalized = _normalize_ticker(ticker)
+    cache_key = f"live_price_{normalized}"
+    cached = _cache.get(cache_key)
+    if cached is not None:
+        return cached
+
+    try:
+        price = await asyncio.to_thread(_yfinance_fast_price_sync, normalized)
+    except Exception:
+        logger.warning("live price fetch failed for %s", normalized, exc_info=True)
+        return None
+
+    if price and price > 0:
+        _cache.set(cache_key, price, _CACHE_TTL_PRICE)
+    return price
+
+
+def _yfinance_fx_sync(pair: str) -> float | None:
+    """Blocking call — fetch FX rate via yfinance, e.g. USDGBP=X."""
+    import yfinance as yf
+
+    t = yf.Ticker(pair)
+    info = dict(t.info)
+    price = info.get("regularMarketPrice") or info.get("price") or info.get("previousClose")
+    return float(price) if price else None
+
+
+async def _fetch_fx_rate_direct(from_ccy: str, to_ccy: str) -> float | None:
+    pair = f"{from_ccy}{to_ccy}=X"
+    try:
+        return await asyncio.to_thread(_yfinance_fx_sync, pair)
+    except Exception:
+        logger.warning("yfinance FX lookup failed for %s", pair, exc_info=True)
+        return None
+
+
+async def get_fx_rate(from_ccy: str, to_ccy: str) -> float:
+    """Return the exchange rate from_ccy → to_ccy, cached for 4 hours.
+
+    Falls back to 1.0 (no conversion) if the rate cannot be fetched, with a
+    warning logged so the issue is visible without crashing the sync.
+    """
+    if from_ccy == to_ccy:
+        return 1.0
+    cache_key = f"fx_{from_ccy}_{to_ccy}"
+    cached = _cache.get(cache_key)
+    if cached is not None:
+        return cached
+
+    rate = await _fetch_fx_rate_direct(from_ccy, to_ccy)
+    if rate is None or rate <= 0:
+        # Try inverse and reciprocate
+        inverse = await _fetch_fx_rate_direct(to_ccy, from_ccy)
+        if inverse and inverse > 0:
+            rate = 1.0 / inverse
+
+    if rate is None or rate <= 0:
+        logger.warning("FX rate unavailable for %s→%s, using 1.0 fallback", from_ccy, to_ccy)
+        rate = 1.0
+
+    _cache.set(cache_key, rate, _CACHE_TTL_SHORT)
+    return rate
+
+
 QUALITATIVE_KEYWORDS = (
     "earnings",
     "guidance",
@@ -605,7 +784,7 @@ def _build_news_candidate(
     *,
     now: datetime,
 ) -> tuple[int, dict[str, Any]] | None:
-    if item.published_at < (now - timedelta(hours=24)):
+    if item.published_at < (now - timedelta(days=7)):
         return None
 
     combined_text = f"{item.headline} {item.summary}".lower()
@@ -809,7 +988,7 @@ def _parse_yfinance_news(raw_news: list[dict[str, Any]], ticker: str) -> list[Ne
     return items
 
 
-async def _fetch_yfinance_company_data(ticker: str) -> CompanyData | None:
+async def _fetch_yfinance_company_data(ticker: str, _retried: bool = False) -> CompanyData | None:
     try:
         info, raw_news, earnings_rows = await asyncio.gather(
             asyncio.to_thread(_yfinance_info_sync, ticker),
@@ -819,6 +998,14 @@ async def _fetch_yfinance_company_data(ticker: str) -> CompanyData | None:
     except Exception:
         logger.warning("yfinance fetch failed for %s", ticker, exc_info=True)
         return None
+
+    # yfinance returns an empty dict for unknown symbols. T212 non-US tickers
+    # often have a single trailing disambiguation letter (e.g. ASMLA → ASML).
+    # Retry once with the last character stripped before giving up.
+    if not info and not _retried and len(ticker) > 2:
+        fallback = ticker[:-1]
+        logger.info("yfinance returned no data for %s, retrying as %s", ticker, fallback)
+        return await _fetch_yfinance_company_data(fallback, _retried=True)
 
     name = info.get("shortName") or info.get("longName") or ticker
     sector = info.get("sector") or "Unknown"
@@ -878,6 +1065,7 @@ async def _fetch_yfinance_company_data(ticker: str) -> CompanyData | None:
 
 async def fetch_company_overview(ticker: str) -> dict[str, str] | None:
     """Lightweight call returning {name, sector, country} or None."""
+    ticker = _normalize_ticker(ticker)
     # Try yfinance first (no API key needed)
     result = await _fetch_yfinance_overview(ticker)
     if result is not None:
@@ -902,6 +1090,7 @@ async def fetch_company_overview(ticker: str) -> dict[str, str] | None:
 
 
 async def fetch_company_data(ticker: str) -> CompanyData | None:
+    ticker = _normalize_ticker(ticker)
     if settings.market_data_provider == "yfinance":
         return await _fetch_yfinance_company_data(ticker)
 

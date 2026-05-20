@@ -264,9 +264,19 @@ export default function PositionDetailPage() {
     }
   };
 
-  const handleAssist = async (draftText: string): Promise<ThesisAssistResponse> => {
+  const handleAssist = async (draft: {
+    why_own_it: string;
+    must_remain_true: string;
+    what_would_change_my_mind: string;
+  }): Promise<ThesisAssistResponse> => {
     if (!holding) throw new Error("Holding not found");
-    return api.post<ThesisAssistResponse>("/api/theses/assist", { holding_id: holding.id, draft_text: draftText });
+    return api.post<ThesisAssistResponse>("/api/theses/assist", {
+      holding_id: holding.id,
+      draft_text: draft.why_own_it,
+      why_own_it: draft.why_own_it,
+      must_remain_true: draft.must_remain_true,
+      what_would_change_my_mind: draft.what_would_change_my_mind,
+    });
   };
 
   const handleSave = async (data: {
@@ -285,12 +295,30 @@ export default function PositionDetailPage() {
       let savedThesisId: string | null = null;
       if (activeThesis) {
         const updated = await api.put<Thesis>(`/api/theses/${activeThesis.id}`, data);
-        setTheses(theses.map((t) => (t.id === updated.id ? updated : t)));
+        setTheses((current) => current.map((t) => (t.id === updated.id ? updated : t)));
         savedThesisId = updated.id;
       } else if (holding) {
-        const created = await api.post<Thesis>("/api/theses", { holding_id: holding.id, ...data });
-        setTheses([created, ...theses]);
-        savedThesisId = created.id;
+        try {
+          const created = await api.post<Thesis>("/api/theses", { holding_id: holding.id, ...data });
+          setTheses((current) => [created, ...current]);
+          savedThesisId = created.id;
+        } catch (error) {
+          const message = getErrorMessage(error, "");
+          if (message === "A current thesis already exists for this holding") {
+            const refreshed = await api.get<Thesis[]>(`/api/theses/holding/${holding.id}`);
+            setTheses(refreshed);
+            const existing = refreshed.find((item) => item.status === "active" || item.status === "draft" || item.status === "needs_review");
+            if (!existing) {
+              throw error;
+            }
+            const updated = await api.put<Thesis>(`/api/theses/${existing.id}`, data);
+            setTheses((current) => current.map((t) => (t.id === updated.id ? updated : t)));
+            savedThesisId = updated.id;
+            toast.message("Updated the existing thesis for this holding.");
+          } else {
+            throw error;
+          }
+        }
       }
       setDecompositionEnvelope(null);
       setEditing(false);
@@ -302,6 +330,7 @@ export default function PositionDetailPage() {
       await refreshConvictionLog();
     } catch (err) {
       console.error(err);
+      toast.error(getErrorMessage(err, "Failed to save thesis"));
     }
   };
 
@@ -492,10 +521,10 @@ export default function PositionDetailPage() {
             </div>
             <div className="text-right shrink-0 pb-0.5">
               <p className="font-mono text-[1.6rem] tabular-nums text-foreground leading-tight">
-                {formatCurrency(value, holding.currency)}
+                {formatCurrency(value)}
               </p>
               <p className={`font-mono text-[13px] tabular-nums mt-0.5 ${pnl >= 0 ? "text-emerald-700" : "text-red-600"}`}>
-                {pnl >= 0 ? "+" : ""}{formatCurrency(pnl, holding.currency)}
+                {pnl >= 0 ? "+" : ""}{formatCurrency(pnl)}
                 <span className="opacity-60 ml-1.5">({pnl >= 0 ? "+" : ""}{pnlPct}%)</span>
               </p>
             </div>
@@ -693,6 +722,7 @@ export default function PositionDetailPage() {
                 {activeThesis && !editing && (
                   <ThesisCard
                     thesis={activeThesis}
+                    decomposition={decompositionEnvelope?.decomposition ?? null}
                     onEdit={() => setEditing(true)}
                     onInvalidate={() => setInvalidateOpen(true)}
                   />
@@ -748,9 +778,9 @@ export default function PositionDetailPage() {
                     <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} className="grid grid-cols-2 md:grid-cols-4 gap-3 mt-4">
                       {[
                         { label: "Shares", value: String(holding.quantity) },
-                        { label: "Avg cost", value: formatCurrency(holding.average_cost_basis, holding.currency) },
-                        { label: "Current value", value: formatCurrency(value, holding.currency) },
-                        { label: "P&L", value: `${pnl >= 0 ? "+" : ""}${formatCurrency(pnl, holding.currency)}`, colored: true },
+                        { label: "Avg cost", value: formatCurrency(holding.average_cost_basis) },
+                        { label: "Current value", value: formatCurrency(value) },
+                        { label: "P&L", value: `${pnl >= 0 ? "+" : ""}${formatCurrency(pnl)}`, colored: true },
                       ].map(({ label, value: v, colored }) => (
                         <div key={label} className="border border-border/60 bg-card px-4 py-3">
                           <p className="font-mono text-[9px] uppercase tracking-[0.2em] text-muted-foreground">{label}</p>

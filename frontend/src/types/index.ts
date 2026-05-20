@@ -40,6 +40,9 @@ export interface Thesis {
 }
 
 export interface ThesisAssistResponse {
+  why_own_it: string;
+  must_remain_true: string;
+  what_would_change_my_mind: string;
   ai_summary: string;
   interpretation: Record<string, unknown>;
   source: "ai_assisted";
@@ -459,6 +462,12 @@ export interface DraftStatus {
   failed: number;
   reviewed: number;
   drafts: DraftItem[];
+}
+
+export interface LivePrice {
+  ticker: string;
+  current_price: number;
+  current_value: number;
 }
 
 export interface HoldingContext {

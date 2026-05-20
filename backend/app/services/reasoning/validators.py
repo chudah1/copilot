@@ -57,7 +57,7 @@ ENTITY_SIGNAL_ALLOWLIST: dict[str, set[str]] = {
 CLAIM_SIGNAL_ALLOWLIST: dict[str, set[str]] = {
     "growth": {"price_move", "revenue_growth", "earnings_growth", "guidance_change", "earnings_surprise", "transcript_topic", "news_topic"},
     "margins": {"earnings_growth", "guidance_change", "transcript_topic", "news_topic"},
-    "demand": {"revenue_growth", "guidance_change", "earnings_surprise", "transcript_topic", "news_topic"},
+    "demand": {"revenue_growth", "earnings_growth", "guidance_change", "earnings_surprise", "transcript_topic", "news_topic"},
     "valuation": {"price_move", "earnings_growth", "dividend_change", "macro_series_change", "news_topic"},
     "cash_flow": {"earnings_growth", "dividend_change", "guidance_change", "transcript_topic", "news_topic"},
     "income": {"dividend_change", "earnings_growth", "price_move", "news_topic"},

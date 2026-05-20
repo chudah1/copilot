@@ -1,5 +1,7 @@
 import uuid as _uuid
+import logging
 from datetime import datetime, timezone
+from urllib.parse import urlparse
 
 from sqlalchemy import String, event, types
 from sqlalchemy.ext.asyncio import async_sessionmaker, create_async_engine, AsyncSession
@@ -7,9 +9,26 @@ from sqlalchemy.orm import DeclarativeBase
 
 from app.config import settings
 
+logger = logging.getLogger(__name__)
+
+
+def _resolve_database_url(url: str) -> str:
+    if not url.startswith("postgresql"):
+        return url
+    parsed = urlparse(url)
+    if parsed.hostname in {"localhost", "127.0.0.1"} and not parsed.username:
+        fallback_url = "sqlite+aiosqlite:///./copilot_investor.db"
+        logger.warning(
+            "DATABASE_URL %s is missing a username for local Postgres; falling back to %s",
+            url,
+            fallback_url,
+        )
+        return fallback_url
+    return url
+
 
 def _make_engine():
-    url = settings.database_url
+    url = _resolve_database_url(settings.database_url)
     if url.startswith("sqlite"):
         # timeout: busy_timeout in seconds — writers wait instead of immediately
         # raising "database is locked" when concurrent requests contend for the DB.

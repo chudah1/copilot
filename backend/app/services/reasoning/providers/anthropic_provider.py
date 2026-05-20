@@ -18,7 +18,7 @@ from app.services.reasoning.simple_cache import TTLCache
 
 class AnthropicReasoningProvider:
     name = "anthropic"
-    model = "claude-sonnet-4-20250514"
+    model = settings.anthropic_model
     timeout_seconds = 30
     _cache = TTLCache(ttl_seconds=settings.llm_response_cache_ttl_seconds)
 

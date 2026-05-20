@@ -52,6 +52,12 @@ async def mark_digest_received(db: AsyncSession, user_id: uuid.UUID) -> None:
         await mark_onboarding_completed(db, user_id=user_id, completed_at=completed_at)
 
 
+async def set_investor_profile(db: AsyncSession, user_id: uuid.UUID, profile: str) -> OnboardingState:
+    state = await get_or_create_state(db, user_id)
+    state.investor_profile = profile
+    return state
+
+
 def is_onboarding_complete(state: OnboardingState, holdings_count: int) -> bool:
     if state.onboarding_completed_at is not None:
         return True

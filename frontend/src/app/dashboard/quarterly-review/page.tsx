@@ -2,44 +2,183 @@
 
 import Link from "next/link";
 import { useEffect, useMemo, useState } from "react";
+import { motion, AnimatePresence } from "framer-motion";
 
 import { api } from "@/lib/api";
 import { getErrorMessage } from "@/lib/errors";
 import { formatCurrency } from "@/lib/utils";
 import type { QuarterlyReviewCurrent, QuarterlyReviewHolding, QuarterlyReviewSubmission } from "@/types";
-import { Badge } from "@/components/ui/badge";
-import { Button } from "@/components/ui/button";
-import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
-import { Label } from "@/components/ui/label";
-import { Textarea } from "@/components/ui/textarea";
 import { toast } from "sonner";
+
+function cleanTicker(ticker: string) {
+  return ticker.replace(/_US_EQ$/, "").replace(/_EQ$/, "");
+}
 
 const RESPONSE_OPTIONS: Array<{
   value: "yes_absolutely" | "probably" | "not_sure" | "no";
   label: string;
   description: string;
+  border: string;
+  bg: string;
+  text: string;
 }> = [
   {
     value: "yes_absolutely",
     label: "Yes, absolutely",
-    description: "Your reason still feels strong at today's price.",
+    description: "This reason still feels strong at today's price.",
+    border: "border-l-emerald-600",
+    bg: "hover:bg-emerald-50",
+    text: "group-hover:text-emerald-800",
   },
   {
     value: "probably",
     label: "Probably",
-    description: "The reason still works, but with a little less certainty.",
+    description: "Still valid, but with a little less certainty.",
+    border: "border-l-teal-500",
+    bg: "hover:bg-teal-50",
+    text: "group-hover:text-teal-800",
   },
   {
     value: "not_sure",
     label: "Not sure",
-    description: "Something feels off and this reason needs another pass.",
+    description: "Something feels off. This reason needs another pass.",
+    border: "border-l-amber-500",
+    bg: "hover:bg-amber-50",
+    text: "group-hover:text-amber-900",
   },
   {
     value: "no",
     label: "No",
     description: "You would not start this position today for the same reason.",
+    border: "border-l-[#5C2018]",
+    bg: "hover:bg-red-50",
+    text: "group-hover:text-[#5C2018]",
   },
 ];
+
+const RESPONSE_LABELS: Record<string, { label: string; color: string }> = {
+  yes_absolutely: { label: "Yes, absolutely", color: "text-emerald-700" },
+  probably:       { label: "Probably",        color: "text-teal-700"   },
+  not_sure:       { label: "Not sure",        color: "text-amber-700"  },
+  no:             { label: "No",              color: "text-[#5C2018]"  },
+};
+
+// ── Loading skeleton ────────────────────────────────────────────────────────
+
+function LoadingSkeleton() {
+  return (
+    <div className="min-h-[calc(100vh-53px)] bg-[#FAF7F2] flex items-center justify-center">
+      <p className="font-mono text-[10px] uppercase tracking-[0.3em] text-foreground/30 animate-pulse">
+        Loading review…
+      </p>
+    </div>
+  );
+}
+
+// ── Empty state ─────────────────────────────────────────────────────────────
+
+function EmptyState() {
+  return (
+    <div className="min-h-[calc(100vh-53px)] bg-[#FAF7F2] flex items-center justify-center px-8">
+      <div className="max-w-sm text-center space-y-6">
+        <div className="space-y-2">
+          <p className="font-mono text-[9px] uppercase tracking-[0.3em] text-foreground/40">
+            Quarterly review
+          </p>
+          <h2 className="font-display italic text-[2rem] leading-tight text-foreground">
+            Nothing to review yet.
+          </h2>
+          <p className="font-sans text-sm text-muted-foreground leading-relaxed">
+            Add a holding with a written reason and this flow will appear once
+            there is something worth revisiting.
+          </p>
+        </div>
+        <Link
+          href="/dashboard"
+          className="inline-block font-mono text-[10px] uppercase tracking-[0.2em] text-foreground/60 border-b border-foreground/20 pb-px hover:text-foreground transition-colors"
+        >
+          ← Back to dashboard
+        </Link>
+      </div>
+    </div>
+  );
+}
+
+// ── Completion state ────────────────────────────────────────────────────────
+
+function CompletionState({ review }: { review: QuarterlyReviewCurrent }) {
+  return (
+    <div className="min-h-[calc(100vh-53px)] bg-[#FAF7F2]">
+      <div className="max-w-2xl mx-auto px-8 py-16 space-y-12">
+        {/* Header */}
+        <div className="space-y-3">
+          <p className="font-mono text-[9px] uppercase tracking-[0.3em] text-foreground/40">
+            {review.quarter} · {review.completed_count} reviewed
+          </p>
+          <h1 className="font-display italic text-[3rem] leading-[1.1] text-foreground tracking-tight">
+            Review complete.
+          </h1>
+          <p className="font-sans text-sm text-muted-foreground leading-relaxed max-w-md">
+            Every current reason has been revisited. The conviction log now
+            carries your latest answers.
+          </p>
+        </div>
+
+        {/* Ledger */}
+        <div className="border border-border/60 divide-y divide-border/40">
+          {/* Ledger header */}
+          <div className="grid grid-cols-[1fr_auto_auto] gap-6 px-5 py-2.5 bg-secondary/40">
+            <p className="font-mono text-[9px] uppercase tracking-[0.2em] text-muted-foreground">Position</p>
+            <p className="font-mono text-[9px] uppercase tracking-[0.2em] text-muted-foreground text-right">Age</p>
+            <p className="font-mono text-[9px] uppercase tracking-[0.2em] text-muted-foreground text-right w-28">Answer</p>
+          </div>
+
+          {review.holdings.map((h, i) => {
+            const resp = h.response ? RESPONSE_LABELS[h.response] : null;
+            return (
+              <motion.div
+                key={h.holding_id}
+                initial={{ opacity: 0, y: 6 }}
+                animate={{ opacity: 1, y: 0 }}
+                transition={{ delay: i * 0.05 }}
+                className="grid grid-cols-[1fr_auto_auto] gap-6 px-5 py-4 items-start"
+              >
+                <div className="min-w-0">
+                  <div className="flex items-baseline gap-2">
+                    <span className="font-mono text-[11px] font-semibold tracking-[0.15em] text-foreground">
+                      {cleanTicker(h.ticker)}
+                    </span>
+                    <span className="font-sans text-xs text-muted-foreground truncate">{h.name}</span>
+                  </div>
+                  {h.response_notes && (
+                    <p className="font-sans text-[11px] text-foreground/60 mt-1 leading-relaxed line-clamp-2 italic">
+                      "{h.response_notes}"
+                    </p>
+                  )}
+                </div>
+                <p className="font-mono text-[11px] text-muted-foreground text-right tabular-nums">
+                  {h.reason_age_days}d
+                </p>
+                <p className={`font-sans text-[12px] font-medium text-right w-28 ${resp?.color ?? "text-muted-foreground"}`}>
+                  {resp?.label ?? "—"}
+                </p>
+              </motion.div>
+            );
+          })}
+        </div>
+
+        <Link
+          href="/dashboard"
+          className="inline-block font-mono text-[10px] uppercase tracking-[0.2em] text-foreground/50 border-b border-foreground/20 pb-px hover:text-foreground transition-colors"
+        >
+          ← Back to dashboard
+        </Link>
+      </div>
+    </div>
+  );
+}
+
+// ── Main page ───────────────────────────────────────────────────────────────
 
 export default function QuarterlyReviewPage() {
   const [review, setReview] = useState<QuarterlyReviewCurrent | null>(null);
@@ -57,53 +196,34 @@ export default function QuarterlyReviewPage() {
     } catch (err) {
       setLoadError(getErrorMessage(err, "Failed to load quarterly review"));
     } finally {
-      if (!options?.preserveLoading) {
-        setLoading(false);
-      }
+      if (!options?.preserveLoading) setLoading(false);
     }
   };
 
   useEffect(() => {
     let cancelled = false;
-
     const load = async () => {
       try {
         const current = await api.get<QuarterlyReviewCurrent>("/api/quarterly-review/current");
-        if (cancelled) {
-          return;
-        }
-        setReview(current);
-        setLoadError(null);
+        if (!cancelled) { setReview(current); setLoadError(null); }
       } catch (err) {
-        if (cancelled) {
-          return;
-        }
-        setLoadError(getErrorMessage(err, "Failed to load quarterly review"));
+        if (!cancelled) setLoadError(getErrorMessage(err, "Failed to load quarterly review"));
       } finally {
-        if (!cancelled) {
-          setLoading(false);
-        }
+        if (!cancelled) setLoading(false);
       }
     };
-
     void load();
-    return () => {
-      cancelled = true;
-    };
+    return () => { cancelled = true; };
   }, []);
 
   const pendingHoldings = useMemo(
-    () => review?.holdings.filter((holding) => holding.response === null) ?? [],
+    () => review?.holdings.filter((h) => h.response === null) ?? [],
     [review],
   );
-
   const currentHolding: QuarterlyReviewHolding | null = pendingHoldings[0] ?? null;
 
   const handleSubmit = async (response: QuarterlyReviewSubmission["response"]) => {
-    if (!currentHolding) {
-      return;
-    }
-
+    if (!currentHolding) return;
     try {
       setSubmitting(response);
       const result = await api.post<QuarterlyReviewSubmission>("/api/quarterly-review/current/respond", {
@@ -113,177 +233,191 @@ export default function QuarterlyReviewPage() {
       });
       setLastSubmitted(result);
       setNotes("");
-      toast.success(`${currentHolding.ticker} logged for ${review?.quarter ?? "this quarter"}.`);
+      toast.success(`${cleanTicker(currentHolding.ticker)} logged.`);
       await refreshReview({ preserveLoading: true });
     } catch (err) {
-      toast.error(getErrorMessage(err, "Failed to save quarterly review"));
+      toast.error(getErrorMessage(err, "Failed to save"));
     } finally {
       setSubmitting(null);
     }
   };
 
-  if (loading) {
-    return <div className="py-16 text-center text-muted-foreground">Loading quarterly review...</div>;
-  }
+  if (loading) return <LoadingSkeleton />;
 
   if (loadError) {
     return (
-      <Card>
-        <CardContent className="flex flex-col items-center gap-4 py-12 text-center">
-          <p className="text-muted-foreground">{loadError}</p>
-          <Button onClick={() => { setLoading(true); void refreshReview(); }}>Try again</Button>
-        </CardContent>
-      </Card>
-    );
-  }
-
-  if (!review || review.total_holdings === 0) {
-    return (
-      <Card>
-        <CardContent className="py-12 text-center">
-          <p className="text-lg font-medium">No current reasons are ready for quarterly review.</p>
-          <p className="mt-2 text-sm text-muted-foreground">
-            Add a holding reason first and this flow will appear once there is something worth revisiting.
-          </p>
-          <div className="mt-6">
-            <Link href="/dashboard">
-              <Button>Back to dashboard</Button>
-            </Link>
-          </div>
-        </CardContent>
-      </Card>
-    );
-  }
-
-  if (!currentHolding) {
-    return (
-      <div className="space-y-6">
-        <div className="border-b border-foreground/20 pb-6">
-          <div className="flex flex-wrap items-center gap-2 mb-3">
-            <span className="font-mono text-[10px] uppercase tracking-[0.25em] text-primary">{review.quarter}</span>
-            <span className="font-mono text-[10px] text-muted-foreground">· {review.completed_count} reviewed</span>
-          </div>
-          <h1 className="font-display italic text-[2.5rem] leading-tight text-foreground tracking-tight">
-            Quarterly review complete.
-          </h1>
-          <p className="mt-2 font-sans text-sm text-muted-foreground leading-relaxed max-w-lg">
-            Every current reason has been revisited for this quarter. Reason age keeps compounding; the log now has the latest answer.
-          </p>
+      <div className="min-h-[calc(100vh-53px)] bg-[#FAF7F2] flex items-center justify-center px-8">
+        <div className="text-center space-y-4">
+          <p className="font-sans text-sm text-muted-foreground">{loadError}</p>
+          <button
+            onClick={() => { setLoading(true); void refreshReview(); }}
+            className="font-mono text-[10px] uppercase tracking-[0.2em] text-foreground/60 border-b border-foreground/20 pb-px hover:text-foreground transition-colors"
+          >
+            Try again
+          </button>
         </div>
-        <Card>
-          <CardHeader>
-            <CardTitle className="text-xl">Reviewed holdings</CardTitle>
-          </CardHeader>
-          <CardContent className="space-y-3">
-            {review.holdings.map((holding) => (
-              <div key={holding.holding_id} className="rounded-2xl border p-4">
-                <div className="flex flex-wrap items-center justify-between gap-3">
-                  <div>
-                    <p className="font-medium">{holding.ticker} · {holding.name}</p>
-                    <p className="mt-1 text-sm text-muted-foreground">
-                      Reason age: {holding.reason_age_days} days
-                    </p>
-                  </div>
-                  <Badge variant="outline">{holding.response?.replace("_", " ")}</Badge>
-                </div>
-                {holding.response_notes && (
-                  <p className="mt-3 text-sm text-foreground/70">{holding.response_notes}</p>
-                )}
-              </div>
-            ))}
-          </CardContent>
-        </Card>
       </div>
     );
   }
+
+  if (!review || review.total_holdings === 0) return <EmptyState />;
+  if (!currentHolding) return <CompletionState review={review} />;
 
   const currentIndex = review.completed_count + 1;
+  const progressPct = (review.completed_count / review.total_holdings) * 100;
 
   return (
-    <div className="max-w-4xl mx-auto px-6 py-8 space-y-6">
-      <div className="border-b border-foreground/20 pb-6">
-        <div className="flex flex-wrap items-center gap-2 mb-3">
-          <span className="font-mono text-[10px] uppercase tracking-[0.25em] text-primary">{review.quarter}</span>
-          <span className="font-mono text-[10px] text-muted-foreground">· {currentIndex} of {review.total_holdings}</span>
-        </div>
-        <h1 className="font-display italic text-[2.5rem] leading-tight text-foreground tracking-tight">
-          Would you buy this today?
-        </h1>
-        <p className="mt-2 font-sans text-sm text-muted-foreground leading-relaxed max-w-xl">
-          Keep this simple and honest. The goal is not to predict the market, only to test whether your reason still deserves fresh capital.
-        </p>
+    <div className="min-h-[calc(100vh-53px)] bg-[#FAF7F2]">
+      {/* Thin progress bar */}
+      <div className="h-px bg-border/40 w-full">
+        <motion.div
+          className="h-full bg-[#5C2018]"
+          initial={{ width: 0 }}
+          animate={{ width: `${progressPct}%` }}
+          transition={{ duration: 0.6, ease: "easeOut" }}
+        />
       </div>
 
-      <div className="grid gap-6 lg:grid-cols-[1.15fr_0.85fr]">
-        <Card>
-          <CardHeader>
-            <div className="flex flex-wrap items-start justify-between gap-3">
-              <div>
-                <CardTitle className="text-2xl">{currentHolding.ticker} · {currentHolding.name}</CardTitle>
-                <CardDescription className="mt-2">
-                  Reason age: {currentHolding.reason_age_days} days
-                  {currentHolding.current_price !== null && (
-                    <> · Current price: {formatCurrency(currentHolding.current_price, currentHolding.currency)}</>
-                  )}
-                </CardDescription>
-              </div>
-              <Link href={`/dashboard/positions/${currentHolding.ticker}`}>
-                <Button variant="outline">Open holding</Button>
-              </Link>
-            </div>
-          </CardHeader>
-          <CardContent className="space-y-5">
-            <div className="rounded-2xl border bg-card p-4">
-              <p className="text-sm font-medium text-muted-foreground">Your reason</p>
-              <p className="mt-3 whitespace-pre-wrap text-base leading-7 text-foreground">
-                {currentHolding.why_own_it}
+      <div className="max-w-3xl mx-auto px-8 py-10">
+
+        {/* Top bar */}
+        <div className="flex items-center justify-between mb-10">
+          <Link
+            href="/dashboard"
+            className="font-mono text-[9px] uppercase tracking-[0.25em] text-foreground/40 hover:text-foreground transition-colors"
+          >
+            ← Dashboard
+          </Link>
+          <div className="flex items-center gap-3">
+            <span className="font-mono text-[9px] uppercase tracking-[0.25em] text-foreground/40">
+              {review.quarter}
+            </span>
+            <span className="font-mono text-[9px] text-foreground/30">·</span>
+            <span className="font-mono text-[9px] uppercase tracking-[0.2em] text-foreground/40">
+              {currentIndex} of {review.total_holdings}
+            </span>
+          </div>
+        </div>
+
+        <AnimatePresence mode="wait">
+          <motion.div
+            key={currentHolding.holding_id}
+            initial={{ opacity: 0, y: 16 }}
+            animate={{ opacity: 1, y: 0 }}
+            exit={{ opacity: 0, y: -16 }}
+            transition={{ duration: 0.28, ease: "easeOut" }}
+          >
+            {/* Question heading */}
+            <div className="mb-8">
+              <h1 className="font-display italic text-[2.75rem] leading-[1.1] text-foreground tracking-tight">
+                Would you buy this today?
+              </h1>
+              <p className="font-sans text-[13px] text-muted-foreground mt-2 leading-relaxed">
+                Keep this honest. The goal is not to predict the market — only to test whether
+                your reason still deserves fresh capital.
               </p>
             </div>
 
-            <div className="space-y-3">
-              <Label htmlFor="quarterly-notes">Notes for your future self</Label>
-              <Textarea
-                id="quarterly-notes"
+            {/* Holding identity strip */}
+            <div className="flex items-baseline justify-between gap-4 border-b border-border/50 pb-5 mb-7">
+              <div className="flex items-baseline gap-3">
+                <span className="font-mono text-[1.45rem] font-bold tracking-[0.1em] text-foreground">
+                  {cleanTicker(currentHolding.ticker)}
+                </span>
+                <span className="font-sans text-sm text-muted-foreground">{currentHolding.name}</span>
+              </div>
+              <div className="flex items-center gap-4 shrink-0">
+                {currentHolding.current_price != null && (
+                  <span className="font-mono text-[11px] tabular-nums text-muted-foreground">
+                    {formatCurrency(currentHolding.current_price, currentHolding.currency)}
+                  </span>
+                )}
+                <span className="font-mono text-[9px] uppercase tracking-[0.15em] text-foreground/30">
+                  {currentHolding.reason_age_days}d old
+                </span>
+                <Link
+                  href={`/dashboard/positions/${currentHolding.ticker}`}
+                  className="font-mono text-[9px] uppercase tracking-[0.15em] text-foreground/40 border-b border-foreground/20 pb-px hover:text-foreground transition-colors"
+                >
+                  Open →
+                </Link>
+              </div>
+            </div>
+
+            {/* Thesis block */}
+            <div className="mb-7">
+              <p className="font-mono text-[8.5px] uppercase tracking-[0.25em] text-foreground/35 mb-3">
+                Your reason for owning it
+              </p>
+              <blockquote className="font-display italic text-[1.2rem] leading-[1.65] text-foreground/90 border-l-2 border-[#5C2018]/30 pl-5">
+                {currentHolding.why_own_it}
+              </blockquote>
+            </div>
+
+            {/* Notes */}
+            <div className="mb-8">
+              <p className="font-mono text-[8.5px] uppercase tracking-[0.25em] text-foreground/35 mb-2">
+                Notes for your future self
+              </p>
+              <textarea
                 value={notes}
-                onChange={(event) => setNotes(event.target.value)}
-                placeholder="What changed, if anything?"
-                rows={4}
+                onChange={(e) => setNotes(e.target.value)}
+                placeholder="What changed, if anything? (optional)"
+                rows={3}
+                className="w-full bg-transparent border-0 border-b border-border/50 focus:border-[#5C2018]/40 focus:outline-none resize-none font-sans text-[13px] text-foreground placeholder:text-foreground/25 pb-2 transition-colors"
               />
             </div>
-          </CardContent>
-        </Card>
 
-        <Card>
-          <CardHeader>
-            <CardTitle className="text-xl">Your answer</CardTitle>
-            <CardDescription>
-              Pick the one that is closest to the truth. A weaker answer will keep this holding on your radar.
-            </CardDescription>
-          </CardHeader>
-          <CardContent className="space-y-3">
-            {RESPONSE_OPTIONS.map((option) => (
-              <button
-                key={option.value}
-                type="button"
-                onClick={() => void handleSubmit(option.value)}
-                disabled={submitting !== null}
-                className="w-full rounded-2xl border p-4 text-left transition hover:border-border hover:bg-muted disabled:cursor-not-allowed disabled:opacity-60"
-              >
-                <div className="flex items-center justify-between gap-3">
-                  <p className="font-medium">{option.label}</p>
-                  {submitting === option.value && <Badge variant="outline">Saving…</Badge>}
-                </div>
-                <p className="mt-2 text-sm text-muted-foreground">{option.description}</p>
-              </button>
-            ))}
+            {/* Response options */}
+            <div className="space-y-1.5">
+              {RESPONSE_OPTIONS.map((option) => {
+                const isLoading = submitting === option.value;
+                return (
+                  <button
+                    key={option.value}
+                    type="button"
+                    onClick={() => void handleSubmit(option.value)}
+                    disabled={submitting !== null}
+                    className={`group w-full flex items-center justify-between gap-4 border-l-[3px] border border-border/50 bg-card px-5 py-3.5 text-left transition-all duration-150 disabled:opacity-50 disabled:cursor-not-allowed ${option.border} ${option.bg}`}
+                  >
+                    <div className="flex-1 min-w-0">
+                      <p className={`font-sans text-[13px] font-medium text-foreground transition-colors ${option.text}`}>
+                        {option.label}
+                      </p>
+                      <p className="font-sans text-[11px] text-muted-foreground mt-0.5">
+                        {option.description}
+                      </p>
+                    </div>
+                    <span className="font-mono text-[10px] text-foreground/25 shrink-0 transition-colors group-hover:text-foreground/50">
+                      {isLoading ? "…" : "→"}
+                    </span>
+                  </button>
+                );
+              })}
+            </div>
 
+            {/* Warning for weak answers */}
             {lastSubmitted && ["not_sure", "no"].includes(lastSubmitted.response) && (
-              <div className="rounded-2xl border border-amber-500/25 bg-amber-500/8 p-4 text-sm text-amber-700">
-                This answer keeps the holding in review. The best next move is to tighten or rewrite the reason on the holding page.
-              </div>
+              <motion.div
+                initial={{ opacity: 0, y: 6 }}
+                animate={{ opacity: 1, y: 0 }}
+                className="mt-4 border-l-2 border-amber-400 bg-amber-50 px-4 py-3"
+              >
+                <p className="font-sans text-[12px] text-amber-800 leading-relaxed">
+                  This answer keeps the holding on your radar. The best next move is to
+                  tighten or rewrite the reason from the holding page.
+                </p>
+              </motion.div>
             )}
-          </CardContent>
-        </Card>
+
+            {/* Remaining count */}
+            {pendingHoldings.length > 1 && (
+              <p className="mt-6 font-mono text-[9px] uppercase tracking-[0.2em] text-foreground/25 text-center">
+                {pendingHoldings.length - 1} more to go
+              </p>
+            )}
+          </motion.div>
+        </AnimatePresence>
       </div>
     </div>
   );
