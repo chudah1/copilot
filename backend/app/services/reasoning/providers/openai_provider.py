@@ -76,7 +76,10 @@ class OpenAIReasoningProvider:
             )
             text = response.choices[0].message.content or "{}"
             raw = json.loads(text)
-            self._cache.set(cache_key, raw)
+            # Only cache if claims were actually extracted — don't poison the
+            # cache with an empty-claims response that might be a model fluke.
+            if raw.get("claims"):
+                self._cache.set(cache_key, raw)
             latency = int((time.perf_counter() - started) * 1000)
             return ReasoningResult(True, "success", self.name, self.model, DECOMPOSITION_PROMPT_VERSION, None, raw, None, latency, None, True)
         except Exception as exc:

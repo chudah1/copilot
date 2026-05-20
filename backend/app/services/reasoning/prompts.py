@@ -1,4 +1,4 @@
-DECOMPOSITION_PROMPT_VERSION = "v3"
+DECOMPOSITION_PROMPT_VERSION = "v4"
 
 DECOMPOSITION_JSON_SCHEMA = {
     "type": "object",
@@ -167,11 +167,13 @@ DECOMPOSITION_SYSTEM_PROMPT = """You decompose an investor's reason for owning a
 Return only schema-conforming JSON (no extra keys, no prose).
 
 Rules:
-- Do not create monitorable signals from descriptive facts with no investment intent.
+- If the reason contains any investment rationale (even one sentence with a measurable premise), extract at least one claim. Zero claims is only acceptable if the entire text is purely descriptive with zero investment intent (e.g. "they make phones").
+- Extract claims from all three fields: why_own_it, must_remain_true, and what_would_change_my_mind. Conditions in must_remain_true and what_would_change_my_mind are often the most monitorable.
+- Do not create monitorable signals from pure description with no investment intent.
 - Do not invent numeric thresholds unless the user text clearly implies them.
 - Do not assume proxy entities unless there is a plausible causal relationship.
 - Mark speculative mappings with lower confidence and confirmation_required=true.
-- It's acceptable to return zero entities/signals if the reason is too vague.
+- Entities and signals within a claim may be empty arrays if the claim is too vague to generate them, but the claim itself must still be captured.
 """
 
 DECOMPOSITION_USER_PROMPT = """Holding

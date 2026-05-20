@@ -202,7 +202,15 @@ async def check_now(
     if thesis is None:
         raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="No active thesis")
 
-    result = await run_check_now(holding, thesis, db)
+    try:
+        result = await run_check_now(holding, thesis, db)
+    except RuntimeError as exc:
+        if "market_data_unavailable" in str(exc):
+            raise HTTPException(
+                status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
+                detail="Market data is temporarily unavailable (rate limit). Wait a moment and try again.",
+            ) from exc
+        raise
 
     snapshot_response = None
     if result.snapshot is not None:

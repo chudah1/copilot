@@ -40,7 +40,7 @@ class AnthropicReasoningProvider:
             client = anthropic.AsyncAnthropic(api_key=settings.anthropic_api_key)
             response = await client.messages.create(
                 model=self.model,
-                max_tokens=1800,
+                max_tokens=3000,
                 tools=[
                     {
                         "name": "record_thesis_decomposition",
@@ -61,7 +61,10 @@ class AnthropicReasoningProvider:
                     break
             if raw is None:
                 raise ValueError("Claude did not return a tool_use payload")
-            self._cache.set(cache_key, raw)
+            # Only cache if claims were actually extracted — don't poison the
+            # cache with an empty-claims response that might be a model fluke.
+            if raw.get("claims"):
+                self._cache.set(cache_key, raw)
             latency = int((time.perf_counter() - started) * 1000)
             return ReasoningResult(True, "success", self.name, self.model, DECOMPOSITION_PROMPT_VERSION, None, raw, None, latency, None, True)
         except Exception as exc:

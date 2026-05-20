@@ -20,6 +20,7 @@ from app.services.noise_filter import (
 from app.services.monitoring_pipeline import (
     build_claim_signal_lookup,
     classify_candidates_for_thesis,
+    load_investor_profile,
     persist_classified_candidates,
 )
 from app.services.signal_matching import (
@@ -152,7 +153,11 @@ async def run_check_now(
         return CheckNowResult(status="rate_limited", next_available_at=next_available)
 
     # Fetch market data
-    company_data = await fetch_company_data(holding.ticker)
+    try:
+        company_data = await fetch_company_data(holding.ticker)
+    except Exception as exc:
+        logger.exception("Failed to fetch market data for %s", holding.ticker)
+        raise RuntimeError("market_data_unavailable") from exc
 
     # Generate monitoring candidates
     previous_price = float(holding.current_price) if holding.current_price is not None else None
@@ -170,6 +175,7 @@ async def run_check_now(
 
     # Build lookup tables for narrative generation
     claims_by_id, signals_by_id = build_claim_signal_lookup(claims)
+    investor_profile = await load_investor_profile(db, thesis.user_id)
 
     # Build snapshot — always returned, even when 0 events
     snapshot = await _build_snapshot(company_data, holding, previous_price, thesis)
@@ -182,7 +188,11 @@ async def run_check_now(
     # Noise suppression: filter before classification (rules 1, 2, 4)
     candidates = await filter_candidates(candidates, holding.id, signals_by_id, db, now=now)
 
-    classified = await classify_candidates_for_thesis(thesis, candidates)
+    classified = await classify_candidates_for_thesis(
+        thesis,
+        candidates,
+        investor_profile=investor_profile,
+    )
 
     # Rule 3: Priority suppression (post-classification)
     suppressed = apply_priority_suppression([(c, s) for c, s, _ in classified])
@@ -197,6 +207,7 @@ async def run_check_now(
         claims_by_id=claims_by_id,
         signals_by_id=signals_by_id,
         now=now,
+        investor_profile=investor_profile,
     )
 
     await db.commit()
