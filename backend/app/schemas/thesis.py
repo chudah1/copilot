@@ -237,3 +237,23 @@ class CounterThesisResponse(BaseModel):
     blind_spots: list[str]
     suggested_additions: list[str]
     generated_at: datetime
+
+
+class ClaimVerdictResponse(BaseModel):
+    claim_id: str
+    claim_text: str
+    verdict: str  # "holds" | "watch" | "broken" | "unclear"
+    explanation: str
+    evidence: str | None = None
+
+
+class EarningsReviewResponse(BaseModel):
+    thesis_id: uuid.UUID
+    ticker: str
+    verdicts: list[ClaimVerdictResponse]
+    overall_assessment: str  # "thesis_intact" | "watch" | "thesis_challenged"
+    summary: str
+    fiscal_quarter: str | None = None
+    earnings_surprise_pct: float | None = None
+    log_entry_id: uuid.UUID
+    reviewed_at: datetime

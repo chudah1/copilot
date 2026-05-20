@@ -236,7 +236,7 @@ async def test_run_monitoring_creates_multiple_events_and_flags_review(db, job_s
         news_items=[],
         earnings_call=TranscriptSignal(
             quarter="2026Q1",
-            call_date=datetime(2026, 5, 6, tzinfo=timezone.utc),
+            call_date=reference_now - timedelta(days=7),
             sentiment=-0.2,
             sentiment_label="Negative",
             highlights=["Management noted weaker demand in key segments."],
@@ -245,8 +245,8 @@ async def test_run_monitoring_creates_multiple_events_and_flags_review(db, job_s
         insider_transactions=[
             InsiderTransaction(
                 id="txn-1",
-                filing_date=datetime(2026, 5, 10, tzinfo=timezone.utc),
-                transaction_date=datetime(2026, 5, 9, tzinfo=timezone.utc),
+                filing_date=reference_now - timedelta(days=10),
+                transaction_date=reference_now - timedelta(days=11),
                 insider_name="Jane Founder",
                 title="Founder & CEO",
                 transaction_type="Sale",

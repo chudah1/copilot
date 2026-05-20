@@ -3,6 +3,7 @@ from unittest.mock import AsyncMock, patch
 from app.services.ai_thesis import (
     ThesisAssistOutput,
     _fallback_assist,
+    _fallback_synthesize,
     _parse_draft_output,
     assist_thesis,
 )
@@ -173,3 +174,14 @@ def test_parse_draft_output_sanitizes_stale_administration_references():
     assert "Biden" not in result["must_remain_true"]
     assert "Biden" not in result["what_would_change_my_mind"]
     assert "U.S. federal policy" in result["why_own_it"]
+
+
+def test_fallback_synthesize_for_hearsay_investor_sharpens_break_condition():
+    result = _fallback_synthesize(
+        ticker="NVDA",
+        answer1="People kept talking about AI winners and this seemed like the one to own.",
+        answer2="",
+        investor_profile="hearsay_driven",
+    )
+    assert "story stops showing up in the operating results" in result.what_would_change_my_mind
+    assert result.why_own_it.startswith("People kept talking") or "rough idea" in result.why_own_it

@@ -1,6 +1,7 @@
 from datetime import datetime, timedelta, timezone
 from unittest.mock import AsyncMock, patch
 
+from app.services.ai_thesis import SynthesisOutput
 from app.models.earnings_calendar import EarningsCalendar
 from app.services.onboarding import get_or_create_state
 from app.services.trading212 import Trading212Position
@@ -84,6 +85,51 @@ async def test_onboarding_already_completed_user_stays_completed(client, auth_he
 async def test_onboarding_requires_auth(client):
     response = await client.get("/api/onboarding/status")
     assert response.status_code == 403
+
+
+async def test_onboarding_profile_can_be_saved_and_loaded(client, auth_headers):
+    response = await client.post(
+        "/api/onboarding/profile",
+        json={"investor_profile": "hearsay_driven"},
+        headers=auth_headers,
+    )
+    assert response.status_code == 200
+    assert response.json()["investor_profile"] == "hearsay_driven"
+
+    state_response = await client.get("/api/onboarding/state", headers=auth_headers)
+    assert state_response.status_code == 200
+    assert state_response.json()["investor_profile"] == "hearsay_driven"
+
+
+async def test_synthesize_uses_investor_profile_from_request(client, auth_headers):
+    holding = await client.post("/api/portfolio/holdings", json={
+        "ticker": "NVDA", "name": "NVIDIA", "quantity": 2, "average_cost_basis": 900,
+    }, headers=auth_headers)
+    assert holding.status_code == 201
+
+    mock_output = SynthesisOutput(
+        why_own_it="This started from AI excitement, but the real reason to own it is durable demand for accelerated compute.",
+        must_remain_true="AI infrastructure demand and pricing power remain intact.",
+        what_would_change_my_mind="If the growth story stops showing up in actual results.",
+        ai_summary="A rough AI idea has been turned into a demand-driven thesis.",
+        interpretation={"labels": ["growth"], "monitorability": "medium", "watch_hints": [], "proxy_signals": [], "ambiguity_note": ""},
+    )
+    with patch("app.routes.onboarding.synthesize_thesis_from_qa", new_callable=AsyncMock, return_value=mock_output) as mock_synthesize:
+        response = await client.post(
+            "/api/onboarding/synthesize",
+            json={
+                "holding_id": holding.json()["id"],
+                "investor_profile": "hearsay_driven",
+                "question1": "What made this stock interesting enough to buy in the first place?",
+                "answer1": "Everyone was talking about AI leaders.",
+                "question2": "What would make you admit the original idea is no longer working?",
+                "answer2": "If growth no longer shows up in the numbers.",
+            },
+            headers=auth_headers,
+        )
+
+    assert response.status_code == 201
+    assert mock_synthesize.await_args.kwargs["investor_profile"] == "hearsay_driven"
 
 
 async def test_onboarding_after_broker_sync(client, auth_headers):

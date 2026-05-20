@@ -55,7 +55,8 @@ def _digest_summary_points(events_data: list[dict], observations: dict, next_ear
     points: list[str] = []
     if events_data:
         first = events_data[0]
-        points.append(f"{first['ticker']}: {first['summary']}")
+        clean = first["ticker"].replace("_US_EQ", "").replace("_EQ", "")
+        points.append(f"{clean}: {_what_happened(first)}")
     if observations.get("stale_theses"):
         points.append(f"Stale theses: {', '.join(observations['stale_theses'][:3])}")
     if observations.get("missing_theses"):
@@ -103,19 +104,67 @@ def _signal_status_text(intact_count: int, weakening_count: int) -> str:
     return f"{weakening_count} weakening, {intact_count} intact"
 
 
+def _parse_evidence_parts(evidence_summary: str | None) -> dict[str, str]:
+    """Extract keyed sections from the 'You said: / We watched: / What happened:' format."""
+    if not evidence_summary:
+        return {}
+    parts: dict[str, str] = {}
+    for line in evidence_summary.split("\n"):
+        for key in ("You said", "We watched", "What happened", "Your reason"):
+            prefix = f"{key}:"
+            if line.startswith(prefix):
+                parts[key] = line[len(prefix):].strip().strip('"')
+    return parts
+
+
+def _what_happened(event: dict) -> str:
+    """One-line fact extracted from the event — suitable for TLDR or subject."""
+    evidence = _parse_evidence_parts(event.get("evidence_summary"))
+    return evidence.get("What happened") or event.get("summary", "")
+
+
 def _tldr_lines(events_data: list[dict]) -> list[str]:
     lines = []
     for event in events_data[:3]:
-        ticker = event["ticker"]
+        ticker = event["ticker"].replace("_US_EQ", "").replace("_EQ", "")
         verdict = event.get("verdict")
-        summary = event.get("evidence_summary") or event.get("summary", "")
+        what = _what_happened(event)
         if verdict == "threatens":
-            lines.append(f"{ticker}: {summary} Worth reviewing against your reason.")
+            lines.append(f"{ticker}: {what} Worth reviewing against your reason.")
         elif verdict == "supports":
-            lines.append(f"{ticker}: {summary} Aligns with your reason for holding.")
+            lines.append(f"{ticker}: {what} Aligns with your reason for holding.")
         else:
-            lines.append(f"{ticker}: {summary}")
+            lines.append(f"{ticker}: {what}")
     return lines
+
+
+def _render_evidence_html(event: dict) -> str:
+    """Render the structured evidence_summary as clean HTML for the email card."""
+    evidence_summary = event.get("evidence_summary")
+    if not evidence_summary:
+        return f"<p>{escape(event.get('summary', ''))}</p>"
+
+    parts = _parse_evidence_parts(evidence_summary)
+    html_parts = []
+
+    you_said = parts.get("You said") or parts.get("Your reason")
+    we_watched = parts.get("We watched")
+    what_happened = parts.get("What happened")
+
+    if you_said:
+        html_parts.append(f'<blockquote style="border-left:3px solid #ccc;margin:8px 0;padding:4px 12px;color:#555;">&ldquo;{escape(you_said)}&rdquo;</blockquote>')
+    if we_watched:
+        html_parts.append(f'<p style="font-size:12px;color:#888;margin:4px 0;">Signal: {escape(we_watched)}</p>')
+    if what_happened:
+        html_parts.append(f'<p style="margin:8px 0;"><strong>What changed:</strong> {escape(what_happened)}</p>')
+    elif not html_parts:
+        # No structured parts — fall back to raw summary
+        html_parts.append(f"<p>{escape(event.get('summary', ''))}</p>")
+
+    if event.get("ai_analysis"):
+        html_parts.append(f'<p style="font-style:italic;color:#666;margin:4px 0;">{escape(event["ai_analysis"])}</p>')
+
+    return "".join(html_parts)
 
 
 def _monitoring_receipt(
@@ -405,21 +454,26 @@ def _render_digest_html(
         for event in ranked_events:
             reason_text = event.get("why_own_it") or "No reason recorded."
             ticker = event["ticker"]
+            clean_ticker = ticker.replace("_US_EQ", "").replace("_EQ", "")
             verdict = event.get("verdict")
             is_negative = verdict in ("threatens", "review")
             signal_text = event.get("signal_status_text") or ""
 
-            parts.append(f"<h3>{escape(ticker)} — {escape(event.get('name') or ticker)}</h3>")
-            parts.append(f"<p><strong>Your reason:</strong> {escape(reason_text)}</p>")
-            parts.append(f"<p><strong>What changed:</strong> {escape(event.get('evidence_summary') or event['summary'])}</p>")
+            verdict_color = {"threatens": "#b91c1c", "supports": "#15803d", "review": "#b45309"}.get(verdict or "", "#555")
+            verdict_label = {"threatens": "Threatens this reason", "supports": "Supports this reason", "review": "Worth reviewing", "neutral": "Neutral"}.get(verdict or "", "")
+
+            parts.append(f'<div style="border:1px solid #e5e7eb;border-radius:6px;padding:16px;margin:12px 0;">')
+            parts.append(f'<p style="margin:0 0 8px;font-weight:600;">{escape(clean_ticker)} — {escape(event.get("name") or clean_ticker)}</p>')
+            parts.append(f'<p style="font-size:12px;color:#888;margin:0 0 8px;">Your reason:</p>')
+            parts.append(f'<blockquote style="border-left:3px solid #d1d5db;margin:0 0 12px;padding:4px 12px;color:#374151;">&ldquo;{escape(reason_text)}&rdquo;</blockquote>')
+            parts.append(_render_evidence_html(event))
             if signal_text:
-                parts.append(f"<p><strong>Signal status:</strong> {escape(signal_text)}</p>")
-            if verdict:
-                parts.append(f"<p><strong>Verdict:</strong> {escape(str(verdict).replace('_', ' '))}</p>")
-            if event.get("ai_analysis"):
-                parts.append(f"<p>{escape(event['ai_analysis'])}</p>")
-            action_label = "Review this reason" if is_negative else "No action needed"
-            parts.append(f'<p><a href="/dashboard/positions/{escape(ticker)}">→ {action_label}</a></p>')
+                parts.append(f'<p style="font-size:12px;color:#888;margin:8px 0;">Signals: {escape(signal_text)}</p>')
+            if verdict_label:
+                parts.append(f'<p style="color:{verdict_color};font-weight:500;margin:8px 0;">{escape(verdict_label)}</p>')
+            action_label = "Review this reason" if is_negative else "View position"
+            parts.append(f'<p style="margin:12px 0 0;"><a href="/dashboard/positions/{escape(ticker)}" style="color:#1d4ed8;">→ {action_label}</a></p>')
+            parts.append("</div>")
 
         if stable_holdings:
             parts.append("<hr>")

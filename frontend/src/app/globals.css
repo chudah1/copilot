@@ -51,70 +51,70 @@
 }
 
 :root {
-  /* ── The Investment Ledger — warm paper, sharp edges, serious money ── */
-  --background: oklch(0.987 0.006 75);        /* warm parchment — not stark white */
-  --foreground: oklch(0.118 0.008 50);         /* warm near-black ink */
-  --card: oklch(1.000 0.000 0);               /* pure white — elevated surface */
-  --card-foreground: oklch(0.118 0.008 50);
-  --popover: oklch(1.000 0.000 0);
-  --popover-foreground: oklch(0.118 0.008 50);
-  --primary: oklch(0.365 0.105 30);            /* deep mahogany — authoritative, warm, distinctive */
+  /* ── The Investment Ledger — aged paper, sharp edges, serious money ── */
+  --background: oklch(0.948 0.018 78);         /* genuine parchment — cream with warmth */
+  --foreground: oklch(0.112 0.010 45);         /* rich warm ink, slightly darker */
+  --card: oklch(0.988 0.005 72);               /* elevated surface — clearly lighter than bg */
+  --card-foreground: oklch(0.112 0.010 45);
+  --popover: oklch(0.988 0.005 72);
+  --popover-foreground: oklch(0.112 0.010 45);
+  --primary: oklch(0.355 0.110 28);            /* deep mahogany — slightly richer */
   --primary-foreground: oklch(0.991 0.003 75);
-  --secondary: oklch(0.963 0.007 70);
-  --secondary-foreground: oklch(0.118 0.008 50);
-  --muted: oklch(0.957 0.007 72);
-  --muted-foreground: oklch(0.495 0.012 62);   /* warm slate gray */
-  --accent: oklch(0.957 0.007 72);
-  --accent-foreground: oklch(0.118 0.008 50);
+  --secondary: oklch(0.922 0.022 76);          /* visible secondary — tan, not ghost */
+  --secondary-foreground: oklch(0.112 0.010 45);
+  --muted: oklch(0.918 0.020 75);              /* muted has real presence now */
+  --muted-foreground: oklch(0.445 0.018 58);   /* darker warm gray — more readable */
+  --accent: oklch(0.918 0.020 75);
+  --accent-foreground: oklch(0.112 0.010 45);
   --destructive: oklch(0.510 0.195 22);
-  --border: oklch(0.882 0.010 68);             /* warm tan border */
-  --input: oklch(0.882 0.010 68);
-  --ring: oklch(0.365 0.105 30);
-  --chart-1: oklch(0.365 0.105 30);            /* mahogany */
+  --border: oklch(0.820 0.028 70);             /* strong warm tan — visible hierarchy */
+  --input: oklch(0.820 0.028 70);
+  --ring: oklch(0.355 0.110 28);
+  --chart-1: oklch(0.355 0.110 28);            /* mahogany */
   --chart-2: oklch(0.440 0.110 155);           /* forest green */
   --chart-3: oklch(0.510 0.195 22);            /* deep red */
   --chart-4: oklch(0.415 0.095 252);           /* navy */
   --chart-5: oklch(0.455 0.115 312);           /* plum */
   --radius: 0.2rem;                            /* crisp — not zero, not round */
-  --sidebar: oklch(0.980 0.007 73);
-  --sidebar-foreground: oklch(0.118 0.008 50);
-  --sidebar-primary: oklch(0.365 0.105 30);
+  --sidebar: oklch(0.938 0.020 77);
+  --sidebar-foreground: oklch(0.112 0.010 45);
+  --sidebar-primary: oklch(0.355 0.110 28);
   --sidebar-primary-foreground: oklch(0.991 0.003 75);
-  --sidebar-accent: oklch(0.957 0.007 72);
-  --sidebar-accent-foreground: oklch(0.118 0.008 50);
-  --sidebar-border: oklch(0.882 0.010 68);
-  --sidebar-ring: oklch(0.365 0.105 30);
+  --sidebar-accent: oklch(0.918 0.020 75);
+  --sidebar-accent-foreground: oklch(0.112 0.010 45);
+  --sidebar-border: oklch(0.820 0.028 70);
+  --sidebar-ring: oklch(0.355 0.110 28);
 }
 
 /* ── Override dark-mode media queries from imported shadcn stylesheet ── */
 @media (prefers-color-scheme: dark) {
   :root {
-    --background: oklch(0.987 0.006 75);
-    --foreground: oklch(0.118 0.008 50);
-    --card: oklch(1.000 0.000 0);
-    --card-foreground: oklch(0.118 0.008 50);
-    --popover: oklch(1.000 0.000 0);
-    --popover-foreground: oklch(0.118 0.008 50);
-    --primary: oklch(0.365 0.105 30);
+    --background: oklch(0.948 0.018 78);
+    --foreground: oklch(0.112 0.010 45);
+    --card: oklch(0.988 0.005 72);
+    --card-foreground: oklch(0.112 0.010 45);
+    --popover: oklch(0.988 0.005 72);
+    --popover-foreground: oklch(0.112 0.010 45);
+    --primary: oklch(0.355 0.110 28);
     --primary-foreground: oklch(0.991 0.003 75);
-    --secondary: oklch(0.963 0.007 70);
-    --secondary-foreground: oklch(0.118 0.008 50);
-    --muted: oklch(0.957 0.007 72);
-    --muted-foreground: oklch(0.495 0.012 62);
-    --accent: oklch(0.957 0.007 72);
-    --accent-foreground: oklch(0.118 0.008 50);
+    --secondary: oklch(0.922 0.022 76);
+    --secondary-foreground: oklch(0.112 0.010 45);
+    --muted: oklch(0.918 0.020 75);
+    --muted-foreground: oklch(0.445 0.018 58);
+    --accent: oklch(0.918 0.020 75);
+    --accent-foreground: oklch(0.112 0.010 45);
     --destructive: oklch(0.510 0.195 22);
-    --border: oklch(0.882 0.010 68);
-    --input: oklch(0.882 0.010 68);
-    --ring: oklch(0.365 0.105 30);
-    --sidebar: oklch(0.980 0.007 73);
-    --sidebar-foreground: oklch(0.118 0.008 50);
-    --sidebar-primary: oklch(0.365 0.105 30);
+    --border: oklch(0.820 0.028 70);
+    --input: oklch(0.820 0.028 70);
+    --ring: oklch(0.355 0.110 28);
+    --sidebar: oklch(0.938 0.020 77);
+    --sidebar-foreground: oklch(0.112 0.010 45);
+    --sidebar-primary: oklch(0.355 0.110 28);
     --sidebar-primary-foreground: oklch(0.991 0.003 75);
-    --sidebar-accent: oklch(0.957 0.007 72);
-    --sidebar-accent-foreground: oklch(0.118 0.008 50);
-    --sidebar-border: oklch(0.882 0.010 68);
-    --sidebar-ring: oklch(0.365 0.105 30);
+    --sidebar-accent: oklch(0.918 0.020 75);
+    --sidebar-accent-foreground: oklch(0.112 0.010 45);
+    --sidebar-border: oklch(0.820 0.028 70);
+    --sidebar-ring: oklch(0.355 0.110 28);
   }
 }
 
@@ -133,7 +133,7 @@
     -webkit-font-smoothing: antialiased;
     -moz-osx-font-smoothing: grayscale;
     /* Subtle paper grain */
-    background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='300' height='300'%3E%3Cfilter id='g'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.72' numOctaves='4' stitchTiles='stitch'/%3E%3CfeColorMatrix type='saturate' values='0'/%3E%3C/filter%3E%3Crect width='300' height='300' filter='url(%23g)' opacity='0.022'/%3E%3C/svg%3E");
+    background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='300' height='300'%3E%3Cfilter id='g'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.72' numOctaves='4' stitchTiles='stitch'/%3E%3CfeColorMatrix type='saturate' values='0'/%3E%3C/filter%3E%3Crect width='300' height='300' filter='url(%23g)' opacity='0.048'/%3E%3C/svg%3E");
     background-attachment: fixed;
   }
 

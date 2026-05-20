@@ -14,7 +14,7 @@ interface Props {
 }
 
 function pulseConfig(pulse: HoldingPulse | undefined, hasThesis: boolean) {
-  if (!hasThesis) return { color: "bg-border", label: "No thesis", labelColor: "text-muted-foreground/50" };
+  if (!hasThesis) return { color: "bg-border", label: "No reason yet", labelColor: "text-muted-foreground/50" };
   const s = pulse?.pulse_status ?? "intact";
   if (s === "review") return { color: "bg-red-500", label: "Review", labelColor: "text-red-600" };
   if (s === "watch") return { color: "bg-amber-500", label: "Watch", labelColor: "text-amber-700" };
@@ -30,7 +30,8 @@ export function HoldingCard({ holding, thesis, pulse, earnings, onGenerateDraft,
   const hasThesis = !!thesis;
   const { color: dotColor, label: statusLabel, labelColor } = pulseConfig(pulse, hasThesis);
   const displayName = holding.name !== holding.ticker ? holding.name : holding.ticker;
-  const thesisText = pulse?.reason ?? thesis?.why_own_it;
+  const thesisText = thesis?.why_own_it;
+  const alertReason = pulse && pulse.pulse_status !== "intact" ? pulse.reason : null;
 
   return (
     <Link
@@ -64,15 +65,22 @@ export function HoldingCard({ holding, thesis, pulse, earnings, onGenerateDraft,
             </div>
 
             {hasThesis && thesisText ? (
-              <p className="font-sans text-xs text-muted-foreground leading-relaxed line-clamp-1 max-w-lg italic">
-                {thesisText}
-              </p>
+              <div className="space-y-0.5">
+                <p className="font-sans text-xs text-muted-foreground leading-relaxed line-clamp-1 max-w-lg italic">
+                  {thesisText}
+                </p>
+                {alertReason && (
+                  <p className="font-mono text-[9px] text-amber-700/80 leading-relaxed line-clamp-1 max-w-lg">
+                    {alertReason}
+                  </p>
+                )}
+              </div>
             ) : !hasThesis ? (
               <button
                 onClick={(e) => { e.preventDefault(); e.stopPropagation(); onGenerateDraft?.(); }}
                 className="font-mono text-[9px] uppercase tracking-[0.15em] text-muted-foreground/50 hover:text-primary transition-colors border-b border-dashed border-muted-foreground/30 pb-px"
               >
-                Draft thesis with AI
+                Draft with AI
               </button>
             ) : null}
           </div>

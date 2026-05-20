@@ -56,6 +56,7 @@ class DraftStatusResponse(BaseModel):
 
 class SynthesisRequest(BaseModel):
     holding_id: uuid.UUID
+    investor_profile: str | None = None
     question1: str
     answer1: str
     question2: str

@@ -827,6 +827,10 @@ SYNTHESIS_PROMPT = """You are an investment thesis assistant helping a retail in
 
 Based on the investor's answers to two simple questions, synthesise a well-structured thesis that preserves their voice.
 
+Investor profile:
+- {investor_profile_label}
+- Guidance: {investor_profile_guidance}
+
 Position:
 - Ticker: {ticker}
 - Name: {name}
@@ -869,9 +873,35 @@ Requirements:
 - Output ONLY valid JSON, no markdown fences"""
 
 
-def _fallback_synthesize(ticker: str, answer1: str, answer2: str) -> SynthesisOutput:
+def _synthesis_profile_context(investor_profile: str | None) -> tuple[str, str]:
+    if investor_profile == "hearsay_driven":
+        return (
+            "Hearsay-driven investor",
+            "The investor may be starting from chatter, momentum, or a rough idea. Help them surface the implicit business reason, make it more concrete, and write a sharper break condition than they naturally would.",
+        )
+    return (
+        "Thesis-driven investor",
+        "The investor likely already thinks in explicit reasons. Preserve structure, keep their voice, and sharpen specificity without over-explaining.",
+    )
+
+
+def _fallback_synthesize(
+    ticker: str,
+    answer1: str,
+    answer2: str,
+    investor_profile: str | None = None,
+) -> SynthesisOutput:
     why_own_it = answer1.strip() or f"Investing in {ticker} for long-term growth."
     what_would_change_my_mind = answer2.strip() or "A fundamental change in the business model."
+    if investor_profile == "hearsay_driven":
+        why_own_it = (
+            answer1.strip()
+            or f"This started as a rough idea in {ticker}, but the real reason to own it would need to come from durable business performance rather than chatter alone."
+        )
+        what_would_change_my_mind = (
+            answer2.strip()
+            or "If the original story stops showing up in the operating results, the position should be reconsidered."
+        )
     lowered = why_own_it.lower()
     labels = [
         label
@@ -919,9 +949,15 @@ async def synthesize_thesis_from_qa(
     answer1: str,
     question2: str,
     answer2: str,
+    investor_profile: str | None = None,
 ) -> SynthesisOutput:
     if not settings.anthropic_api_key:
-        return _fallback_synthesize(ticker=ticker, answer1=answer1, answer2=answer2)
+        return _fallback_synthesize(
+            ticker=ticker,
+            answer1=answer1,
+            answer2=answer2,
+            investor_profile=investor_profile,
+        )
 
     try:
         market_data = await fetch_company_data(ticker)
@@ -929,10 +965,13 @@ async def synthesize_thesis_from_qa(
         logger.warning("Market data unavailable for synthesis on %s: %s", ticker, e)
         market_data = None
     market_data_section = _build_market_data_section(market_data)
+    investor_profile_label, investor_profile_guidance = _synthesis_profile_context(investor_profile)
 
     prompt = SYNTHESIS_PROMPT.format(
         ticker=ticker,
         name=name,
+        investor_profile_label=investor_profile_label,
+        investor_profile_guidance=investor_profile_guidance,
         question1=question1,
         answer1=answer1 or "Not provided",
         question2=question2,
@@ -949,7 +988,12 @@ async def synthesize_thesis_from_qa(
         return _parse_synthesis_output(data, ticker)
     except Exception as e:
         logger.error("Synthesis failed for %s: %s", ticker, e)
-        return _fallback_synthesize(ticker=ticker, answer1=answer1, answer2=answer2)
+        return _fallback_synthesize(
+            ticker=ticker,
+            answer1=answer1,
+            answer2=answer2,
+            investor_profile=investor_profile,
+        )
 
 
 # ---------------------------------------------------------------------------

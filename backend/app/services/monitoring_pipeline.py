@@ -15,6 +15,36 @@ from app.services.noise_filter import EVIDENCE_TYPE_MAP, record_signal_fired
 from app.services.signal_matching import build_evidence_summary, determine_verdict
 
 
+def _event_title(ticker: str, candidate: dict[str, Any], claim_obj: Any | None) -> str:
+    event_type = candidate.get("event_type", "")
+    evidence = candidate.get("evidence", {})
+    clean = ticker.replace("_US_EQ", "").replace("_EQ", "")
+
+    if event_type == "earnings_surprise":
+        surprise = evidence.get("recent_earnings_surprise_pct")
+        if surprise is not None:
+            direction = "beat" if surprise >= 0 else "missed"
+            return f"{clean} earnings {direction} by {abs(surprise):.1f}%"
+        return f"{clean} reported earnings"
+
+    if event_type == "metric_threshold_breach":
+        metric = evidence.get("metric", "").replace("_", " ")
+        return f"{clean}: {metric} threshold breached" if metric else f"{clean} metric alert"
+
+    if event_type in ("news_or_earnings_candidate", "news_keyword_match"):
+        if claim_obj:
+            return f"{clean}: news touches '{claim_obj.claim_text[:50]}'"
+        return f"{clean}: relevant news"
+
+    if event_type == "upcoming_earnings":
+        return f"{clean} reports earnings soon"
+
+    if event_type == "insider_transaction":
+        return f"{clean}: insider activity"
+
+    return f"{clean}: {event_type.replace('_', ' ')}"
+
+
 def build_claim_signal_lookup(claims: list[Any] | None) -> tuple[dict[str, Any], dict[str, Any]]:
     claims_by_id: dict[str, Any] = {}
     signals_by_id: dict[str, Any] = {}
@@ -98,7 +128,7 @@ async def persist_classified_candidates(
             signal_label=signal_obj.signal_label if signal_obj else None,
             why_own_it=thesis.why_own_it,
         )
-        verdict = determine_verdict(severity)
+        verdict = determine_verdict(severity, candidate)
         evidence_type = EVIDENCE_TYPE_MAP.get(candidate["event_type"], candidate["event_type"])
         stored_summary = candidate_summary_for_storage(candidate)
 
@@ -107,7 +137,7 @@ async def persist_classified_candidates(
             thesis_id=thesis.id,
             event_type=candidate["event_type"],
             severity=severity,
-            title=f"Review {holding.ticker}",
+            title=_event_title(holding.ticker, candidate, claim_obj),
             summary=stored_summary,
             source_url=source_url,
             ai_analysis=ai_analysis,

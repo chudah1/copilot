@@ -137,7 +137,26 @@ def build_evidence_summary(
     return description
 
 
-def determine_verdict(severity: str) -> str:
+def determine_verdict(severity: str, candidate: dict | None = None) -> str:
+    """Infer verdict from severity and candidate evidence where possible."""
+    evidence = (candidate or {}).get("evidence", {}) if candidate else {}
+    event_type = (candidate or {}).get("event_type", "") if candidate else ""
+
+    # Earnings surprise: use direction
+    if event_type == "earnings_surprise":
+        surprise = evidence.get("recent_earnings_surprise_pct")
+        if surprise is not None:
+            if surprise >= 5:
+                return "supports"
+            if surprise <= -5:
+                return "threatens"
+            return "neutral"
+
+    # Metric breaches: explicitly flagged as broken are threats
+    if event_type == "metric_threshold_breach":
+        return "threatens"
+
+    # Severity-based fallback
     if severity == "thesis_breaking":
         return "threatens"
     if severity == "warning":

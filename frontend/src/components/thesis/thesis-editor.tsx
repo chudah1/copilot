@@ -98,13 +98,13 @@ export function ThesisEditor({ thesis, onSave, onAssist, onCancel }: Props) {
   return (
     <Card>
       <CardHeader>
-        <CardTitle className="text-base">{thesis ? "Edit Thesis" : "Create Thesis"}</CardTitle>
+        <CardTitle className="text-base">{thesis ? "Edit reason" : "Write your reason"}</CardTitle>
       </CardHeader>
       <CardContent className="space-y-4">
         <div className="rounded-xl border bg-muted/30 p-4">
-          <p className="text-sm font-medium">What makes a strong thesis here</p>
+          <p className="text-sm font-medium">What makes a strong reason here</p>
           <p className="mt-1 text-sm text-muted-foreground">
-            Be specific enough that you would know what changed. Good theses explain the reason for owning, what has to stay true, and what would clearly break the case.
+            Be specific enough that you would know what changed. A good reason explains why you own this, what has to stay true, and what would clearly break the case.
           </p>
         </div>
 

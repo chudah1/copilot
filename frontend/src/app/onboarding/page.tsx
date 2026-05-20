@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useState, useCallback, Suspense } from "react";
+import { useEffect, useState, Suspense } from "react";
 import { useRouter, useSearchParams } from "next/navigation";
 import { AnimatePresence, motion } from "framer-motion";
 import { AuthGuard } from "@/components/layout/auth-guard";
@@ -21,15 +21,62 @@ type Step =
   | "REVIEW"
   | "DONE";
 
-const QUESTIONS = {
-  q1: "Why did you buy it? What's the main reason you own this position?",
-  q2: "What would have to happen for you to sell it?",
+type InvestorProfile = "thesis_driven" | "hearsay_driven";
+
+const PROFILE_CONTENT: Record<
+  InvestorProfile,
+  {
+    label: string;
+    title: string;
+    subtitle: string;
+    welcomeLines: string[];
+    q1: string;
+    q2: string;
+    q1Placeholder: string;
+    q2Placeholder: string;
+  }
+> = {
+  thesis_driven: {
+    label: "I invest from a thesis",
+    title: "You already think in reasons. We help you keep score.",
+    subtitle:
+      "Turn your investment logic into something explicit, monitored, and reviewable when new evidence lands.",
+    welcomeLines: [
+      "One position, two questions — takes 2 minutes.",
+      "We structure the thesis without flattening your thinking.",
+      "You get a monitoring loop tied to what you actually believe.",
+    ],
+    q1: "What is the core thesis behind owning this position?",
+    q2: "What specific evidence would tell you that thesis is breaking?",
+    q1Placeholder:
+      "e.g. This is an AI infrastructure leader with pricing power, durable demand, and a software moat that should keep returns above peers…",
+    q2Placeholder:
+      "e.g. Data center demand weakens, gross margins compress for multiple quarters, or a credible competitor breaks the software lock-in…",
+  },
+  hearsay_driven: {
+    label: "I often buy from tips, chatter, or momentum",
+    title: "That’s okay. Let’s turn instinct into a real reason.",
+    subtitle:
+      "You do not need a polished thesis to start. We’ll help you turn a rough idea into something you can monitor and revisit calmly.",
+    welcomeLines: [
+      "One position, two questions — takes 2 minutes.",
+      "Start with what caught your attention, even if it was a tip or theme.",
+      "We turn that into a reason you can test instead of just hope for.",
+    ],
+    q1: "What made this stock interesting enough to buy in the first place?",
+    q2: "What would make you admit the original idea is no longer working?",
+    q1Placeholder:
+      "e.g. Everyone was talking about AI demand, the numbers looked strong, and it felt like this company was in the right place at the right time…",
+    q2Placeholder:
+      "e.g. Revenue growth cools sharply, management guidance weakens, or the whole story starts depending more on hype than business results…",
+  },
 };
 
 const STORAGE_KEY = "copilot_onboarding_wizard";
 
 interface WizardState {
   holdingId: string | null;
+  investorProfile: InvestorProfile | null;
   answer1: string;
   answer2: string;
   synthesisResult: SynthesisResponse | null;
@@ -37,12 +84,12 @@ interface WizardState {
 
 function loadState(): WizardState {
   if (typeof window === "undefined")
-    return { holdingId: null, answer1: "", answer2: "", synthesisResult: null };
+    return { holdingId: null, investorProfile: null, answer1: "", answer2: "", synthesisResult: null };
   try {
     const raw = localStorage.getItem(STORAGE_KEY);
     if (raw) return JSON.parse(raw);
   } catch {}
-  return { holdingId: null, answer1: "", answer2: "", synthesisResult: null };
+  return { holdingId: null, investorProfile: null, answer1: "", answer2: "", synthesisResult: null };
 }
 
 function saveState(s: WizardState) {
@@ -55,6 +102,12 @@ function clearState() {
   try {
     localStorage.removeItem(STORAGE_KEY);
   } catch {}
+}
+
+function inferInitialStep(state: WizardState): Step {
+  if (state.synthesisResult) return "REVIEW";
+  if (state.answer2 || state.answer1) return "QUESTION_2";
+  return "WELCOME";
 }
 
 // ---------------------------------------------------------------------------
@@ -89,12 +142,19 @@ const stepVariants = {
 function WizardInner() {
   const router = useRouter();
   const searchParams = useSearchParams();
+  const queryHoldingId = searchParams.get("holding_id");
+  const initialWizardState = (() => {
+    const loaded = loadState();
+    return queryHoldingId ? { ...loaded, holdingId: queryHoldingId } : loaded;
+  })();
 
-  const [step, setStep] = useState<Step>("WELCOME");
-  const [wizardState, setWizardState] = useState<WizardState>(() => loadState());
+  const [step, setStep] = useState<Step>(() => inferInitialStep(initialWizardState));
+  const [wizardState, setWizardState] = useState<WizardState>(() => initialWizardState);
   const [holding, setHolding] = useState<HoldingContext | null>(null);
   const [error, setError] = useState("");
-  const [loadingHolding, setLoadingHolding] = useState(false);
+  const [loadingHolding, setLoadingHolding] = useState(Boolean(initialWizardState.holdingId));
+  const profile = wizardState.investorProfile;
+  const profileContent = profile ? PROFILE_CONTENT[profile] : null;
 
   // Sync wizardState to localStorage
   useEffect(() => {
@@ -103,12 +163,7 @@ function WizardInner() {
 
   // On mount: determine starting holding
   useEffect(() => {
-    const qHoldingId = searchParams.get("holding_id");
-    const source = searchParams.get("source");
-
-    if (qHoldingId) {
-      setWizardState((prev) => ({ ...prev, holdingId: qHoldingId }));
-    } else if (!wizardState.holdingId) {
+    if (!initialWizardState.holdingId) {
       // Pick the top undrafted holding from draft status
       api
         .get<DraftStatus>("/api/portfolio/draft-status")
@@ -117,6 +172,7 @@ function WizardInner() {
           const pending = ds.drafts.find((d) => d.status === "pending");
           const chosen = ready || pending;
           if (chosen) {
+            setLoadingHolding(true);
             setWizardState((prev) => ({ ...prev, holdingId: chosen.holding_id }));
           } else {
             // No drafts at all — redirect to dashboard
@@ -126,20 +182,19 @@ function WizardInner() {
         .catch(() => router.replace("/dashboard"));
     }
 
-    // Resume to the furthest completed step
-    if (wizardState.synthesisResult) {
-      setStep("REVIEW");
-    } else if (wizardState.answer2 || wizardState.answer1) {
-      setStep("QUESTION_2");
-    }
-    // Run once on mount — wizardState initialised synchronously from localStorage
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, []);
+    api
+      .get<{ investor_profile: InvestorProfile | null }>("/api/onboarding/state")
+      .then((state) => {
+        if (state.investor_profile) {
+          setWizardState((prev) => ({ ...prev, investorProfile: prev.investorProfile ?? state.investor_profile }));
+        }
+      })
+      .catch(() => {});
+  }, [initialWizardState.holdingId, router]);
 
   // Fetch holding context whenever holdingId is set
   useEffect(() => {
     if (!wizardState.holdingId) return;
-    setLoadingHolding(true);
     api
       .get<HoldingContext>(`/api/onboarding/context/${wizardState.holdingId}`)
       .then((h) => setHolding(h))
@@ -165,11 +220,14 @@ function WizardInner() {
     goTo("SYNTHESISING");
     setError("");
     try {
+      const activeProfile = wizardState.investorProfile ?? "thesis_driven";
+      const promptContent = PROFILE_CONTENT[activeProfile];
       const result = await api.post<SynthesisResponse>("/api/onboarding/synthesize", {
         holding_id: wizardState.holdingId,
-        question1: QUESTIONS.q1,
+        investor_profile: activeProfile,
+        question1: promptContent.q1,
         answer1: wizardState.answer1,
-        question2: QUESTIONS.q2,
+        question2: promptContent.q2,
         answer2: wizardState.answer2,
       });
       setWizardState((prev) => ({ ...prev, synthesisResult: result }));
@@ -178,6 +236,13 @@ function WizardInner() {
       setError(getErrorMessage(e, "Something went wrong. Please try again."));
       goTo("QUESTION_2");
     }
+  };
+
+  const handleSelectProfile = async (selected: InvestorProfile) => {
+    setWizardState((prev) => ({ ...prev, investorProfile: selected }));
+    try {
+      await api.post("/api/onboarding/profile", { investor_profile: selected });
+    } catch {}
   };
 
   const handleComplete = async () => {
@@ -211,29 +276,52 @@ function WizardInner() {
           Getting started
         </span>
         <h1 className="font-display italic text-[2.75rem] leading-[1.1] text-foreground tracking-tight">
-          Let&rsquo;s talk about<br />why you invest.
+          Let&rsquo;s talk about<br />how you invest.
         </h1>
         <p className="text-base text-muted-foreground leading-relaxed max-w-sm">
-          We&rsquo;ll ask you two simple questions about one of your positions.
-          Your answers become a thesis — something we can monitor and review with you.
+          Pick the path that sounds most like you. We&rsquo;ll tailor the first-run flow so the app meets you where you actually are.
         </p>
       </div>
 
-      <div className="space-y-3 border-l-2 border-primary/30 pl-4">
-        {[
-          "One position, two questions — takes 2 minutes.",
-          "AI turns your answers into a structured thesis.",
-          "We monitor it. You get a digest every week.",
-        ].map((line, i) => (
-          <p key={i} className="text-sm text-foreground/70 font-mono">
-            {line}
-          </p>
-        ))}
+      <div className="grid gap-3">
+        {(Object.entries(PROFILE_CONTENT) as Array<[InvestorProfile, (typeof PROFILE_CONTENT)[InvestorProfile]]>).map(([key, content]) => {
+          const selected = profile === key;
+          return (
+            <button
+              key={key}
+              type="button"
+              onClick={() => handleSelectProfile(key)}
+              className={`text-left border p-4 transition-colors ${
+                selected ? "border-primary bg-primary/5" : "border-border hover:border-primary/40"
+              }`}
+            >
+              <div className="flex items-start justify-between gap-4">
+                <div className="space-y-2">
+                  <p className="font-mono text-[10px] uppercase tracking-[0.25em] text-primary">{content.label}</p>
+                  <p className="text-base font-medium text-foreground">{content.title}</p>
+                  <p className="text-sm text-muted-foreground leading-relaxed">{content.subtitle}</p>
+                </div>
+                <span className={`mt-1 h-3 w-3 rounded-full border ${selected ? "border-primary bg-primary" : "border-border"}`} />
+              </div>
+            </button>
+          );
+        })}
       </div>
+
+      {profileContent && (
+        <div className="space-y-3 border-l-2 border-primary/30 pl-4">
+          {profileContent.welcomeLines.map((line, i) => (
+            <p key={i} className="text-sm text-foreground/70 font-mono">
+              {line}
+            </p>
+          ))}
+        </div>
+      )}
 
       <div className="flex items-center gap-6 pt-2">
         <button
           onClick={() => goTo("POSITION_FOCUS")}
+          disabled={!profile}
           className="bg-primary text-primary-foreground px-8 py-3 text-sm font-mono tracking-wide hover:bg-primary/90 transition-colors"
         >
           Begin →
@@ -536,16 +624,16 @@ function WizardInner() {
             {step === "QUESTION_1" &&
               renderQuestion(
                 "answer1",
-                QUESTIONS.q1,
-                "e.g. Strong AI infrastructure play, growing enterprise software segment with high switching costs…",
+                profileContent?.q1 ?? PROFILE_CONTENT.thesis_driven.q1,
+                profileContent?.q1Placeholder ?? PROFILE_CONTENT.thesis_driven.q1Placeholder,
                 () => goTo("QUESTION_2"),
                 "Question 01"
               )}
             {step === "QUESTION_2" &&
               renderQuestion(
                 "answer2",
-                QUESTIONS.q2,
-                "e.g. Revenue growth falls below 15% for two consecutive quarters, or a major competitor breaks their moat…",
+                profileContent?.q2 ?? PROFILE_CONTENT.thesis_driven.q2,
+                profileContent?.q2Placeholder ?? PROFILE_CONTENT.thesis_driven.q2Placeholder,
                 handleSynthesize,
                 "Question 02"
               )}

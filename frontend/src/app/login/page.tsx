@@ -34,7 +34,7 @@ export default function LoginPage() {
       <Card className="w-full max-w-md">
         <CardHeader>
           <CardTitle>Sign in</CardTitle>
-          <CardDescription>Welcome back to Copilot Investor</CardDescription>
+          <CardDescription>Welcome back. Let's review your convictions.</CardDescription>
         </CardHeader>
         <CardContent>
           <form onSubmit={handleSubmit} className="space-y-4">

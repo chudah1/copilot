@@ -20,6 +20,7 @@ import { Textarea } from "@/components/ui/textarea";
 import { ThesisHealthCheck } from "@/components/thesis/thesis-health-check";
 import { CounterThesisCard } from "@/components/thesis/counter-thesis-card";
 import { CheckNowButton } from "@/components/monitoring/check-now-button";
+import { EarningsReviewModal } from "@/components/thesis/earnings-review-modal";
 import type {
   ConfirmDecompositionRequest,
   ConvictionLogResponse,
@@ -27,6 +28,7 @@ import type {
   Holding,
   MonitoringEvent,
   MonitoringEventReviewResponse,
+  OnboardingState,
   Thesis,
   ThesisAssistResponse,
   ThesisDecompositionEnvelope,
@@ -45,14 +47,24 @@ function ageInDays(dateString: string) {
   return Math.max(0, Math.floor((now - then) / (1000 * 60 * 60 * 24)));
 }
 
-function getThesisInsights(thesis: Thesis | undefined, events: MonitoringEvent[]) {
+function getThesisInsights(
+  thesis: Thesis | undefined,
+  events: MonitoringEvent[],
+  investorProfile: "thesis_driven" | "hearsay_driven" | null,
+) {
   if (!thesis) {
     return {
-      nextStep: "Write the first thesis for this position so monitoring has something real to watch.",
-      qualityLabel: "No thesis yet",
+      nextStep:
+        investorProfile === "hearsay_driven"
+          ? "Start by turning the original story into a real business reason this app can monitor."
+          : "Write your thesis for this position so monitoring has something explicit to watch.",
+      qualityLabel: "No reason yet",
       qualityTone: "bg-red-500/15 text-red-600",
       statusDot: "text-red-500",
-      watchStatus: "This position is not being monitored against any explicit belief yet.",
+      watchStatus:
+        investorProfile === "hearsay_driven"
+          ? "Right now this position has no explicit reason attached to it, so the app cannot separate signal from noise."
+          : "This position is not being monitored against any explicit belief yet.",
       canReaffirm: false,
     };
   }
@@ -65,18 +77,18 @@ function getThesisInsights(thesis: Thesis | undefined, events: MonitoringEvent[]
 
   if (thesis.status === "needs_review") {
     return {
-      nextStep: latestEvent?.ai_analysis || "Review what changed and decide whether the thesis still holds.",
+      nextStep: latestEvent?.ai_analysis || "Review what changed and decide whether your reason still holds.",
       qualityLabel: "Needs review",
       qualityTone: "bg-orange-500/15 text-orange-600",
       statusDot: "text-orange-500",
-      watchStatus: "Monitoring found something worth revisiting in this thesis.",
+      watchStatus: "Monitoring found something worth revisiting in your reason.",
       canReaffirm: true,
     };
   }
 
   if (stale) {
     return {
-      nextStep: "This thesis is old. Re-read it and either reaffirm it or tighten the language.",
+      nextStep: "This reason is old. Re-read it and either confirm it or tighten the language.",
       qualityLabel: "Stale",
       qualityTone: "bg-amber-500/15 text-amber-700",
       statusDot: "text-amber-500",
@@ -87,21 +99,28 @@ function getThesisInsights(thesis: Thesis | undefined, events: MonitoringEvent[]
 
   if (monitorability === "low") {
     return {
-      nextStep: ambiguity || "Tighten the thesis so the app can monitor something more precise.",
+      nextStep:
+        ambiguity ||
+        (investorProfile === "hearsay_driven"
+          ? "Tighten this story into a clearer business reason and a sharper break condition."
+          : "Tighten the thesis so the app can monitor something more precise."),
       qualityLabel: "Weak signals",
       qualityTone: "bg-muted text-muted-foreground",
       statusDot: "text-muted-foreground",
-      watchStatus: "The current reason is too vague for high-confidence monitoring.",
+      watchStatus:
+        investorProfile === "hearsay_driven"
+          ? "The current reason still reads more like a narrative than a thesis."
+          : "The current reason is too vague for high-confidence monitoring.",
       canReaffirm: false,
     };
   }
 
   return {
-    nextStep: latestEvent ? latestEvent.ai_analysis || "Monitoring is active. Review the latest event if it still matters." : "The thesis looks healthy. No action needed.",
+    nextStep: latestEvent ? latestEvent.ai_analysis || "Monitoring is active. Review the latest event if it still matters." : "Your reason looks healthy. No action needed.",
     qualityLabel: "Intact",
     qualityTone: "bg-emerald-500/15 text-emerald-700",
     statusDot: "text-emerald-500",
-    watchStatus: latestEvent ? "Monitoring has context to evaluate new changes against this thesis." : "Monitoring is active, no material change flagged.",
+    watchStatus: latestEvent ? "Monitoring has context to evaluate new changes against your reason." : "Monitoring is active, no material change flagged.",
     canReaffirm: false,
   };
 }
@@ -173,6 +192,8 @@ export default function PositionDetailPage() {
   const [showCounterThesis, setShowCounterThesis] = useState(false);
   const [showAnalysis, setShowAnalysis] = useState(false);
   const [showPositionDetails, setShowPositionDetails] = useState(false);
+  const [showEarningsReview, setShowEarningsReview] = useState(false);
+  const [onboardingState, setOnboardingState] = useState<OnboardingState | null>(null);
 
   const holding = holdings.find((h) => h.ticker === ticker);
   const activeThesis = theses.find((t) => t.status === "active" || t.status === "draft" || t.status === "needs_review");
@@ -184,16 +205,18 @@ export default function PositionDetailPage() {
         setHoldings(h);
         const match = h.find((x) => x.ticker === ticker);
         if (match) {
-          const [t, e, log, earnings] = await Promise.all([
+          const [t, e, log, earnings, onboarding] = await Promise.all([
             api.get<Thesis[]>(`/api/theses/holding/${match.id}`),
             api.get<MonitoringEvent[]>(`/api/monitoring/holdings/${match.id}/events`),
             api.get<ConvictionLogResponse>(`/api/portfolio/holdings/${match.id}/conviction-log`).catch(() => null),
             api.get<UpcomingEarnings[]>("/api/portfolio/upcoming-earnings").catch(() => []),
+            api.get<OnboardingState>("/api/onboarding/state").catch(() => null),
           ]);
           setTheses(t);
           setEvents(e);
           setConvictionLog(log);
           setUpcomingEarnings(earnings.find((item) => item.holding_id === match.id) ?? null);
+          setOnboardingState(onboarding);
           const latestThesis = t.find((item) => item.status === "active" || item.status === "draft" || item.status === "needs_review");
           if (latestThesis) {
             setDecompositionLoading(true);
@@ -210,6 +233,10 @@ export default function PositionDetailPage() {
             } finally {
               setDecompositionLoading(false);
             }
+            // Background health check — detects recent earnings without requiring a monitoring event
+            void api.post<HealthCheckResult>(`/api/theses/${latestThesis.id}/health-check`)
+              .then(setHealthCheck)
+              .catch(() => null);
           } else {
             setDecompositionEnvelope(null);
           }
@@ -314,7 +341,7 @@ export default function PositionDetailPage() {
             const updated = await api.put<Thesis>(`/api/theses/${existing.id}`, data);
             setTheses((current) => current.map((t) => (t.id === updated.id ? updated : t)));
             savedThesisId = updated.id;
-            toast.message("Updated the existing thesis for this holding.");
+            toast.message("Updated the existing reason for this holding.");
           } else {
             throw error;
           }
@@ -330,7 +357,7 @@ export default function PositionDetailPage() {
       await refreshConvictionLog();
     } catch (err) {
       console.error(err);
-      toast.error(getErrorMessage(err, "Failed to save thesis"));
+      toast.error(getErrorMessage(err, "Failed to save reason"));
     }
   };
 
@@ -448,12 +475,21 @@ export default function PositionDetailPage() {
   const value = holding.current_value || 0;
   const pnl = value - cost;
   const pnlPct = cost > 0 ? ((pnl / cost) * 100).toFixed(1) : "0.0";
-  const thesisInsights = getThesisInsights(activeThesis, events);
+  const thesisInsights = getThesisInsights(
+    activeThesis,
+    events,
+    onboardingState?.investor_profile ?? null,
+  );
   const latestEvent = events[0];
   const recentEarningsEvent =
     events.find(
-      (e) => ["earnings_surprise", "earnings_call_transcript"].includes(e.event_type) && !e.review_action && isRecentEvent(e.created_at, 3),
+      (e) => ["earnings_surprise", "earnings_call_transcript"].includes(e.event_type) && !e.review_action && isRecentEvent(e.created_at, 14),
     ) ?? null;
+
+  // Show earnings review prompt if a monitoring event fired OR health check shows recent earnings
+  const showEarningsBanner =
+    Boolean(recentEarningsEvent) ||
+    (Boolean(healthCheck?.recent_earnings_surprise_pct) && Boolean(activeThesis));
   const hasSignals = Boolean(decompositionEnvelope?.decomposition);
   const hasActiveSignals =
     decompositionEnvelope?.decomposition?.claims.some((claim) =>
@@ -467,7 +503,7 @@ export default function PositionDetailPage() {
   const invalidatedTheses = theses.filter((t) => t.status === "invalidated");
 
   const tabs: { id: TabId; label: string; badge?: number | string }[] = [
-    { id: "thesis", label: "Thesis" },
+    { id: "thesis", label: "Your reason" },
     { id: "monitoring", label: "Monitoring", badge: unreviewedEvents > 0 ? unreviewedEvents : undefined },
     { id: "history", label: "History", badge: convictionLog?.entries.length ?? undefined },
   ];
@@ -543,7 +579,7 @@ export default function PositionDetailPage() {
               <>
                 <span className="text-border text-[10px]">·</span>
                 <span className="font-mono text-[10px] text-muted-foreground/60">
-                  thesis {ageInDays(activeThesis.updated_at)}d old
+                  reason {ageInDays(activeThesis.updated_at)}d old
                 </span>
               </>
             )}
@@ -619,13 +655,13 @@ export default function PositionDetailPage() {
               </div>
             ) : (
               <p className="font-sans text-xs text-muted-foreground">
-                Tighten the thesis so the app knows what evidence should matter the morning after.
+                Tighten your reason so the app knows what evidence should matter the morning after.
               </p>
             )}
           </motion.div>
         )}
 
-        {activeThesis && recentEarningsEvent && (
+        {showEarningsBanner && (
           <motion.div
             initial={{ opacity: 0, y: -4 }}
             animate={{ opacity: 1, y: 0 }}
@@ -636,14 +672,19 @@ export default function PositionDetailPage() {
                 ● Earnings just landed
               </span>
               <p className="font-sans text-sm text-foreground/80 leading-relaxed mt-1">
-                {recentEarningsEvent.ai_analysis || recentEarningsEvent.evidence_summary || recentEarningsEvent.summary}
+                {recentEarningsEvent
+                  ? (recentEarningsEvent.ai_analysis || recentEarningsEvent.evidence_summary || recentEarningsEvent.summary)
+                  : healthCheck?.recent_earnings_surprise_pct !== null && healthCheck?.recent_earnings_surprise_pct !== undefined
+                    ? `${cleanTicker(ticker)} reported earnings with a ${healthCheck.recent_earnings_surprise_pct > 0 ? "+" : ""}${healthCheck.recent_earnings_surprise_pct.toFixed(1)}% surprise. Review your reason to see what still holds.`
+                    : `${cleanTicker(ticker)} recently reported earnings. Review whether your reason still holds.`
+                }
               </p>
             </div>
             <div className="flex flex-wrap gap-2">
-              {[
-                { action: "reaffirmed" as const, label: "Thesis holds", cls: "border-emerald-500/30 text-emerald-700 hover:bg-emerald-500/8" },
+              {recentEarningsEvent && [
+                { action: "reaffirmed" as const, label: "Reason holds", cls: "border-emerald-500/30 text-emerald-700 hover:bg-emerald-500/8" },
                 { action: "lowered_confidence" as const, label: "Lower confidence", cls: "border-amber-500/30 text-amber-700 hover:bg-amber-500/8" },
-                { action: "invalidated" as const, label: "Thesis broken", cls: "border-red-500/30 text-red-600 hover:bg-red-500/8" },
+                { action: "invalidated" as const, label: "Reason broken", cls: "border-red-500/30 text-red-600 hover:bg-red-500/8" },
               ].map(({ action, label, cls }) => (
                 <button
                   key={action}
@@ -655,15 +696,23 @@ export default function PositionDetailPage() {
                 </button>
               ))}
               <button
-                onClick={() => { setEditing(true); setActiveTab("thesis"); }}
-                className="font-mono text-[10px] uppercase tracking-[0.15em] border border-border text-muted-foreground hover:text-foreground px-4 py-2 transition-colors"
+                onClick={() => setShowEarningsReview(true)}
+                className="font-mono text-[10px] uppercase tracking-[0.15em] border border-amber-600/40 text-amber-700 bg-amber-50 hover:bg-amber-100 px-4 py-2 transition-colors"
               >
-                Update thesis
+                Review reason claim by claim →
               </button>
             </div>
           </motion.div>
         )}
       </div>
+
+      {showEarningsReview && activeThesis && (
+        <EarningsReviewModal
+          thesisId={activeThesis.id}
+          ticker={cleanTicker(ticker)}
+          onClose={() => setShowEarningsReview(false)}
+        />
+      )}
 
       {/* ── Tab content ─────────────────────────────────────────────────── */}
       <div className="max-w-5xl mx-auto px-6 lg:px-10">
@@ -692,7 +741,7 @@ export default function PositionDetailPage() {
                           onClick={() => setEditing(true)}
                           className="font-mono text-[10px] uppercase tracking-[0.15em] bg-primary text-primary-foreground px-4 py-2 hover:bg-primary/90 transition-colors"
                         >
-                          Start thesis
+                          Write your reason
                         </button>
                       )}
                       {activeThesis && thesisInsights.canReaffirm && (
@@ -701,7 +750,15 @@ export default function PositionDetailPage() {
                           disabled={reaffirming}
                           className="font-mono text-[10px] uppercase tracking-[0.15em] border border-primary/40 text-primary px-4 py-2 hover:border-primary transition-colors disabled:opacity-40"
                         >
-                          {reaffirming ? "Reaffirming…" : "Reaffirm thesis"}
+                          {reaffirming ? "Reaffirming…" : "Still holding"}
+                        </button>
+                      )}
+                      {activeThesis && (
+                        <button
+                          onClick={() => setShowEarningsReview(true)}
+                          className="font-mono text-[10px] uppercase tracking-[0.15em] border border-border text-muted-foreground hover:text-foreground px-4 py-2 transition-colors"
+                        >
+                          After earnings?
                         </button>
                       )}
                     </div>
@@ -732,7 +789,7 @@ export default function PositionDetailPage() {
                 {!activeThesis && !editing && (
                   <div className="py-16 text-center space-y-4">
                     <p className="font-display italic text-2xl text-foreground/50">
-                      No thesis written yet.
+                      No reason written yet.
                     </p>
                     <p className="font-sans text-sm text-muted-foreground max-w-sm mx-auto leading-relaxed">
                       Start with the reason this position exists, what has to stay true, and what would make you rethink it.
@@ -741,7 +798,7 @@ export default function PositionDetailPage() {
                       onClick={() => setEditing(true)}
                       className="font-mono text-[10px] uppercase tracking-[0.2em] border border-primary/40 text-primary px-5 py-2.5 hover:border-primary transition-colors"
                     >
-                      Write thesis
+                      Write your reason
                     </button>
                   </div>
                 )}
@@ -806,13 +863,13 @@ export default function PositionDetailPage() {
                       Nothing to watch yet.
                     </p>
                     <p className="font-sans text-sm text-muted-foreground max-w-xs mx-auto leading-relaxed">
-                      Write a thesis first — monitoring needs an explicit belief to test against.
+                      Write your reason first — monitoring needs an explicit belief to test against.
                     </p>
                     <button
                       onClick={() => { setEditing(true); setActiveTab("thesis"); }}
                       className="font-mono text-[10px] uppercase tracking-[0.2em] border border-primary/40 text-primary px-5 py-2.5 hover:border-primary transition-colors"
                     >
-                      Go to thesis →
+                      Go to your reason →
                     </button>
                   </div>
                 ) : (
@@ -854,7 +911,7 @@ export default function PositionDetailPage() {
                             </p>
                             <p className="font-sans text-sm text-muted-foreground leading-relaxed">
                               {events.length > 0
-                                ? `All ${events.length} event${events.length !== 1 ? "s" : ""} reviewed.${lastReviewedEvent ? ` Last reviewed ${ageInDays(lastReviewedEvent.created_at)}d ago.` : ""} The thesis stands until something changes.`
+                                ? `All ${events.length} event${events.length !== 1 ? "s" : ""} reviewed.${lastReviewedEvent ? ` Last reviewed ${ageInDays(lastReviewedEvent.created_at)}d ago.` : ""} Your reason stands until something changes.`
                                 : "No material changes flagged since monitoring started."}
                             </p>
                           </div>
@@ -965,10 +1022,10 @@ export default function PositionDetailPage() {
       <Dialog open={invalidateOpen} onOpenChange={setInvalidateOpen}>
         <DialogContent>
           <DialogHeader>
-            <DialogTitle className="font-display italic">Invalidate thesis</DialogTitle>
+            <DialogTitle className="font-display italic">Mark as broken</DialogTitle>
           </DialogHeader>
           <Textarea
-            placeholder="Why is this thesis no longer valid?"
+            placeholder="Why is this reason no longer valid?"
             value={invalidateReason}
             onChange={(e) => setInvalidateReason(e.target.value)}
           />

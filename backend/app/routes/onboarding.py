@@ -156,12 +156,14 @@ async def onboarding_banner(
     if state.first_reason_written_at is None:
         noun = "holding" if holdings_count == 1 else "holdings"
         message = f"You have {holdings_count} {noun}. Let's start with one — which matters most to you?"
+        top = max(holdings, key=lambda h: float(h.current_value or 0), default=None)
         return OnboardingBannerResponse(
             show=True,
             banner_type="start_first_reason",
             message=message,
             holdings_count=holdings_count,
             reasons_count=reasons_count,
+            suggested_holding=SuggestedHolding(id=str(top.id), ticker=top.ticker, name=top.name) if top else None,
         )
 
     # Within 24h of first reason: monitoring confirmation (shown regardless of coverage)
@@ -303,6 +305,9 @@ async def synthesize_thesis(
     if holding is None:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Holding not found")
 
+    state = await get_or_create_state(db, current_user.id)
+    investor_profile = body.investor_profile or state.investor_profile
+
     output = await synthesize_thesis_from_qa(
         ticker=holding.ticker,
         name=holding.name,
@@ -310,6 +315,7 @@ async def synthesize_thesis(
         answer1=body.answer1,
         question2=body.question2,
         answer2=body.answer2,
+        investor_profile=investor_profile,
     )
 
     thesis = Thesis(
@@ -340,7 +346,6 @@ async def synthesize_thesis(
         draft.updated_at = datetime.now(timezone.utc)
 
     now = datetime.now(timezone.utc)
-    state = await get_or_create_state(db, current_user.id)
     state.reasons_written_count = (state.reasons_written_count or 0) + 1
     if state.first_reason_written_at is None:
         state.first_reason_written_at = now

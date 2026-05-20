@@ -876,8 +876,12 @@ async def _alpha_vantage_request(client: httpx.AsyncClient, function: str, **par
     if "text/csv" in content_type or function == "EARNINGS_CALENDAR":
         return response.text
     data = response.json()
-    if isinstance(data, dict) and data.get("Note"):
-        raise RuntimeError(data["Note"])
+    if isinstance(data, dict):
+        # Both "Note" (hard limit) and "Information" (soft rate-limit / premium-only) mean the
+        # response is empty. Don't treat these as valid data.
+        limit_msg = data.get("Note") or data.get("Information")
+        if limit_msg:
+            raise RuntimeError(limit_msg)
     return data
 
 
@@ -1098,10 +1102,19 @@ async def fetch_company_data(ticker: str) -> CompanyData | None:
         raise RuntimeError(f"Unsupported market data provider: {settings.market_data_provider}")
 
     if not settings.alpha_vantage_api_key:
-        return None
+        return await _fetch_yfinance_company_data(ticker)
 
-    provider_payload = await _fetch_alpha_vantage_payloads(ticker)
-    return _build_company_data_from_alpha_vantage(ticker, provider_payload)
+    try:
+        provider_payload = await _fetch_alpha_vantage_payloads(ticker)
+        data = _build_company_data_from_alpha_vantage(ticker, provider_payload)
+        # If AV returned mostly empty data (rate-limited payloads), fall back to yfinance
+        if data.sector == "Unknown" and not data.news_items and data.current_price is None:
+            logger.info("Alpha Vantage returned empty data for %s, falling back to yfinance", ticker)
+            return await _fetch_yfinance_company_data(ticker)
+        return data
+    except Exception:
+        logger.warning("Alpha Vantage fetch failed for %s, falling back to yfinance", ticker, exc_info=True)
+        return await _fetch_yfinance_company_data(ticker)
 
 
 async def _fetch_alpha_vantage_payloads(ticker: str) -> dict[str, Any]:

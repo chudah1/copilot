@@ -144,7 +144,7 @@ function DraggableCard({ event, index, total, isTop, onSwipe, busy }: CardProps)
           {/* Verdict chip */}
           {verdict && (
             <div className={`mt-3 inline-flex self-start items-center border rounded-sm px-2 py-0.5 font-mono text-[9px] uppercase tracking-[0.15em] ${verdictBg[verdict] ?? verdictBg.neutral}`}>
-              {verdict === "supports" ? "Supports thesis" : verdict === "threatens" ? "Threatens thesis" : verdict === "review" ? "Warrants review" : "Neutral"}
+              {verdict === "supports" ? "Supports reason" : verdict === "threatens" ? "Threatens reason" : verdict === "review" ? "Warrants review" : "Neutral"}
             </div>
           )}
 
@@ -243,7 +243,7 @@ export function EventReviewStack({ events, onReview, reviewingEventId }: Props) 
       >
         <p className="font-display text-2xl italic text-foreground">All caught up.</p>
         <p className="font-sans text-sm text-muted-foreground">
-          You&apos;ve reviewed every signal. The thesis stands until something changes.
+          You&apos;ve reviewed every signal. Your reason stands until something changes.
         </p>
       </motion.div>
     );
@@ -303,7 +303,7 @@ export function EventReviewStack({ events, onReview, reviewingEventId }: Props) 
           disabled={!!reviewingEventId}
           className="flex-1"
         >
-          Thesis holds
+          Reason holds
         </Button>
         <Button
           size="sm"

@@ -1,294 +1,71 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useState, useMemo } from "react";
 import Link from "next/link";
 import { motion, AnimatePresence } from "framer-motion";
-import { api } from "@/lib/api";
+import useSWR from "swr";
+import { api, fetcher } from "@/lib/api";
 import { getErrorMessage } from "@/lib/errors";
 import { formatCurrency, formatPercent } from "@/lib/utils";
 import { OnboardingBanner } from "@/components/onboarding/onboarding-banner";
 import { QuickAddHolding } from "@/components/portfolio/quick-add-holding";
 import { DigestCountdown } from "@/components/portfolio/digest-countdown";
+import { PositionCard, cleanTicker } from "@/components/portfolio/position-card";
+import { AttentionCard } from "@/components/portfolio/attention-card";
+import { DashboardSkeleton } from "@/components/portfolio/dashboard-skeleton";
+import { ErrorBoundary } from "@/components/ui/error-boundary";
 import { toast } from "sonner";
 import type {
   DraftStatus,
   Holding,
   LivePrice,
+  OnboardingState,
   PortfolioSummary,
   Thesis,
-  HoldingPulse,
   PortfolioPulse,
   QuarterlyReviewCurrent,
   UpcomingEarnings,
 } from "@/types";
 
-// ── Data fetching ──────────────────────────────────────────────────────────
-
-type DashboardData = {
-  holdings: Holding[];
-  summary: PortfolioSummary;
-  currentTheses: Thesis[];
-  pulse: PortfolioPulse;
-  upcomingEarnings: UpcomingEarnings[];
-  quarterlyReview: QuarterlyReviewCurrent | null;
-  draftStatus: DraftStatus | null;
-};
-
-async function fetchDashboardData(): Promise<DashboardData> {
-  const [holdings, summary, currentTheses, pulse, upcomingEarnings, quarterlyReview, draftStatus] =
-    await Promise.all([
-      api.get<Holding[]>("/api/portfolio/holdings"),
-      api.get<PortfolioSummary>("/api/portfolio/summary"),
-      api.get<Thesis[]>("/api/theses/current"),
-      api.get<PortfolioPulse>("/api/portfolio/pulse"),
-      api.get<UpcomingEarnings[]>("/api/portfolio/upcoming-earnings").catch(() => []),
-      api.get<QuarterlyReviewCurrent>("/api/quarterly-review/current").catch(() => null),
-      api.get<DraftStatus>("/api/portfolio/draft-status").catch(() => null),
-    ]);
-  return { holdings, summary, currentTheses, pulse, upcomingEarnings, quarterlyReview, draftStatus };
-}
-
-// ── Position card ──────────────────────────────────────────────────────────
-
-const PULSE_DOT: Record<string, string> = {
-  intact: "bg-emerald-500",
-  watch: "bg-amber-400",
-  review: "bg-red-500",
-};
-
-const PULSE_RING: Record<string, string> = {
-  review: "ring-1 ring-red-200",
-  watch: "ring-1 ring-amber-200",
-};
-
-function cleanTicker(ticker: string) {
-  return ticker.replace(/_US_EQ$/, "").replace(/_EQ$/, "");
-}
-
-interface PositionCardProps {
-  holding: Holding;
-  thesis?: Thesis;
-  pulse?: HoldingPulse;
-  earnings?: UpcomingEarnings;
-  livePrice?: LivePrice;
-  totalValue: number;
-  onGenerateDraft?: () => void;
-  index: number;
-}
-
-function PositionCard({ holding, thesis, pulse, earnings, livePrice, totalValue, onGenerateDraft, index }: PositionCardProps) {
-  const value = livePrice?.current_value ?? holding.current_value ?? 0;
-  const cost = holding.quantity * holding.average_cost_basis;
-  const pnl = value - cost;
-  const pnlPct = cost > 0 ? (pnl / cost) * 100 : 0;
-  const allocationPct = totalValue > 0 ? (value / totalValue) * 100 : 0;
-
-  const pulseStatus = pulse?.pulse_status ?? (thesis ? "intact" : null);
-  const dotColor = pulseStatus ? (PULSE_DOT[pulseStatus] ?? "bg-border") : "bg-border";
-  const ringClass = pulseStatus ? (PULSE_RING[pulseStatus] ?? "") : "";
-
-  return (
-    <motion.div
-      className="h-full"
-      initial={{ opacity: 0, y: 6 }}
-      animate={{ opacity: 1, y: 0 }}
-      transition={{ duration: 0.3, delay: index * 0.04, ease: "easeOut" }}
-    >
-      <Link href={`/dashboard/positions/${holding.ticker}`} className="block h-full">
-        <div
-          className={`h-full group relative flex flex-col gap-3 border border-border bg-card p-4 transition-all duration-150 hover:border-foreground/20 hover:shadow-md cursor-pointer ${ringClass}`}
-        >
-          {/* Allocation bar — top edge */}
-          <div className="absolute top-0 left-0 right-0 h-[3px] bg-border overflow-hidden">
-            <motion.div
-              className="h-full bg-primary"
-              initial={{ width: 0 }}
-              animate={{ width: `${Math.min(allocationPct * 4, 100)}%` }}
-              transition={{ duration: 0.6, delay: index * 0.05 + 0.2, ease: "easeOut" }}
-            />
-          </div>
-
-          {/* Header row */}
-          <div className="flex items-start justify-between pt-1">
-            <div className="min-w-0">
-              <p className="font-mono text-[11px] font-semibold tracking-[0.2em] text-primary">
-                {cleanTicker(holding.ticker)}
-              </p>
-              <p className="font-sans text-[11px] text-muted-foreground mt-0.5 truncate max-w-[140px]">
-                {holding.name}
-              </p>
-            </div>
-            <div className="flex items-center gap-2 shrink-0">
-              {earnings && earnings.days_until <= 5 && (
-                <span className="font-mono text-[8px] uppercase tracking-[0.12em] text-violet-600 border border-violet-200 px-1 py-px">
-                  {earnings.days_until === 0 ? "today" : earnings.days_until === 1 ? "tmrw" : `${earnings.days_until}d`}
-                </span>
-              )}
-              <span className={`h-2 w-2 rounded-full flex-shrink-0 ${dotColor}`} />
-            </div>
-          </div>
-
-          {/* Value + P&L */}
-          <div>
-            <p className="font-mono text-[1.05rem] tabular-nums text-foreground font-medium leading-tight">
-              {formatCurrency(value)}
-            </p>
-            <p className={`font-mono text-[11px] tabular-nums mt-0.5 ${pnl >= 0 ? "text-emerald-700" : "text-red-600"}`}>
-              {pnl >= 0 ? "+" : ""}{formatCurrency(pnl)}{" "}
-              <span className="opacity-70">({formatPercent(pnlPct)})</span>
-            </p>
-          </div>
-
-          {/* Allocation % with bar */}
-          <div className="space-y-1">
-            <div className="flex items-center justify-between">
-              <span className="font-mono text-[9px] uppercase tracking-[0.15em] text-muted-foreground/60">
-                Portfolio weight
-              </span>
-              <span className="font-mono text-[10px] text-muted-foreground">
-                {allocationPct.toFixed(1)}%
-              </span>
-            </div>
-            <div className="h-px bg-border overflow-hidden">
-              <motion.div
-                className="h-full bg-foreground/20"
-                initial={{ width: 0 }}
-                animate={{ width: `${Math.min(allocationPct * 4, 100)}%` }}
-                transition={{ duration: 0.5, delay: index * 0.05 + 0.25, ease: "easeOut" }}
-              />
-            </div>
-          </div>
-
-          {/* Spacer — pushes thesis/CTA flush to bottom */}
-          <div className="flex-1" />
-
-          {/* Thesis snippet or CTA */}
-          {thesis?.why_own_it ? (
-            <p className="font-sans text-[11px] italic text-muted-foreground leading-relaxed line-clamp-2 border-t border-border/60 pt-2.5">
-              {thesis.why_own_it}
-            </p>
-          ) : (
-            <button
-              onClick={(e) => { e.preventDefault(); e.stopPropagation(); onGenerateDraft?.(); }}
-              className="font-mono text-[9px] uppercase tracking-[0.15em] text-muted-foreground/50 hover:text-primary transition-colors border-t border-border/60 pt-2.5 text-left"
-            >
-              + Draft thesis with AI
-            </button>
-          )}
-        </div>
-      </Link>
-    </motion.div>
-  );
-}
-
-// ── Attention card ─────────────────────────────────────────────────────────
-
-interface AttentionCardProps {
-  holding: Holding;
-  pulse: HoldingPulse;
-  index: number;
-}
-
-function AttentionCard({ holding, pulse, index }: AttentionCardProps) {
-  const isReview = pulse.pulse_status === "review";
-  return (
-    <motion.div
-      initial={{ opacity: 0, x: -8 }}
-      animate={{ opacity: 1, x: 0 }}
-      transition={{ duration: 0.25, delay: index * 0.06 }}
-    >
-      <Link href={`/dashboard/positions/${holding.ticker}`}>
-        <div className={`w-56 shrink-0 border bg-card p-4 space-y-2 transition-all hover:shadow-md cursor-pointer ${
-          isReview
-            ? "border-l-2 border-l-red-500 border-border hover:border-l-red-600"
-            : "border-l-2 border-l-amber-400 border-border hover:border-l-amber-500"
-        }`}>
-          <div className="flex items-center justify-between">
-            <span className="font-mono text-[11px] font-semibold tracking-[0.2em] text-primary">
-              {cleanTicker(holding.ticker)}
-            </span>
-            <span className={`font-mono text-[9px] uppercase tracking-[0.15em] ${isReview ? "text-red-600" : "text-amber-700"}`}>
-              {isReview ? "Review" : "Watch"}
-            </span>
-          </div>
-          <p className="font-sans text-[11px] text-foreground/80 leading-relaxed line-clamp-3">
-            {pulse.latest_event_summary ?? pulse.reason ?? "Monitoring event requires attention"}
-          </p>
-          {pulse.recent_event_count > 0 && (
-            <p className="font-mono text-[9px] text-muted-foreground/60">
-              {pulse.recent_event_count} recent event{pulse.recent_event_count !== 1 ? "s" : ""} →
-            </p>
-          )}
-        </div>
-      </Link>
-    </motion.div>
-  );
-}
+// Extracted PositionCard and AttentionCard to src/components/portfolio/
 
 // ── Dashboard ──────────────────────────────────────────────────────────────
 
 export default function DashboardPage() {
-  const [holdings, setHoldings] = useState<Holding[]>([]);
-  const [currentTheses, setCurrentTheses] = useState<Thesis[]>([]);
-  const [summary, setSummary] = useState<PortfolioSummary | null>(null);
-  const [pulse, setPulse] = useState<PortfolioPulse | null>(null);
-  const [quarterlyReview, setQuarterlyReview] = useState<QuarterlyReviewCurrent | null>(null);
-  const [upcomingEarnings, setUpcomingEarnings] = useState<UpcomingEarnings[]>([]);
-  const [draftStatus, setDraftStatus] = useState<DraftStatus | null>(null);
   const [draftBannerDismissed, setDraftBannerDismissed] = useState(false);
-  const [loading, setLoading] = useState(true);
-  const [loadError, setLoadError] = useState<string | null>(null);
   const [showAddForm, setShowAddForm] = useState(false);
-  const [livePrices, setLivePrices] = useState<Record<string, LivePrice>>({});
+  const [onboardingBannerVisible, setOnboardingBannerVisible] = useState(false);
 
-  const fetchLivePrices = async () => {
-    try {
-      const prices = await api.get<LivePrice[]>("/api/portfolio/live-prices");
-      setLivePrices(Object.fromEntries(prices.map((p) => [p.ticker, p])));
-    } catch {
-      // Silently ignore — fall back to DB values
-    }
+  // SWR queries
+  const { data: holdings, error: holdingsError, mutate: mutateHoldings } = useSWR<Holding[]>("/api/portfolio/holdings", fetcher);
+  const { data: summary, error: summaryError, mutate: mutateSummary } = useSWR<PortfolioSummary>("/api/portfolio/summary", fetcher);
+  const { data: currentTheses, error: thesesError, mutate: mutateTheses } = useSWR<Thesis[]>("/api/theses/current", fetcher);
+  const { data: pulse, error: pulseError, mutate: mutatePulse } = useSWR<PortfolioPulse>("/api/portfolio/pulse", fetcher);
+  const { data: upcomingEarnings = [] } = useSWR<UpcomingEarnings[]>("/api/portfolio/upcoming-earnings", fetcher, { fallbackData: [] });
+  const { data: quarterlyReview = null } = useSWR<QuarterlyReviewCurrent>("/api/quarterly-review/current", fetcher);
+  const { data: draftStatus = null, mutate: mutateDraftStatus } = useSWR<DraftStatus>("/api/portfolio/draft-status", fetcher);
+  const { data: onboardingState = null } = useSWR<OnboardingState>("/api/onboarding/state", fetcher);
+
+  // Live prices (updates in background every 60s)
+  const { data: livePricesRaw } = useSWR<LivePrice[]>("/api/portfolio/live-prices", fetcher, {
+    refreshInterval: 60_000,
+    revalidateOnFocus: true,
+  });
+
+  const livePrices = useMemo(() => {
+    if (!livePricesRaw) return {};
+    return Object.fromEntries(livePricesRaw.map((p) => [p.ticker, p]));
+  }, [livePricesRaw]);
+
+  const refresh = async () => {
+    await Promise.all([
+      mutateHoldings(),
+      mutateSummary(),
+      mutateTheses(),
+      mutatePulse(),
+      mutateDraftStatus(),
+    ]);
   };
-
-  const applyData = (data: DashboardData) => {
-    setHoldings(data.holdings);
-    setSummary(data.summary);
-    setCurrentTheses(data.currentTheses);
-    setPulse(data.pulse);
-    setUpcomingEarnings(data.upcomingEarnings);
-    setQuarterlyReview(data.quarterlyReview);
-    setDraftStatus(data.draftStatus);
-  };
-
-  const refresh = async ({ spinner = false }: { spinner?: boolean } = {}) => {
-    if (spinner) setLoading(true);
-    setLoadError(null);
-    try { applyData(await fetchDashboardData()); }
-    catch (err) { setLoadError(getErrorMessage(err, "Failed to load portfolio")); }
-    finally { setLoading(false); }
-  };
-
-  useEffect(() => {
-    let cancelled = false;
-    fetchDashboardData()
-      .then((data) => { if (!cancelled) { applyData(data); setLoadError(null); } })
-      .catch((err) => { if (!cancelled) setLoadError(getErrorMessage(err, "Failed to load portfolio")); })
-      .finally(() => {
-        if (!cancelled) {
-          setLoading(false);
-          void fetchLivePrices();
-        }
-      });
-    return () => { cancelled = true; };
-  }, []);
-
-  // Refresh live prices every 60 seconds while the tab is visible
-  useEffect(() => {
-    const interval = setInterval(() => {
-      if (!document.hidden) void fetchLivePrices();
-    }, 60_000);
-    return () => clearInterval(interval);
-  }, []);
 
   const handleGenerateDraft = async (holdingId: string, ticker: string) => {
     try {
@@ -312,54 +89,75 @@ export default function DashboardPage() {
   };
 
   // ── Derived state ─────────────────────────────────────────────────────
-  const thesesByHolding = Object.fromEntries(currentTheses.map((t) => [t.holding_id, t]));
+  const thesesByHolding = useMemo(() => {
+    if (!currentTheses) return {};
+    return Object.fromEntries(currentTheses.map((t) => [t.holding_id, t]));
+  }, [currentTheses]);
 
-  // Live portfolio total: sum current_value from live prices where available,
-  // fall back to DB value for holdings not yet refreshed.
   const hasLivePrices = Object.keys(livePrices).length > 0;
-  const liveTotalValue = hasLivePrices
-    ? holdings.reduce((sum, h) => sum + (livePrices[h.ticker]?.current_value ?? h.current_value ?? 0), 0)
-    : null;
+  const liveTotalValue = useMemo(() => {
+    if (!holdings || !hasLivePrices) return null;
+    return holdings.reduce((sum, h) => sum + (livePrices[h.ticker]?.current_value ?? h.current_value ?? 0), 0);
+  }, [holdings, livePrices, hasLivePrices]);
+
   const displayTotalValue = liveTotalValue ?? summary?.total_value ?? 0;
   const livePnl = liveTotalValue != null && summary ? liveTotalValue - summary.total_cost : null;
   const livePnlPct = livePnl != null && summary && summary.total_cost > 0 ? (livePnl / summary.total_cost) * 100 : null;
-  const pulseByHolding = Object.fromEntries((pulse?.pulses ?? []).map((p) => [p.holding_id, p]));
-  const earningsByHolding = Object.fromEntries(upcomingEarnings.map((e) => [e.holding_id, e]));
+  
+  const pulseByHolding = useMemo(() => {
+    if (!pulse?.pulses) return {};
+    return Object.fromEntries(pulse.pulses.map((p) => [p.holding_id, p]));
+  }, [pulse]);
 
-  const needsAttention = (pulse?.pulses ?? []).filter(
-    (p) => p.pulse_status === "review" || p.pulse_status === "watch"
-  );
-  const reviewCount = needsAttention.filter((p) => p.pulse_status === "review").length;
+  const earningsByHolding = useMemo(() => {
+    if (!upcomingEarnings) return {};
+    return Object.fromEntries(upcomingEarnings.map((e) => [e.holding_id, e]));
+  }, [upcomingEarnings]);
+
+  // Attention = real monitoring signals only (watch/review from events), not "no thesis" bookkeeping
+  const needsAttention = useMemo(() => {
+    if (!pulse?.pulses) return [];
+    return pulse.pulses.filter(
+      (p) => (p.pulse_status === "review" || p.pulse_status === "watch") && p.has_thesis,
+    );
+  }, [pulse]);
+
+  const reviewCount = useMemo(() => {
+    return needsAttention.filter((p) => p.pulse_status === "review").length;
+  }, [needsAttention]);
+
   const missingThesisCount = summary?.theses_missing ?? 0;
 
-  // Sort: review first, then watch, then intact; within each group sort by value desc
-  const sortedHoldings = [...holdings].sort((a, b) => {
-    const pa = pulseByHolding[a.id]?.pulse_status ?? "intact";
-    const pb = pulseByHolding[b.id]?.pulse_status ?? "intact";
-    const order: Record<string, number> = { review: 0, watch: 1, intact: 2 };
-    const diff = (order[pa] ?? 2) - (order[pb] ?? 2);
-    if (diff !== 0) return diff;
-    return (b.current_value ?? 0) - (a.current_value ?? 0);
-  });
+  const sortedHoldings = useMemo(() => {
+    if (!holdings) return [];
+    return [...holdings].sort((a, b) => {
+      const pa = pulseByHolding[a.id]?.pulse_status ?? "intact";
+      const pb = pulseByHolding[b.id]?.pulse_status ?? "intact";
+      const order: Record<string, number> = { review: 0, watch: 1, intact: 2 };
+      const diff = (order[pa] ?? 2) - (order[pb] ?? 2);
+      if (diff !== 0) return diff;
+      return (b.current_value ?? 0) - (a.current_value ?? 0);
+    });
+  }, [holdings, pulseByHolding]);
 
-  // ── Loading ─────────────────────────────────────────────────────────
+  // Loading state
+  const loading = !holdings && !holdingsError;
+
   if (loading) {
-    return (
-      <div className="flex items-center justify-center min-h-[calc(100vh-54px)]">
-        <p className="font-mono text-[10px] uppercase tracking-[0.3em] text-muted-foreground animate-pulse">
-          Loading…
-        </p>
-      </div>
-    );
+    return <DashboardSkeleton />;
   }
 
-  // ── Error ────────────────────────────────────────────────────────────
-  if (loadError && holdings.length === 0) {
+  // Error state
+  const loadError = holdingsError || summaryError || thesesError || pulseError;
+
+  if (loadError && (!holdings || holdings.length === 0)) {
     return (
       <div className="flex flex-col items-center justify-center min-h-[calc(100vh-54px)] gap-4 text-center px-6">
-        <p className="font-sans text-sm text-muted-foreground">{loadError}</p>
+        <p className="font-sans text-sm text-muted-foreground">
+          {getErrorMessage(loadError, "Failed to load portfolio")}
+        </p>
         <button
-          onClick={() => void refresh({ spinner: true })}
+          onClick={() => void refresh()}
           className="font-mono text-[10px] uppercase tracking-[0.2em] text-primary border border-primary/30 px-4 py-2 hover:bg-primary/5 transition-colors"
         >
           Retry
@@ -368,8 +166,8 @@ export default function DashboardPage() {
     );
   }
 
-  // ── Empty state ──────────────────────────────────────────────────────
-  if (holdings.length === 0) {
+  // Empty state
+  if (!holdings || holdings.length === 0) {
     return (
       <div className="flex flex-col items-center justify-center min-h-[calc(100vh-54px)] gap-8 text-center px-6">
         <motion.div
@@ -379,11 +177,11 @@ export default function DashboardPage() {
           className="space-y-3 max-w-sm"
         >
           <div className="border-t-2 border-foreground pt-4">
-            <p className="font-display italic text-3xl text-foreground">Begin your ledger.</p>
+            <p className="font-display italic text-3xl text-foreground">Write it down.</p>
           </div>
           <div className="border-b-2 border-foreground" />
           <p className="font-sans text-sm text-muted-foreground leading-relaxed pt-1">
-            Import your holdings to start tracking your investment reasoning.
+            The market will test you. Add your positions below and write down exactly why you own them so you don&rsquo;t panic sell when things get tough.
           </p>
         </motion.div>
         <motion.div
@@ -499,16 +297,18 @@ export default function DashboardPage() {
 
       {/* ── Banners ─────────────────────────────────────────────────── */}
       <div className="px-8 pt-3 space-y-2 empty:hidden">
-        <OnboardingBanner />
+        <ErrorBoundary>
+          <OnboardingBanner onVisibilityChange={setOnboardingBannerVisible} />
+        </ErrorBoundary>
 
-        {draftStatus && draftStatus.ready > 0 && !draftBannerDismissed && (
+        {!onboardingBannerVisible && draftStatus && draftStatus.ready > 0 && !draftBannerDismissed && (
           <div className="flex items-center justify-between border border-primary/25 bg-primary/5 px-5 py-2.5">
             <div className="flex items-center gap-3">
               <span className="font-mono text-[8px] uppercase tracking-[0.2em] text-primary border border-primary/30 px-1.5 py-0.5">
                 New
               </span>
               <p className="font-sans text-sm text-foreground/80">
-                AI drafted {draftStatus.ready === 1 ? "a thesis" : `${draftStatus.ready} theses`} for your top position{draftStatus.ready > 1 ? "s" : ""}.
+                We found some notes to help articulate your conviction for {draftStatus.ready === 1 ? "1 position" : `${draftStatus.ready} positions`}.
               </p>
             </div>
             <div className="flex items-center gap-4 shrink-0 ml-4">
@@ -569,15 +369,17 @@ export default function DashboardPage() {
               </p>
               <span className="font-mono text-[9px] text-primary/60">({needsAttention.length})</span>
             </div>
-            <div className="flex gap-3 overflow-x-auto pb-1 scrollbar-hide">
-              {needsAttention.map((p, i) => {
-                const holding = holdings.find((h) => h.id === p.holding_id);
-                if (!holding) return null;
-                return (
-                  <AttentionCard key={p.holding_id} holding={holding} pulse={p} index={i} />
-                );
-              })}
-            </div>
+            <ErrorBoundary>
+              <div className="flex gap-3 overflow-x-auto pb-1 scrollbar-hide">
+                {needsAttention.map((p, i) => {
+                  const holding = holdings.find((h) => h.id === p.holding_id);
+                  if (!holding) return null;
+                  return (
+                    <AttentionCard key={p.holding_id} holding={holding} pulse={p} index={i} />
+                  );
+                })}
+              </div>
+            </ErrorBoundary>
           </motion.div>
         )}
       </AnimatePresence>
@@ -607,6 +409,7 @@ export default function DashboardPage() {
               livePrice={livePrices[h.ticker]}
               totalValue={summary?.total_value ?? 0}
               onGenerateDraft={() => handleGenerateDraft(h.id, h.ticker)}
+              investorProfile={onboardingState?.investor_profile ?? null}
               index={i}
             />
           ))}
@@ -615,29 +418,31 @@ export default function DashboardPage() {
 
       {/* ── Footer strip ─────────────────────────────────────────────── */}
       {(upcomingEarnings.length > 0) && (
-        <div className="border-t border-border bg-card px-8 py-3">
-          <div className="flex items-center gap-6 overflow-x-auto">
-            <p className="font-mono text-[9px] uppercase tracking-[0.25em] text-muted-foreground shrink-0">
-              Upcoming earnings
-            </p>
-            <div className="flex items-center gap-4">
-              {upcomingEarnings.slice(0, 6).map((e) => (
-                <Link
-                  key={e.holding_id}
-                  href={`/dashboard/positions/${e.ticker}`}
-                  className="flex items-center gap-2 group shrink-0"
-                >
-                  <span className="font-mono text-[10px] font-medium text-primary/70 group-hover:text-primary transition-colors">
-                    {cleanTicker(e.ticker)}
-                  </span>
-                  <span className="font-mono text-[9px] text-muted-foreground">
-                    {e.days_until === 0 ? "today" : e.days_until === 1 ? "tomorrow" : `${e.days_until}d`}
-                  </span>
-                </Link>
-              ))}
+        <ErrorBoundary>
+          <div className="border-t border-border bg-card px-8 py-3">
+            <div className="flex items-center gap-6 overflow-x-auto">
+              <p className="font-mono text-[9px] uppercase tracking-[0.25em] text-muted-foreground shrink-0">
+                Upcoming earnings
+              </p>
+              <div className="flex items-center gap-4">
+                {upcomingEarnings.slice(0, 6).map((e) => (
+                  <Link
+                    key={e.holding_id}
+                    href={`/dashboard/positions/${e.ticker}`}
+                    className="flex items-center gap-2 group shrink-0"
+                  >
+                    <span className="font-mono text-[10px] font-medium text-primary/70 group-hover:text-primary transition-colors">
+                      {cleanTicker(e.ticker)}
+                    </span>
+                    <span className="font-mono text-[9px] text-muted-foreground">
+                      {e.days_until === 0 ? "today" : e.days_until === 1 ? "tomorrow" : `${e.days_until}d`}
+                    </span>
+                  </Link>
+                ))}
+              </div>
             </div>
           </div>
-        </div>
+        </ErrorBoundary>
       )}
     </div>
   );

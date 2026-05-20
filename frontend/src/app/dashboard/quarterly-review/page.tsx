@@ -67,7 +67,7 @@ const RESPONSE_LABELS: Record<string, { label: string; color: string }> = {
 
 function LoadingSkeleton() {
   return (
-    <div className="min-h-[calc(100vh-53px)] bg-[#FAF7F2] flex items-center justify-center">
+    <div className="min-h-[calc(100vh-53px)] bg-background flex items-center justify-center">
       <p className="font-mono text-[10px] uppercase tracking-[0.3em] text-foreground/30 animate-pulse">
         Loading review…
       </p>
@@ -79,7 +79,7 @@ function LoadingSkeleton() {
 
 function EmptyState() {
   return (
-    <div className="min-h-[calc(100vh-53px)] bg-[#FAF7F2] flex items-center justify-center px-8">
+    <div className="min-h-[calc(100vh-53px)] bg-background flex items-center justify-center px-8">
       <div className="max-w-sm text-center space-y-6">
         <div className="space-y-2">
           <p className="font-mono text-[9px] uppercase tracking-[0.3em] text-foreground/40">
@@ -108,7 +108,7 @@ function EmptyState() {
 
 function CompletionState({ review }: { review: QuarterlyReviewCurrent }) {
   return (
-    <div className="min-h-[calc(100vh-53px)] bg-[#FAF7F2]">
+    <div className="min-h-[calc(100vh-53px)] bg-background">
       <div className="max-w-2xl mx-auto px-8 py-16 space-y-12">
         {/* Header */}
         <div className="space-y-3">
@@ -246,7 +246,7 @@ export default function QuarterlyReviewPage() {
 
   if (loadError) {
     return (
-      <div className="min-h-[calc(100vh-53px)] bg-[#FAF7F2] flex items-center justify-center px-8">
+      <div className="min-h-[calc(100vh-53px)] bg-background flex items-center justify-center px-8">
         <div className="text-center space-y-4">
           <p className="font-sans text-sm text-muted-foreground">{loadError}</p>
           <button
@@ -267,7 +267,7 @@ export default function QuarterlyReviewPage() {
   const progressPct = (review.completed_count / review.total_holdings) * 100;
 
   return (
-    <div className="min-h-[calc(100vh-53px)] bg-[#FAF7F2]">
+    <div className="min-h-[calc(100vh-53px)] bg-background">
       {/* Thin progress bar */}
       <div className="h-px bg-border/40 w-full">
         <motion.div

@@ -84,11 +84,10 @@ export default function ConnectPage() {
     try {
       const formData = new FormData();
       formData.append("file", csvFile);
-      const token = localStorage.getItem("access_token");
       const API_URL = process.env.NEXT_PUBLIC_API_URL || "http://localhost:8000";
       const res = await fetch(`${API_URL}/api/portfolio/upload-csv`, {
         method: "POST",
-        headers: token ? { Authorization: `Bearer ${token}` } : {},
+        credentials: "include",
         body: formData,
       });
       if (!res.ok) {

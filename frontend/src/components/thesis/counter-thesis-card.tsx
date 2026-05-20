@@ -33,10 +33,10 @@ export function CounterThesisCard({ thesisId }: { thesisId: string }) {
         <CardContent className="flex items-center justify-between py-4">
           <div>
             <p className="text-sm font-medium">Devil&apos;s Advocate</p>
-            <p className="text-xs text-muted-foreground">Generate a bear case to stress-test your thesis.</p>
+            <p className="text-xs text-muted-foreground">Generate a bear case to stress-test your reason.</p>
           </div>
           <Button variant="outline" size="sm" onClick={generate}>
-            Challenge thesis
+            Challenge reason
           </Button>
         </CardContent>
       </Card>

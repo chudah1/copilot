@@ -441,6 +441,7 @@ export interface OnboardingState {
   wizard_skipped_at: string | null;
   wizard_completed_at: string | null;
   reasons_written_count: number;
+  investor_profile: "thesis_driven" | "hearsay_driven" | null;
 }
 
 export interface DraftItem {
@@ -483,6 +484,7 @@ export interface HoldingContext {
 
 export interface SynthesisRequest {
   holding_id: string;
+  investor_profile: "thesis_driven" | "hearsay_driven" | null;
   question1: string;
   answer1: string;
   question2: string;
@@ -495,4 +497,24 @@ export interface SynthesisResponse {
   must_remain_true: string;
   what_would_change_my_mind: string;
   ai_summary: string;
+}
+
+export interface ClaimVerdict {
+  claim_id: string;
+  claim_text: string;
+  verdict: "holds" | "watch" | "broken" | "unclear";
+  explanation: string;
+  evidence: string | null;
+}
+
+export interface EarningsReviewResult {
+  thesis_id: string;
+  ticker: string;
+  verdicts: ClaimVerdict[];
+  overall_assessment: "thesis_intact" | "watch" | "thesis_challenged";
+  summary: string;
+  fiscal_quarter: string | null;
+  earnings_surprise_pct: number | null;
+  log_entry_id: string;
+  reviewed_at: string;
 }

@@ -754,7 +754,10 @@ async def portfolio_summary(
             holdings_count=len(holdings),
         )
         db.add(snap)
-        await db.commit()
+        try:
+            await db.commit()
+        except Exception:
+            await db.rollback()
 
     return PortfolioSummary(
         total_value=total_value,

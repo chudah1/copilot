@@ -38,7 +38,7 @@ export default function RegisterPage() {
       <Card className="w-full max-w-md">
         <CardHeader>
           <CardTitle>Create account</CardTitle>
-          <CardDescription>Start investing intentionally</CardDescription>
+          <CardDescription>Stop second-guessing your trades.</CardDescription>
         </CardHeader>
         <CardContent>
           <form onSubmit={handleSubmit} className="space-y-4">

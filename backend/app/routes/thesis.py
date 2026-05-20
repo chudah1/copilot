@@ -18,6 +18,7 @@ from app.models.user import User
 from app.schemas.thesis import (
     AssistThesisRequest,
     AssistThesisResponse,
+    ClaimVerdictResponse,
     ConfirmDecompositionRequest,
     CounterThesisResponse,
     CreateThesisRequest,
@@ -25,6 +26,7 @@ from app.schemas.thesis import (
     DebugDecomposeResponse,
     DraftThesisRequest,
     DraftThesisResponse,
+    EarningsReviewResponse,
     HealthCheckResponse,
     InvalidateThesisRequest,
     ThesisDecompositionEnvelopeResponse,
@@ -34,6 +36,7 @@ from app.schemas.thesis import (
 )
 from app.services.ai_thesis import assist_thesis, generate_counter_thesis, generate_initial_draft
 from app.services.conviction_log import (
+    POST_EARNINGS_REVIEW,
     REASON_CREATED,
     REASON_INVALIDATED,
     REASON_UPDATED,
@@ -552,4 +555,108 @@ async def counter_thesis(
         blind_spots=output.blind_spots,
         suggested_additions=output.suggested_additions,
         generated_at=datetime.now(timezone.utc),
+    )
+
+
+@router.post("/{thesis_id}/earnings-review", response_model=EarningsReviewResponse)
+async def earnings_review(
+    thesis_id: uuid.UUID,
+    current_user: User = Depends(get_current_user),
+    db: AsyncSession = Depends(get_db),
+):
+    from app.models.thesis_decomposition import ThesisDecomposition
+    from app.services.earnings_review import run_earnings_review
+    from app.services.market_data import fetch_company_data
+
+    result = await db.execute(
+        select(Thesis)
+        .where(
+            Thesis.id == thesis_id,
+            Thesis.user_id == current_user.id,
+        )
+        .options(selectinload(Thesis.holding))
+    )
+    thesis = result.scalar_one_or_none()
+    if thesis is None:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Thesis not found")
+    if thesis.holding is None:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Holding not found")
+
+    # Load latest confirmed decomposition claims
+    decomp_result = await db.execute(
+        select(ThesisDecomposition)
+        .where(
+            ThesisDecomposition.thesis_id == thesis_id,
+            ThesisDecomposition.status.in_(["confirmed", "partially_confirmed", "draft"]),
+        )
+        .options(selectinload(ThesisDecomposition.claims))
+        .order_by(ThesisDecomposition.version.desc())
+        .limit(1)
+    )
+    decomp = decomp_result.scalar_one_or_none()
+    claims = [
+        {"id": str(c.id), "claim_text": c.claim_text}
+        for c in (decomp.claims if decomp else [])
+    ]
+
+    ticker = thesis.holding.ticker
+    company_data = await fetch_company_data(ticker)
+
+    review = await run_earnings_review(
+        ticker=ticker,
+        name=thesis.holding.name,
+        why_own_it=thesis.why_own_it,
+        must_remain_true=thesis.must_remain_true,
+        what_would_change_my_mind=thesis.what_would_change_my_mind,
+        claims=claims,
+        company_data=company_data,
+    )
+
+    # Persist to conviction log
+    metadata = {
+        "overall_assessment": review.overall_assessment,
+        "fiscal_quarter": review.fiscal_quarter,
+        "earnings_surprise_pct": review.earnings_surprise_pct,
+        "verdicts": [
+            {
+                "claim_id": v.claim_id,
+                "verdict": v.verdict,
+                "evidence": v.evidence,
+            }
+            for v in review.verdicts
+        ],
+    }
+    log_entry = append_log_entry(
+        db,
+        thesis_id=thesis.id,
+        holding_id=thesis.holding_id,
+        user_id=current_user.id,
+        entry_type=POST_EARNINGS_REVIEW,
+        content=review.summary,
+        metadata=metadata,
+    )
+    await db.flush()
+    await db.commit()
+    await db.refresh(log_entry)
+
+    reviewed_at = datetime.now(timezone.utc)
+    return EarningsReviewResponse(
+        thesis_id=thesis.id,
+        ticker=ticker,
+        verdicts=[
+            ClaimVerdictResponse(
+                claim_id=v.claim_id,
+                claim_text=v.claim_text,
+                verdict=v.verdict,
+                explanation=v.explanation,
+                evidence=v.evidence,
+            )
+            for v in review.verdicts
+        ],
+        overall_assessment=review.overall_assessment,
+        summary=review.summary,
+        fiscal_quarter=review.fiscal_quarter,
+        earnings_surprise_pct=review.earnings_surprise_pct,
+        log_entry_id=log_entry.id,
+        reviewed_at=reviewed_at,
     )
