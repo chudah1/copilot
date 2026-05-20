@@ -42,7 +42,7 @@ class AnthropicReasoningProvider:
             client = anthropic.AsyncAnthropic(api_key=settings.anthropic_api_key)
             async with client.messages.stream(
                 model=self.model,
-                max_tokens=6000,
+                max_tokens=8000,
                 tools=[
                     {
                         "name": "record_thesis_decomposition",
@@ -57,6 +57,12 @@ class AnthropicReasoningProvider:
                 timeout=self.timeout_seconds,
             ) as stream:
                 response = await stream.get_final_message()
+            logger.info(
+                "Anthropic decomposition usage — input: %s, output: %s, stop_reason: %s",
+                getattr(response.usage, "input_tokens", "?"),
+                getattr(response.usage, "output_tokens", "?"),
+                response.stop_reason,
+            )
             if response.stop_reason == "max_tokens":
                 logger.warning("Anthropic hit max_tokens during decomposition — output may be truncated")
             raw = None

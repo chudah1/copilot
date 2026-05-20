@@ -164,7 +164,7 @@ DECOMPOSITION_JSON_SCHEMA = {
 
 DECOMPOSITION_SYSTEM_PROMPT = """You decompose an investor's reason for owning a holding into monitorable claims, entities, and signals.
 
-Return only schema-conforming JSON (no extra keys, no prose).
+Return only schema-conforming JSON (no extra keys, no prose). Be concise: keep every rationale field under 20 words, signal_label under 8 words.
 
 Rules:
 - If the reason contains any investment rationale (even one sentence with a measurable premise), extract at least one claim. Zero claims is only acceptable if the entire text is purely descriptive with zero investment intent (e.g. "they make phones").
@@ -174,6 +174,7 @@ Rules:
 - Do not assume proxy entities unless there is a plausible causal relationship.
 - Mark speculative mappings with lower confidence and confirmation_required=true.
 - Entities and signals within a claim may be empty arrays if the claim is too vague to generate them, but the claim itself must still be captured.
+- Limit to the 3 most important claims, 3 entities per claim, 3 signals per entity. Quality over quantity.
 """
 
 DECOMPOSITION_USER_PROMPT = """Holding
