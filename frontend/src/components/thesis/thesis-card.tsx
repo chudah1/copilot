@@ -1,57 +1,61 @@
 "use client";
 
-import { Badge } from "@/components/ui/badge";
-import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { formatDate } from "@/lib/utils";
-import type { Thesis } from "@/types";
+import type { Thesis, ThesisDecomposition } from "@/types";
 
 interface Props {
   thesis: Thesis;
+  decomposition?: ThesisDecomposition | null;
   onEdit: () => void;
   onInvalidate: () => void;
 }
 
-const statusColors: Record<string, string> = {
-  draft: "bg-muted text-muted-foreground",
-  active: "bg-emerald-500/15 text-emerald-700",
-  needs_review: "bg-orange-500/15 text-orange-600",
-  invalidated: "bg-red-500/15 text-red-600",
+// ── Colour maps ───────────────────────────────────────────────────────────────
+
+const STATUS_DOT: Record<string, string> = {
+  draft: "bg-muted-foreground/40",
+  active: "bg-emerald-500",
+  needs_review: "bg-orange-500",
+  invalidated: "bg-red-500",
 };
 
-const convictionColors: Record<string, string> = {
-  high: "bg-emerald-500/15 text-emerald-700",
-  medium: "bg-amber-500/15 text-amber-700",
-  low: "bg-red-500/15 text-red-600",
+const STATUS_TEXT: Record<string, string> = {
+  draft: "text-muted-foreground",
+  active: "text-emerald-700",
+  needs_review: "text-orange-600",
+  invalidated: "text-red-600",
 };
 
-const monitorabilityColors: Record<string, string> = {
-  high: "bg-emerald-500/15 text-emerald-700",
-  medium: "bg-sky-500/15 text-sky-700",
-  low: "bg-muted text-muted-foreground",
+const CONFIDENCE_TEXT: Record<string, string> = {
+  high: "text-emerald-700",
+  medium: "text-amber-700",
+  low: "text-red-600",
 };
 
-function getInterpretation(thesis: Thesis) {
-  const interpretation = thesis.interpretation ?? {};
-  const labels = Array.isArray(interpretation.labels)
-    ? interpretation.labels.filter((label): label is string => typeof label === "string" && label.length > 0)
-    : [];
-  const watchHints = Array.isArray(interpretation.watch_hints)
-    ? interpretation.watch_hints.filter((hint): hint is Record<string, unknown> => typeof hint === "object" && hint !== null)
-    : [];
-  const monitorability = typeof interpretation.monitorability === "string" ? interpretation.monitorability : null;
-  const ambiguityNote = typeof interpretation.ambiguity_note === "string" ? interpretation.ambiguity_note : "";
+const MONITORABILITY_DOT: Record<string, string> = {
+  high: "bg-emerald-500",
+  medium: "bg-amber-400",
+  low: "bg-red-500",
+};
 
-  return { labels, watchHints, monitorability, ambiguityNote };
-}
+const MONITORABILITY_TEXT: Record<string, string> = {
+  high: "text-emerald-700",
+  medium: "text-amber-700",
+  low: "text-red-600",
+};
+
+// ── Helpers ───────────────────────────────────────────────────────────────────
 
 const METRIC_LABELS: Record<string, string> = {
   revenue_growth_yoy: "Revenue growth (YoY)",
   earnings_growth_yoy: "Earnings growth (YoY)",
   pe_ratio: "P/E ratio",
   dividend_yield: "Dividend yield",
+  gross_margin: "Gross margin",
+  operating_margin: "Operating margin",
 };
 
-function describeWatchHint(hint: Record<string, unknown>) {
+function describeWatchHint(hint: Record<string, unknown>): string | null {
   if (hint.kind === "price_move_pct" && typeof hint.threshold === "number") {
     return `Review if price moves ${hint.threshold}% or more.`;
   }
@@ -62,133 +66,275 @@ function describeWatchHint(hint: Record<string, unknown>) {
     typeof hint.threshold === "number"
   ) {
     const label = METRIC_LABELS[hint.metric] ?? hint.metric.replaceAll("_", " ");
-    return `${label} should stay ${hint.operator} ${hint.threshold}.`;
+    return `${label} stays ${hint.operator} ${hint.threshold}.`;
   }
   return null;
 }
 
-export function ThesisCard({ thesis, onEdit, onInvalidate }: Props) {
-  const { labels, watchHints, monitorability, ambiguityNote } = getInterpretation(thesis);
-  const watchDescriptions = watchHints
-    .map((hint) => describeWatchHint(hint))
-    .filter((description): description is string => Boolean(description));
+function formatThresholdValue(metric: string, threshold: number): string {
+  if (["revenue_growth_yoy", "earnings_growth_yoy", "dividend_yield"].includes(metric)) {
+    const pct = Math.abs(threshold) <= 1 ? threshold * 100 : threshold;
+    return `${pct}%`;
+  }
+  return `${threshold}`;
+}
 
-  return (
-    <Card>
-      <CardHeader className="gap-3">
-        <div className="flex flex-wrap items-start justify-between gap-3">
-          <div className="space-y-2">
-            <div className="flex flex-wrap items-center gap-2">
-              <CardTitle className="text-base">Current thesis</CardTitle>
-              <Badge className={statusColors[thesis.status]}>{thesis.status.replace("_", " ")}</Badge>
-              <Badge className={convictionColors[thesis.confidence]}>{thesis.confidence} confidence</Badge>
-              <Badge variant="outline">{thesis.source === "ai_assisted" ? "AI assisted" : "User authored"}</Badge>
-            </div>
-            <CardDescription>
-              This is the working reason for owning the position. Keep it tight enough that a future version of you can tell when it broke.
-            </CardDescription>
-          </div>
-          <div className="flex gap-3 text-sm">
-            <button onClick={onEdit} className="text-primary/80 hover:text-primary transition-colors">
-              Edit
-            </button>
-            {thesis.status !== "invalidated" && (
-              <button onClick={onInvalidate} className="text-red-600/70 hover:text-red-600 transition-colors">
-                Invalidate
-              </button>
-            )}
-          </div>
-        </div>
-      </CardHeader>
-      <CardContent className="space-y-4">
-        <div className="grid gap-3 md:grid-cols-3">
-          <ThesisBlock
-            label="Own it because"
-            text={thesis.why_own_it}
-            tone="bg-background"
-          />
-          <ThesisBlock
-            label="Still true if"
-            text={thesis.must_remain_true ?? "You have not defined the condition that must remain true yet."}
-            tone={thesis.must_remain_true ? "bg-background" : "bg-amber-500/8"}
-          />
-          <ThesisBlock
-            label="Breaks if"
-            text={thesis.what_would_change_my_mind ?? "You have not written the exit condition yet."}
-            tone={thesis.what_would_change_my_mind ? "bg-background" : "bg-red-500/8"}
-          />
-        </div>
+function describeSignalCheckLogic(signalType: string, config: Record<string, unknown> | null): string | null {
+  const c = config ?? {};
+  if (signalType === "price_move") {
+    const t = typeof c.threshold_pct === "number" ? c.threshold_pct : null;
+    return t != null ? `Flags if the stock moves ${t}% or more.` : "Flags on a sharp price move.";
+  }
+  if (signalType === "revenue_growth" || signalType === "earnings_growth") {
+    const threshold = typeof c.threshold === "number" ? c.threshold : null;
+    const operator = typeof c.operator === "string" ? c.operator : ">=";
+    const label = signalType === "revenue_growth" ? "revenue growth" : "earnings growth";
+    if (threshold == null || (threshold === 0 && operator === ">=")) {
+      return `Flags when ${label} turns negative YoY.`;
+    }
+    const fmt = formatThresholdValue(
+      signalType === "revenue_growth" ? "revenue_growth_yoy" : "earnings_growth_yoy",
+      threshold,
+    );
+    if (operator === ">=" || operator === ">") return `Flags when ${label} falls below ${fmt} YoY.`;
+    if (operator === "<=" || operator === "<") return `Flags when ${label} rises above ${fmt} YoY.`;
+  }
+  if (signalType === "guidance_change") return "Watches guidance for meaningful deterioration.";
+  if (signalType === "earnings_surprise") return "Watches for a material miss versus expectations.";
+  if (signalType === "dividend_change") return "Watches for a dividend cut or payout policy change.";
+  return null;
+}
 
-        {(monitorability || labels.length > 0 || watchHints.length > 0 || ambiguityNote) && (
-          <div className="rounded-xl border bg-muted/30 p-4">
-            <div className="flex flex-wrap items-center justify-between gap-3">
-              <div className="flex flex-wrap items-center gap-2">
-                {monitorability && (
-                  <Badge className={monitorabilityColors[monitorability] ?? monitorabilityColors.low}>
-                    {monitorability} monitorability
-                  </Badge>
-                )}
-                {labels.map((label) => (
-                  <Badge key={label} variant="outline">
-                    {label}
-                  </Badge>
-                ))}
-              </div>
-              <p className="text-xs text-muted-foreground">
-                Updated {formatDate(thesis.updated_at)}
-              </p>
-            </div>
-
-            {watchDescriptions.length > 0 && (
-              <div className="mt-3">
-                <p className="text-sm font-medium text-muted-foreground">What the app is watching</p>
-                <div className="mt-2 grid gap-2 md:grid-cols-2">
-                  {watchDescriptions.map((description, index) => (
-                    <div key={`${description}-${index}`} className="rounded-lg border bg-background/80 p-3">
-                      <p className="text-sm text-muted-foreground">{description}</p>
-                    </div>
-                  ))}
-                </div>
-              </div>
-            )}
-
-            {ambiguityNote && (
-              <div className="mt-3 rounded-lg bg-background/80 p-3">
-                <p className="text-sm font-medium text-muted-foreground">Ambiguity</p>
-                <p className="mt-1 text-sm text-muted-foreground">{ambiguityNote}</p>
-              </div>
-            )}
-          </div>
-        )}
-
-        {thesis.ai_summary && (
-          <div className="rounded-lg border border-dashed p-3">
-            <p className="text-xs font-medium uppercase tracking-wide text-muted-foreground">Summary</p>
-            <p className="mt-1 text-sm text-muted-foreground">{thesis.ai_summary}</p>
-          </div>
-        )}
-
-        <p className="text-xs text-muted-foreground">
-          Created {formatDate(thesis.created_at)} · Last reviewed {formatDate(thesis.updated_at)}
-        </p>
-      </CardContent>
-    </Card>
+function getActiveSignals(decomposition: ThesisDecomposition | null | undefined) {
+  if (!decomposition) return [];
+  return decomposition.claims.flatMap((claim) =>
+    claim.entities.flatMap((entity) =>
+      entity.signals
+        .filter((s) => s.active || s.user_confirmed === true)
+        .map((s) => ({
+          id: s.id,
+          label: s.signal_label ?? s.signal_type.replaceAll("_", " "),
+          rationale: s.rationale,
+          entityName: entity.entity_name,
+          entityTicker: entity.entity_ticker,
+          checkLogic: describeSignalCheckLogic(s.signal_type, s.signal_config_json),
+        })),
+    ),
   );
 }
 
-function ThesisBlock({
-  label,
-  text,
-  tone,
-}: {
-  label: string;
-  text: string;
-  tone: string;
-}) {
+function getInterpretation(thesis: Thesis) {
+  const interp = thesis.interpretation ?? {};
+  const labels = Array.isArray(interp.labels)
+    ? interp.labels.filter((l): l is string => typeof l === "string" && l.length > 0)
+    : [];
+  const watchHints = Array.isArray(interp.watch_hints)
+    ? interp.watch_hints.filter((h): h is Record<string, unknown> => typeof h === "object" && h !== null)
+    : [];
+  const monitorability = typeof interp.monitorability === "string" ? interp.monitorability : null;
+  const ambiguityNote = typeof interp.ambiguity_note === "string" ? interp.ambiguity_note : "";
+  return { labels, watchHints, monitorability, ambiguityNote };
+}
+
+// ── Component ─────────────────────────────────────────────────────────────────
+
+export function ThesisCard({ thesis, decomposition, onEdit, onInvalidate }: Props) {
+  const { labels, watchHints, monitorability, ambiguityNote } = getInterpretation(thesis);
+  const watchDescriptions = watchHints
+    .map(describeWatchHint)
+    .filter((d): d is string => Boolean(d));
+  const activeSignals = getActiveSignals(decomposition);
+
   return (
-    <div className={`rounded-xl border p-4 ${tone}`}>
-      <p className="text-xs font-medium uppercase tracking-wide text-muted-foreground">{label}</p>
-      <p className="mt-2 text-sm leading-6">{text}</p>
+    <div className="border border-border bg-card divide-y divide-border/40">
+
+      {/* ── Header: status strip + actions ── */}
+      <div className="flex items-center justify-between px-5 py-3 gap-4 flex-wrap">
+        <div className="flex items-center gap-3 flex-wrap min-w-0">
+          {/* Status */}
+          <div className="flex items-center gap-1.5 shrink-0">
+            <span className={`h-1.5 w-1.5 rounded-full ${STATUS_DOT[thesis.status] ?? "bg-border"}`} />
+            <span className={`font-mono text-[10px] uppercase tracking-[0.2em] ${STATUS_TEXT[thesis.status] ?? "text-muted-foreground"}`}>
+              {thesis.status.replace("_", " ")}
+            </span>
+          </div>
+
+          <span className="text-border/60 text-xs">·</span>
+
+          {/* Confidence */}
+          <span className={`font-mono text-[10px] uppercase tracking-[0.12em] ${CONFIDENCE_TEXT[thesis.confidence] ?? "text-muted-foreground"}`}>
+            {thesis.confidence} confidence
+          </span>
+
+          <span className="text-border/60 text-xs">·</span>
+
+          {/* Source */}
+          <span className="font-mono text-[9px] uppercase tracking-[0.1em] text-muted-foreground/50">
+            {thesis.source === "ai_assisted" ? "AI assisted" : "Authored"}
+          </span>
+
+          {/* Monitorability */}
+          {monitorability && (
+            <>
+              <span className="text-border/60 text-xs">·</span>
+              <div className="flex items-center gap-1.5">
+                <span className={`h-1.5 w-1.5 rounded-full ${MONITORABILITY_DOT[monitorability] ?? "bg-border"}`} />
+                <span className={`font-mono text-[9px] uppercase tracking-[0.12em] ${MONITORABILITY_TEXT[monitorability] ?? "text-muted-foreground"}`}>
+                  {monitorability} monitorability
+                </span>
+              </div>
+            </>
+          )}
+        </div>
+
+        {/* Actions */}
+        <div className="flex items-center gap-4 shrink-0">
+          <button
+            onClick={onEdit}
+            className="font-mono text-[10px] uppercase tracking-[0.15em] text-primary/60 hover:text-primary transition-colors"
+          >
+            Edit
+          </button>
+          {thesis.status !== "invalidated" && (
+            <button
+              onClick={onInvalidate}
+              className="font-mono text-[10px] uppercase tracking-[0.15em] text-red-500/40 hover:text-red-600 transition-colors"
+            >
+              Invalidate
+            </button>
+          )}
+        </div>
+      </div>
+
+      {/* ── Bull case — hero ── */}
+      <div className="px-5 py-6">
+        <p className="font-mono text-[9px] uppercase tracking-[0.3em] text-muted-foreground mb-3">
+          Own it because
+        </p>
+        <p className="font-display italic text-[1.2rem] leading-relaxed text-foreground max-w-prose">
+          {thesis.why_own_it}
+        </p>
+
+        {/* Thesis labels */}
+        {labels.length > 0 && (
+          <div className="flex flex-wrap gap-1.5 mt-4">
+            {labels.map((label) => (
+              <span
+                key={label}
+                className="font-mono text-[8px] uppercase tracking-[0.12em] text-muted-foreground/70 border border-border/50 px-1.5 py-0.5"
+              >
+                {label}
+              </span>
+            ))}
+          </div>
+        )}
+      </div>
+
+      {/* ── Must remain true + Exit trigger ── */}
+      <div className="grid md:grid-cols-2 divide-y md:divide-y-0 md:divide-x divide-border/40">
+        {/* Must remain true */}
+        <div className={`relative px-5 py-5 border-l-2 ${thesis.must_remain_true ? "border-l-emerald-500/35" : "border-l-amber-400/35"}`}>
+          <p className="font-mono text-[9px] uppercase tracking-[0.25em] text-muted-foreground mb-2">
+            Still true if
+          </p>
+          {thesis.must_remain_true ? (
+            <p className="font-sans text-sm leading-relaxed text-foreground/80">
+              {thesis.must_remain_true}
+            </p>
+          ) : (
+            <p className="font-sans text-sm leading-relaxed text-muted-foreground/60 italic">
+              Not defined — write the condition that must remain true.
+            </p>
+          )}
+        </div>
+
+        {/* Exit trigger */}
+        <div className={`relative px-5 py-5 border-l-2 md:border-l-0 ${thesis.what_would_change_my_mind ? "border-l-red-500/30" : "border-l-border/30"}`}>
+          <p className="font-mono text-[9px] uppercase tracking-[0.25em] text-muted-foreground mb-2">
+            Breaks if
+          </p>
+          {thesis.what_would_change_my_mind ? (
+            <p className="font-sans text-sm leading-relaxed text-foreground/80">
+              {thesis.what_would_change_my_mind}
+            </p>
+          ) : (
+            <p className="font-sans text-sm leading-relaxed text-muted-foreground/60 italic">
+              Not defined — write the event that would make you rethink this.
+            </p>
+          )}
+        </div>
+      </div>
+
+      {/* ── Active signals or watch hints ── */}
+      {(activeSignals.length > 0 || watchDescriptions.length > 0) && (
+        <div className="px-5 py-4 space-y-3">
+          <p className="font-mono text-[9px] uppercase tracking-[0.3em] text-muted-foreground">
+            {activeSignals.length > 0 ? "Active signals" : "Watching for"}
+          </p>
+
+          <div className="space-y-0">
+            {activeSignals.length > 0
+              ? activeSignals.map((signal) => (
+                  <div
+                    key={signal.id}
+                    className="flex items-start gap-3 py-2.5 border-b border-border/20 last:border-b-0"
+                  >
+                    <span className="font-mono text-[10px] text-emerald-600 mt-0.5 shrink-0">●</span>
+                    <div className="space-y-0.5 min-w-0">
+                      <p className="font-sans text-[13px] text-foreground leading-tight">
+                        {signal.label}
+                        {signal.entityTicker && (
+                          <span className="font-mono text-[9px] text-muted-foreground/60 ml-2">
+                            ({signal.entityTicker})
+                          </span>
+                        )}
+                      </p>
+                      {signal.checkLogic && (
+                        <p className="font-sans text-xs text-muted-foreground/60 leading-relaxed">
+                          {signal.checkLogic}
+                        </p>
+                      )}
+                    </div>
+                  </div>
+                ))
+              : watchDescriptions.map((desc, i) => (
+                  <div
+                    key={i}
+                    className="flex items-start gap-3 py-2.5 border-b border-border/20 last:border-b-0"
+                  >
+                    <span className="font-mono text-[10px] text-muted-foreground/35 mt-0.5 shrink-0">○</span>
+                    <p className="font-sans text-[13px] text-muted-foreground leading-tight">{desc}</p>
+                  </div>
+                ))}
+          </div>
+        </div>
+      )}
+
+      {/* ── AI summary ── */}
+      {thesis.ai_summary && (
+        <div className="px-5 py-4">
+          <p className="font-mono text-[9px] uppercase tracking-[0.25em] text-muted-foreground mb-1.5">
+            Summary
+          </p>
+          <p className="font-sans text-xs text-muted-foreground/80 leading-relaxed">
+            {thesis.ai_summary}
+          </p>
+        </div>
+      )}
+
+      {/* ── Footer ── */}
+      <div className="px-5 py-3 flex items-start justify-between gap-4 flex-wrap">
+        {ambiguityNote ? (
+          <p className="font-sans text-xs text-amber-700/70 leading-relaxed max-w-lg">
+            {ambiguityNote}
+          </p>
+        ) : (
+          <span />
+        )}
+        <p className="font-mono text-[9px] text-muted-foreground/40 whitespace-nowrap ml-auto">
+          Created {formatDate(thesis.created_at)} · Updated {formatDate(thesis.updated_at)}
+        </p>
+      </div>
     </div>
   );
 }
