@@ -3,6 +3,7 @@
 import Link from "next/link";
 import { usePathname } from "next/navigation";
 import { useAuth } from "@/lib/auth";
+import { NotificationBell } from "./notification-bell";
 
 const NAV_LINKS = [
   { href: "/dashboard", label: "Dashboard" },
@@ -51,6 +52,8 @@ export function Navbar() {
               </Link>
             );
           })}
+          <div className="w-px h-4 bg-border mx-2" />
+          <NotificationBell />
           <div className="w-px h-4 bg-border mx-2" />
           <button
             onClick={logout}

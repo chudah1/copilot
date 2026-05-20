@@ -10,6 +10,8 @@ from app.models.holding import Holding
 from app.models.thesis import Thesis
 from app.models.user import User
 from app.models.user_notification import UserNotification
+from app.services.email import send_earnings_alert_email
+from app.config import settings
 
 logger = logging.getLogger(__name__)
 
@@ -51,9 +53,9 @@ async def run_pre_earnings_nudge() -> None:
 
         user_ids_needed = {holding.user_id for holding, _ in pairs}
         users_result = await db.execute(select(User).where(User.id.in_(user_ids_needed)))
-        user_prefs: dict = {
-            u.id: (u.preferences or {}) for u in users_result.scalars().all()
-        }
+        users_list = users_result.scalars().all()
+        user_prefs: dict = {u.id: (u.preferences or {}) for u in users_list}
+        users_map: dict = {u.id: u for u in users_list}
 
         # Batch-load today's pre_earnings notifications to avoid N+1 dedup checks
         today_start = now.replace(hour=0, minute=0, second=0, microsecond=0)
@@ -109,10 +111,42 @@ async def run_pre_earnings_nudge() -> None:
                 },
             )
             db.add(notification)
+
+            # Send email alert
+            user = users_map.get(holding.user_id)
+            if user and user.email:
+                subject = f"{holding.ticker} reports in {days_until} day{'s' if days_until != 1 else ''} — here's what matters for your reason"
+                html = _build_pre_earnings_email(holding.ticker, holding.name, days_until, date_str, watch_hints[:3])
+                await send_earnings_alert_email(user.email, subject, html)
+
             nudges_created += 1
 
         await db.commit()
         logger.info("Created %d pre-earnings nudges", nudges_created)
+
+
+def _build_pre_earnings_email(ticker: str, name: str | None, days_until: int, date_str: str, signals: list[str]) -> str:
+    company = name or ticker
+    days_label = f"{days_until} day{'s' if days_until != 1 else ''}"
+    signals_html = ""
+    if signals:
+        items = "".join(f'<li style="margin:4px 0;color:#5c4a2a;">{s}</li>' for s in signals)
+        signals_html = f"""
+        <p style="margin:24px 0 8px;font-size:13px;letter-spacing:0.1em;text-transform:uppercase;color:#8b7355;font-family:monospace;">Your key signals to watch</p>
+        <ul style="margin:0;padding:0 0 0 20px;line-height:1.8;">{items}</ul>"""
+    position_url = f"{settings.frontend_url}/dashboard/positions/{ticker}"
+    return f"""
+    <div style="font-family:Georgia,serif;max-width:600px;margin:0 auto;background:#faf8f5;padding:40px 32px;">
+      <p style="font-size:11px;letter-spacing:0.2em;text-transform:uppercase;color:#8b7355;font-family:monospace;margin:0 0 28px;">Copilot Investor &middot; Earnings Alert</p>
+      <h1 style="font-size:26px;font-weight:400;color:#2d1f0e;margin:0 0 16px;font-style:italic;line-height:1.3;">{ticker} reports in {days_label}</h1>
+      <p style="color:#5c4a2a;font-size:15px;line-height:1.7;margin:0 0 8px;">{company} is scheduled to report on <strong>{date_str}</strong>.</p>
+      {signals_html}
+      <p style="color:#5c4a2a;font-size:14px;line-height:1.6;margin:24px 0;padding:16px 20px;background:#f0ebe3;border-left:3px solid #8b4513;">
+        We'll run a full evaluation the morning after and flag anything that touches your reason.
+      </p>
+      <a href="{position_url}" style="display:inline-block;font-family:monospace;font-size:11px;letter-spacing:0.15em;text-transform:uppercase;color:#8b4513;text-decoration:none;border-bottom:1px solid #8b4513;padding-bottom:2px;">Review your reason &rarr;</a>
+      <p style="margin:40px 0 0;font-size:11px;color:#b8a89a;font-family:monospace;">You're receiving this because earnings alerts are enabled. <a href="{settings.frontend_url}/settings" style="color:#8b7355;">Manage preferences</a></p>
+    </div>"""
 
 
 def _extract_watch_hints(interpretation: dict | None) -> list[str]:

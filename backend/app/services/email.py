@@ -29,6 +29,10 @@ async def send_onboarding_email(to_email: str, subject: str, html_content: str) 
     return _send_email_via_resend("Copilot Investor <hello@copilotinvestor.com>", to_email, subject, html_content)
 
 
+async def send_earnings_alert_email(to_email: str, subject: str, html_content: str) -> bool:
+    return _send_email_via_resend("Copilot Investor <alerts@copilotinvestor.com>", to_email, subject, html_content)
+
+
 async def send_password_reset_email(to_email: str, reset_token: str) -> bool:
     reset_url = f"{settings.frontend_url}/reset-password?token={reset_token}"
     html = (
