@@ -207,17 +207,16 @@ export function ThesisCard({ thesis, decomposition, onEdit, onInvalidate }: Prop
       </div>
 
       {/* ── Bull case — hero ── */}
-      <div className="px-5 py-6">
-        <p className="font-mono text-[9px] uppercase tracking-[0.3em] text-muted-foreground mb-3">
-          Own it because
-        </p>
-        <p className="font-display italic text-[1.2rem] leading-relaxed text-foreground max-w-prose">
-          {thesis.why_own_it}
-        </p>
+      <div className="px-5 py-6 space-y-4">
+        <blockquote className="border-l-2 border-primary/25 pl-4">
+          <p className="font-display italic text-[1.15rem] leading-relaxed text-foreground/90 max-w-prose">
+            {thesis.why_own_it}
+          </p>
+        </blockquote>
 
         {/* Thesis labels */}
         {labels.length > 0 && (
-          <div className="flex flex-wrap gap-1.5 mt-4">
+          <div className="flex flex-wrap gap-1.5 pl-4">
             {labels.map((label) => (
               <span
                 key={label}
