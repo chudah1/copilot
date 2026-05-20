@@ -18,7 +18,7 @@ from app.services.reasoning.simple_cache import TTLCache
 class OpenAIReasoningProvider:
     name = "openai"
     model = "gpt-4.1-mini"
-    timeout_seconds = 30
+    timeout_seconds = 60
     _cache = TTLCache(ttl_seconds=settings.llm_response_cache_ttl_seconds)
 
     def _response_schema(self) -> dict:

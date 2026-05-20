@@ -1,4 +1,3 @@
-import asyncio
 import json
 import time
 from hashlib import sha256
@@ -19,7 +18,7 @@ from app.services.reasoning.simple_cache import TTLCache
 class AnthropicReasoningProvider:
     name = "anthropic"
     model = settings.anthropic_model
-    timeout_seconds = 30
+    timeout_seconds = 60
     _cache = TTLCache(ttl_seconds=settings.llm_response_cache_ttl_seconds)
 
     async def run(self, request: ReasoningRequest) -> ReasoningResult:
@@ -38,7 +37,7 @@ class AnthropicReasoningProvider:
                 return ReasoningResult(True, "success", self.name, self.model, DECOMPOSITION_PROMPT_VERSION, None, cached, None, latency, None, True)
 
             client = anthropic.AsyncAnthropic(api_key=settings.anthropic_api_key)
-            response = await client.messages.create(
+            async with client.messages.stream(
                 model=self.model,
                 max_tokens=3000,
                 tools=[
@@ -53,7 +52,8 @@ class AnthropicReasoningProvider:
                 messages=[{"role": "user", "content": build_decomposition_prompt(request.payload)}],
                 temperature=0,
                 timeout=self.timeout_seconds,
-            )
+            ) as stream:
+                response = await stream.get_final_message()
             raw = None
             for block in response.content:
                 if getattr(block, "type", None) == "tool_use":
