@@ -119,7 +119,7 @@ def get_price_watch_threshold(interpretation: dict[str, Any] | None, default: fl
 def check_price_move(current_price: float, previous_price: float, threshold_pct: float = 10.0) -> bool:
     if previous_price == 0:
         return False
-    pct_change = abs((current_price - previous_price) / previous_price) * 100
+    pct_change = abs((current_price - float(previous_price)) / float(previous_price)) * 100
     return pct_change >= threshold_pct
 
 
