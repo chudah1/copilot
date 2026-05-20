@@ -125,6 +125,48 @@ function getThesisInsights(
   };
 }
 
+function positionCopy(investorProfile: "thesis_driven" | "hearsay_driven" | null) {
+  if (investorProfile === "thesis_driven") {
+    return {
+      earningsEmpty: "Tighten your thesis so the app knows which assumption should matter the morning after.",
+      postEarningsReview: "Review which assumption still holds after the quarter landed.",
+      noReasonTitle: "No thesis written yet.",
+      noReasonBody: "Write the core reason, the assumption that must stay true, and the condition that would break the thesis.",
+      noReasonCta: "Write your thesis",
+      monitoringEmptyTitle: "Nothing to monitor yet.",
+      monitoringEmptyBody: "Write your thesis first — monitoring needs an explicit assumption set to test against.",
+      monitoringEmptyCta: "Go to your thesis →",
+      afterEarningsCta: "After earnings?",
+    };
+  }
+
+  if (investorProfile === "hearsay_driven") {
+    return {
+      earningsEmpty: "Turn the original story into a reason first, so the app knows what evidence should matter the morning after.",
+      postEarningsReview: "Review whether the original story still holds now that the quarter is out.",
+      noReasonTitle: "No reason written yet.",
+      noReasonBody: "Start with the story behind the position, then turn it into a concrete reason, what has to stay true, and what would break it.",
+      noReasonCta: "Write your reason",
+      monitoringEmptyTitle: "Nothing to check yet.",
+      monitoringEmptyBody: "Write the real reason first — without that, the app cannot tell signal from noise.",
+      monitoringEmptyCta: "Go to your reason →",
+      afterEarningsCta: "After earnings?",
+    };
+  }
+
+  return {
+    earningsEmpty: "Tighten your reason so the app knows what evidence should matter the morning after.",
+    postEarningsReview: "Review whether your reason still holds.",
+    noReasonTitle: "No reason written yet.",
+    noReasonBody: "Start with the reason this position exists, what has to stay true, and what would make you rethink it.",
+    noReasonCta: "Write your reason",
+    monitoringEmptyTitle: "Nothing to watch yet.",
+    monitoringEmptyBody: "Write your reason first — monitoring needs an explicit belief to test against.",
+    monitoringEmptyCta: "Go to your reason →",
+    afterEarningsCta: "After earnings?",
+  };
+}
+
 const METRIC_LABELS: Record<string, string> = {
   revenue_growth_yoy: "Revenue growth (YoY)",
   earnings_growth_yoy: "Earnings growth (YoY)",
@@ -480,6 +522,7 @@ export default function PositionDetailPage() {
     events,
     onboardingState?.investor_profile ?? null,
   );
+  const copy = positionCopy(onboardingState?.investor_profile ?? null);
   const latestEvent = events[0];
   const recentEarningsEvent =
     events.find(
@@ -588,7 +631,7 @@ export default function PositionDetailPage() {
               {steps.map((step, i) => (
                 <div key={step.label} className="flex items-center gap-2">
                   {i > 0 && <span className="text-border text-[10px]">·</span>}
-                  <span className={`font-mono text-[9px] uppercase tracking-[0.15em] ${
+                  <span className={`font-mono text-[10px] uppercase tracking-[0.12em] ${
                     step.done ? "text-emerald-600" : step.partial ? "text-amber-600" : "text-muted-foreground/40"
                   }`}>
                     {step.done ? "●" : step.partial ? "◐" : "○"} {step.label}
@@ -609,7 +652,7 @@ export default function PositionDetailPage() {
               >
                 {tab.label}
                 {tab.badge !== undefined && (
-                  <span className={`inline-flex items-center justify-center h-4 min-w-4 px-1 rounded-sm font-mono text-[8px] tabular-nums ${
+                  <span className={`inline-flex items-center justify-center h-4 min-w-4 px-1 rounded-sm font-mono text-[10px] tabular-nums ${
                     tab.id === "monitoring" && unreviewedEvents > 0
                       ? "bg-primary/10 text-primary"
                       : "text-muted-foreground/60"
@@ -655,7 +698,7 @@ export default function PositionDetailPage() {
               </div>
             ) : (
               <p className="font-sans text-xs text-muted-foreground">
-                Tighten your reason so the app knows what evidence should matter the morning after.
+                {copy.earningsEmpty}
               </p>
             )}
           </motion.div>
@@ -675,8 +718,8 @@ export default function PositionDetailPage() {
                 {recentEarningsEvent
                   ? (recentEarningsEvent.ai_analysis || recentEarningsEvent.evidence_summary || recentEarningsEvent.summary)
                   : healthCheck?.recent_earnings_surprise_pct !== null && healthCheck?.recent_earnings_surprise_pct !== undefined
-                    ? `${cleanTicker(ticker)} reported earnings with a ${healthCheck.recent_earnings_surprise_pct > 0 ? "+" : ""}${healthCheck.recent_earnings_surprise_pct.toFixed(1)}% surprise. Review your reason to see what still holds.`
-                    : `${cleanTicker(ticker)} recently reported earnings. Review whether your reason still holds.`
+                    ? `${cleanTicker(ticker)} reported earnings with a ${healthCheck.recent_earnings_surprise_pct > 0 ? "+" : ""}${healthCheck.recent_earnings_surprise_pct.toFixed(1)}% surprise. ${copy.postEarningsReview}`
+                    : `${cleanTicker(ticker)} recently reported earnings. ${copy.postEarningsReview}`
                 }
               </p>
             </div>
@@ -758,7 +801,7 @@ export default function PositionDetailPage() {
                           onClick={() => setShowEarningsReview(true)}
                           className="font-mono text-[10px] uppercase tracking-[0.15em] border border-border text-muted-foreground hover:text-foreground px-4 py-2 transition-colors"
                         >
-                          After earnings?
+                          {copy.afterEarningsCta}
                         </button>
                       )}
                     </div>
@@ -789,16 +832,16 @@ export default function PositionDetailPage() {
                 {!activeThesis && !editing && (
                   <div className="py-16 text-center space-y-4">
                     <p className="font-display italic text-2xl text-foreground/50">
-                      No reason written yet.
+                      {copy.noReasonTitle}
                     </p>
                     <p className="font-sans text-sm text-muted-foreground max-w-sm mx-auto leading-relaxed">
-                      Start with the reason this position exists, what has to stay true, and what would make you rethink it.
+                      {copy.noReasonBody}
                     </p>
                     <button
                       onClick={() => setEditing(true)}
                       className="font-mono text-[10px] uppercase tracking-[0.2em] border border-primary/40 text-primary px-5 py-2.5 hover:border-primary transition-colors"
                     >
-                      Write your reason
+                      {copy.noReasonCta}
                     </button>
                   </div>
                 )}
@@ -840,7 +883,7 @@ export default function PositionDetailPage() {
                         { label: "P&L", value: `${pnl >= 0 ? "+" : ""}${formatCurrency(pnl)}`, colored: true },
                       ].map(({ label, value: v, colored }) => (
                         <div key={label} className="border border-border/60 bg-card px-4 py-3">
-                          <p className="font-mono text-[9px] uppercase tracking-[0.2em] text-muted-foreground">{label}</p>
+                          <p className="font-mono text-[10px] uppercase tracking-[0.15em] text-muted-foreground">{label}</p>
                           <p className={`font-mono text-lg tabular-nums mt-1.5 ${colored ? (pnl >= 0 ? "text-emerald-700" : "text-red-600") : "text-foreground"}`}>
                             {v}
                           </p>
@@ -860,16 +903,16 @@ export default function PositionDetailPage() {
                 {!activeThesis ? (
                   <div className="py-16 text-center space-y-4">
                     <p className="font-display italic text-2xl text-foreground/50">
-                      Nothing to watch yet.
+                      {copy.monitoringEmptyTitle}
                     </p>
                     <p className="font-sans text-sm text-muted-foreground max-w-xs mx-auto leading-relaxed">
-                      Write your reason first — monitoring needs an explicit belief to test against.
+                      {copy.monitoringEmptyBody}
                     </p>
                     <button
                       onClick={() => { setEditing(true); setActiveTab("thesis"); }}
                       className="font-mono text-[10px] uppercase tracking-[0.2em] border border-primary/40 text-primary px-5 py-2.5 hover:border-primary transition-colors"
                     >
-                      Go to your reason →
+                      {copy.monitoringEmptyCta}
                     </button>
                   </div>
                 ) : (
@@ -881,7 +924,7 @@ export default function PositionDetailPage() {
                           {/* Decisions pending header */}
                           <div className="flex items-baseline justify-between gap-4">
                             <div>
-                              <p className="font-mono text-[9px] uppercase tracking-[0.3em] text-muted-foreground mb-1">
+                              <p className="font-mono text-[10px] uppercase tracking-[0.2em] text-muted-foreground mb-1">
                                 Decisions pending
                               </p>
                               <p className="font-display italic text-[1.6rem] leading-tight text-foreground">
@@ -900,6 +943,7 @@ export default function PositionDetailPage() {
                             events={events.filter((e) => !e.review_action)}
                             onReview={handleReviewEvent}
                             reviewingEventId={reviewingEventId}
+                            investorProfile={onboardingState?.investor_profile ?? null}
                           />
                         </div>
                       ) : (
@@ -923,7 +967,7 @@ export default function PositionDetailPage() {
                     <section className="border-t border-border/40 pt-8 space-y-4">
                       <div className="flex items-center justify-between">
                         <div>
-                          <p className="font-mono text-[9px] uppercase tracking-[0.3em] text-muted-foreground mb-0.5">
+                          <p className="font-mono text-[10px] uppercase tracking-[0.2em] text-muted-foreground mb-0.5">
                             Watching for
                           </p>
                           <p className="font-sans text-xs text-muted-foreground/70">
@@ -954,7 +998,7 @@ export default function PositionDetailPage() {
                     {events.some((e) => e.review_action) && (
                       <section className="border-t border-border/40 pt-8 space-y-4">
                         <div>
-                          <p className="font-mono text-[9px] uppercase tracking-[0.3em] text-muted-foreground mb-0.5">
+                          <p className="font-mono text-[10px] uppercase tracking-[0.2em] text-muted-foreground mb-0.5">
                             Evidence on file
                           </p>
                           <p className="font-sans text-xs text-muted-foreground/70">
@@ -964,6 +1008,7 @@ export default function PositionDetailPage() {
                         <EventTimeline
                           events={events.filter((e) => e.review_action)}
                           reviewingEventId={reviewingEventId}
+                          investorProfile={onboardingState?.investor_profile ?? null}
                         />
                       </section>
                     )}
@@ -991,7 +1036,7 @@ export default function PositionDetailPage() {
 
                 {invalidatedTheses.length > 0 && (
                   <div className="border-t border-border/40 pt-6 space-y-3">
-                    <p className="font-mono text-[9px] uppercase tracking-[0.3em] text-muted-foreground">
+                    <p className="font-mono text-[10px] uppercase tracking-[0.2em] text-muted-foreground">
                       Previous theses
                     </p>
                     {invalidatedTheses.map((t) => (
@@ -1004,7 +1049,7 @@ export default function PositionDetailPage() {
                             Closed: {t.invalidation_reason}
                           </p>
                         )}
-                        <p className="font-mono text-[9px] text-muted-foreground/50">
+                        <p className="font-mono text-[10px] text-muted-foreground/60">
                           {formatDate(t.updated_at)}
                         </p>
                       </div>

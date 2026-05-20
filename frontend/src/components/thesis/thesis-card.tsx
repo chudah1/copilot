@@ -169,7 +169,7 @@ export function ThesisCard({ thesis, decomposition, onEdit, onInvalidate }: Prop
           <span className="text-border/60 text-xs">·</span>
 
           {/* Source */}
-          <span className="font-mono text-[9px] uppercase tracking-[0.1em] text-muted-foreground/50">
+          <span className="font-mono text-[10px] uppercase tracking-[0.1em] text-muted-foreground/60">
             {thesis.source === "ai_assisted" ? "AI assisted" : "Authored"}
           </span>
 
@@ -179,7 +179,7 @@ export function ThesisCard({ thesis, decomposition, onEdit, onInvalidate }: Prop
               <span className="text-border/60 text-xs">·</span>
               <div className="flex items-center gap-1.5">
                 <span className={`h-1.5 w-1.5 rounded-full ${MONITORABILITY_DOT[monitorability] ?? "bg-border"}`} />
-                <span className={`font-mono text-[9px] uppercase tracking-[0.12em] ${MONITORABILITY_TEXT[monitorability] ?? "text-muted-foreground"}`}>
+                <span className={`font-mono text-[10px] uppercase tracking-[0.1em] ${MONITORABILITY_TEXT[monitorability] ?? "text-muted-foreground"}`}>
                   {monitorability} monitorability
                 </span>
               </div>
@@ -220,7 +220,7 @@ export function ThesisCard({ thesis, decomposition, onEdit, onInvalidate }: Prop
             {labels.map((label) => (
               <span
                 key={label}
-                className="font-mono text-[8px] uppercase tracking-[0.12em] text-muted-foreground/70 border border-border/50 px-1.5 py-0.5"
+                className="font-mono text-[10px] uppercase tracking-[0.1em] text-muted-foreground/70 border border-border/50 px-1.5 py-0.5"
               >
                 {label}
               </span>
@@ -233,7 +233,7 @@ export function ThesisCard({ thesis, decomposition, onEdit, onInvalidate }: Prop
       <div className="grid md:grid-cols-2 divide-y md:divide-y-0 md:divide-x divide-border/40">
         {/* Must remain true */}
         <div className={`relative px-5 py-5 border-l-2 ${thesis.must_remain_true ? "border-l-emerald-500/35" : "border-l-amber-400/35"}`}>
-          <p className="font-mono text-[9px] uppercase tracking-[0.25em] text-muted-foreground mb-2">
+          <p className="font-mono text-[10px] uppercase tracking-[0.18em] text-muted-foreground mb-2">
             Still true if
           </p>
           {thesis.must_remain_true ? (
@@ -249,7 +249,7 @@ export function ThesisCard({ thesis, decomposition, onEdit, onInvalidate }: Prop
 
         {/* Exit trigger */}
         <div className={`relative px-5 py-5 border-l-2 md:border-l-0 ${thesis.what_would_change_my_mind ? "border-l-red-500/30" : "border-l-border/30"}`}>
-          <p className="font-mono text-[9px] uppercase tracking-[0.25em] text-muted-foreground mb-2">
+          <p className="font-mono text-[10px] uppercase tracking-[0.18em] text-muted-foreground mb-2">
             Breaks if
           </p>
           {thesis.what_would_change_my_mind ? (
@@ -267,7 +267,7 @@ export function ThesisCard({ thesis, decomposition, onEdit, onInvalidate }: Prop
       {/* ── Active signals or watch hints ── */}
       {(activeSignals.length > 0 || watchDescriptions.length > 0) && (
         <div className="px-5 py-4 space-y-3">
-          <p className="font-mono text-[9px] uppercase tracking-[0.3em] text-muted-foreground">
+          <p className="font-mono text-[10px] uppercase tracking-[0.2em] text-muted-foreground">
             {activeSignals.length > 0 ? "Active signals" : "Watching for"}
           </p>
 
@@ -283,7 +283,7 @@ export function ThesisCard({ thesis, decomposition, onEdit, onInvalidate }: Prop
                       <p className="font-sans text-[13px] text-foreground leading-tight">
                         {signal.label}
                         {signal.entityTicker && (
-                          <span className="font-mono text-[9px] text-muted-foreground/60 ml-2">
+                          <span className="font-mono text-[10px] text-muted-foreground/60 ml-2">
                             ({signal.entityTicker})
                           </span>
                         )}
@@ -312,7 +312,7 @@ export function ThesisCard({ thesis, decomposition, onEdit, onInvalidate }: Prop
       {/* ── AI summary ── */}
       {thesis.ai_summary && (
         <div className="px-5 py-4">
-          <p className="font-mono text-[9px] uppercase tracking-[0.25em] text-muted-foreground mb-1.5">
+          <p className="font-mono text-[10px] uppercase tracking-[0.18em] text-muted-foreground mb-1.5">
             Summary
           </p>
           <p className="font-sans text-xs text-muted-foreground/80 leading-relaxed">
@@ -330,7 +330,7 @@ export function ThesisCard({ thesis, decomposition, onEdit, onInvalidate }: Prop
         ) : (
           <span />
         )}
-        <p className="font-mono text-[9px] text-muted-foreground/40 whitespace-nowrap ml-auto">
+        <p className="font-mono text-[10px] text-muted-foreground/50 whitespace-nowrap ml-auto">
           Created {formatDate(thesis.created_at)} · Updated {formatDate(thesis.updated_at)}
         </p>
       </div>

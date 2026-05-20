@@ -82,7 +82,7 @@ function EmptyState() {
     <div className="min-h-[calc(100vh-53px)] bg-background flex items-center justify-center px-8">
       <div className="max-w-sm text-center space-y-6">
         <div className="space-y-2">
-          <p className="font-mono text-[9px] uppercase tracking-[0.3em] text-foreground/40">
+          <p className="font-mono text-[10px] uppercase tracking-[0.2em] text-foreground/40">
             Quarterly review
           </p>
           <h2 className="font-display italic text-[2rem] leading-tight text-foreground">
@@ -95,7 +95,7 @@ function EmptyState() {
         </div>
         <Link
           href="/dashboard"
-          className="inline-block font-mono text-[10px] uppercase tracking-[0.2em] text-foreground/60 border-b border-foreground/20 pb-px hover:text-foreground transition-colors"
+          className="inline-block font-mono text-[11px] uppercase tracking-[0.15em] text-foreground/60 border-b border-foreground/20 pb-px hover:text-foreground transition-colors"
         >
           ← Back to dashboard
         </Link>
@@ -112,7 +112,7 @@ function CompletionState({ review }: { review: QuarterlyReviewCurrent }) {
       <div className="max-w-2xl mx-auto px-8 py-16 space-y-12">
         {/* Header */}
         <div className="space-y-3">
-          <p className="font-mono text-[9px] uppercase tracking-[0.3em] text-foreground/40">
+          <p className="font-mono text-[10px] uppercase tracking-[0.2em] text-foreground/40">
             {review.quarter} · {review.completed_count} reviewed
           </p>
           <h1 className="font-display italic text-[3rem] leading-[1.1] text-foreground tracking-tight">
@@ -128,9 +128,9 @@ function CompletionState({ review }: { review: QuarterlyReviewCurrent }) {
         <div className="border border-border/60 divide-y divide-border/40">
           {/* Ledger header */}
           <div className="grid grid-cols-[1fr_auto_auto] gap-6 px-5 py-2.5 bg-secondary/40">
-            <p className="font-mono text-[9px] uppercase tracking-[0.2em] text-muted-foreground">Position</p>
-            <p className="font-mono text-[9px] uppercase tracking-[0.2em] text-muted-foreground text-right">Age</p>
-            <p className="font-mono text-[9px] uppercase tracking-[0.2em] text-muted-foreground text-right w-28">Answer</p>
+            <p className="font-mono text-[10px] uppercase tracking-[0.15em] text-muted-foreground">Position</p>
+            <p className="font-mono text-[10px] uppercase tracking-[0.15em] text-muted-foreground text-right">Age</p>
+            <p className="font-mono text-[10px] uppercase tracking-[0.15em] text-muted-foreground text-right w-28">Answer</p>
           </div>
 
           {review.holdings.map((h, i) => {
@@ -284,16 +284,16 @@ export default function QuarterlyReviewPage() {
         <div className="flex items-center justify-between mb-10">
           <Link
             href="/dashboard"
-            className="font-mono text-[9px] uppercase tracking-[0.25em] text-foreground/40 hover:text-foreground transition-colors"
+            className="font-mono text-[10px] uppercase tracking-[0.18em] text-foreground/40 hover:text-foreground transition-colors"
           >
             ← Dashboard
           </Link>
           <div className="flex items-center gap-3">
-            <span className="font-mono text-[9px] uppercase tracking-[0.25em] text-foreground/40">
+            <span className="font-mono text-[10px] uppercase tracking-[0.18em] text-foreground/40">
               {review.quarter}
             </span>
-            <span className="font-mono text-[9px] text-foreground/30">·</span>
-            <span className="font-mono text-[9px] uppercase tracking-[0.2em] text-foreground/40">
+            <span className="font-mono text-[10px] text-foreground/30">·</span>
+            <span className="font-mono text-[10px] uppercase tracking-[0.15em] text-foreground/40">
               {currentIndex} of {review.total_holdings}
             </span>
           </div>
@@ -332,12 +332,12 @@ export default function QuarterlyReviewPage() {
                     {formatCurrency(currentHolding.current_price, currentHolding.currency)}
                   </span>
                 )}
-                <span className="font-mono text-[9px] uppercase tracking-[0.15em] text-foreground/30">
+                <span className="font-mono text-[10px] uppercase tracking-[0.12em] text-foreground/35">
                   {currentHolding.reason_age_days}d old
                 </span>
                 <Link
                   href={`/dashboard/positions/${currentHolding.ticker}`}
-                  className="font-mono text-[9px] uppercase tracking-[0.15em] text-foreground/40 border-b border-foreground/20 pb-px hover:text-foreground transition-colors"
+                  className="font-mono text-[10px] uppercase tracking-[0.12em] text-foreground/50 border-b border-foreground/20 pb-px hover:text-foreground transition-colors"
                 >
                   Open →
                 </Link>
@@ -346,7 +346,7 @@ export default function QuarterlyReviewPage() {
 
             {/* Thesis block */}
             <div className="mb-7">
-              <p className="font-mono text-[8.5px] uppercase tracking-[0.25em] text-foreground/35 mb-3">
+              <p className="font-mono text-[10px] uppercase tracking-[0.15em] text-foreground/40 mb-3">
                 Your reason for owning it
               </p>
               <blockquote className="font-display italic text-[1.2rem] leading-[1.65] text-foreground/90 border-l-2 border-[#5C2018]/30 pl-5">
@@ -356,7 +356,7 @@ export default function QuarterlyReviewPage() {
 
             {/* Notes */}
             <div className="mb-8">
-              <p className="font-mono text-[8.5px] uppercase tracking-[0.25em] text-foreground/35 mb-2">
+              <p className="font-mono text-[10px] uppercase tracking-[0.15em] text-foreground/40 mb-2">
                 Notes for your future self
               </p>
               <textarea
@@ -412,7 +412,7 @@ export default function QuarterlyReviewPage() {
 
             {/* Remaining count */}
             {pendingHoldings.length > 1 && (
-              <p className="mt-6 font-mono text-[9px] uppercase tracking-[0.2em] text-foreground/25 text-center">
+              <p className="mt-6 font-mono text-[10px] uppercase tracking-[0.15em] text-foreground/30 text-center">
                 {pendingHoldings.length - 1} more to go
               </p>
             )}

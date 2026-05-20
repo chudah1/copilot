@@ -58,7 +58,7 @@ export function HoldingCard({ holding, thesis, pulse, earnings, onGenerateDraft,
                 {displayName}
               </span>
               {earnings && earnings.days_until <= 7 && (
-                <span className="font-mono text-[9px] tracking-[0.12em] uppercase text-violet-600 border border-violet-200 px-1.5 py-px rounded-sm">
+                <span className="font-mono text-[10px] tracking-[0.1em] uppercase text-violet-600 border border-violet-200 px-1.5 py-px rounded-sm">
                   earnings {earnings.days_until === 0 ? "today" : earnings.days_until === 1 ? "tomorrow" : `${earnings.days_until}d`}
                 </span>
               )}
@@ -66,11 +66,11 @@ export function HoldingCard({ holding, thesis, pulse, earnings, onGenerateDraft,
 
             {hasThesis && thesisText ? (
               <div className="space-y-0.5">
-                <p className="font-sans text-xs text-muted-foreground leading-relaxed line-clamp-1 max-w-lg italic">
+                <p className="font-sans text-xs text-foreground/75 leading-relaxed line-clamp-1 max-w-lg italic">
                   {thesisText}
                 </p>
                 {alertReason && (
-                  <p className="font-mono text-[9px] text-amber-700/80 leading-relaxed line-clamp-1 max-w-lg">
+                  <p className="font-mono text-[10px] text-amber-700 leading-relaxed line-clamp-1 max-w-lg">
                     {alertReason}
                   </p>
                 )}
@@ -78,7 +78,7 @@ export function HoldingCard({ holding, thesis, pulse, earnings, onGenerateDraft,
             ) : !hasThesis ? (
               <button
                 onClick={(e) => { e.preventDefault(); e.stopPropagation(); onGenerateDraft?.(); }}
-                className="font-mono text-[9px] uppercase tracking-[0.15em] text-muted-foreground/50 hover:text-primary transition-colors border-b border-dashed border-muted-foreground/30 pb-px"
+                className="font-mono text-[10px] uppercase tracking-[0.12em] text-muted-foreground/60 hover:text-primary transition-colors border-b border-dashed border-muted-foreground/30 pb-px"
               >
                 Draft with AI
               </button>

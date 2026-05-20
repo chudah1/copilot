@@ -29,6 +29,39 @@ import type {
 
 // Extracted PositionCard and AttentionCard to src/components/portfolio/
 
+function dashboardCopy(investorProfile: "thesis_driven" | "hearsay_driven" | null) {
+  if (investorProfile === "thesis_driven") {
+    return {
+      emptyBody:
+        "The market will test your assumptions. Add your positions below and write down exactly why you own them so you can tell when the thesis changes.",
+      draftBanner:
+        "We drafted working thesis notes for {count}. Review them and tighten the assumptions before monitoring does the rest.",
+      quarterly:
+        "Quarterly review — {count} position{plural} waiting for a fresh underwriting call",
+    };
+  }
+
+  if (investorProfile === "hearsay_driven") {
+    return {
+      emptyBody:
+        "The market will test the story. Add your positions below and write down why you own them so you can tell signal from panic when things move fast.",
+      draftBanner:
+        "We drafted clearer reasons for {count}. Review them and turn the story into something you can actually monitor.",
+      quarterly:
+        "Quarterly review — {count} position{plural} waiting to see if the original story still holds",
+    };
+  }
+
+  return {
+    emptyBody:
+      "The market will test you. Add your positions below and write down exactly why you own them so you don&rsquo;t panic sell when things get tough.",
+    draftBanner:
+      "We found some notes to help articulate your conviction for {count}.",
+    quarterly:
+      "Quarterly review — {count} position{plural} awaiting judgement",
+  };
+}
+
 // ── Dashboard ──────────────────────────────────────────────────────────────
 
 export default function DashboardPage() {
@@ -45,6 +78,7 @@ export default function DashboardPage() {
   const { data: quarterlyReview = null } = useSWR<QuarterlyReviewCurrent>("/api/quarterly-review/current", fetcher);
   const { data: draftStatus = null, mutate: mutateDraftStatus } = useSWR<DraftStatus>("/api/portfolio/draft-status", fetcher);
   const { data: onboardingState = null } = useSWR<OnboardingState>("/api/onboarding/state", fetcher);
+  const copy = dashboardCopy(onboardingState?.investor_profile ?? null);
 
   // Live prices (updates in background every 60s)
   const { data: livePricesRaw } = useSWR<LivePrice[]>("/api/portfolio/live-prices", fetcher, {
@@ -181,7 +215,7 @@ export default function DashboardPage() {
           </div>
           <div className="border-b-2 border-foreground" />
           <p className="font-sans text-sm text-muted-foreground leading-relaxed pt-1">
-            The market will test you. Add your positions below and write down exactly why you own them so you don&rsquo;t panic sell when things get tough.
+            {copy.emptyBody}
           </p>
         </motion.div>
         <motion.div
@@ -226,7 +260,7 @@ export default function DashboardPage() {
           {/* Left: portfolio total */}
           <div className="flex items-baseline gap-4">
             <div>
-              <p className="font-mono text-[9px] uppercase tracking-[0.25em] text-muted-foreground mb-1">
+              <p className="font-mono text-[10px] uppercase tracking-[0.18em] text-muted-foreground mb-1">
                 Portfolio
               </p>
               <div className="flex items-baseline gap-3">
@@ -239,7 +273,7 @@ export default function DashboardPage() {
                   </span>
                 )}
                 {hasLivePrices && (
-                  <span className="flex items-center gap-1 font-mono text-[9px] uppercase tracking-[0.15em] text-emerald-600">
+                  <span className="flex items-center gap-1 font-mono text-[10px] uppercase tracking-[0.12em] text-emerald-600">
                     <span className="inline-block h-1.5 w-1.5 rounded-full bg-emerald-500 animate-pulse" />
                     live
                   </span>
@@ -262,7 +296,7 @@ export default function DashboardPage() {
                   <p className={`font-mono text-base tabular-nums font-medium ${accent ? "text-primary" : "text-foreground/80"}`}>
                     {value}
                   </p>
-                  <p className="font-mono text-[9px] uppercase tracking-[0.18em] text-muted-foreground mt-0.5">
+                  <p className="font-mono text-[10px] uppercase tracking-[0.14em] text-muted-foreground mt-0.5">
                     {label}
                   </p>
                 </div>
@@ -277,13 +311,13 @@ export default function DashboardPage() {
             )}
             <div className="h-4 w-px bg-border hidden sm:block" />
             <Link href="/dashboard/simulate">
-              <button className="font-mono text-[9px] uppercase tracking-[0.18em] text-muted-foreground hover:text-foreground transition-colors border border-border px-3 py-1.5 hover:border-foreground/30">
+              <button className="font-mono text-[10px] uppercase tracking-[0.14em] text-muted-foreground hover:text-foreground transition-colors border border-border px-3 py-1.5 hover:border-foreground/30">
                 Simulate
               </button>
             </Link>
             <button
               onClick={() => setShowAddForm((v) => !v)}
-              className={`font-mono text-[9px] uppercase tracking-[0.18em] transition-colors border px-3 py-1.5 ${
+              className={`font-mono text-[10px] uppercase tracking-[0.14em] transition-colors border px-3 py-1.5 ${
                 showAddForm
                   ? "text-muted-foreground border-border"
                   : "text-primary border-primary/30 hover:border-primary/60"
@@ -304,11 +338,14 @@ export default function DashboardPage() {
         {!onboardingBannerVisible && draftStatus && draftStatus.ready > 0 && !draftBannerDismissed && (
           <div className="flex items-center justify-between border border-primary/25 bg-primary/5 px-5 py-2.5">
             <div className="flex items-center gap-3">
-              <span className="font-mono text-[8px] uppercase tracking-[0.2em] text-primary border border-primary/30 px-1.5 py-0.5">
+              <span className="font-mono text-[10px] uppercase tracking-[0.15em] text-primary border border-primary/30 px-1.5 py-0.5">
                 New
               </span>
               <p className="font-sans text-sm text-foreground/80">
-                We found some notes to help articulate your conviction for {draftStatus.ready === 1 ? "1 position" : `${draftStatus.ready} positions`}.
+                {copy.draftBanner.replace(
+                  "{count}",
+                  draftStatus.ready === 1 ? "1 position" : `${draftStatus.ready} positions`,
+                )}
               </p>
             </div>
             <div className="flex items-center gap-4 shrink-0 ml-4">
@@ -325,9 +362,11 @@ export default function DashboardPage() {
         {quarterlyReview && quarterlyReview.pending_count > 0 && (
           <div className="flex items-center justify-between border border-primary/20 bg-primary/5 px-5 py-2.5">
             <div className="flex items-center gap-3">
-              <span className="font-mono text-[8px] uppercase tracking-[0.2em] text-primary">{quarterlyReview.quarter}</span>
+              <span className="font-mono text-[10px] uppercase tracking-[0.15em] text-primary">{quarterlyReview.quarter}</span>
               <p className="font-sans text-sm text-foreground/80">
-                Quarterly review — {quarterlyReview.pending_count} position{quarterlyReview.pending_count > 1 ? "s" : ""} awaiting judgement
+                {copy.quarterly
+                  .replace("{count}", String(quarterlyReview.pending_count))
+                  .replace("{plural}", quarterlyReview.pending_count > 1 ? "s" : "")}
               </p>
             </div>
             <Link href="/dashboard/quarterly-review" className="font-mono text-[10px] uppercase tracking-[0.15em] text-primary hover:text-primary/70 transition-colors whitespace-nowrap shrink-0 ml-4">
@@ -364,10 +403,10 @@ export default function DashboardPage() {
             className="px-8 pt-5"
           >
             <div className="flex items-center gap-3 mb-3">
-              <p className="font-mono text-[9px] uppercase tracking-[0.25em] text-muted-foreground">
+              <p className="font-mono text-[10px] uppercase tracking-[0.18em] text-muted-foreground">
                 Needs attention
               </p>
-              <span className="font-mono text-[9px] text-primary/60">({needsAttention.length})</span>
+              <span className="font-mono text-[10px] text-primary/60">({needsAttention.length})</span>
             </div>
             <ErrorBoundary>
               <div className="flex gap-3 overflow-x-auto pb-1 scrollbar-hide">
@@ -388,12 +427,12 @@ export default function DashboardPage() {
       <div className="px-8 pt-6 pb-8 flex-1">
         <div className="flex items-center justify-between mb-4">
           <div className="flex items-center gap-2">
-            <p className="font-mono text-[9px] uppercase tracking-[0.25em] text-muted-foreground">
+            <p className="font-mono text-[10px] uppercase tracking-[0.18em] text-muted-foreground">
               All positions
             </p>
-            <span className="font-mono text-[9px] text-primary/50">({holdings.length})</span>
+            <span className="font-mono text-[10px] text-primary/50">({holdings.length})</span>
           </div>
-          <p className="font-mono text-[9px] uppercase tracking-[0.15em] text-muted-foreground/40 hidden sm:block">
+          <p className="font-mono text-[10px] uppercase tracking-[0.12em] text-muted-foreground/40 hidden sm:block">
             Sorted by status · value
           </p>
         </div>
@@ -421,7 +460,7 @@ export default function DashboardPage() {
         <ErrorBoundary>
           <div className="border-t border-border bg-card px-8 py-3">
             <div className="flex items-center gap-6 overflow-x-auto">
-              <p className="font-mono text-[9px] uppercase tracking-[0.25em] text-muted-foreground shrink-0">
+              <p className="font-mono text-[10px] uppercase tracking-[0.18em] text-muted-foreground shrink-0">
                 Upcoming earnings
               </p>
               <div className="flex items-center gap-4">
@@ -434,7 +473,7 @@ export default function DashboardPage() {
                     <span className="font-mono text-[10px] font-medium text-primary/70 group-hover:text-primary transition-colors">
                       {cleanTicker(e.ticker)}
                     </span>
-                    <span className="font-mono text-[9px] text-muted-foreground">
+                    <span className="font-mono text-[10px] text-muted-foreground">
                       {e.days_until === 0 ? "today" : e.days_until === 1 ? "tomorrow" : `${e.days_until}d`}
                     </span>
                   </Link>

@@ -248,7 +248,7 @@ export function ThesisDecompositionReview({ envelope, loading, saving, onGenerat
               <div className="space-y-2">
                 <div className="flex items-center gap-3">
                   {claim.claim_type && (
-                    <span className="font-mono text-[8px] uppercase tracking-[0.2em] text-muted-foreground border border-border/60 px-1.5 py-0.5">
+                    <span className="font-mono text-[10px] uppercase tracking-[0.15em] text-muted-foreground border border-border/60 px-1.5 py-0.5">
                       {CLAIM_TYPE_LABELS[claim.claim_type] ?? claim.claim_type.replaceAll("_", " ")}
                     </span>
                   )}
@@ -276,12 +276,12 @@ export function ThesisDecompositionReview({ envelope, loading, saving, onGenerat
                           {entity.entity_ticker ? ` (${entity.entity_ticker})` : ""}
                         </span>
                         {entity.entity_type && (
-                          <span className="font-mono text-[8px] uppercase tracking-[0.1em] text-muted-foreground/60 border border-border/50 px-1 py-px">
+                          <span className="font-mono text-[10px] uppercase tracking-[0.1em] text-muted-foreground/70 border border-border/50 px-1 py-px">
                             {entity.entity_type.replaceAll("_", " ")}
                           </span>
                         )}
                         {entity.confirmation_required && (
-                          <span className="font-mono text-[8px] uppercase tracking-[0.1em] text-amber-700/80 border border-amber-200 px-1 py-px">
+                          <span className="font-mono text-[10px] uppercase tracking-[0.1em] text-amber-700 border border-amber-200 px-1 py-px">
                             external data
                           </span>
                         )}

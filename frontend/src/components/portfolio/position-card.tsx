@@ -90,7 +90,7 @@ export function PositionCard({
             </div>
             <div className="flex items-center gap-2 shrink-0">
               {earnings && earnings.days_until <= 5 && (
-                <span className="font-mono text-[8px] uppercase tracking-[0.12em] text-violet-600 border border-violet-200 px-1 py-px">
+                <span className="font-mono text-[10px] uppercase tracking-[0.1em] text-violet-600 border border-violet-200 px-1 py-px">
                   {earnings.days_until === 0 ? "today" : earnings.days_until === 1 ? "tmrw" : `${earnings.days_until}d`}
                 </span>
               )}
@@ -112,7 +112,7 @@ export function PositionCard({
           {/* Allocation % with bar */}
           <div className="space-y-1">
             <div className="flex items-center justify-between">
-              <span className="font-mono text-[9px] uppercase tracking-[0.15em] text-muted-foreground/60">
+              <span className="font-mono text-[10px] uppercase tracking-[0.1em] text-muted-foreground/70">
                 Portfolio weight
               </span>
               <span className="font-mono text-[10px] text-muted-foreground">
@@ -134,13 +134,13 @@ export function PositionCard({
 
           {/* Thesis snippet or CTA */}
           {thesis?.why_own_it ? (
-            <p className="font-sans text-[11px] italic text-muted-foreground leading-relaxed line-clamp-2 border-t border-border/60 pt-2.5">
+            <p className="font-sans text-[11px] italic text-foreground/75 leading-relaxed line-clamp-2 border-t border-border/60 pt-2.5">
               {thesis.why_own_it}
             </p>
           ) : (
             <button
               onClick={(e) => { e.preventDefault(); e.stopPropagation(); onGenerateDraft?.(); }}
-              className="font-mono text-[9px] uppercase tracking-[0.15em] text-muted-foreground/50 hover:text-primary transition-colors border-t border-border/60 pt-2.5 text-left"
+              className="font-mono text-[10px] uppercase tracking-[0.12em] text-muted-foreground/60 hover:text-primary transition-colors border-t border-border/60 pt-2.5 text-left"
             >
               {noThesisCta}
             </button>

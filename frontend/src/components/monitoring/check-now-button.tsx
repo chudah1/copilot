@@ -48,7 +48,7 @@ function SnapshotCard({ snapshot, ticker, currency, eventsCreated }: { snapshot:
       <div className="grid grid-cols-2 gap-0 sm:grid-cols-4 divide-x divide-border/40">
         {snapshot.current_price != null && (
           <div className="px-4 py-3">
-            <p className="font-mono text-[9px] uppercase tracking-[0.2em] text-muted-foreground mb-1">Price</p>
+            <p className="font-mono text-[10px] uppercase tracking-[0.15em] text-muted-foreground mb-1">Price</p>
             <p className="font-mono text-sm font-medium tabular-nums">{formatCurrency(snapshot.current_price, currency)}</p>
             {snapshot.price_change_pct != null && (
               <p className={`font-mono text-[10px] tabular-nums ${priceUp ? "text-emerald-600" : "text-red-600"}`}>
@@ -60,7 +60,7 @@ function SnapshotCard({ snapshot, ticker, currency, eventsCreated }: { snapshot:
 
         {snapshot.pnl != null && (
           <div className="px-4 py-3">
-            <p className="font-mono text-[9px] uppercase tracking-[0.2em] text-muted-foreground mb-1">P&L</p>
+            <p className="font-mono text-[10px] uppercase tracking-[0.15em] text-muted-foreground mb-1">P&L</p>
             <p className={`font-mono text-sm font-medium tabular-nums ${pnlPositive ? "text-emerald-600" : "text-red-600"}`}>
               {formatCurrency(snapshot.pnl)}
             </p>
@@ -74,7 +74,7 @@ function SnapshotCard({ snapshot, ticker, currency, eventsCreated }: { snapshot:
 
         {snapshot.pe_ratio != null && (
           <div className="px-4 py-3">
-            <p className="font-mono text-[9px] uppercase tracking-[0.2em] text-muted-foreground mb-1">P/E</p>
+            <p className="font-mono text-[10px] uppercase tracking-[0.15em] text-muted-foreground mb-1">P/E</p>
             <p className="font-mono text-sm font-medium tabular-nums">{snapshot.pe_ratio.toFixed(1)}</p>
             {snapshot.market_cap != null && (
               <p className="font-mono text-[10px] text-muted-foreground">{formatLargeNumber(snapshot.market_cap)}</p>
@@ -83,7 +83,7 @@ function SnapshotCard({ snapshot, ticker, currency, eventsCreated }: { snapshot:
         )}
 
         <div className="px-4 py-3">
-          <p className="font-mono text-[9px] uppercase tracking-[0.2em] text-muted-foreground mb-1">Signals</p>
+          <p className="font-mono text-[10px] uppercase tracking-[0.15em] text-muted-foreground mb-1">Signals</p>
           {snapshot.watch_hints_total > 0 ? (
             <p className={`font-mono text-sm font-medium tabular-nums ${hintsOk ? "text-emerald-600" : "text-amber-600"}`}>
               {snapshot.watch_hints_ok}/{snapshot.watch_hints_total}
@@ -105,7 +105,7 @@ function SnapshotCard({ snapshot, ticker, currency, eventsCreated }: { snapshot:
 
       {earningsDate && earningsDays != null && earningsDays > 0 && earningsDays <= 30 && (
         <div className="px-4 py-2.5 border-t border-border/40">
-          <p className="font-mono text-[9px] text-muted-foreground/60">
+          <p className="font-mono text-[10px] text-muted-foreground/70">
             Earnings {earningsDate} · {earningsDays} day{earningsDays !== 1 ? "s" : ""} away
           </p>
         </div>

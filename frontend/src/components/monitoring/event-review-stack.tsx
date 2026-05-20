@@ -12,6 +12,7 @@ interface Props {
   events: MonitoringEvent[];
   onReview: (event: MonitoringEvent, action: ReviewAction, notes?: string) => Promise<void>;
   reviewingEventId: string | null;
+  investorProfile?: "thesis_driven" | "hearsay_driven" | null;
 }
 
 const severityStripe: Record<string, string> = {
@@ -49,11 +50,55 @@ interface CardProps {
   isTop: boolean;
   onSwipe: (action: ReviewAction) => void;
   busy: boolean;
+  investorProfile?: "thesis_driven" | "hearsay_driven" | null;
 }
 
-function DraggableCard({ event, index, total, isTop, onSwipe, busy }: CardProps) {
+function reviewCopy(investorProfile?: "thesis_driven" | "hearsay_driven" | null) {
+  if (investorProfile === "thesis_driven") {
+    return {
+      right: "Thesis holds",
+      up: "Assumption weaker",
+      left: "Not relevant",
+      buttonHold: "Thesis holds",
+      buttonErode: "Assumption weaker",
+      buttonSkip: "Not relevant",
+      buttonBroken: "Thesis broken",
+      reviewHint: "drag to decide · swipe up to flag weakening confidence",
+      allCaughtUp: "You've reviewed every signal. Your thesis stands until something changes.",
+    };
+  }
+
+  if (investorProfile === "hearsay_driven") {
+    return {
+      right: "Reason holds",
+      up: "Less sure",
+      left: "Not relevant",
+      buttonHold: "Reason holds",
+      buttonErode: "Less sure now",
+      buttonSkip: "Not relevant",
+      buttonBroken: "Story broken",
+      reviewHint: "drag to decide · swipe up if the story feels weaker",
+      allCaughtUp: "You've reviewed every signal. Your reason stands until something real changes.",
+    };
+  }
+
+  return {
+    right: "Holds",
+    up: "Eroding",
+    left: "Irrelevant",
+    buttonHold: "Reason holds",
+    buttonErode: "Eroding",
+    buttonSkip: "Skip",
+    buttonBroken: "Broken",
+    reviewHint: "drag to decide · swipe up to flag",
+    allCaughtUp: "You've reviewed every signal. Your reason stands until something changes.",
+  };
+}
+
+function DraggableCard({ event, index, total, isTop, onSwipe, busy, investorProfile }: CardProps) {
   const x = useMotionValue(0);
   const y = useMotionValue(0);
+  const copy = reviewCopy(investorProfile);
 
   const rotate = useTransform(x, [-220, 0, 220], [-14, 0, 14]);
   const rightOpacity = useTransform(x, [20, 100], [0, 1]);
@@ -61,8 +106,9 @@ function DraggableCard({ event, index, total, isTop, onSwipe, busy }: CardProps)
   const upOpacity = useTransform(y, [-100, -20], [1, 0]);
 
   const narrative = event.evidence_summary ? parseNarrative(event.evidence_summary) : {};
-  const displayText = narrative["What happened"] ?? event.summary;
+  const displayText = narrative["What changed"] ?? narrative["What happened"] ?? event.summary;
   const verdict = event.verdict;
+  const thesisLine = narrative["Your thesis"] ?? narrative["You said"] ?? narrative["Your reason"];
 
   const handleDragEnd = (_: unknown, info: { offset: { x: number; y: number }; velocity: { x: number; y: number } }) => {
     if (busy) return;
@@ -113,11 +159,11 @@ function DraggableCard({ event, index, total, isTop, onSwipe, busy }: CardProps)
           {/* Meta row */}
           <div className="flex items-center justify-between mb-3">
             <div className="flex items-center gap-2">
-              <span className="font-mono text-[9px] uppercase tracking-[0.2em] text-muted-foreground border border-border px-1.5 py-0.5">
+              <span className="font-mono text-[10px] uppercase tracking-[0.15em] text-muted-foreground border border-border px-1.5 py-0.5">
                 {event.severity.replace("_", " ")}
               </span>
               {event.signal_label && (
-                <span className="font-mono text-[9px] uppercase tracking-[0.15em] text-primary/70">
+                <span className="font-mono text-[10px] uppercase tracking-[0.12em] text-primary/70">
                   {event.signal_label}
                 </span>
               )}
@@ -128,10 +174,10 @@ function DraggableCard({ event, index, total, isTop, onSwipe, busy }: CardProps)
           </div>
 
           {/* Thesis clause quoted */}
-          {narrative["You said"] && (
+          {thesisLine && (
             <blockquote className="border-l-2 border-primary/30 pl-3 mb-3">
               <p className="font-sans text-xs italic text-muted-foreground leading-relaxed line-clamp-2">
-                &ldquo;{narrative["You said"]}&rdquo;
+                &ldquo;{thesisLine}&rdquo;
               </p>
             </blockquote>
           )}
@@ -143,7 +189,7 @@ function DraggableCard({ event, index, total, isTop, onSwipe, busy }: CardProps)
 
           {/* Verdict chip */}
           {verdict && (
-            <div className={`mt-3 inline-flex self-start items-center border rounded-sm px-2 py-0.5 font-mono text-[9px] uppercase tracking-[0.15em] ${verdictBg[verdict] ?? verdictBg.neutral}`}>
+            <div className={`mt-3 inline-flex self-start items-center border rounded-sm px-2 py-0.5 font-mono text-[10px] uppercase tracking-[0.12em] ${verdictBg[verdict] ?? verdictBg.neutral}`}>
               {verdict === "supports" ? "Supports reason" : verdict === "threatens" ? "Threatens reason" : verdict === "review" ? "Warrants review" : "Neutral"}
             </div>
           )}
@@ -155,7 +201,7 @@ function DraggableCard({ event, index, total, isTop, onSwipe, busy }: CardProps)
               target="_blank"
               rel="noreferrer"
               onClick={(e) => e.stopPropagation()}
-              className="mt-2 font-mono text-[9px] uppercase tracking-[0.15em] text-primary/60 hover:text-primary transition-colors underline underline-offset-2"
+              className="mt-2 font-mono text-[10px] uppercase tracking-[0.12em] text-primary/60 hover:text-primary transition-colors underline underline-offset-2"
             >
               Source ↗
             </a>
@@ -165,9 +211,9 @@ function DraggableCard({ event, index, total, isTop, onSwipe, busy }: CardProps)
         {/* Swipe hint row at bottom */}
         {isTop && (
           <div className="flex items-center justify-between border-t border-border px-5 py-2.5 bg-muted/30">
-            <span className="font-mono text-[9px] uppercase tracking-[0.12em] text-muted-foreground/50">← Irrelevant</span>
-            <span className="font-mono text-[9px] uppercase tracking-[0.12em] text-muted-foreground/50">↑ Eroding</span>
-            <span className="font-mono text-[9px] uppercase tracking-[0.12em] text-muted-foreground/50">Holds →</span>
+            <span className="font-mono text-[10px] uppercase tracking-[0.1em] text-muted-foreground/60">← {copy.left}</span>
+            <span className="font-mono text-[10px] uppercase tracking-[0.1em] text-muted-foreground/60">↑ {copy.up}</span>
+            <span className="font-mono text-[10px] uppercase tracking-[0.1em] text-muted-foreground/60">{copy.right} →</span>
           </div>
         )}
       </div>
@@ -181,7 +227,7 @@ function DraggableCard({ event, index, total, isTop, onSwipe, busy }: CardProps)
             className="pointer-events-none absolute inset-0 flex items-center justify-start pl-6 rounded-sm"
           >
             <div className="border-2 border-emerald-500 rounded-sm px-3 py-1.5 rotate-[-12deg]">
-              <span className="font-mono text-sm font-bold tracking-[0.2em] text-emerald-600 uppercase">Holds</span>
+              <span className="font-mono text-sm font-bold tracking-[0.2em] text-emerald-600 uppercase">{copy.right}</span>
             </div>
           </motion.div>
 
@@ -191,7 +237,7 @@ function DraggableCard({ event, index, total, isTop, onSwipe, busy }: CardProps)
             className="pointer-events-none absolute inset-0 flex items-center justify-end pr-6 rounded-sm"
           >
             <div className="border-2 border-muted-foreground/40 rounded-sm px-3 py-1.5 rotate-[12deg]">
-              <span className="font-mono text-sm font-bold tracking-[0.2em] text-muted-foreground uppercase">Skip</span>
+              <span className="font-mono text-sm font-bold tracking-[0.2em] text-muted-foreground uppercase">{copy.left}</span>
             </div>
           </motion.div>
 
@@ -201,7 +247,7 @@ function DraggableCard({ event, index, total, isTop, onSwipe, busy }: CardProps)
             className="pointer-events-none absolute inset-0 flex items-end justify-center pb-14 rounded-sm"
           >
             <div className="border-2 border-amber-500 rounded-sm px-3 py-1.5">
-              <span className="font-mono text-sm font-bold tracking-[0.2em] text-amber-600 uppercase">Eroding</span>
+              <span className="font-mono text-sm font-bold tracking-[0.2em] text-amber-600 uppercase">{copy.up}</span>
             </div>
           </motion.div>
         </>
@@ -212,8 +258,9 @@ function DraggableCard({ event, index, total, isTop, onSwipe, busy }: CardProps)
 
 // ── Stack container ────────────────────────────────────────────────────────
 
-export function EventReviewStack({ events, onReview, reviewingEventId }: Props) {
+export function EventReviewStack({ events, onReview, reviewingEventId, investorProfile }: Props) {
   const [dismissed, setDismissed] = useState<Set<string>>(new Set());
+  const copy = reviewCopy(investorProfile);
 
   // Events not yet dismissed from stack
   const pending = events.filter((e) => !dismissed.has(e.id));
@@ -243,7 +290,7 @@ export function EventReviewStack({ events, onReview, reviewingEventId }: Props) 
       >
         <p className="font-display text-2xl italic text-foreground">All caught up.</p>
         <p className="font-sans text-sm text-muted-foreground">
-          You&apos;ve reviewed every signal. Your reason stands until something changes.
+          {copy.allCaughtUp}
         </p>
       </motion.div>
     );
@@ -260,7 +307,7 @@ export function EventReviewStack({ events, onReview, reviewingEventId }: Props) 
           {pending.length} to review
         </p>
         <p className="font-mono text-[10px] text-muted-foreground/50">
-          drag to decide · swipe up to flag
+          {copy.reviewHint}
         </p>
       </div>
 
@@ -289,6 +336,7 @@ export function EventReviewStack({ events, onReview, reviewingEventId }: Props) 
                 isTop={index === 0}
                 onSwipe={handleSwipe}
                 busy={!!reviewingEventId}
+                investorProfile={investorProfile}
               />
             </motion.div>
           ))}
@@ -303,7 +351,7 @@ export function EventReviewStack({ events, onReview, reviewingEventId }: Props) 
           disabled={!!reviewingEventId}
           className="flex-1"
         >
-          Reason holds
+          {copy.buttonHold}
         </Button>
         <Button
           size="sm"
@@ -311,7 +359,7 @@ export function EventReviewStack({ events, onReview, reviewingEventId }: Props) 
           onClick={() => void handleSwipe("lowered_confidence")}
           disabled={!!reviewingEventId}
         >
-          Eroding
+          {copy.buttonErode}
         </Button>
         <Button
           size="sm"
@@ -319,7 +367,7 @@ export function EventReviewStack({ events, onReview, reviewingEventId }: Props) 
           onClick={() => void handleSwipe("not_relevant")}
           disabled={!!reviewingEventId}
         >
-          Skip
+          {copy.buttonSkip}
         </Button>
         <Button
           size="sm"
@@ -327,7 +375,7 @@ export function EventReviewStack({ events, onReview, reviewingEventId }: Props) 
           onClick={() => void handleInvalidate()}
           disabled={!!reviewingEventId}
         >
-          Broken
+          {copy.buttonBroken}
         </Button>
       </div>
     </div>

@@ -29,7 +29,7 @@ export function AttentionCard({ holding, pulse, index }: AttentionCardProps) {
             <span className="font-mono text-[11px] font-semibold tracking-[0.2em] text-primary">
               {cleanTicker(holding.ticker)}
             </span>
-            <span className={`font-mono text-[9px] uppercase tracking-[0.15em] ${isReview ? "text-red-600" : "text-amber-700"}`}>
+            <span className={`font-mono text-[10px] uppercase tracking-[0.12em] ${isReview ? "text-red-600" : "text-amber-700"}`}>
               {isReview ? "Review" : "Watch"}
             </span>
           </div>
@@ -37,7 +37,7 @@ export function AttentionCard({ holding, pulse, index }: AttentionCardProps) {
             {pulse.latest_event_summary ?? pulse.reason ?? "Monitoring event requires attention"}
           </p>
           {pulse.recent_event_count > 0 && (
-            <p className="font-mono text-[9px] text-muted-foreground/60">
+            <p className="font-mono text-[10px] text-muted-foreground/70">
               {pulse.recent_event_count} recent event{pulse.recent_event_count !== 1 ? "s" : ""} →
             </p>
           )}
