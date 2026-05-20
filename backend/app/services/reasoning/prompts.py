@@ -1,4 +1,4 @@
-DECOMPOSITION_PROMPT_VERSION = "v4"
+DECOMPOSITION_PROMPT_VERSION = "v5"
 
 DECOMPOSITION_JSON_SCHEMA = {
     "type": "object",
@@ -164,17 +164,81 @@ DECOMPOSITION_JSON_SCHEMA = {
 
 DECOMPOSITION_SYSTEM_PROMPT = """You decompose an investor's reason for owning a holding into monitorable claims, entities, and signals.
 
-Return only schema-conforming JSON (no extra keys, no prose). Be concise: keep every rationale field under 20 words, signal_label under 8 words.
+Return only schema-conforming JSON (no extra keys, no prose). Be concise: rationale fields under 20 words, signal_label 4-8 words.
 
 Rules:
-- If the reason contains any investment rationale (even one sentence with a measurable premise), extract at least one claim. Zero claims is only acceptable if the entire text is purely descriptive with zero investment intent (e.g. "they make phones").
-- Extract claims from all three fields: why_own_it, must_remain_true, and what_would_change_my_mind. Conditions in must_remain_true and what_would_change_my_mind are often the most monitorable.
-- Do not create monitorable signals from pure description with no investment intent.
+- Extract at least one claim whenever any investment rationale is present (even one sentence). Zero claims only if the text is purely descriptive with zero investment intent.
+- Extract claims from all three fields: why_own_it, must_remain_true, and what_would_change_my_mind. The latter two are often the most monitorable.
+- Phrase each claim_text as a falsifiable assertion with an implied pass/fail condition — e.g. "Data center revenue grows >20% YoY", not "Company is growing fast."
+- signal_label must be a search-ready phrase specific enough to find relevant news — e.g. "NVDA data center revenue growth", not just "revenue".
+- Populate signal_config_json (metric, operator, threshold/threshold_pct, segment, topic) whenever the signal is quantitative or topic-based.
 - Do not invent numeric thresholds unless the user text clearly implies them.
 - Do not assume proxy entities unless there is a plausible causal relationship.
 - Mark speculative mappings with lower confidence and confirmation_required=true.
-- Entities and signals within a claim may be empty arrays if the claim is too vague to generate them, but the claim itself must still be captured.
-- Limit to the 3 most important claims, 3 entities per claim, 3 signals per entity. Quality over quantity.
+- Limit to the 3 most important claims, 3 entities per claim, 3 signals per entity.
+
+Example input:
+  Ticker: NVDA | why_own_it: "NVIDIA dominates AI training GPUs. Hyperscalers pour money into data centers and NVDA takes the lion's share."
+  must_remain_true: "Data center revenue keeps growing. Gross margins stay above 70%."
+  what_would_change_my_mind: "AMD gains real GPU market share. Export restrictions gut China revenue."
+
+Example output:
+{
+  "reason_type": "business_performance", "monitorability": "high", "decomposition_confidence": 0.9,
+  "claims": [
+    {
+      "claim_text": "NVDA data center revenue grows above 20% YoY on AI GPU demand",
+      "claim_type": "growth", "confidence": 0.9,
+      "entities": [
+        {
+          "entity_name": "NVIDIA", "entity_ticker": "NVDA", "entity_type": "held_company",
+          "relation_type": "validated_by", "rationale": "Data center is primary revenue driver",
+          "confidence": 0.95, "confirmation_required": false,
+          "signals": [
+            {"signal_type": "revenue_growth", "signal_label": "NVDA data center revenue growth",
+             "signal_config_json": {"metric": "data_center_revenue", "operator": ">=", "threshold_pct": 20},
+             "rationale": "Core thesis validator", "confidence": 0.95, "confirmation_required": false},
+            {"signal_type": "earnings_surprise", "signal_label": "NVDA quarterly earnings beat",
+             "signal_config_json": {}, "rationale": "Beats confirm AI demand continues",
+             "confidence": 0.8, "confirmation_required": false}
+          ]
+        }
+      ]
+    },
+    {
+      "claim_text": "NVDA gross margin stays above 70%",
+      "claim_type": "margins", "confidence": 0.85,
+      "entities": [
+        {
+          "entity_name": "NVIDIA", "entity_ticker": "NVDA", "entity_type": "held_company",
+          "relation_type": "validated_by", "rationale": "Margin erosion breaks thesis",
+          "confidence": 0.85, "confirmation_required": false,
+          "signals": [
+            {"signal_type": "earnings_growth", "signal_label": "NVDA gross margin trend",
+             "signal_config_json": {"metric": "gross_margin", "operator": ">=", "threshold_pct": 70},
+             "rationale": "70% floor implied by thesis condition", "confidence": 0.85, "confirmation_required": false}
+          ]
+        }
+      ]
+    },
+    {
+      "claim_text": "AMD does not take meaningful AI GPU market share from NVDA",
+      "claim_type": "demand", "confidence": 0.75,
+      "entities": [
+        {
+          "entity_name": "AMD", "entity_ticker": "AMD", "entity_type": "competitor",
+          "relation_type": "threatened_by", "rationale": "AMD GPU wins would erode NVDA moat",
+          "confidence": 0.75, "confirmation_required": true,
+          "signals": [
+            {"signal_type": "news_topic", "signal_label": "AMD AI GPU market share gains",
+             "signal_config_json": {"topic": "AMD AI GPU competition NVDA"},
+             "rationale": "AMD customer wins signal thesis risk", "confidence": 0.7, "confirmation_required": true}
+          ]
+        }
+      ]
+    }
+  ]
+}
 """
 
 DECOMPOSITION_USER_PROMPT = """Holding
