@@ -29,6 +29,7 @@ from app.services.edgar import (
     get_recent_8k_filings,
     get_recent_form4_transactions,
 )
+from app.services.edgar_extractor import enrich_earnings_candidates
 from app.services.news_collector import collect_news_evidence
 from app.services.signal_matching import (
     load_active_decomposition,
@@ -278,6 +279,9 @@ async def run_monitoring():
                 # EDGAR Form 4 insider transactions
                 form4_txns = await get_recent_form4_transactions(holding.ticker)
                 candidates.extend(build_form4_candidates(holding.ticker, form4_txns, now=now))
+
+                # Enrich earnings 8-Ks (item 2.02) with LLM-extracted content
+                candidates = await enrich_earnings_candidates(candidates, thesis)
 
                 # Signal linking: load decomposition and enrich candidates
                 decomposition = await load_active_decomposition(db, thesis.id)
