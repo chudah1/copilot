@@ -22,7 +22,15 @@ from app.services.monitoring_pipeline import (
     classify_candidates_for_thesis,
     load_investor_profile,
     persist_classified_candidates,
+    signal_labels_from_claims,
 )
+from app.services.edgar import (
+    build_edgar_candidates,
+    build_form4_candidates,
+    get_recent_8k_filings,
+    get_recent_form4_transactions,
+)
+from app.services.news_collector import collect_news_evidence
 from app.services.signal_matching import (
     load_active_decomposition,
     match_candidates_to_signals,
@@ -168,9 +176,24 @@ async def run_check_now(
         now=now,
     )
 
+    # EDGAR 8-K candidates (US tickers only; silently skipped for non-US)
+    edgar_filings = await get_recent_8k_filings(holding.ticker)
+    candidates.extend(build_edgar_candidates(holding.ticker, edgar_filings))
+
+    # EDGAR Form 4 insider transactions
+    form4_txns = await get_recent_form4_transactions(holding.ticker)
+    candidates.extend(build_form4_candidates(holding.ticker, form4_txns, now=now))
+
     # Signal linking: load decomposition and enrich candidates
     decomposition = await load_active_decomposition(db, thesis.id)
     claims = decomposition.claims if decomposition else None
+
+    # Gemini news (uses signal labels from decomposition)
+    signal_labels = signal_labels_from_claims(claims)
+    gemini_candidates = await collect_news_evidence(
+        holding.ticker, holding.name or holding.ticker, signal_labels
+    )
+    candidates.extend(gemini_candidates)
     candidates = match_candidates_to_signals(candidates, claims)
 
     # Build lookup tables for narrative generation

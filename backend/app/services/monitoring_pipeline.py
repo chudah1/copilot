@@ -3,11 +3,13 @@ from __future__ import annotations
 import uuid
 from typing import Any
 
+from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.config import settings
 from app.models.holding import Holding
 from app.models.monitoring_event import MonitoringEvent
+from app.models.onboarding_state import OnboardingState
 from app.models.thesis import Thesis
 from app.services.ai_monitor import classify_event
 from app.services.conviction_log import EVIDENCE_RECEIVED, append_log_entry
@@ -42,7 +44,28 @@ def _event_title(ticker: str, candidate: dict[str, Any], claim_obj: Any | None) 
     if event_type == "insider_transaction":
         return f"{clean}: insider activity"
 
+    if event_type == "edgar_8k":
+        desc = evidence.get("description", "material event")
+        return f"{clean}: SEC 8-K — {desc}"
+
+    if event_type == "gemini_news":
+        headline = evidence.get("headline", "")
+        return f"{clean}: {headline[:80]}" if headline else f"{clean}: news"
+
     return f"{clean}: {event_type.replace('_', ' ')}"
+
+
+def signal_labels_from_claims(claims: list[Any] | None) -> list[str]:
+    """Extract all active signal labels from a decomposition's claim list."""
+    if not claims:
+        return []
+    return [
+        signal.signal_label
+        for claim in claims
+        for entity in (claim.entities or [])
+        for signal in (entity.signals or [])
+        if signal.signal_label
+    ]
 
 
 def build_claim_signal_lookup(claims: list[Any] | None) -> tuple[dict[str, Any], dict[str, Any]]:
@@ -86,6 +109,8 @@ def candidate_summary_for_storage(candidate: dict[str, Any]) -> str:
 async def classify_candidates_for_thesis(
     thesis: Thesis,
     candidates: list[dict[str, Any]],
+    *,
+    investor_profile: str | None = None,
 ) -> list[tuple[dict[str, Any], str, str | None]]:
     classified: list[tuple[dict[str, Any], str, str | None]] = []
     for candidate in candidates:
@@ -95,11 +120,22 @@ async def classify_candidates_for_thesis(
             what_would_change_my_mind=thesis.what_would_change_my_mind,
             ai_summary=thesis.ai_summary,
             event_description=candidate_description_for_classifier(candidate),
+            investor_profile=investor_profile,
         )
         severity = classification.severity if classification else "warning"
         ai_analysis = classification.analysis if classification else None
         classified.append((candidate, severity, ai_analysis))
     return classified
+
+
+async def load_investor_profile(
+    db: AsyncSession,
+    user_id,
+) -> str | None:
+    result = await db.execute(
+        select(OnboardingState.investor_profile).where(OnboardingState.user_id == user_id)
+    )
+    return result.scalar_one_or_none()
 
 
 async def persist_classified_candidates(
@@ -111,6 +147,7 @@ async def persist_classified_candidates(
     claims_by_id: dict[str, Any],
     signals_by_id: dict[str, Any],
     now,
+    investor_profile: str | None = None,
 ) -> list[uuid.UUID]:
     events: list[MonitoringEvent] = []
     for candidate, severity, ai_analysis in classified:
@@ -122,13 +159,16 @@ async def persist_classified_candidates(
         claim_obj = claims_by_id.get(evidence_claim_id) if evidence_claim_id else None
         signal_obj = signals_by_id.get(evidence_signal_id) if evidence_signal_id else None
 
+        verdict = determine_verdict(severity, candidate)
         evidence_summary = build_evidence_summary(
             candidate=candidate,
             claim_text=claim_obj.claim_text if claim_obj else None,
             signal_label=signal_obj.signal_label if signal_obj else None,
             why_own_it=thesis.why_own_it,
+            severity=severity,
+            verdict=verdict,
+            investor_profile=investor_profile,
         )
-        verdict = determine_verdict(severity, candidate)
         evidence_type = EVIDENCE_TYPE_MAP.get(candidate["event_type"], candidate["event_type"])
         stored_summary = candidate_summary_for_storage(candidate)
 

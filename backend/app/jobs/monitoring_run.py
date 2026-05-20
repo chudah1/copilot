@@ -19,8 +19,17 @@ from app.services.noise_filter import (
 from app.services.monitoring_pipeline import (
     build_claim_signal_lookup,
     classify_candidates_for_thesis,
+    load_investor_profile,
     persist_classified_candidates,
+    signal_labels_from_claims,
 )
+from app.services.edgar import (
+    build_edgar_candidates,
+    build_form4_candidates,
+    get_recent_8k_filings,
+    get_recent_form4_transactions,
+)
+from app.services.news_collector import collect_news_evidence
 from app.services.signal_matching import (
     load_active_decomposition,
     match_candidates_to_signals,
@@ -262,13 +271,29 @@ async def run_monitoring():
                         )
                     )
 
+                # EDGAR 8-K candidates (US tickers only; silently skipped for non-US)
+                edgar_filings = await get_recent_8k_filings(holding.ticker)
+                candidates.extend(build_edgar_candidates(holding.ticker, edgar_filings))
+
+                # EDGAR Form 4 insider transactions
+                form4_txns = await get_recent_form4_transactions(holding.ticker)
+                candidates.extend(build_form4_candidates(holding.ticker, form4_txns, now=now))
+
                 # Signal linking: load decomposition and enrich candidates
                 decomposition = await load_active_decomposition(db, thesis.id)
                 claims = decomposition.claims if decomposition else None
+
+                # Gemini news (uses signal labels from decomposition)
+                signal_labels = signal_labels_from_claims(claims)
+                gemini_candidates = await collect_news_evidence(
+                    holding.ticker, holding.name or holding.ticker, signal_labels
+                )
+                candidates.extend(gemini_candidates)
                 candidates = match_candidates_to_signals(candidates, claims)
 
                 # Build lookup tables for narrative generation
                 claims_by_id, signals_by_id = build_claim_signal_lookup(claims)
+                investor_profile = await load_investor_profile(db, thesis.user_id)
 
                 # Update holding price from direct ticker data
                 if company_data and company_data.current_price is not None:
@@ -281,7 +306,11 @@ async def run_monitoring():
                 # Noise suppression: filter before classification (rules 1, 2, 4)
                 candidates = await filter_candidates(candidates, holding.id, signals_by_id, db, now=now)
 
-                classified = await classify_candidates_for_thesis(thesis, candidates)
+                classified = await classify_candidates_for_thesis(
+                    thesis,
+                    candidates,
+                    investor_profile=investor_profile,
+                )
 
                 # Rule 3: Priority suppression (post-classification)
                 suppressed = apply_priority_suppression([(c, s) for c, s, _ in classified])
@@ -296,6 +325,7 @@ async def run_monitoring():
                     claims_by_id=claims_by_id,
                     signals_by_id=signals_by_id,
                     now=now,
+                    investor_profile=investor_profile,
                 )
 
             except Exception as e:

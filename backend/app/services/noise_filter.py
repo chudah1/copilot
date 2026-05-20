@@ -33,6 +33,9 @@ EVIDENCE_TYPE_MAP: dict[str, str] = {
     "upcoming_earnings": "earnings",
     "earnings_call_transcript": "earnings",
     "insider_transaction": "insider",
+    "edgar_8k": "regulatory_filing",
+    "gemini_news": "news",
+    "news_keyword_match": "news",
 }
 
 
@@ -41,6 +44,7 @@ def _get_evidence_source_id(evidence: dict[str, Any]) -> str | None:
         evidence.get("article_id")
         or evidence.get("transaction_id")
         or evidence.get("transcript_id")
+        or evidence.get("edgar_accession")
     )
 
 

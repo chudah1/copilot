@@ -379,7 +379,10 @@ async def test_run_monitoring_skips_vague_thesis_without_candidates(db, job_sess
         mock_settings.market_data_provider = "alpha_vantage"
         with patch("app.jobs.monitoring_run.async_session", job_session_factory):
             with patch("app.jobs.monitoring_run.fetch_company_data", new_callable=AsyncMock, return_value=company_data):
-                await run_monitoring()
+                with patch("app.jobs.monitoring_run.get_recent_8k_filings", new_callable=AsyncMock, return_value=[]):
+                    with patch("app.jobs.monitoring_run.get_recent_form4_transactions", new_callable=AsyncMock, return_value=[]):
+                        with patch("app.jobs.monitoring_run.collect_news_evidence", new_callable=AsyncMock, return_value=[]):
+                            await run_monitoring()
 
     events = (await db.execute(MonitoringEvent.__table__.select())).all()
     assert events == []
