@@ -244,13 +244,7 @@ async def decompose_thesis(
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Holding not found")
 
     result = await generate_decomposition_for_thesis(db=db, thesis=thesis, holding=thesis.holding)
-    if result.status == "pending":
-        envelope = _decomposition_envelope_from_result(result)
-        return JSONResponse(
-            status_code=status.HTTP_202_ACCEPTED,
-            content=envelope.model_dump(mode="json"),
-        )
-    if result.status == "failed":
+    if result.status in ("pending", "failed"):
         envelope = _decomposition_envelope_from_result(result)
         return JSONResponse(
             status_code=status.HTTP_200_OK,

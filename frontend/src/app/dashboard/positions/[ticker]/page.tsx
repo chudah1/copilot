@@ -1,7 +1,7 @@
 "use client";
 
 import { useEffect, useState } from "react";
-import { useParams } from "next/navigation";
+import { useParams, useSearchParams } from "next/navigation";
 import Link from "next/link";
 import { motion, AnimatePresence } from "framer-motion";
 import { api } from "@/lib/api";
@@ -22,6 +22,7 @@ import { CounterThesisCard } from "@/components/thesis/counter-thesis-card";
 import { CheckNowButton } from "@/components/monitoring/check-now-button";
 import { EarningsReviewModal } from "@/components/thesis/earnings-review-modal";
 import type {
+  CheckNowResponse,
   ConfirmDecompositionRequest,
   ConvictionLogResponse,
   HealthCheckResult,
@@ -36,6 +37,15 @@ import type {
 } from "@/types";
 
 type TabId = "thesis" | "monitoring" | "history";
+type NextStepAction = "edit" | "generate_signals" | "confirm_signals" | "monitoring";
+
+interface NextStepNotice {
+  eyebrow: string;
+  title: string;
+  body: string;
+  ctaLabel?: string;
+  action?: NextStepAction;
+}
 
 function cleanTicker(ticker: string) {
   return ticker.replace(/_US_EQ$/, "").replace(/_EQ$/, "");
@@ -167,6 +177,185 @@ function positionCopy(investorProfile: "thesis_driven" | "hearsay_driven" | null
   };
 }
 
+function getDecisionPrompt(
+  thesis: Thesis | undefined,
+  events: MonitoringEvent[],
+  investorProfile: "thesis_driven" | "hearsay_driven" | null,
+  daysOld: number,
+) {
+  if (!thesis) {
+    return {
+      eyebrow: "Before you add more",
+      title:
+        investorProfile === "hearsay_driven"
+          ? "Do not add to a story you have not written down yet."
+          : "Do not add to a position before the thesis is explicit.",
+      body:
+        investorProfile === "hearsay_driven"
+          ? "Turn the original story into a real reason first, or it becomes too easy to size up a hope trade."
+          : "Write the thesis, what must remain true, and what would break it before treating this like conviction.",
+      ctaLabel: investorProfile === "thesis_driven" ? "Write the thesis now →" : "Write the reason now →",
+      action: "edit" as const,
+      tone: "border-amber-500/25 bg-amber-500/8",
+    };
+  }
+
+  const monitorability =
+    thesis.interpretation && typeof thesis.interpretation.monitorability === "string"
+      ? thesis.interpretation.monitorability
+      : null;
+  const ambiguity =
+    thesis.interpretation && typeof thesis.interpretation.ambiguity_note === "string"
+      ? thesis.interpretation.ambiguity_note
+      : "";
+  const unresolvedEvent = events.find((event) => !event.review_action);
+
+  if (thesis.status === "needs_review" && unresolvedEvent) {
+    return {
+      eyebrow: "Before you add more",
+      title:
+        investorProfile === "hearsay_driven"
+          ? "Resolve whether the original story still holds."
+          : "Resolve this thesis review before you add.",
+      body:
+        unresolvedEvent.ai_analysis ||
+        unresolvedEvent.evidence_summary ||
+        (investorProfile === "hearsay_driven"
+          ? "New evidence already challenged the story behind this position. Review it before increasing size."
+          : "New evidence already challenged part of this thesis. Review it before increasing size."),
+      ctaLabel: "Review the latest evidence →",
+      action: "monitoring" as const,
+      tone: "border-red-500/25 bg-red-500/8",
+    };
+  }
+
+  if (monitorability === "low" || ambiguity) {
+    return {
+      eyebrow: "Before you size up",
+      title:
+        investorProfile === "hearsay_driven"
+          ? "The reason is still too story-like."
+          : "The thesis is still too vague.",
+      body:
+        ambiguity ||
+        (investorProfile === "hearsay_driven"
+          ? "Make the business driver and break condition clearer before you commit more capital."
+          : "Tighten the assumptions before you commit more capital."),
+      ctaLabel: investorProfile === "hearsay_driven" ? "Tighten the reason →" : "Tighten the thesis →",
+      action: "edit" as const,
+      tone: "border-sky-500/25 bg-sky-500/8",
+    };
+  }
+
+  if (daysOld > 90) {
+    return {
+      eyebrow: "Before you keep holding on autopilot",
+      title:
+        investorProfile === "hearsay_driven"
+          ? "Would you still buy this today for the same reason?"
+          : "Would you still underwrite this thesis today?",
+      body:
+        investorProfile === "hearsay_driven"
+          ? "The reason is old enough that you should re-read it before treating this as active conviction."
+          : "The written thesis is old enough that you should re-underwrite it before treating this as active conviction.",
+      ctaLabel: "Re-read and refresh it →",
+      action: "edit" as const,
+      tone: "border-amber-500/25 bg-amber-500/8",
+    };
+  }
+
+  return null;
+}
+
+function getThesisHandoffPrompt(args: {
+  hasThesis: boolean;
+  hasSignals: boolean;
+  hasActiveSignals: boolean;
+  decompositionStatus: string | null;
+  investorProfile: "thesis_driven" | "hearsay_driven" | null;
+}) {
+  const { hasThesis, hasSignals, hasActiveSignals, decompositionStatus, investorProfile } = args;
+  if (!hasThesis) return null;
+
+  if (!hasSignals) {
+    return {
+      title:
+        investorProfile === "hearsay_driven"
+          ? "The reason is written. Next, make it watchable."
+          : "The thesis is written. Next, make it watchable.",
+      body:
+        investorProfile === "hearsay_driven"
+          ? "Generate signal candidates so the app knows what evidence should actually test this reason."
+          : "Generate signal candidates so the app knows what evidence should actually test this thesis.",
+      ctaLabel: "Generate signals →",
+      action: "generate" as const,
+    };
+  }
+
+  if (!hasActiveSignals || decompositionStatus === "draft" || decompositionStatus === "partially_confirmed") {
+    return {
+      title:
+        investorProfile === "hearsay_driven"
+          ? "The watchlist is ready. Now confirm what should count."
+          : "The watchlist is ready. Now confirm what should count.",
+      body:
+        investorProfile === "hearsay_driven"
+          ? "The app already suggested a monitoring setup. Review it once so future alerts reflect the reason you actually mean."
+          : "The app already suggested a monitoring setup. Review it once so future alerts reflect the thesis you actually mean.",
+      ctaLabel: "Review signals →",
+      action: "monitoring" as const,
+    };
+  }
+
+  return null;
+}
+
+function getMonitoringCalmState(args: {
+  hasReviewedEvents: boolean;
+  lastReviewedEventAgeDays: number | null;
+  upcomingEarnings: UpcomingEarnings | null;
+  monitoringPreviewItems: Array<{ key: string; label: string; detail: string }>;
+  watchHints: string[];
+  activeSignalCount: number;
+  investorProfile: "thesis_driven" | "hearsay_driven" | null;
+}) {
+  const {
+    hasReviewedEvents,
+    lastReviewedEventAgeDays,
+    upcomingEarnings,
+    monitoringPreviewItems,
+    watchHints,
+    activeSignalCount,
+    investorProfile,
+  } = args;
+
+  const title =
+    investorProfile === "hearsay_driven"
+      ? "Reason intact. Nothing needs a decision right now."
+      : "Thesis intact. Nothing needs a decision right now.";
+
+  const body = hasReviewedEvents
+    ? `All reviewed evidence is on file${lastReviewedEventAgeDays != null ? ` and the last decision was ${lastReviewedEventAgeDays} day${lastReviewedEventAgeDays === 1 ? "" : "s"} ago` : ""}.`
+    : investorProfile === "hearsay_driven"
+      ? "Monitoring is live and the latest available data did not produce a reason-level decision."
+      : "Monitoring is live and the latest available data did not produce a thesis-level decision.";
+
+  const nextCheck =
+    upcomingEarnings && upcomingEarnings.days_until >= 0 && upcomingEarnings.days_until <= 30
+      ? `Next likely checkpoint: earnings ${upcomingEarnings.days_until === 0 ? "today" : upcomingEarnings.days_until === 1 ? "tomorrow" : `in ${upcomingEarnings.days_until} days`}.`
+      : activeSignalCount > 0
+        ? `The app is actively watching ${activeSignalCount} signal${activeSignalCount === 1 ? "" : "s"} for this position.`
+        : "The app is waiting for a material change that touches one of your monitored assumptions.";
+
+  return {
+    title,
+    body,
+    nextCheck,
+    previewItems: monitoringPreviewItems.slice(0, 2),
+    fallbackHints: watchHints.slice(0, 2),
+  };
+}
+
 const METRIC_LABELS: Record<string, string> = {
   revenue_growth_yoy: "Revenue growth (YoY)",
   earnings_growth_yoy: "Earnings growth (YoY)",
@@ -193,6 +382,179 @@ function describeWatchHint(hint: Record<string, unknown>) {
   return null;
 }
 
+function getMonitoringPreviewItems(
+  decompositionEnvelope: ThesisDecompositionEnvelope | null,
+  fallbackWatchHints: Record<string, unknown>[],
+) {
+  const signalItems =
+    decompositionEnvelope?.decomposition?.claims.flatMap((claim) =>
+      claim.entities.flatMap((entity) =>
+        entity.signals
+          .filter((signal) => signal.active)
+          .map((signal) => ({
+            key: signal.id,
+            label: signal.signal_label || signal.signal_type.replaceAll("_", " "),
+            detail: signal.rationale || `Watch ${entity.entity_name} for evidence tied to this thesis signal.`,
+          })),
+      ),
+    ) ?? [];
+
+  if (signalItems.length > 0) {
+    return signalItems.slice(0, 3);
+  }
+
+  return fallbackWatchHints
+    .map((hint, index) => {
+      const label = describeWatchHint(hint);
+      if (!label) return null;
+      return {
+        key: `watch_hint_${index}`,
+        label,
+        detail:
+          typeof hint.rationale === "string" && hint.rationale.trim()
+            ? hint.rationale.trim()
+            : "This is the first monitoring rule the app can evaluate against your reason.",
+      };
+    })
+    .filter((item): item is { key: string; label: string; detail: string } => Boolean(item))
+    .slice(0, 3);
+}
+
+function buildPostSaveNotice(investorProfile: "thesis_driven" | "hearsay_driven" | null): NextStepNotice {
+  return {
+    eyebrow: "Reason saved",
+    title:
+      investorProfile === "hearsay_driven"
+        ? "Next, tell the app what parts of the story to watch."
+        : "Next, turn the thesis into explicit signals.",
+    body:
+      investorProfile === "hearsay_driven"
+        ? "Your reason is written down. Generate signal candidates now so the app can separate real evidence from narrative noise."
+        : "Your thesis is saved. Generate signal candidates now so monitoring knows which assumptions should matter.",
+    ctaLabel: "Generate signals now →",
+    action: "generate_signals",
+  };
+}
+
+function buildPostDecompositionNotice(
+  envelope: ThesisDecompositionEnvelope,
+  investorProfile: "thesis_driven" | "hearsay_driven" | null,
+): NextStepNotice {
+  if (envelope.status === "failed" || envelope.status === "pending") {
+    return {
+      eyebrow: "Signal generation failed",
+      title: "Something went wrong mapping your reason.",
+      body: envelope.message || "This happens occasionally. Try again — it usually works on the second attempt.",
+      ctaLabel: "Try again →",
+      action: "generate_signals",
+    };
+  }
+
+  return {
+    eyebrow: "Signals ready",
+    title:
+      investorProfile === "hearsay_driven"
+        ? "Review what the app thinks should test this reason."
+        : "Review what the app thinks should test this thesis.",
+    body:
+      investorProfile === "hearsay_driven"
+        ? "The recommended setup is preselected. Keep it if it matches the story you meant, or edit signal by signal."
+        : "The recommended setup is preselected. Keep it if it matches your thesis, or edit signal by signal.",
+    ctaLabel: "Review and confirm them →",
+    action: "confirm_signals",
+  };
+}
+
+function buildPostConfirmationNotice(
+  investorProfile: "thesis_driven" | "hearsay_driven" | null,
+): NextStepNotice {
+  return {
+    eyebrow: "Monitoring setup confirmed",
+    title:
+      investorProfile === "hearsay_driven"
+        ? "The app now knows what would actually test this reason."
+        : "The app now knows what would actually test this thesis.",
+    body:
+      investorProfile === "hearsay_driven"
+        ? "You do not need to keep checking manually. The next meaningful change will show up here as evidence to review."
+        : "You do not need to keep checking manually. The next meaningful change will show up here as evidence to review.",
+    ctaLabel: "See the live monitoring state →",
+    action: "monitoring",
+  };
+}
+
+function buildPostReviewClearNotice(
+  investorProfile: "thesis_driven" | "hearsay_driven" | null,
+): NextStepNotice {
+  return {
+    eyebrow: "Decision logged",
+    title:
+      investorProfile === "hearsay_driven"
+        ? "The reason is back in a monitored, quiet state."
+        : "The thesis is back in a monitored, quiet state.",
+    body:
+      investorProfile === "hearsay_driven"
+        ? "There is nothing else to decide right now. The next meaningful change will appear here when it tests your reason again."
+        : "There is nothing else to decide right now. The next meaningful change will appear here when it tests your thesis again.",
+    ctaLabel: "Stay on monitoring →",
+    action: "monitoring",
+  };
+}
+
+function buildPostInvalidationNotice(
+  investorProfile: "thesis_driven" | "hearsay_driven" | null,
+): NextStepNotice {
+  return {
+    eyebrow: "Reason broken",
+    title:
+      investorProfile === "hearsay_driven"
+        ? "This position now needs a new reason or a sell decision."
+        : "This position now needs a new thesis or a sell decision.",
+    body:
+      investorProfile === "hearsay_driven"
+        ? "You logged that the original story no longer holds. Rework the reason on the thesis tab if you still want to own it."
+        : "You logged that the thesis no longer holds. Rework the thesis on the thesis tab if you still want to own it.",
+    ctaLabel: investorProfile === "thesis_driven" ? "Rewrite the thesis →" : "Rewrite the reason →",
+    action: "edit",
+  };
+}
+
+function buildCheckNowNotice(args: {
+  result: CheckNowResponse;
+  investorProfile: "thesis_driven" | "hearsay_driven" | null;
+}): NextStepNotice {
+  const { result, investorProfile } = args;
+  if (result.events_created > 0) {
+    return {
+      eyebrow: "Fresh evidence found",
+      title:
+        investorProfile === "hearsay_driven"
+          ? `${result.events_created} change${result.events_created !== 1 ? "s" : ""} may test your reason.`
+          : `${result.events_created} change${result.events_created !== 1 ? "s" : ""} may test your thesis.`,
+      body:
+        investorProfile === "hearsay_driven"
+          ? "The app found new evidence worth a decision. Review it below while the original story is still fresh in your head."
+          : "The app found new evidence worth a decision. Review it below while the thesis is still fresh in your head.",
+      ctaLabel: "Review the new evidence →",
+      action: "monitoring",
+    };
+  }
+
+  return {
+    eyebrow: "Check complete",
+    title:
+      investorProfile === "hearsay_driven"
+        ? "Nothing meaningful changed for this reason."
+        : "Nothing meaningful changed for this thesis.",
+    body:
+      investorProfile === "hearsay_driven"
+        ? "The app checked the latest available data and did not find a reason-level decision to make right now."
+        : "The app checked the latest available data and did not find a thesis-level decision to make right now.",
+    ctaLabel: "Stay on monitoring →",
+    action: "monitoring",
+  };
+}
+
 function isRecentEvent(dateString: string, days: number) {
   const ageMs = Date.now() - new Date(dateString).getTime();
   return ageMs >= 0 && ageMs <= days * 24 * 60 * 60 * 1000;
@@ -212,6 +574,7 @@ const STATUS_DOT: Record<string, string> = {
 
 export default function PositionDetailPage() {
   const { ticker } = useParams<{ ticker: string }>();
+  const searchParams = useSearchParams();
   const [activeTab, setActiveTab] = useState<TabId>("thesis");
   const [holdings, setHoldings] = useState<Holding[]>([]);
   const [theses, setTheses] = useState<Thesis[]>([]);
@@ -236,6 +599,7 @@ export default function PositionDetailPage() {
   const [showPositionDetails, setShowPositionDetails] = useState(false);
   const [showEarningsReview, setShowEarningsReview] = useState(false);
   const [onboardingState, setOnboardingState] = useState<OnboardingState | null>(null);
+  const [nextStepNotice, setNextStepNotice] = useState<NextStepNotice | null>(null);
 
   const holding = holdings.find((h) => h.ticker === ticker);
   const activeThesis = theses.find((t) => t.status === "active" || t.status === "draft" || t.status === "needs_review");
@@ -318,6 +682,7 @@ export default function PositionDetailPage() {
     if (!holding) return;
     const refreshed = await api.get<MonitoringEvent[]>(`/api/monitoring/holdings/${holding.id}/events`);
     setEvents(refreshed);
+    return refreshed;
   };
 
   const refreshConvictionLog = async () => {
@@ -395,6 +760,8 @@ export default function PositionDetailPage() {
         runHealthCheck(savedThesisId);
         setShowCounterThesis(true);
         setShowAnalysis(true);
+        setActiveTab("monitoring");
+        setNextStepNotice(buildPostSaveNotice(onboardingState?.investor_profile ?? null));
       }
       await refreshConvictionLog();
     } catch (err) {
@@ -437,6 +804,8 @@ export default function PositionDetailPage() {
       setDecompositionLoading(true);
       const envelope = await api.post<ThesisDecompositionEnvelope>(`/api/theses/${activeThesis.id}/decompose`);
       setDecompositionEnvelope(envelope);
+      setActiveTab("monitoring");
+      setNextStepNotice(buildPostDecompositionNotice(envelope, onboardingState?.investor_profile ?? null));
       await refreshCurrentThesis();
     } catch (error) {
       const message = getErrorMessage(error, "Failed to generate thesis signals");
@@ -452,6 +821,8 @@ export default function PositionDetailPage() {
       setDecompositionSaving(true);
       const envelope = await api.post<ThesisDecompositionEnvelope>(`/api/theses/${activeThesis.id}/decomposition/confirm`, payload);
       setDecompositionEnvelope(envelope);
+      setActiveTab("monitoring");
+      setNextStepNotice(buildPostConfirmationNotice(onboardingState?.investor_profile ?? null));
       await refreshCurrentThesis();
       await refreshConvictionLog();
     } catch (error) {
@@ -473,7 +844,14 @@ export default function PositionDetailPage() {
         notes: notes?.trim() ? notes.trim() : undefined,
       });
       setTheses((current) => current.map((thesis) => (thesis.id === result.thesis.id ? result.thesis : thesis)));
-      await Promise.all([refreshEvents(), refreshConvictionLog()]);
+      const [refreshedEvents] = await Promise.all([refreshEvents(), refreshConvictionLog()]);
+      if (action === "invalidated") {
+        setActiveTab("thesis");
+        setNextStepNotice(buildPostInvalidationNotice(onboardingState?.investor_profile ?? null));
+      } else if (refreshedEvents && refreshedEvents.every((candidate) => candidate.review_action)) {
+        setActiveTab("monitoring");
+        setNextStepNotice(buildPostReviewClearNotice(onboardingState?.investor_profile ?? null));
+      }
       const ageText = result.reason_age_days != null ? ` Reason age: ${result.reason_age_days} days.` : "";
       toast.success(`Logged. Reason is now ${result.thesis.status.replace("_", " ")}.${ageText}`);
     } catch (error) {
@@ -495,6 +873,16 @@ export default function PositionDetailPage() {
     } finally {
       setNoteSaving(false);
     }
+  };
+
+  const handleCheckNowComplete = async (result: CheckNowResponse) => {
+    await refreshEvents();
+    await refreshCurrentThesis();
+    setActiveTab("monitoring");
+    setNextStepNotice(buildCheckNowNotice({
+      result,
+      investorProfile: onboardingState?.investor_profile ?? null,
+    }));
   };
 
   // ── Loading ──────────────────────────────────────────────────────────────
@@ -541,9 +929,38 @@ export default function PositionDetailPage() {
   const watchHints = Array.isArray(activeThesis?.interpretation?.watch_hints)
     ? activeThesis.interpretation.watch_hints.filter((hint): hint is Record<string, unknown> => typeof hint === "object" && hint !== null)
     : [];
+  const monitoringPreviewItems = getMonitoringPreviewItems(decompositionEnvelope, watchHints);
   const earningsWatchList = watchHints.map((h) => describeWatchHint(h)).filter((h): h is string => Boolean(h)).slice(0, 3);
   const unreviewedEvents = events.filter((e) => !e.review_action).length;
+  const reviewedEventsCount = events.filter((e) => Boolean(e.review_action)).length;
   const invalidatedTheses = theses.filter((t) => t.status === "invalidated");
+  const latestInvalidatedThesis = [...invalidatedTheses].sort(
+    (a, b) => new Date(b.updated_at).getTime() - new Date(a.updated_at).getTime(),
+  )[0];
+  const decisionPrompt = getDecisionPrompt(
+    activeThesis,
+    events,
+    onboardingState?.investor_profile ?? null,
+    activeThesis ? ageInDays(activeThesis.updated_at) : 0,
+  );
+  const thesisHandoffPrompt = getThesisHandoffPrompt({
+    hasThesis: Boolean(activeThesis),
+    hasSignals,
+    hasActiveSignals,
+    decompositionStatus: decompositionEnvelope?.status ?? null,
+    investorProfile: onboardingState?.investor_profile ?? null,
+  });
+  const fromOnboarding = searchParams.get("source") === "onboarding";
+  const onboardingMonitoringMessage = decompositionLoading
+    ? "We’re turning your first reason into watchable signals now."
+    : decompositionEnvelope?.decomposition
+        ? "Your first reason is live and the app has started turning it into something monitorable."
+        : "Your first reason is live. The next step is to confirm what the app should actually watch.";
+  const onboardingMonitoringNextStep = decompositionLoading
+    ? "Next step: give the app a moment to finish turning your reason into signal candidates."
+    : decompositionEnvelope?.decomposition
+      ? "Next step: confirm these signals so monitoring becomes explicit and high-trust."
+      : "Next step: review the first monitoring rules below and tighten anything that feels vague.";
 
   const tabs: { id: TabId; label: string; badge?: number | string }[] = [
     { id: "thesis", label: "Your reason" },
@@ -560,6 +977,51 @@ export default function PositionDetailPage() {
   const lastReviewedEvent = events.filter((e) => e.review_action).sort((a, b) =>
     new Date(b.created_at).getTime() - new Date(a.created_at).getTime()
   )[0];
+  const firstPendingEvent = events.find((event) => !event.review_action) ?? null;
+  const isFirstLiveEvidenceMoment = unreviewedEvents > 0 && reviewedEventsCount === 0;
+  const activeSignalCount =
+    decompositionEnvelope?.decomposition?.claims.reduce(
+      (sum, claim) =>
+        sum +
+        claim.entities.reduce(
+          (entitySum, entity) => entitySum + entity.signals.filter((signal) => signal.active).length,
+          0,
+        ),
+      0,
+    ) ?? 0;
+  const monitoringCalmState = getMonitoringCalmState({
+    hasReviewedEvents: events.some((event) => Boolean(event.review_action)),
+    lastReviewedEventAgeDays: lastReviewedEvent ? ageInDays(lastReviewedEvent.created_at) : null,
+    upcomingEarnings,
+    monitoringPreviewItems,
+    watchHints: earningsWatchList,
+    activeSignalCount,
+    investorProfile: onboardingState?.investor_profile ?? null,
+  });
+  const editorSeedThesis = activeThesis ?? latestInvalidatedThesis ?? null;
+  const editorMode: "write" | "tighten" | "rewrite" =
+    !activeThesis && latestInvalidatedThesis
+      ? "rewrite"
+      : activeThesis && thesisInsights.qualityLabel === "Weak signals"
+        ? "tighten"
+        : "write";
+
+  const handleNextStepAction = () => {
+    if (!nextStepNotice?.action) return;
+    const action = nextStepNotice.action;
+    setNextStepNotice(null);
+    if (action === "edit") {
+      setEditing(true);
+      setActiveTab("thesis");
+      return;
+    }
+    if (action === "generate_signals") {
+      setActiveTab("monitoring");
+      void handleGenerateDecomposition();
+      return;
+    }
+    setActiveTab("monitoring");
+  };
 
   // ── Render ───────────────────────────────────────────────────────────────
 
@@ -582,7 +1044,8 @@ export default function PositionDetailPage() {
               holdingId={holding.id}
               ticker={holding.ticker}
               currency={holding.currency}
-              onComplete={async () => { await refreshEvents(); await refreshCurrentThesis(); }}
+              investorProfile={onboardingState?.investor_profile ?? null}
+              onComplete={handleCheckNowComplete}
             />
           </div>
 
@@ -676,6 +1139,114 @@ export default function PositionDetailPage() {
       {/* ── Contextual banners ───────────────────────────────────────────── */}
       <div className="max-w-5xl mx-auto px-6 lg:px-10">
 
+        {fromOnboarding && activeThesis && (
+          <motion.div
+            initial={{ opacity: 0, y: -4 }}
+            animate={{ opacity: 1, y: 0 }}
+            className="mt-5 border border-emerald-500/25 bg-emerald-500/8 px-5 py-4 space-y-4"
+          >
+            <div className="space-y-2">
+              <p className="font-mono text-[10px] uppercase tracking-[0.2em] text-emerald-700">
+                ● First holding activated
+              </p>
+              <p className="font-sans text-sm text-foreground/80 leading-relaxed">
+                {onboardingMonitoringMessage}
+              </p>
+            </div>
+
+            {monitoringPreviewItems.length > 0 && (
+              <div className="space-y-2">
+                <p className="font-mono text-[10px] uppercase tracking-[0.18em] text-foreground/60">
+                  What the app is beginning to watch
+                </p>
+                <div className="grid gap-2">
+                  {monitoringPreviewItems.map((item) => (
+                    <div key={item.key} className="border border-emerald-600/10 bg-background/70 px-3 py-2.5">
+                      <p className="font-sans text-sm text-foreground">{item.label}</p>
+                      <p className="font-sans text-xs text-muted-foreground mt-1 leading-relaxed">{item.detail}</p>
+                    </div>
+                  ))}
+                </div>
+              </div>
+            )}
+
+            <p className="font-sans text-xs text-foreground/65 leading-relaxed">
+              {onboardingMonitoringNextStep}
+            </p>
+          </motion.div>
+        )}
+
+        {nextStepNotice && (
+          <motion.div
+            initial={{ opacity: 0, y: -4 }}
+            animate={{ opacity: 1, y: 0 }}
+            className="mt-5 border border-primary/20 bg-primary/5 px-5 py-4 space-y-3"
+          >
+            <div className="flex items-start justify-between gap-4">
+              <div className="space-y-2">
+                <p className="font-mono text-[10px] uppercase tracking-[0.2em] text-primary">
+                  {nextStepNotice.eyebrow}
+                </p>
+                <div className="space-y-1">
+                  <p className="font-display italic text-[1.35rem] leading-tight text-foreground">
+                    {nextStepNotice.title}
+                  </p>
+                  <p className="font-sans text-sm text-foreground/80 leading-relaxed">
+                    {nextStepNotice.body}
+                  </p>
+                </div>
+              </div>
+              <button
+                onClick={() => setNextStepNotice(null)}
+                className="font-mono text-[10px] uppercase tracking-[0.15em] text-muted-foreground hover:text-foreground transition-colors"
+              >
+                Dismiss
+              </button>
+            </div>
+            {nextStepNotice.ctaLabel && nextStepNotice.action && (
+              <button
+                onClick={handleNextStepAction}
+                className="font-mono text-[10px] uppercase tracking-[0.15em] text-primary hover:text-primary/80 transition-colors"
+              >
+                {nextStepNotice.ctaLabel}
+              </button>
+            )}
+          </motion.div>
+        )}
+
+        {decisionPrompt && (
+          <motion.div
+            initial={{ opacity: 0, y: -4 }}
+            animate={{ opacity: 1, y: 0 }}
+            className={`mt-5 border px-5 py-4 space-y-3 ${decisionPrompt.tone}`}
+          >
+            <p className="font-mono text-[10px] uppercase tracking-[0.2em] text-foreground/70">
+              {decisionPrompt.eyebrow}
+            </p>
+            <div className="space-y-1.5">
+              <p className="font-display italic text-[1.35rem] leading-tight text-foreground">
+                {decisionPrompt.title}
+              </p>
+              <p className="font-sans text-sm text-foreground/80 leading-relaxed">
+                {decisionPrompt.body}
+              </p>
+            </div>
+            <button
+              onClick={() => {
+                if (decisionPrompt.action === "edit") {
+                  setEditing(true);
+                  setActiveTab("thesis");
+                  return;
+                }
+                setActiveTab("monitoring");
+              }}
+              className="font-mono text-[10px] uppercase tracking-[0.15em] text-primary hover:text-primary/80 transition-colors"
+            >
+              {decisionPrompt.ctaLabel}
+            </button>
+          </motion.div>
+        )}
+
         {activeThesis && upcomingEarnings && upcomingEarnings.days_until <= 14 && (
           <motion.div
             initial={{ opacity: 0, y: -4 }}
@@ -742,7 +1313,11 @@ export default function PositionDetailPage() {
                 onClick={() => setShowEarningsReview(true)}
                 className="font-mono text-[10px] uppercase tracking-[0.15em] border border-amber-600/40 text-amber-700 bg-amber-50 hover:bg-amber-100 px-4 py-2 transition-colors"
               >
-                Review reason claim by claim →
+                {onboardingState?.investor_profile === "thesis_driven"
+                  ? "Review thesis claim by claim →"
+                  : onboardingState?.investor_profile === "hearsay_driven"
+                    ? "Review the reason claim by claim →"
+                    : "Review reason claim by claim →"}
               </button>
             </div>
           </motion.div>
@@ -753,6 +1328,7 @@ export default function PositionDetailPage() {
         <EarningsReviewModal
           thesisId={activeThesis.id}
           ticker={cleanTicker(ticker)}
+          investorProfile={onboardingState?.investor_profile ?? null}
           onClose={() => setShowEarningsReview(false)}
         />
       )}
@@ -808,10 +1384,38 @@ export default function PositionDetailPage() {
                   </div>
                 )}
 
+                {thesisHandoffPrompt && !editing && (
+                  <div className="border-l-2 border-sky-500/30 pl-4 py-1 flex items-start justify-between gap-4">
+                    <div className="space-y-1">
+                      <p className="font-sans text-sm text-foreground/90 leading-relaxed max-w-xl">
+                        {thesisHandoffPrompt.title}
+                      </p>
+                      <p className="font-sans text-sm text-muted-foreground leading-relaxed max-w-xl">
+                        {thesisHandoffPrompt.body}
+                      </p>
+                    </div>
+                    <button
+                      onClick={() => {
+                        if (thesisHandoffPrompt.action === "generate") {
+                          setActiveTab("monitoring");
+                          void handleGenerateDecomposition();
+                          return;
+                        }
+                        setActiveTab("monitoring");
+                      }}
+                      className="font-mono text-[10px] uppercase tracking-[0.15em] text-primary px-4 py-2 hover:text-primary/80 transition-colors shrink-0"
+                    >
+                      {thesisHandoffPrompt.ctaLabel}
+                    </button>
+                  </div>
+                )}
+
                 {/* Editor */}
                 {editing && (
                   <ThesisEditor
-                    thesis={activeThesis ?? null}
+                    thesis={editorSeedThesis}
+                    investorProfile={onboardingState?.investor_profile ?? null}
+                    mode={editorMode}
                     onSave={handleSave}
                     onAssist={handleAssist}
                     onCancel={() => setEditing(false)}
@@ -823,6 +1427,7 @@ export default function PositionDetailPage() {
                   <ThesisCard
                     thesis={activeThesis}
                     decomposition={decompositionEnvelope?.decomposition ?? null}
+                    investorProfile={onboardingState?.investor_profile ?? null}
                     onEdit={() => setEditing(true)}
                     onInvalidate={() => setInvalidateOpen(true)}
                   />
@@ -832,16 +1437,30 @@ export default function PositionDetailPage() {
                 {!activeThesis && !editing && (
                   <div className="py-16 text-center space-y-4">
                     <p className="font-display italic text-2xl text-foreground/50">
-                      {copy.noReasonTitle}
+                      {latestInvalidatedThesis
+                        ? (onboardingState?.investor_profile === "thesis_driven"
+                            ? "Your last thesis broke."
+                            : onboardingState?.investor_profile === "hearsay_driven"
+                              ? "Your last reason broke."
+                              : "Your last reason broke.")
+                        : copy.noReasonTitle}
                     </p>
                     <p className="font-sans text-sm text-muted-foreground max-w-sm mx-auto leading-relaxed">
-                      {copy.noReasonBody}
+                      {latestInvalidatedThesis
+                        ? (onboardingState?.investor_profile === "thesis_driven"
+                            ? "Start from the last written thesis, remove what failed, and write the version you would still underwrite today."
+                            : onboardingState?.investor_profile === "hearsay_driven"
+                              ? "Start from the last written reason, remove the part of the story that broke, and write the version you would still believe today."
+                              : "Start from the last written reason, remove what failed, and write the version you would still believe today.")
+                        : copy.noReasonBody}
                     </p>
                     <button
                       onClick={() => setEditing(true)}
                       className="font-mono text-[10px] uppercase tracking-[0.2em] border border-primary/40 text-primary px-5 py-2.5 hover:border-primary transition-colors"
                     >
-                      {copy.noReasonCta}
+                      {latestInvalidatedThesis
+                        ? (onboardingState?.investor_profile === "thesis_driven" ? "Rewrite the thesis" : "Rewrite the reason")
+                        : copy.noReasonCta}
                     </button>
                   </div>
                 )}
@@ -858,7 +1477,11 @@ export default function PositionDetailPage() {
                     {showAnalysis && (
                       <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} className="space-y-4">
                         {(healthCheck || healthCheckLoading) && (
-                          <ThesisHealthCheck result={healthCheck} loading={healthCheckLoading} />
+                          <ThesisHealthCheck
+                            result={healthCheck}
+                            loading={healthCheckLoading}
+                            investorProfile={onboardingState?.investor_profile ?? null}
+                          />
                         )}
                         {showCounterThesis && <CounterThesisCard thesisId={activeThesis.id} />}
                       </motion.div>
@@ -921,6 +1544,29 @@ export default function PositionDetailPage() {
                     <section>
                       {unreviewedEvents > 0 ? (
                         <div className="space-y-5">
+                          {isFirstLiveEvidenceMoment && firstPendingEvent && (
+                            <div className="border border-primary/20 bg-primary/5 px-5 py-4 space-y-3">
+                              <p className="font-mono text-[10px] uppercase tracking-[0.2em] text-primary">
+                                ● First live evidence
+                              </p>
+                              <div className="space-y-1.5">
+                                <p className="font-display italic text-[1.35rem] leading-tight text-foreground">
+                                  {onboardingState?.investor_profile === "hearsay_driven"
+                                    ? "This is the first real test of the reason you wrote down."
+                                    : "This is the first real test of the thesis you wrote down."}
+                                </p>
+                                <p className="font-sans text-sm text-foreground/80 leading-relaxed">
+                                  {firstPendingEvent.ai_analysis ||
+                                    firstPendingEvent.evidence_summary ||
+                                    firstPendingEvent.summary ||
+                                    (onboardingState?.investor_profile === "hearsay_driven"
+                                      ? "The app found the first piece of evidence that may change the original story. Decide what it means before you move on."
+                                      : "The app found the first piece of evidence that may change the thesis. Decide what it means before you move on.")}
+                                </p>
+                              </div>
+                            </div>
+                          )}
+
                           {/* Decisions pending header */}
                           <div className="flex items-baseline justify-between gap-4">
                             <div>
@@ -928,9 +1574,17 @@ export default function PositionDetailPage() {
                                 Decisions pending
                               </p>
                               <p className="font-display italic text-[1.6rem] leading-tight text-foreground">
-                                {unreviewedEvents === 1
-                                  ? "One signal needs your verdict."
-                                  : `${unreviewedEvents} signals need your verdict.`}
+                                {onboardingState?.investor_profile === "thesis_driven"
+                                  ? (unreviewedEvents === 1
+                                      ? "One thesis signal needs your verdict."
+                                      : `${unreviewedEvents} thesis signals need your verdict.`)
+                                  : onboardingState?.investor_profile === "hearsay_driven"
+                                    ? (unreviewedEvents === 1
+                                        ? "One change to your reason needs a decision."
+                                        : `${unreviewedEvents} changes to your reason need decisions.`)
+                                    : (unreviewedEvents === 1
+                                        ? "One signal needs your verdict."
+                                        : `${unreviewedEvents} signals need your verdict.`)}
                               </p>
                             </div>
                             <span className="font-mono text-[10px] text-muted-foreground/50 shrink-0 self-end pb-0.5">
@@ -948,17 +1602,39 @@ export default function PositionDetailPage() {
                         </div>
                       ) : (
                         /* Position clear */
-                        <div className="flex items-start gap-5 py-6 border-l-[3px] border-emerald-500/40 pl-6">
+                        <div className="space-y-4 py-6 border-l-[3px] border-emerald-500/40 pl-6">
                           <div className="space-y-1">
                             <p className="font-display italic text-[1.6rem] leading-tight text-foreground">
-                              Position clear.
+                              {monitoringCalmState.title}
                             </p>
                             <p className="font-sans text-sm text-muted-foreground leading-relaxed">
-                              {events.length > 0
-                                ? `All ${events.length} event${events.length !== 1 ? "s" : ""} reviewed.${lastReviewedEvent ? ` Last reviewed ${ageInDays(lastReviewedEvent.created_at)}d ago.` : ""} Your reason stands until something changes.`
-                                : "No material changes flagged since monitoring started."}
+                              {monitoringCalmState.body}
+                            </p>
+                            <p className="font-sans text-sm text-foreground/70 leading-relaxed">
+                              {monitoringCalmState.nextCheck}
                             </p>
                           </div>
+
+                          {monitoringCalmState.previewItems.length > 0 && (
+                            <div className="grid gap-2 sm:grid-cols-2 max-w-3xl">
+                              {monitoringCalmState.previewItems.map((item) => (
+                                <div key={item.key} className="border border-emerald-600/10 bg-card px-3 py-2.5">
+                                  <p className="font-sans text-sm text-foreground">{item.label}</p>
+                                  <p className="font-sans text-xs text-muted-foreground mt-1 leading-relaxed">{item.detail}</p>
+                                </div>
+                              ))}
+                            </div>
+                          )}
+
+                          {monitoringCalmState.previewItems.length === 0 && monitoringCalmState.fallbackHints.length > 0 && (
+                            <div className="flex flex-wrap gap-2">
+                              {monitoringCalmState.fallbackHints.map((hint) => (
+                                <span key={hint} className="font-sans text-xs text-foreground/70 border border-border/60 bg-card px-3 py-1">
+                                  {hint}
+                                </span>
+                              ))}
+                            </div>
+                          )}
                         </div>
                       )}
                     </section>
@@ -971,7 +1647,11 @@ export default function PositionDetailPage() {
                             Watching for
                           </p>
                           <p className="font-sans text-xs text-muted-foreground/70">
-                            Signals derived from your thesis
+                            {onboardingState?.investor_profile === "thesis_driven"
+                              ? "Signals derived from your thesis"
+                              : onboardingState?.investor_profile === "hearsay_driven"
+                                ? "Signals derived from the reason you wrote down"
+                                : "Signals derived from your thesis"}
                           </p>
                         </div>
                         {!hasSignals && !decompositionLoading && (
@@ -1015,9 +1695,21 @@ export default function PositionDetailPage() {
 
                     {/* No events at all */}
                     {events.length === 0 && !decompositionLoading && (
-                      <p className="font-sans text-sm text-muted-foreground/60 italic">
-                        Monitoring is active. Events will appear here as they are detected.
-                      </p>
+                      <div className="border border-border/50 bg-card/60 px-4 py-3 space-y-2">
+                        <p className="font-mono text-[10px] uppercase tracking-[0.18em] text-muted-foreground">
+                          Quiet state
+                        </p>
+                        <p className="font-sans text-sm text-muted-foreground/80 leading-relaxed">
+                          {onboardingState?.investor_profile === "thesis_driven"
+                            ? "Monitoring is active. No thesis-level change is worth a decision yet."
+                            : onboardingState?.investor_profile === "hearsay_driven"
+                              ? "Monitoring is active. Nothing has tested the reason strongly enough to force a decision yet."
+                              : "Monitoring is active. Nothing meaningful has changed yet."}
+                        </p>
+                        <p className="font-sans text-xs text-foreground/65">
+                          {monitoringCalmState.nextCheck}
+                        </p>
+                      </div>
                     )}
                   </>
                 )}
@@ -1032,12 +1724,13 @@ export default function PositionDetailPage() {
                   loading={convictionLogLoading}
                   saving={noteSaving}
                   onAddNote={activeThesis ? handleAddManualNote : undefined}
+                  investorProfile={onboardingState?.investor_profile ?? null}
                 />
 
                 {invalidatedTheses.length > 0 && (
                   <div className="border-t border-border/40 pt-6 space-y-3">
                     <p className="font-mono text-[10px] uppercase tracking-[0.2em] text-muted-foreground">
-                      Previous theses
+                      {onboardingState?.investor_profile === "thesis_driven" ? "Previous theses" : "Previous reasons"}
                     </p>
                     {invalidatedTheses.map((t) => (
                       <div key={t.id} className="border-l-2 border-border/60 pl-4 py-3 space-y-1.5">
@@ -1070,7 +1763,13 @@ export default function PositionDetailPage() {
             <DialogTitle className="font-display italic">Mark as broken</DialogTitle>
           </DialogHeader>
           <Textarea
-            placeholder="Why is this reason no longer valid?"
+            placeholder={
+              onboardingState?.investor_profile === "thesis_driven"
+                ? "Why is this thesis no longer valid?"
+                : onboardingState?.investor_profile === "hearsay_driven"
+                  ? "Why does the original story no longer hold?"
+                  : "Why is this reason no longer valid?"
+            }
             value={invalidateReason}
             onChange={(e) => setInvalidateReason(e.target.value)}
           />
