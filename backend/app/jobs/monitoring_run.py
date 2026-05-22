@@ -38,8 +38,6 @@ from app.services.signal_matching import (
 
 logger = logging.getLogger(__name__)
 
-MAX_MONITORED_POSITIONS = 50
-
 
 def _requires_market_data_key() -> bool:
     return settings.market_data_provider == "alpha_vantage"
@@ -227,7 +225,6 @@ async def run_monitoring():
         result = await db.execute(
             select(Thesis)
             .where(Thesis.status.in_(["active", "needs_review"]))
-            .limit(MAX_MONITORED_POSITIONS)
         )
         active_theses = result.scalars().all()
 
@@ -314,6 +311,7 @@ async def run_monitoring():
                     thesis,
                     candidates,
                     investor_profile=investor_profile,
+                    sector=holding.sector,
                 )
 
                 # Rule 3: Priority suppression (post-classification)

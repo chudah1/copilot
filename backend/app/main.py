@@ -4,6 +4,9 @@ from urllib.parse import urlparse
 
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
+from slowapi import _rate_limit_exceeded_handler
+from slowapi.errors import RateLimitExceeded
+from app.limiter import limiter
 from sqlalchemy import inspect, text
 
 from app.config import settings
@@ -60,6 +63,9 @@ def _ensure_sqlite_dev_compatibility(conn) -> None:
         if "onboarding_completed_at" not in user_columns:
             conn.execute(text("ALTER TABLE users ADD COLUMN onboarding_completed_at DATETIME"))
             logger.info("Added missing users.onboarding_completed_at column for local SQLite compatibility")
+        if "last_seen_at" not in user_columns:
+            conn.execute(text("ALTER TABLE users ADD COLUMN last_seen_at DATETIME"))
+            logger.info("Added missing users.last_seen_at column for local SQLite compatibility")
 
     if "thesis_signals" in tables:
         thesis_signal_columns = {column["name"] for column in inspector.get_columns("thesis_signals")}
@@ -83,6 +89,9 @@ def _ensure_sqlite_dev_compatibility(conn) -> None:
         if "investor_profile" not in ob_columns:
             conn.execute(text("ALTER TABLE onboarding_states ADD COLUMN investor_profile VARCHAR(32)"))
             logger.info("Added missing onboarding_states.investor_profile column for local SQLite compatibility")
+        if "reengagement_email_sent_at" not in ob_columns:
+            conn.execute(text("ALTER TABLE onboarding_states ADD COLUMN reengagement_email_sent_at DATETIME"))
+            logger.info("Added missing onboarding_states.reengagement_email_sent_at column for local SQLite compatibility")
 
 
 @asynccontextmanager
@@ -101,6 +110,8 @@ async def lifespan(app: FastAPI):
 
 
 app = FastAPI(title="Copilot Investor", version="0.1.0", lifespan=lifespan)
+app.state.limiter = limiter
+app.add_exception_handler(RateLimitExceeded, _rate_limit_exceeded_handler)
 
 app.add_middleware(
     CORSMiddleware,

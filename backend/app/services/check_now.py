@@ -219,6 +219,7 @@ async def run_check_now(
         thesis,
         candidates,
         investor_profile=investor_profile,
+        sector=holding.sector,
     )
 
     # Rule 3: Priority suppression (post-classification)

@@ -276,24 +276,25 @@ def _infer_story_watch_hints(text: str) -> list[dict[str, Any]]:
             "rationale": "Prompt a review when price moves sharply.",
         }
     ]
-    if any(keyword in lowered for keyword in ("growth", "demand", "adoption", "sales", "orders", "capex", "ai")):
+    # Only trigger on explicit revenue/unit language — "growth", "AI", "demand" alone are too generic
+    if any(keyword in lowered for keyword in ("revenue", "sales", "orders", "bookings", "subscribers", "users", "capex", "top line", "top-line")):
         watch_hints.append(
             {
                 "kind": "metric_threshold",
                 "metric": "revenue_growth_yoy",
                 "operator": ">=",
                 "threshold": 0.0,
-                "rationale": "If the story is real, it should keep showing up in revenue growth and demand commentary.",
+                "rationale": "Revenue growth must stay positive to validate this thesis.",
             }
         )
-    if any(keyword in lowered for keyword in ("margin", "margins", "profit", "profitability", "earnings", "cash flow")):
+    if any(keyword in lowered for keyword in ("margin", "margins", "profit", "profitability", "earnings", "cash flow", "ebitda", "eps")):
         watch_hints.append(
             {
                 "kind": "metric_threshold",
                 "metric": "earnings_growth_yoy",
                 "operator": ">=",
                 "threshold": 0.0,
-                "rationale": "The business story should translate into healthy earnings, not just excitement.",
+                "rationale": "The thesis depends on profitable execution — monitor earnings growth.",
             }
         )
     return _dedupe_watch_hints(watch_hints)[:3]

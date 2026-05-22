@@ -111,6 +111,7 @@ async def classify_candidates_for_thesis(
     candidates: list[dict[str, Any]],
     *,
     investor_profile: str | None = None,
+    sector: str | None = None,
 ) -> list[tuple[dict[str, Any], str, str | None]]:
     classified: list[tuple[dict[str, Any], str, str | None]] = []
     for candidate in candidates:
@@ -121,6 +122,7 @@ async def classify_candidates_for_thesis(
             ai_summary=thesis.ai_summary,
             event_description=candidate_description_for_classifier(candidate),
             investor_profile=investor_profile,
+            sector=sector,
         )
         severity = classification.severity if classification else "warning"
         ai_analysis = classification.analysis if classification else None

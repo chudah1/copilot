@@ -28,6 +28,7 @@ Severity rules (apply strictly):
   Multiple conditions: each condition in "what would change my mind" is independent — any single one clearly met is sufficient for "thesis_breaking".
 - "warning": when a thesis pillar is weakening, a quantitative threshold is missed by 5pp or less, or a stated qualitative scenario is beginning to materialize. Also use for: direct competitor product launches or market share gains, management signals that weaken a thesis pillar (significant insider sales, executive departures, negative guidance), or trends consistently moving against a stated pillar.
 - "info": when the event does not directly touch any specific stated condition. Macro moves, index-level rallies, unrelated product launches, general market surveys, and a competitor's fundraising or hiring are almost always "info". Classify as "warning" only when the event reports direct evidence that a stated condition is currently changing, not because it might eventually lead to one.
+- Sector-aware macro rule: some macro events are "info" for most stocks but "warning" for specific sectors. When the holding sector is provided and the event directly affects that sector's economics, use "warning" even if the thesis doesn't explicitly name the macro risk. Examples: geopolitical conflict or oil supply disruption → Energy; central bank rate decision → Financials or REITs; trade tariffs on specific goods → the sector that makes or imports those goods; currency moves → companies with heavy international revenue; defence spending news → Industrials/Aerospace & Defence.
 
 Output valid JSON:
 {"severity": "info|warning|thesis_breaking", "analysis": "2-3 sentences."}
@@ -48,6 +49,7 @@ _CLASSIFY_USER_TEMPLATE = """Thesis:
 - AI summary: {ai_summary}
 - Investor profile: {investor_profile_label}
 - Decision framing: {investor_profile_guidance}
+- Holding sector: {sector}
 
 New data point:
 {event_description}"""
@@ -150,6 +152,7 @@ def _build_classification_prompt(
     ai_summary: str | None,
     event_description: str,
     investor_profile: str | None = None,
+    sector: str | None = None,
 ) -> str:
     investor_profile_label, investor_profile_guidance = _classification_profile_context(investor_profile)
     return _CLASSIFY_USER_TEMPLATE.format(
@@ -160,6 +163,7 @@ def _build_classification_prompt(
         event_description=event_description,
         investor_profile_label=investor_profile_label,
         investor_profile_guidance=investor_profile_guidance,
+        sector=sector or "Not specified",
     )
 
 
@@ -179,6 +183,7 @@ async def classify_event(
     ai_summary: str | None,
     event_description: str,
     investor_profile: str | None = None,
+    sector: str | None = None,
 ) -> ClassificationResult | None:
     prompt = _build_classification_prompt(
         why_own_it=why_own_it,
@@ -187,6 +192,7 @@ async def classify_event(
         ai_summary=ai_summary,
         event_description=event_description,
         investor_profile=investor_profile,
+        sector=sector,
     )
     try:
         if not settings.anthropic_api_key:

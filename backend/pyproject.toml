@@ -27,6 +27,8 @@ dependencies = [
     "python-multipart>=0.0.9",
     "aiosqlite>=0.20.0",
     "yfinance>=0.2.40",
+    "sentry-sdk[fastapi]>=2.0.0",
+    "slowapi>=0.1.9",
 ]
 
 [project.optional-dependencies]
@@ -40,6 +42,9 @@ dev = [
 [tool.pytest.ini_options]
 asyncio_mode = "auto"
 testpaths = ["tests"]
+markers = [
+    "eval: prompt quality eval suite — requires live API keys, excluded from default runs",
+]
 
 [tool.setuptools.packages.find]
 include = ["app*"]

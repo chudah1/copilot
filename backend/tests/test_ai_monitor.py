@@ -55,7 +55,7 @@ def test_build_classification_prompt_includes_profile_guidance():
         investor_profile="hearsay_driven",
     )
     assert "Investor profile: hearsay_driven" in prompt
-    assert "started from a story or tip" in prompt
+    assert "started from a tip or theme" in prompt
 
 
 async def test_classify_event_uses_profile_aware_fallback_when_no_key():
@@ -72,7 +72,7 @@ async def test_classify_event_uses_profile_aware_fallback_when_no_key():
 
     assert result is not None
     assert result.severity == "warning"
-    assert "original story" in result.analysis
+    assert "story" in result.analysis
 
 
 def test_normalize_analysis_text_adds_decision_ready_structure():

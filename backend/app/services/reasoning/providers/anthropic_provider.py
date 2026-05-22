@@ -48,19 +48,29 @@ class AnthropicReasoningProvider:
                         "name": "record_thesis_decomposition",
                         "description": "Return the thesis decomposition in the required structured schema.",
                         "input_schema": DECOMPOSITION_JSON_SCHEMA,
+                        "cache_control": {"type": "ephemeral"},
                     }
                 ],
                 tool_choice={"type": "tool", "name": "record_thesis_decomposition"},
-                system=DECOMPOSITION_SYSTEM_PROMPT,
+                system=[
+                    {
+                        "type": "text",
+                        "text": DECOMPOSITION_SYSTEM_PROMPT,
+                        "cache_control": {"type": "ephemeral"},
+                    }
+                ],
                 messages=[{"role": "user", "content": build_decomposition_prompt(request.payload)}],
                 temperature=0,
                 timeout=self.timeout_seconds,
             ) as stream:
                 response = await stream.get_final_message()
+            usage = response.usage
             logger.info(
-                "Anthropic decomposition usage — input: %s, output: %s, stop_reason: %s",
-                getattr(response.usage, "input_tokens", "?"),
-                getattr(response.usage, "output_tokens", "?"),
+                "Anthropic decomposition usage — input: %s, output: %s, cache_read: %s, cache_write: %s, stop_reason: %s",
+                getattr(usage, "input_tokens", "?"),
+                getattr(usage, "output_tokens", "?"),
+                getattr(usage, "cache_read_input_tokens", 0),
+                getattr(usage, "cache_creation_input_tokens", 0),
                 response.stop_reason,
             )
             if response.stop_reason == "max_tokens":
@@ -77,7 +87,9 @@ class AnthropicReasoningProvider:
             if raw.get("claims"):
                 self._cache.set(cache_key, raw)
             latency = int((time.perf_counter() - started) * 1000)
+            logger.info("Anthropic decomposition completed in %d ms", latency)
             return ReasoningResult(True, "success", self.name, self.model, DECOMPOSITION_PROMPT_VERSION, None, raw, None, latency, None, True)
         except Exception as exc:
             latency = int((time.perf_counter() - started) * 1000)
+            logger.error("Anthropic decomposition failed after %d ms", latency)
             return ReasoningResult(False, "failed", self.name, self.model, DECOMPOSITION_PROMPT_VERSION, None, None, None, latency, str(exc), True)

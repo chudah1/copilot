@@ -1,3 +1,4 @@
+from datetime import datetime, timezone
 from typing import Optional
 from fastapi import APIRouter, Depends, HTTPException, status, Response, Request
 from sqlalchemy import select
@@ -5,17 +6,27 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.config import settings
 from app.database import get_db
+from app.dependencies import get_current_user
 from app.models.user import User
 from app.schemas.auth import RegisterRequest, LoginRequest, TokenResponse, RefreshRequest, ForgotPasswordRequest, ResetPasswordRequest
 from app.services.auth import hash_password, verify_password, create_access_token, create_refresh_token, decode_token
 from app.services.password_reset import create_reset_token, validate_reset_token
 from app.services.email import send_password_reset_email
+from app.limiter import limiter
 
 router = APIRouter(prefix="/api/auth", tags=["auth"])
 
+_COOKIE_KWARGS = dict(httponly=True, secure=True, samesite="lax")
+
+
+def _set_auth_cookies(response: Response, *, access_token: str, refresh_token: str) -> None:
+    response.set_cookie(key="access_token", value=access_token, max_age=settings.jwt_access_token_expire_minutes * 60, **_COOKIE_KWARGS)
+    response.set_cookie(key="refresh_token", value=refresh_token, max_age=settings.jwt_refresh_token_expire_days * 24 * 60 * 60, **_COOKIE_KWARGS)
+
 
 @router.post("/register", response_model=TokenResponse, status_code=status.HTTP_201_CREATED)
-async def register(body: RegisterRequest, response: Response, db: AsyncSession = Depends(get_db)):
+@limiter.limit("3/minute")
+async def register(request: Request, body: RegisterRequest, response: Response, db: AsyncSession = Depends(get_db)):
     result = await db.execute(select(User).where(User.email == body.email))
     if result.scalar_one_or_none() is not None:
         raise HTTPException(status_code=status.HTTP_409_CONFLICT, detail="Email already registered")
@@ -27,61 +38,25 @@ async def register(body: RegisterRequest, response: Response, db: AsyncSession =
 
     access_token = create_access_token(str(user.id))
     refresh_token = create_refresh_token(str(user.id))
-
-    response.set_cookie(
-        key="access_token",
-        value=access_token,
-        httponly=True,
-        secure=True,
-        samesite="lax",
-        max_age=settings.jwt_access_token_expire_minutes * 60,
-    )
-    response.set_cookie(
-        key="refresh_token",
-        value=refresh_token,
-        httponly=True,
-        secure=True,
-        samesite="lax",
-        max_age=settings.jwt_refresh_token_expire_days * 24 * 60 * 60,
-    )
-
-    return TokenResponse(
-        access_token=access_token,
-        refresh_token=refresh_token,
-    )
+    _set_auth_cookies(response, access_token=access_token, refresh_token=refresh_token)
+    return TokenResponse(access_token=access_token, refresh_token=refresh_token)
 
 
 @router.post("/login", response_model=TokenResponse)
-async def login(body: LoginRequest, response: Response, db: AsyncSession = Depends(get_db)):
+@limiter.limit("5/minute")
+async def login(request: Request, body: LoginRequest, response: Response, db: AsyncSession = Depends(get_db)):
     result = await db.execute(select(User).where(User.email == body.email))
     user = result.scalar_one_or_none()
     if user is None or not verify_password(body.password, user.password_hash):
         raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="Invalid credentials")
 
+    user.last_seen_at = datetime.now(timezone.utc)
     access_token = create_access_token(str(user.id))
     refresh_token = create_refresh_token(str(user.id))
+    await db.commit()
 
-    response.set_cookie(
-        key="access_token",
-        value=access_token,
-        httponly=True,
-        secure=True,
-        samesite="lax",
-        max_age=settings.jwt_access_token_expire_minutes * 60,
-    )
-    response.set_cookie(
-        key="refresh_token",
-        value=refresh_token,
-        httponly=True,
-        secure=True,
-        samesite="lax",
-        max_age=settings.jwt_refresh_token_expire_days * 24 * 60 * 60,
-    )
-
-    return TokenResponse(
-        access_token=access_token,
-        refresh_token=refresh_token,
-    )
+    _set_auth_cookies(response, access_token=access_token, refresh_token=refresh_token)
+    return TokenResponse(access_token=access_token, refresh_token=refresh_token)
 
 
 @router.post("/refresh", response_model=TokenResponse)
@@ -105,39 +80,25 @@ async def refresh(
     user_id = payload.get("sub")
     access_token = create_access_token(user_id)
     new_refresh_token = create_refresh_token(user_id)
-
-    response.set_cookie(
-        key="access_token",
-        value=access_token,
-        httponly=True,
-        secure=True,
-        samesite="lax",
-        max_age=settings.jwt_access_token_expire_minutes * 60,
-    )
-    response.set_cookie(
-        key="refresh_token",
-        value=new_refresh_token,
-        httponly=True,
-        secure=True,
-        samesite="lax",
-        max_age=settings.jwt_refresh_token_expire_days * 24 * 60 * 60,
-    )
-
-    return TokenResponse(
-        access_token=access_token,
-        refresh_token=new_refresh_token,
-    )
+    _set_auth_cookies(response, access_token=access_token, refresh_token=new_refresh_token)
+    return TokenResponse(access_token=access_token, refresh_token=new_refresh_token)
 
 
 @router.post("/logout")
 async def logout(response: Response):
-    response.delete_cookie(key="access_token")
-    response.delete_cookie(key="refresh_token")
+    response.delete_cookie(key="access_token", **_COOKIE_KWARGS)
+    response.delete_cookie(key="refresh_token", **_COOKIE_KWARGS)
     return {"message": "Logged out successfully"}
 
 
+@router.get("/me")
+async def me(user: User = Depends(get_current_user)):
+    return {"id": str(user.id), "email": user.email}
+
+
 @router.post("/forgot-password")
-async def forgot_password(body: ForgotPasswordRequest, db: AsyncSession = Depends(get_db)):
+@limiter.limit("3/10minute")
+async def forgot_password(request: Request, body: ForgotPasswordRequest, db: AsyncSession = Depends(get_db)):
     result = await db.execute(select(User).where(User.email == body.email))
     user = result.scalar_one_or_none()
     if user is not None:
