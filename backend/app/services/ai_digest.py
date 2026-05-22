@@ -11,8 +11,8 @@ logger = logging.getLogger(__name__)
 
 ALLOWED_INSIGHT_TYPES = {"event", "warning", "stable"}
 
-DIGEST_PROMPT = """You are a smart, objective investing assistant for a retail investor. Generate a weekly portfolio digest.
-Instead of paragraphs, provide atomic, scannable insights.
+DIGEST_PROMPT = """Write a weekly portfolio digest for a retail investor who tracks why they own each stock.
+Use short bullet-style insights, not essay paragraphs.
 
 Portfolio holdings and their theses:
 {holdings_section}
@@ -32,8 +32,8 @@ Output ONLY valid JSON with this exact structure:
         {{
             "ticker": "AAPL",
             "type": "event" | "warning" | "stable",
-            "headline": "Short, punchy headline (e.g. 'Earnings beat expectations')",
-            "rationale": "One plain English sentence on what happened and how it affects the thesis."
+            "headline": "Short headline (e.g. 'Earnings beat expectations')",
+            "rationale": "One sentence: what happened and whether it matters to their reason for holding."
         }}
     ],
     "portfolio_warnings": [
@@ -185,7 +185,7 @@ def _fallback_digest(
                 {
                     "ticker": stable["ticker"],
                     "type": "stable",
-                    "headline": "No material changes",
+                    "headline": "Nothing meaningful this week",
                     "rationale": "Everything is quiet and your thesis remains intact.",
                 }
             )

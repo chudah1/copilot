@@ -115,6 +115,10 @@ class OnboardingBannerResponse(BaseModel):
     suggested_holding: SuggestedHolding | None = None
 
 
+class DraftReviewRequest(BaseModel):
+    action: str  # keep | dismiss
+
+
 @router.get("/banner", response_model=OnboardingBannerResponse)
 async def onboarding_banner(
     current_user: User = Depends(get_current_user),
@@ -172,7 +176,7 @@ async def onboarding_banner(
         return OnboardingBannerResponse(
             show=True,
             banner_type="first_reason_monitoring",
-            message="Your first reason is being monitored. Come back in a few days to see how it's holding up.",
+            message="We're watching your first reason. Check back in a few days to see if anything moved.",
             holdings_count=holdings_count,
             reasons_count=reasons_count,
         )
@@ -207,8 +211,8 @@ async def onboarding_banner(
         suggested = max(uncovered, key=lambda h: float(h.current_value or 0), default=uncovered[0])
 
     message = (
-        f"You've got a reason for {reasons_count} of {holdings_count} holdings. "
-        f"The ones without a reason are blind spots. Want to add one for {suggested.ticker}?"
+        f"You've written a reason for {reasons_count} of {holdings_count} holdings. "
+        f"{holdings_count - reasons_count} still have no written reason — add one for {suggested.ticker}?"
     )
     return OnboardingBannerResponse(
         show=True,
@@ -289,6 +293,60 @@ async def wizard_complete(
     now = datetime.now(timezone.utc)
     if state.wizard_completed_at is None:
         state.wizard_completed_at = now
+    await db.commit()
+
+
+@router.post("/drafts/{draft_id}/review", status_code=status.HTTP_204_NO_CONTENT)
+async def review_draft(
+    draft_id: uuid.UUID,
+    body: DraftReviewRequest,
+    current_user: User = Depends(get_current_user),
+    db: AsyncSession = Depends(get_db),
+):
+    if body.action not in {"keep", "dismiss"}:
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="Invalid draft review action")
+
+    result = await db.execute(
+        select(OnboardingDraft).where(
+            OnboardingDraft.id == draft_id,
+            OnboardingDraft.user_id == current_user.id,
+        )
+    )
+    draft = result.scalar_one_or_none()
+    if draft is None:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Draft not found")
+
+    thesis = None
+    if draft.thesis_id is not None:
+        thesis_result = await db.execute(
+            select(Thesis).where(
+                Thesis.id == draft.thesis_id,
+                Thesis.user_id == current_user.id,
+            )
+        )
+        thesis = thesis_result.scalar_one_or_none()
+
+    now = datetime.now(timezone.utc)
+
+    if body.action == "keep":
+        if thesis is None:
+            raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Draft thesis not found")
+        thesis.status = "active"
+        thesis.updated_at = now
+    else:
+        if thesis is not None:
+            thesis.status = "invalidated"
+            thesis.invalidated_at = now
+            thesis.invalidation_reason = "Dismissed during onboarding review"
+            thesis.updated_at = now
+
+    draft.status = "reviewed"
+    draft.updated_at = now
+
+    state = await get_or_create_state(db, current_user.id)
+    if state.drafts_reviewed_at is None:
+        state.drafts_reviewed_at = now
+
     await db.commit()
 
 

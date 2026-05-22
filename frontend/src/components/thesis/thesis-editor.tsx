@@ -21,6 +21,8 @@ function asText(value: unknown): string {
 
 interface Props {
   thesis?: Thesis | null;
+  investorProfile?: "thesis_driven" | "hearsay_driven" | null;
+  mode?: "write" | "first_write" | "tighten" | "rewrite";
   onSave: (data: {
     thesis_kind: "company";
     why_own_it: string;
@@ -37,7 +39,7 @@ interface Props {
   onCancel: () => void;
 }
 
-export function ThesisEditor({ thesis, onSave, onAssist, onCancel }: Props) {
+export function ThesisEditor({ thesis, investorProfile, mode = "write", onSave, onAssist, onCancel }: Props) {
   const [whyOwnIt, setWhyOwnIt] = useState(asText(thesis?.why_own_it));
   const [mustRemainTrue, setMustRemainTrue] = useState(asText(thesis?.must_remain_true));
   const [changeMind, setChangeMind] = useState(asText(thesis?.what_would_change_my_mind));
@@ -74,6 +76,96 @@ export function ThesisEditor({ thesis, onSave, onAssist, onCancel }: Props) {
     })
     .filter((value): value is string => Boolean(value));
 
+  const baseCopy = investorProfile === "thesis_driven"
+    ? {
+        title: thesis ? "Edit thesis" : "Write your thesis",
+        helperTitle: "What makes a strong thesis here",
+        helperBody: "Be specific enough that you would know which assumption changed. A strong thesis explains why you own this, what must remain true, and what would clearly break the case.",
+        why: "Why do you own this?",
+        whyPlaceholder: "Example: I own this because AI infrastructure demand should keep revenue growth and margins strong for the next 3 years.",
+        must: "What must remain true?",
+        mustPlaceholder: "Example: Revenue growth stays healthy, margins hold up, and management keeps guiding confidently.",
+        breaks: "What would change your mind?",
+        breaksPlaceholder: "Example: Growth falls below expectations for multiple quarters or management signals weaker long-term demand.",
+      }
+    : investorProfile === "hearsay_driven"
+      ? {
+          title: thesis ? "Edit reason" : "Write your reason",
+          helperTitle: "What makes a strong reason here",
+          helperBody: "Turn the original story into something testable. A strong reason explains why you own this, what has to stay true, and what would clearly prove the story wrong.",
+          why: "Why do you own this?",
+          whyPlaceholder: "Example: I own this because AI demand should keep revenue growth and margins strong for the next 3 years.",
+          must: "What must remain true?",
+          mustPlaceholder: "Example: Revenue growth stays healthy, margins hold up, and customers keep spending instead of delaying orders.",
+          breaks: "What would change your mind?",
+          breaksPlaceholder: "Example: Growth falls below expectations for multiple quarters or management signals weaker long-term demand.",
+        }
+      : {
+          title: thesis ? "Edit reason" : "Write your reason",
+          helperTitle: "What makes a strong reason here",
+          helperBody: "Be specific enough that you would know what changed. A good reason explains why you own this, what has to stay true, and what would clearly break the case.",
+          why: "Why do you own this?",
+          whyPlaceholder: "Example: I own this because demand for AI infrastructure should keep revenue growth and margins strong for the next 3 years.",
+          must: "What must remain true?",
+          mustPlaceholder: "Example: Revenue growth stays healthy, margins hold up, and management keeps guiding confidently.",
+          breaks: "What would change your mind?",
+          breaksPlaceholder: "Example: Growth falls below expectations for multiple quarters or management signals weaker long-term demand.",
+        };
+
+  const modeCopy = mode === "rewrite"
+    ? investorProfile === "hearsay_driven"
+      ? {
+          title: "Rewrite the reason",
+          helperTitle: "What to rewrite this time",
+          helperBody: "Keep what is still true, but remove the part of the story that already broke. The next version should make it obvious why you still own this and what would prove the new reason wrong.",
+          saveLabel: "Save rewritten reason",
+        }
+      : {
+          title: "Rewrite the thesis",
+          helperTitle: "What to rewrite this time",
+          helperBody: "Keep what is still true, but remove the assumption that already broke. The next version should make it obvious why you still own this and what would invalidate the new thesis.",
+          saveLabel: "Save rewritten thesis",
+        }
+    : mode === "tighten"
+      ? investorProfile === "hearsay_driven"
+        ? {
+            title: "Tighten the reason",
+            helperTitle: "What to tighten here",
+            helperBody: "Make the business driver clearer, make the break condition sharper, and remove any language that still sounds like a loose story.",
+            saveLabel: "Save tighter reason",
+          }
+        : {
+            title: "Tighten the thesis",
+            helperTitle: "What to tighten here",
+            helperBody: "Make the core assumption more specific, sharpen the break condition, and cut wording we can't tie to real evidence.",
+            saveLabel: "Save tighter thesis",
+          }
+      : mode === "first_write"
+        ? investorProfile === "hearsay_driven"
+          ? {
+              title: "Write the real reason",
+              helperTitle: "Turn the story into something testable",
+              helperBody: "Start with why it caught your eye, then nail what would prove you wrong. Messy is fine — vague isn't. We'll watch for evidence against what you write and nudge you to revisit on a schedule, not only when you're rattled.",
+              saveLabel: "Save reason and start watching",
+            }
+          : {
+              title: "Write the thesis",
+              helperTitle: "Make the position monitorable",
+              helperBody: "Why you own it, what has to stay true, and what would make you sell. Not a sell-side note — a short case we can check against news and earnings, with reminders to re-read it before the tape does your thinking for you.",
+              saveLabel: "Save thesis and start watching",
+            }
+        : {
+          title: baseCopy.title,
+          helperTitle: baseCopy.helperTitle,
+          helperBody: baseCopy.helperBody,
+          saveLabel: "Save & Start Monitoring",
+        };
+
+  const copy = {
+    ...baseCopy,
+    ...modeCopy,
+  };
+
   const handleAssist = async () => {
     setAssisting(true);
     setAssistError("");
@@ -98,43 +190,43 @@ export function ThesisEditor({ thesis, onSave, onAssist, onCancel }: Props) {
   return (
     <Card>
       <CardHeader>
-        <CardTitle className="text-base">{thesis ? "Edit reason" : "Write your reason"}</CardTitle>
+        <CardTitle className="text-base">{copy.title}</CardTitle>
       </CardHeader>
       <CardContent className="space-y-4">
         <div className="rounded-xl border bg-muted/30 p-4">
-          <p className="text-sm font-medium">What makes a strong reason here</p>
+          <p className="text-sm font-medium">{copy.helperTitle}</p>
           <p className="mt-1 text-sm text-muted-foreground">
-            Be specific enough that you would know what changed. A good reason explains why you own this, what has to stay true, and what would clearly break the case.
+            {copy.helperBody}
           </p>
         </div>
 
         <div className="space-y-2">
-          <Label>Why do you own this?</Label>
+          <Label>{copy.why}</Label>
           <Textarea
             value={whyOwnIt}
             onChange={(e) => setWhyOwnIt(e.target.value)}
             rows={4}
-            placeholder="Example: I own this because demand for AI infrastructure should keep revenue growth and margins strong for the next 3 years."
+            placeholder={copy.whyPlaceholder}
           />
         </div>
 
         <div className="space-y-2">
-          <Label>What must remain true?</Label>
+          <Label>{copy.must}</Label>
           <Textarea
             value={mustRemainTrue}
             onChange={(e) => setMustRemainTrue(e.target.value)}
             rows={3}
-            placeholder="Example: Revenue growth stays healthy, margins hold up, and management keeps guiding confidently."
+            placeholder={copy.mustPlaceholder}
           />
         </div>
 
         <div className="space-y-2">
-          <Label>What would change your mind?</Label>
+          <Label>{copy.breaks}</Label>
           <Textarea
             value={changeMind}
             onChange={(e) => setChangeMind(e.target.value)}
             rows={3}
-            placeholder="Example: Growth falls below expectations for multiple quarters or management signals weaker long-term demand."
+            placeholder={copy.breaksPlaceholder}
           />
         </div>
 
@@ -216,7 +308,7 @@ export function ThesisEditor({ thesis, onSave, onAssist, onCancel }: Props) {
             }
             disabled={whyOwnIt.trim().length === 0}
           >
-            Save & Start Monitoring
+            {copy.saveLabel}
           </Button>
           <Button variant="outline" onClick={onCancel}>Cancel</Button>
         </div>

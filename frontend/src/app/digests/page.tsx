@@ -13,12 +13,42 @@ function statusDot(status: string) {
   return "text-muted-foreground";
 }
 
+function digestArchiveCopy(investorProfile: "thesis_driven" | "hearsay_driven" | null) {
+  if (investorProfile === "thesis_driven") {
+    return {
+      title: "Weekly thesis reviews",
+      subtitle: "What moved, what held, and which assumptions need another look.",
+      empty: "Your first digest will arrive after at least one position has an active thesis and monitoring is running.",
+      fallbackHeadline: "Weekly thesis review",
+    };
+  }
+
+  if (investorProfile === "hearsay_driven") {
+    return {
+      title: "Weekly reason reviews",
+      subtitle: "What moved, what held, and where the story you wrote may need a decision.",
+      empty: "Your first digest will arrive after at least one position has a written reason and monitoring is running.",
+      fallbackHeadline: "Weekly reason review",
+    };
+  }
+
+  return {
+    title: "Weekly reviews",
+    subtitle: "What moved, what stayed quiet, and where your thesis needs a decision.",
+    empty: "Your first digest will arrive on Sunday after at least one holding has an active thesis and monitoring is running.",
+    fallbackHeadline: "Weekly thesis review",
+  };
+}
+
 export default function DigestsPage() {
   const [digests, setDigests] = useState<Digest[]>([]);
 
   useEffect(() => {
     api.get<Digest[]>("/api/digests").then(setDigests);
   }, []);
+
+  const investorProfile = digests[0]?.content.investor_profile ?? null;
+  const copy = digestArchiveCopy(investorProfile);
 
   return (
     <AppShell>
@@ -30,10 +60,10 @@ export default function DigestsPage() {
             Archive
           </p>
           <h1 className="font-display italic text-4xl text-foreground leading-tight">
-            Weekly reviews
+            {copy.title}
           </h1>
           <p className="font-sans text-sm text-muted-foreground mt-2 max-w-xl leading-relaxed">
-            Each digest summarises what changed, what stayed stable, and where your thesis needs a decision.
+            {copy.subtitle}
           </p>
         </div>
 
@@ -43,7 +73,7 @@ export default function DigestsPage() {
               No digests yet.
             </p>
             <p className="font-sans text-sm text-muted-foreground max-w-sm mx-auto leading-relaxed">
-              Your first digest will arrive on Sunday after at least one holding has an active thesis and monitoring is running.
+              {copy.empty}
             </p>
           </div>
         ) : (
@@ -69,7 +99,7 @@ export default function DigestsPage() {
 
                   {/* Headline */}
                   <p className="font-sans text-[15px] text-foreground leading-snug group-hover:text-primary transition-colors">
-                    {d.content.headline || "Weekly thesis review"}
+                    {d.content.headline || copy.fallbackHeadline}
                   </p>
 
                   {/* Summary points */}

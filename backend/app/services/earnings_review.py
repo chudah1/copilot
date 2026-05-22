@@ -34,7 +34,7 @@ class EarningsReviewResult:
 
 
 _EARNINGS_REVIEW_PROMPT = """\
-You are a rigorous investment analyst helping a retail investor evaluate their thesis after earnings.
+You help a retail investor compare their stated reason for holding a stock to the latest earnings.
 
 The investor owns {ticker} ({name}). Here is their investment thesis:
 
@@ -74,16 +74,17 @@ Return valid JSON with this exact structure:
     }}
   ],
   "overall_assessment": "thesis_intact" | "watch" | "thesis_challenged",
-  "summary": "2-3 sentences. Be direct. Reference specific numbers from earnings. Say what the investor needs to hear, not what they want to hear.",
+  "summary": "2-3 sentences. Be direct. Use specific numbers from earnings. No cheerleading or hedge words.",
   "fiscal_quarter": "Q1 2026 or similar, null if unknown"
 }}
 
 Rules:
 - explanation must start with "You said" and quote from their actual thesis
 - Be direct about broken conditions — do not soften bad news
-- Only mark "broken" if earnings data directly contradicts a specific claim
-- Use "watch" when the trend is concerning but not definitively broken
+- Only mark "broken" if earnings data directly contradicts a specific claim with a clear, unambiguous breach. A metric missing its stated threshold by a small margin (under 5 percentage points) is "watch", not "broken".
+- Use "watch" when a threshold is being approached or missed by a small margin, or when a trend is consistently moving in the wrong direction.
 - Use "unclear" when there is not enough data to evaluate
+- For overall_assessment: use "thesis_challenged" only when 2 or more claims are "broken" OR one claim is dramatically and clearly violated. A single near-miss claim = "watch" overall.
 - If no claims provided, still give an overall assessment based on the thesis text
 - Output ONLY valid JSON, no markdown fences"""
 
@@ -211,7 +212,7 @@ async def run_earnings_review(
         client = anthropic.AsyncAnthropic(api_key=settings.anthropic_api_key)
         response = await client.messages.create(
             model=settings.anthropic_model,
-            max_tokens=2048,
+            max_tokens=1500,
             messages=[{"role": "user", "content": prompt}],
             timeout=45.0,
         )

@@ -26,20 +26,45 @@ function formatLargeNumber(n: number): string {
 export function ThesisHealthCheck({
   result,
   loading,
+  investorProfile,
 }: {
   result: HealthCheckResult | null;
   loading: boolean;
+  investorProfile?: "thesis_driven" | "hearsay_driven" | null;
 }) {
+  const copy = investorProfile === "thesis_driven"
+    ? {
+        title: "Thesis check",
+        loading: "Checking your thesis against live market data...",
+        conditions: "Your assumptions",
+        findings: "What we found",
+        empty: "Nothing jumped out. Your assumptions still look intact.",
+      }
+    : investorProfile === "hearsay_driven"
+      ? {
+          title: "Reason check",
+          loading: "Checking whether your written reason still lines up with live market data...",
+          conditions: "What must stay true",
+          findings: "What we found",
+          empty: "Nothing jumped out. The reason you wrote still looks intact.",
+        }
+      : {
+          title: "Reality Check",
+          loading: "Checking your thesis against live market data...",
+          conditions: "Your conditions",
+          findings: "What we found",
+          empty: "Nothing jumped out. Your conditions still look intact.",
+        };
   if (loading) {
     return (
       <Card>
         <CardHeader>
-          <CardTitle className="text-base">Reality Check</CardTitle>
+          <CardTitle className="text-base">{copy.title}</CardTitle>
         </CardHeader>
         <CardContent>
           <div className="flex items-center gap-2 text-sm text-muted-foreground">
             <span className="inline-block h-2 w-2 animate-pulse rounded-full bg-amber-400" />
-            Checking your thesis against live market data...
+            {copy.loading}
           </div>
         </CardContent>
       </Card>
@@ -56,7 +81,7 @@ export function ThesisHealthCheck({
     <Card>
       <CardHeader>
         <div className="flex items-center justify-between">
-          <CardTitle className="text-base">Reality Check</CardTitle>
+          <CardTitle className="text-base">{copy.title}</CardTitle>
           <Badge className={assessment.className}>{assessment.label}</Badge>
         </div>
       </CardHeader>
@@ -92,7 +117,7 @@ export function ThesisHealthCheck({
         {/* Watch hints */}
         {result.watch_hints_status.length > 0 && (
           <div>
-            <p className="mb-2 text-sm font-medium">Your conditions</p>
+            <p className="mb-2 text-sm font-medium">{copy.conditions}</p>
             <div className="space-y-1.5">
               {breachedHints.map((hint, i) => (
                 <div key={i} className="flex items-start gap-2 rounded-md bg-red-500/10 border border-red-500/20 px-3 py-2 text-sm">
@@ -121,7 +146,7 @@ export function ThesisHealthCheck({
         {/* Monitoring candidates */}
         {result.candidates.length > 0 && (
           <div>
-            <p className="mb-2 text-sm font-medium">What we found</p>
+            <p className="mb-2 text-sm font-medium">{copy.findings}</p>
             <div className="space-y-2">
               {result.candidates.map((c, i) => (
                 <div key={i} className="rounded-md border px-3 py-2 text-sm">
@@ -145,7 +170,7 @@ export function ThesisHealthCheck({
 
         {result.candidates.length === 0 && result.watch_hints_status.length === 0 && (
           <p className="text-sm text-muted-foreground">
-            No material findings right now. Your thesis conditions are holding.
+            {copy.empty}
           </p>
         )}
 

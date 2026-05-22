@@ -9,7 +9,8 @@ interface CheckNowButtonProps {
   holdingId: string;
   ticker: string;
   currency?: string;
-  onComplete: () => void;
+  investorProfile?: "thesis_driven" | "hearsay_driven" | null;
+  onComplete: (result: CheckNowResponse) => void;
 }
 
 function cleanTicker(ticker: string): string {
@@ -83,7 +84,7 @@ function SnapshotCard({ snapshot, ticker, currency, eventsCreated }: { snapshot:
         )}
 
         <div className="px-4 py-3">
-          <p className="font-mono text-[10px] uppercase tracking-[0.15em] text-muted-foreground mb-1">Signals</p>
+          <p className="font-mono text-[10px] uppercase tracking-[0.15em] text-muted-foreground mb-1">Watchlist</p>
           {snapshot.watch_hints_total > 0 ? (
             <p className={`font-mono text-sm font-medium tabular-nums ${hintsOk ? "text-emerald-600" : "text-amber-600"}`}>
               {snapshot.watch_hints_ok}/{snapshot.watch_hints_total}
@@ -94,11 +95,11 @@ function SnapshotCard({ snapshot, ticker, currency, eventsCreated }: { snapshot:
           {snapshot.recent_news_count > 0 ? (
             <p className="font-mono text-[10px] text-muted-foreground">
               {eventsCreated > 0
-                ? `${snapshot.recent_news_count} article${snapshot.recent_news_count !== 1 ? "s" : ""} · ${eventsCreated} flagged`
-                : `${snapshot.recent_news_count} reviewed · none flagged`}
+                ? `${snapshot.recent_news_count} source${snapshot.recent_news_count !== 1 ? "s" : ""} checked · ${eventsCreated} worth review`
+                : `${snapshot.recent_news_count} source${snapshot.recent_news_count !== 1 ? "s" : ""} checked · no decision needed`}
             </p>
           ) : (
-            <p className="font-mono text-[10px] text-muted-foreground">No recent articles</p>
+            <p className="font-mono text-[10px] text-muted-foreground">No fresh evidence sources</p>
           )}
         </div>
       </div>
@@ -114,7 +115,7 @@ function SnapshotCard({ snapshot, ticker, currency, eventsCreated }: { snapshot:
   );
 }
 
-export function CheckNowButton({ holdingId, ticker, currency = "GBP", onComplete }: CheckNowButtonProps) {
+export function CheckNowButton({ holdingId, ticker, currency = "GBP", investorProfile, onComplete }: CheckNowButtonProps) {
   const [loading, setLoading] = useState(false);
   const [result, setResult] = useState<CheckNowResponse | null>(null);
 
@@ -125,7 +126,7 @@ export function CheckNowButton({ holdingId, ticker, currency = "GBP", onComplete
       const res = await api.post<CheckNowResponse>(`/api/monitoring/holdings/${holdingId}/check-now`);
       setResult(res);
       if (res.status === "completed") {
-        onComplete();
+        onComplete(res);
       }
     } catch (err) {
       console.error("Check now failed:", err);
@@ -137,6 +138,12 @@ export function CheckNowButton({ holdingId, ticker, currency = "GBP", onComplete
   const nextAvailable = result?.next_available_at ? new Date(result.next_available_at) : null;
   const isRateLimited = result?.status === "rate_limited";
   const hasEvents = result?.status === "completed" && (result?.events_created ?? 0) > 0;
+  const reviewLabel =
+    investorProfile === "thesis_driven"
+      ? "review thesis below"
+      : investorProfile === "hearsay_driven"
+        ? "review reason below"
+        : "review below";
 
   return (
     <div>
@@ -151,7 +158,7 @@ export function CheckNowButton({ holdingId, ticker, currency = "GBP", onComplete
 
         {hasEvents && (
           <span className="font-mono text-[10px] uppercase tracking-[0.15em] text-amber-700">
-            {result!.events_created} event{result!.events_created !== 1 ? "s" : ""} — review below
+            {result!.events_created} event{result!.events_created !== 1 ? "s" : ""} — {reviewLabel}
           </span>
         )}
 

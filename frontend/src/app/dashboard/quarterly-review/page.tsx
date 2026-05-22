@@ -90,7 +90,7 @@ function EmptyState() {
           </h2>
           <p className="font-sans text-sm text-muted-foreground leading-relaxed">
             Add a holding with a written reason and this flow will appear once
-            there is something worth revisiting.
+            a quarter has passed since you wrote your reason down.
           </p>
         </div>
         <Link

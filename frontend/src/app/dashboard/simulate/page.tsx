@@ -6,7 +6,7 @@ import Link from "next/link";
 import { motion, AnimatePresence } from "framer-motion";
 import { api } from "@/lib/api";
 import { formatCurrency } from "@/lib/utils";
-import type { Holding, PortfolioSummary, SimulateTradeResponse } from "@/types";
+import type { Holding, OnboardingState, PortfolioSummary, SimulateTradeResponse, Thesis } from "@/types";
 
 function pct(v: number) {
   return `${v.toFixed(1)}%`;
@@ -14,6 +14,108 @@ function pct(v: number) {
 
 function cleanTicker(ticker: string) {
   return ticker.replace(/_US_EQ$/, "").replace(/_EQ$/, "");
+}
+
+function getMonitorability(thesis: Thesis | null | undefined) {
+  const value = thesis?.interpretation && typeof thesis.interpretation.monitorability === "string"
+    ? thesis.interpretation.monitorability
+    : null;
+  return value === "high" || value === "medium" || value === "low" ? value : null;
+}
+
+function getTradeIntervention(
+  result: SimulateTradeResponse,
+  holdings: Holding[],
+  theses: Thesis[],
+  investorProfile: "thesis_driven" | "hearsay_driven" | null,
+) {
+  const matchingHolding = holdings.find((holding) => cleanTicker(holding.ticker) === cleanTicker(result.ticker));
+  const currentThesis = matchingHolding
+    ? theses.find(
+        (thesis) =>
+          thesis.holding_id === matchingHolding.id &&
+          (thesis.status === "draft" || thesis.status === "active" || thesis.status === "needs_review"),
+      ) ?? null
+    : null;
+  const monitorability = getMonitorability(currentThesis);
+  const ambiguityNote =
+    currentThesis?.interpretation && typeof currentThesis.interpretation.ambiguity_note === "string"
+      ? currentThesis.interpretation.ambiguity_note
+      : "";
+
+  if (matchingHolding && currentThesis?.status === "needs_review") {
+    return {
+      tone: "border-red-500/25 bg-red-500/6 text-red-700",
+      eyebrow: "Before you add more",
+      title:
+        investorProfile === "hearsay_driven"
+          ? "This story already has unresolved evidence against it."
+          : "This thesis already needs review.",
+      body:
+        investorProfile === "hearsay_driven"
+          ? "Adding here means increasing a position before you decide whether the original story is still real."
+          : "Adding here means increasing a position before you resolve evidence that may weaken or break a thesis pillar.",
+      ctaLabel: "Review this position first →",
+      ctaHref: `/dashboard/positions/${result.ticker}`,
+      softenSecondary: true,
+    };
+  }
+
+  if (matchingHolding && !currentThesis) {
+    return {
+      tone: "border-amber-500/25 bg-amber-500/6 text-amber-800",
+      eyebrow: "Before you add more",
+      title:
+        investorProfile === "hearsay_driven"
+          ? "You are increasing a position with no written reason."
+          : "You're adding size to a position with no written thesis.",
+      body:
+        investorProfile === "hearsay_driven"
+          ? "That makes it much easier to average into a story without noticing what would prove you wrong."
+          : "Hard to know if you're adding to a real case or just reacting to price and headlines.",
+      ctaLabel: "Add it and write the reason →",
+      ctaHref: null,
+      softenSecondary: true,
+    };
+  }
+
+  if (matchingHolding && currentThesis && (monitorability === "low" || ambiguityNote)) {
+    return {
+      tone: "border-sky-500/25 bg-sky-500/6 text-sky-800",
+      eyebrow: "Before you size up",
+      title:
+        investorProfile === "hearsay_driven"
+          ? "The current reason is still too story-like."
+          : "The current thesis is still too vague.",
+      body:
+        ambiguityNote ||
+        (investorProfile === "hearsay_driven"
+          ? "Tighten what has to show up in the business results before you commit more capital."
+          : "Tighten the assumption set before you commit more capital to this name."),
+      ctaLabel: "Tighten it on the position page →",
+      ctaHref: `/dashboard/positions/${result.ticker}`,
+      softenSecondary: false,
+    };
+  }
+
+  return {
+    tone: "border-border bg-card text-foreground/80",
+    eyebrow: "Decision check",
+    title:
+      investorProfile === "hearsay_driven"
+        ? "Can you name what would prove the story is real?"
+        : "Can you state what must remain true before this becomes a position?",
+    body:
+      investorProfile === "hearsay_driven"
+        ? "If you cannot tie this idea to business results you expect to see, the safer move is to add it with a written reason immediately."
+        : "If you can't state why you own it, what has to stay true, and what would make you sell, treat this as a draft idea — not a full-size add.",
+    ctaLabel:
+      investorProfile === "hearsay_driven"
+        ? `Add ${cleanTicker(result.ticker)} & write the reason`
+        : `Add ${cleanTicker(result.ticker)} & write the thesis`,
+    ctaHref: null,
+    softenSecondary: false,
+  };
 }
 
 // ── Trade verdict ─────────────────────────────────────────────────────────────
@@ -110,12 +212,21 @@ export default function SimulatePage() {
   const [error, setError] = useState<string | null>(null);
   const [summary, setSummary] = useState<PortfolioSummary | null>(null);
   const [holdings, setHoldings] = useState<Holding[]>([]);
+  const [theses, setTheses] = useState<Thesis[]>([]);
+  const [onboardingState, setOnboardingState] = useState<OnboardingState | null>(null);
 
   useEffect(() => {
     Promise.all([
       api.get<PortfolioSummary>("/api/portfolio/summary"),
       api.get<Holding[]>("/api/portfolio/holdings"),
-    ]).then(([s, h]) => { setSummary(s); setHoldings(h); }).catch(() => {});
+      api.get<Thesis[]>("/api/theses/current").catch(() => []),
+      api.get<OnboardingState>("/api/onboarding/state").catch(() => null),
+    ]).then(([s, h, t, onboarding]) => {
+      setSummary(s);
+      setHoldings(h);
+      setTheses(t);
+      setOnboardingState(onboarding);
+    }).catch(() => {});
   }, []);
 
   const handleSimulate = async () => {
@@ -157,6 +268,9 @@ export default function SimulatePage() {
 
   const verdict = result ? gradeTheTrade(result) : null;
   const narrative = result ? buildNarrative(result) : [];
+  const intervention = result
+    ? getTradeIntervention(result, holdings, theses, onboardingState?.investor_profile ?? null)
+    : null;
   const topHoldings = [...holdings]
     .filter((h) => h.current_value != null)
     .sort((a, b) => (b.current_value ?? 0) - (a.current_value ?? 0))
@@ -346,6 +460,26 @@ export default function SimulatePage() {
               </div>
             )}
 
+            {intervention && (
+              <div className={`border px-5 py-4 space-y-3 ${intervention.tone}`}>
+                <p className="font-mono text-[9px] uppercase tracking-[0.25em] opacity-80">
+                  {intervention.eyebrow}
+                </p>
+                <div className="space-y-1.5">
+                  <p className="font-display italic text-xl text-foreground">{intervention.title}</p>
+                  <p className="font-sans text-sm leading-relaxed text-current/90">{intervention.body}</p>
+                </div>
+                {intervention.ctaHref && (
+                  <Link
+                    href={intervention.ctaHref}
+                    className="inline-flex font-mono text-[10px] uppercase tracking-[0.15em] text-primary hover:text-primary/80 transition-colors"
+                  >
+                    {intervention.ctaLabel}
+                  </Link>
+                )}
+              </div>
+            )}
+
             {/* Before / after numbers */}
             <div className="border border-border bg-card divide-y divide-border/40">
               <div className="grid grid-cols-4 divide-x divide-border/40">
@@ -420,12 +554,20 @@ export default function SimulatePage() {
                   disabled={adding}
                   className="flex-1 font-mono text-[10px] uppercase tracking-[0.15em] bg-primary text-primary-foreground px-4 py-3 hover:bg-primary/90 transition-colors disabled:opacity-40"
                 >
-                  {adding ? "Adding…" : `Add ${cleanTicker(result.ticker)} & write thesis`}
+                  {adding
+                    ? "Adding…"
+                    : intervention?.ctaHref === null
+                      ? intervention.ctaLabel
+                      : `Add ${cleanTicker(result.ticker)} & write thesis`}
                 </button>
                 <button
                   onClick={() => addHolding("dashboard")}
                   disabled={adding}
-                  className="flex-1 font-mono text-[10px] uppercase tracking-[0.15em] border border-border text-foreground/70 hover:text-foreground hover:border-foreground/40 px-4 py-3 transition-colors disabled:opacity-40"
+                  className={`flex-1 font-mono text-[10px] uppercase tracking-[0.15em] border px-4 py-3 transition-colors disabled:opacity-40 ${
+                    intervention?.softenSecondary
+                      ? "border-border text-foreground/45 hover:text-foreground/60 hover:border-foreground/25"
+                      : "border-border text-foreground/70 hover:text-foreground hover:border-foreground/40"
+                  }`}
                 >
                   Just add it
                 </button>

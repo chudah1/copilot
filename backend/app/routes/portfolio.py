@@ -103,8 +103,8 @@ def _monitoring_status_message(*, holdings_with_current_theses_count: int) -> tu
     if _requires_market_data_key() and not settings.alpha_vantage_api_key:
         return False, "Monitoring is not active yet. Add ALPHA_VANTAGE_API_KEY to enable daily portfolio monitoring."
     if holdings_with_current_theses_count == 0:
-        return monitoring_ready, "Monitoring is live, but you need at least one current thesis before it can watch anything meaningful."
-    return monitoring_ready, "Daily monitoring is active. We check your current theses each morning and send a weekly digest on Sunday."
+        return monitoring_ready, "Monitoring is on, but we need at least one written thesis before there's anything to compare news against."
+    return monitoring_ready, "We check your theses each morning and email a weekly digest on Sunday."
 
 
 @router.post("/connect", response_model=BrokerConnectionResponse, status_code=status.HTTP_201_CREATED)
@@ -507,9 +507,12 @@ async def portfolio_pulse(
                 "name": p.name,
                 "pulse_status": p.pulse_status,
                 "reason": p.reason,
+                "assumption_label": p.assumption_label,
                 "latest_event_summary": p.latest_event_summary,
                 "days_since_thesis_update": p.days_since_thesis_update,
                 "has_thesis": p.has_thesis,
+                "latest_event_at": p.latest_event_at,
+                "urgency_score": p.urgency_score,
                 "pnl_pct": p.pnl_pct,
                 "last_checked_at": p.last_checked_at,
                 "recent_event_count": p.recent_event_count,

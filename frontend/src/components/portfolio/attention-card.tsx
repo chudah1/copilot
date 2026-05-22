@@ -8,11 +8,61 @@ import type { Holding, HoldingPulse } from "@/types";
 interface AttentionCardProps {
   holding: Holding;
   pulse: HoldingPulse;
+  investorProfile?: "thesis_driven" | "hearsay_driven" | null;
   index: number;
 }
 
-export function AttentionCard({ holding, pulse, index }: AttentionCardProps) {
+function assumptionHeadline(
+  assumptionLabel: string | null | undefined,
+  investorProfile?: "thesis_driven" | "hearsay_driven" | null,
+) {
+  if (assumptionLabel && assumptionLabel.trim()) {
+    return assumptionLabel.trim();
+  }
+  return investorProfile === "hearsay_driven" ? "The original story" : "The core assumption";
+}
+
+function attentionCopy(
+  pulse: HoldingPulse,
+  investorProfile?: "thesis_driven" | "hearsay_driven" | null,
+) {
   const isReview = pulse.pulse_status === "review";
+  const target = assumptionHeadline(pulse.assumption_label, investorProfile);
+  const cadencePressure = pulse.reason.includes("review cadence");
+  if (isReview) {
+    return {
+      eyebrow: "Decision now",
+      headline:
+        investorProfile === "hearsay_driven"
+          ? `${target} may no longer hold.`
+          : `${target} may no longer hold.`,
+      detail:
+        pulse.reason ||
+        (investorProfile === "hearsay_driven"
+          ? "Past watch mode — you need to decide what this means for the story."
+          : "Past watch mode — you need to decide what this means for the thesis."),
+      subLabel: cadencePressure ? "Review cadence missed" : null,
+    };
+  }
+
+  return {
+    eyebrow: "Watch closely",
+    headline:
+      investorProfile === "hearsay_driven"
+        ? `${target} is being tested.`
+        : `${target} is being tested.`,
+    detail:
+      pulse.reason ||
+      (investorProfile === "hearsay_driven"
+        ? "Nothing looks broken yet, but the original story has new pressure on it."
+        : "Nothing looks broken yet, but one thesis pillar has new pressure on it."),
+    subLabel: cadencePressure ? "Review cadence drifting" : null,
+  };
+}
+
+export function AttentionCard({ holding, pulse, investorProfile, index }: AttentionCardProps) {
+  const isReview = pulse.pulse_status === "review";
+  const copy = attentionCopy(pulse, investorProfile);
   return (
     <motion.div
       initial={{ opacity: 0, x: -8 }}
@@ -30,17 +80,45 @@ export function AttentionCard({ holding, pulse, index }: AttentionCardProps) {
               {cleanTicker(holding.ticker)}
             </span>
             <span className={`font-mono text-[10px] uppercase tracking-[0.12em] ${isReview ? "text-red-600" : "text-amber-700"}`}>
-              {isReview ? "Review" : "Watch"}
+              {copy.eyebrow}
             </span>
           </div>
-          <p className="font-sans text-[11px] text-foreground/80 leading-relaxed line-clamp-3">
-            {pulse.latest_event_summary ?? pulse.reason ?? "Monitoring event requires attention"}
-          </p>
-          {pulse.recent_event_count > 0 && (
-            <p className="font-mono text-[10px] text-muted-foreground/70">
-              {pulse.recent_event_count} recent event{pulse.recent_event_count !== 1 ? "s" : ""} →
+          <div className="space-y-1">
+            {copy.subLabel && (
+              <p className="font-mono text-[10px] uppercase tracking-[0.14em] text-foreground/45">
+                {copy.subLabel}
+              </p>
+            )}
+            <p className="font-sans text-[11px] text-foreground/90 leading-relaxed line-clamp-2">
+              {copy.headline}
+            </p>
+            <p className="font-sans text-[11px] text-muted-foreground leading-relaxed line-clamp-3">
+              {pulse.latest_event_summary ?? copy.detail}
+            </p>
+          </div>
+          {pulse.reason && pulse.latest_event_summary && pulse.reason !== pulse.latest_event_summary && (
+            <p className="font-mono text-[10px] text-foreground/65 leading-relaxed line-clamp-2">
+              Why now: {pulse.reason}
             </p>
           )}
+          {pulse.days_since_thesis_update != null && (
+            <p className="font-mono text-[10px] text-muted-foreground/60">
+              Reason age {pulse.days_since_thesis_update}d
+            </p>
+          )}
+          {pulse.recent_event_count > 0 && (
+            <p className={`font-mono text-[10px] ${isReview ? "text-red-600/80" : "text-amber-700/80"}`}>
+              {pulse.recent_event_count} recent event{pulse.recent_event_count !== 1 ? "s" : ""} building here →
+            </p>
+          )}
+          {!pulse.recent_event_count && pulse.last_checked_at && (
+            <p className="font-mono text-[10px] text-muted-foreground/60">
+              Watched recently
+            </p>
+          )}
+          <p className="font-mono text-[10px] uppercase tracking-[0.14em] text-primary/70">
+            Open position →
+          </p>
         </div>
       </Link>
     </motion.div>

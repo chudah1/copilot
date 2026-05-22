@@ -13,6 +13,7 @@ interface ConvictionLogProps {
   loading?: boolean;
   saving?: boolean;
   onAddNote?: (content: string) => Promise<void>;
+  investorProfile?: "thesis_driven" | "hearsay_driven" | null;
 }
 
 const entryLabels: Record<string, string> = {
@@ -52,8 +53,43 @@ function EntryRow({ entry }: { entry: ConvictionLogEntry }) {
   );
 }
 
-export function ConvictionLog({ data, loading = false, saving = false, onAddNote }: ConvictionLogProps) {
+export function ConvictionLog({
+  data,
+  loading = false,
+  saving = false,
+  onAddNote,
+  investorProfile,
+}: ConvictionLogProps) {
   const [note, setNote] = useState("");
+  const copy = investorProfile === "thesis_driven"
+    ? {
+        title: "Thesis log",
+        description: "A permanent record of what changed, what you decided, and how long the thesis has stood up.",
+        age: "Thesis age",
+        add: "Add a thesis note",
+        noteHelp: "Capture what you are noticing now so the future version of you can see how the thesis evolved.",
+        notePlaceholder: "Write a short note about what changed, which assumption moved, or how your underwriting view is evolving.",
+        empty: "No thesis history yet. Once you write a thesis, review evidence, or add notes, it will appear here.",
+      }
+    : investorProfile === "hearsay_driven"
+      ? {
+          title: "Reason log",
+          description: "A permanent record of what changed, what you decided, and how the original story held up over time.",
+          age: "Reason age",
+          add: "Add a reason note",
+          noteHelp: "Capture what you are noticing now so the future version of you can see whether the story got stronger or weaker.",
+          notePlaceholder: "Write a short note about what changed or how your view of the story is evolving.",
+          empty: "No reason history yet. Once you write a reason, review evidence, or add notes, it will appear here.",
+        }
+      : {
+          title: "Conviction log",
+          description: "A permanent record of what changed, what you decided, and how long this reason has held up.",
+          age: "Reason age",
+          add: "Add a note",
+          noteHelp: "Capture what you are noticing now so the future version of you has the context.",
+          notePlaceholder: "Write a short note about what changed or how your view is evolving.",
+          empty: "Nothing logged yet. Reviews, notes, and reason changes show up here.",
+        };
 
   const handleSubmit = async () => {
     const trimmed = note.trim();
@@ -67,14 +103,14 @@ export function ConvictionLog({ data, loading = false, saving = false, onAddNote
       <CardHeader>
         <div className="flex flex-wrap items-center justify-between gap-3">
           <div>
-            <CardTitle className="text-base">Conviction log</CardTitle>
+            <CardTitle className="text-base">{copy.title}</CardTitle>
             <CardDescription>
-              A permanent record of what changed, what you decided, and how long this reason has held up.
+              {copy.description}
             </CardDescription>
           </div>
           <div className="flex flex-wrap gap-2">
             <Badge variant="outline">
-              Reason age: {data?.reason_age_days != null ? `${data.reason_age_days} days` : "Not started"}
+              {copy.age}: {data?.reason_age_days != null ? `${data.reason_age_days} days` : "Not started"}
             </Badge>
             <Badge variant="outline">
               Reviews: {data?.review_count ?? 0}
@@ -85,14 +121,14 @@ export function ConvictionLog({ data, loading = false, saving = false, onAddNote
       <CardContent className="space-y-4">
         {onAddNote && (
           <div className="rounded-xl border bg-muted/30 p-3">
-            <p className="text-sm font-medium">Add a note</p>
+            <p className="text-sm font-medium">{copy.add}</p>
             <p className="mt-1 text-xs text-muted-foreground">
-              Capture what you are noticing now so the future version of you has the context.
+              {copy.noteHelp}
             </p>
             <Textarea
               value={note}
               onChange={(e) => setNote(e.target.value)}
-              placeholder="Write a short note about what changed or how your view is evolving."
+              placeholder={copy.notePlaceholder}
               className="mt-3 min-h-24"
             />
             <div className="mt-3 flex justify-end">
@@ -113,7 +149,7 @@ export function ConvictionLog({ data, loading = false, saving = false, onAddNote
           </div>
         ) : (
           <p className="text-sm text-muted-foreground">
-            No conviction history yet. Once you write a reason, review evidence, or add notes, it will appear here.
+            {copy.empty}
           </p>
         )}
       </CardContent>

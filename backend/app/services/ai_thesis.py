@@ -50,6 +50,42 @@ VAGUE_PATTERNS = (
     r"\bi like the stock\b",
     r"\blong[- ]term hold\b",
 )
+HEARSAY_PATTERNS = (
+    r"\bheard\b",
+    r"\bhearsay\b",
+    r"\bbuzz\b",
+    r"\bhype\b",
+    r"\bchat(?:ter)?\b",
+    r"\beveryone was talking about\b",
+    r"\bpeople kept talking about\b",
+    r"\bseemed like the one to own\b",
+    r"\bstory\b",
+    r"\bmomentum\b",
+)
+GENERIC_OUTPUT_PATTERNS = (
+    r"\bcore investment thesis\b",
+    r"\blong[- ]term potential\b",
+    r"\bmarket position\b",
+    r"\bbusiness model\b",
+    r"\bfundamental change\b",
+    r"\bremains intact\b",
+)
+GENERIC_CONDITION_PATTERNS = (
+    r"\bcore investment thesis\b",
+    r"\bremains intact\b",
+    r"\bmarket position\b",
+    r"\bbusiness model\b",
+    r"\blong[- ]term potential\b",
+    r"\bfundamental change\b",
+    r"\boriginal reason for owning\b",
+)
+GENERIC_DRAFT_PATTERNS = (
+    r"\bcore position in the portfolio\b",
+    r"\blong[- ]term potential\b",
+    r"\bmaintains (?:its )?market position\b",
+    r"\bfundamental change in the business model\b",
+    r"\bedit this\b",
+)
 THEME_KEYWORDS = {
     "growth": ("growth", "demand", "expansion", "adoption"),
     "income": ("dividend", "income", "yield"),
@@ -117,7 +153,7 @@ THESIS_ASSIST_INTERPRETATION_SCHEMA = {
 }
 
 
-THESIS_PROMPT = """You are an investment thesis assistant helping a retail investor refine why they own a position.
+THESIS_PROMPT = """You help a retail investor tighten why they own a position — same meaning, clearer words.
 
 Given the position, the user's current thesis draft, and any available market data, produce:
 - refined thesis text that preserves the investor's meaning while making it clearer and more monitorable
@@ -207,6 +243,283 @@ def _format_metric_pct(value: float | None) -> str:
         return "Not available"
     pct = value * 100 if abs(value) <= 1 else value
     return f"{pct:.1f}%"
+
+
+def _text_matches_patterns(text: str, patterns: tuple[str, ...]) -> bool:
+    lowered = text.lower()
+    return any(re.search(pattern, lowered) for pattern in patterns)
+
+
+def _dedupe_watch_hints(watch_hints: list[dict[str, Any]]) -> list[dict[str, Any]]:
+    deduped: list[dict[str, Any]] = []
+    seen: set[tuple[Any, ...]] = set()
+    for hint in watch_hints:
+        key = (
+            hint.get("kind"),
+            hint.get("metric"),
+            hint.get("operator"),
+            hint.get("threshold"),
+        )
+        if key in seen:
+            continue
+        deduped.append(hint)
+        seen.add(key)
+    return deduped
+
+
+def _infer_story_watch_hints(text: str) -> list[dict[str, Any]]:
+    lowered = text.lower()
+    watch_hints: list[dict[str, Any]] = [
+        {
+            "kind": "price_move_pct",
+            "threshold": 5.0,
+            "rationale": "Prompt a review when price moves sharply.",
+        }
+    ]
+    if any(keyword in lowered for keyword in ("growth", "demand", "adoption", "sales", "orders", "capex", "ai")):
+        watch_hints.append(
+            {
+                "kind": "metric_threshold",
+                "metric": "revenue_growth_yoy",
+                "operator": ">=",
+                "threshold": 0.0,
+                "rationale": "If the story is real, it should keep showing up in revenue growth and demand commentary.",
+            }
+        )
+    if any(keyword in lowered for keyword in ("margin", "margins", "profit", "profitability", "earnings", "cash flow")):
+        watch_hints.append(
+            {
+                "kind": "metric_threshold",
+                "metric": "earnings_growth_yoy",
+                "operator": ">=",
+                "threshold": 0.0,
+                "rationale": "The business story should translate into healthy earnings, not just excitement.",
+            }
+        )
+    return _dedupe_watch_hints(watch_hints)[:3]
+
+
+def _infer_hearsay_conditions(ticker: str, answer1: str, answer2: str) -> tuple[str, str, str]:
+    combined = f"{answer1} {answer2}".strip()
+    lowered = combined.lower()
+
+    ambiguity_note = (
+        "Still sounds like story or chatter — name the business driver we should actually watch."
+        if _text_matches_patterns(combined, HEARSAY_PATTERNS) or len(answer1.split()) < 8
+        else ""
+    )
+
+    must_remain_true = (
+        f"The original story in {ticker} needs to keep showing up in measurable business performance rather than sentiment alone."
+    )
+    what_would_change_my_mind = (
+        "If the operating results and management commentary stop supporting the original story for multiple quarters, the position should be reconsidered."
+    )
+
+    if any(keyword in lowered for keyword in ("growth", "demand", "adoption", "sales", "orders", "capex", "ai")):
+        must_remain_true = (
+            f"The demand story in {ticker} needs to keep showing up in revenue growth, customer adoption, and management commentary."
+        )
+        what_would_change_my_mind = (
+            "If demand weakens for multiple quarters or management commentary stops backing the original growth story, the position should be reconsidered."
+        )
+    elif any(keyword in lowered for keyword in ("margin", "margins", "profit", "profitability", "earnings", "cash flow")):
+        must_remain_true = (
+            f"{ticker} needs to turn the story into profitable execution rather than just narrative excitement."
+        )
+        what_would_change_my_mind = (
+            "If margins or earnings deteriorate while the original story is still being sold aggressively, the thesis is weaker than it looks."
+        )
+    elif any(keyword in lowered for keyword in ("leader", "leadership", "moat", "ecosystem", "competitive")):
+        must_remain_true = (
+            f"{ticker} needs to keep showing real competitive strength in customer adoption, pricing, or product leadership."
+        )
+        what_would_change_my_mind = (
+            "If credible competition starts eroding adoption, pricing power, or management confidence in the core story, the position should be reconsidered."
+        )
+
+    return must_remain_true, what_would_change_my_mind, ambiguity_note
+
+
+def _infer_specific_conditions(
+    ticker: str,
+    *,
+    why_text: str,
+    change_text: str,
+    investor_profile: str | None,
+) -> tuple[str, str, str]:
+    combined = f"{why_text} {change_text}".strip()
+    lowered = combined.lower()
+
+    if investor_profile == "hearsay_driven":
+        return _infer_hearsay_conditions(ticker, why_text, change_text)
+
+    ambiguity_note = (
+        "Still vague — nail the business driver and what would make you sell before we can watch the right things."
+        if len(why_text.split()) < 8 or _text_matches_patterns(combined, GENERIC_CONDITION_PATTERNS)
+        else ""
+    )
+
+    must_remain_true = (
+        f"{ticker} still needs to show measurable operating progress that directly supports the reason for owning it."
+    )
+    what_would_change_my_mind = (
+        "If operating results or management commentary stop validating the core business driver for multiple quarters, the position should be reconsidered."
+    )
+
+    if any(keyword in lowered for keyword in ("growth", "demand", "adoption", "orders", "capex", "ai", "sales")):
+        must_remain_true = (
+            f"{ticker} needs to keep showing real demand in revenue growth, customer adoption, and management commentary."
+        )
+        what_would_change_my_mind = (
+            "If demand softens for multiple quarters or management commentary stops supporting the growth driver behind the thesis, the position should be reconsidered."
+        )
+    elif any(keyword in lowered for keyword in ("margin", "margins", "profit", "profitability", "earnings", "cash flow")):
+        must_remain_true = (
+            f"{ticker} needs to keep turning the thesis into healthy margins, earnings, or cash flow rather than just narrative momentum."
+        )
+        what_would_change_my_mind = (
+            "If margins, earnings, or cash generation deteriorate for multiple quarters, the position should be reconsidered."
+        )
+    elif any(keyword in lowered for keyword in ("moat", "ecosystem", "leadership", "competitive", "pricing power")):
+        must_remain_true = (
+            f"{ticker} needs to keep showing competitive strength through customer adoption, pricing power, or product leadership."
+        )
+        what_would_change_my_mind = (
+            "If credible competition starts eroding adoption, pricing power, or management confidence in the competitive edge, the position should be reconsidered."
+        )
+    elif any(keyword in lowered for keyword in ("valuation", "multiple", "cheap", "expensive", "p/e", "pe")):
+        must_remain_true = (
+            f"{ticker} needs to keep delivering enough business performance to justify the valuation being paid today."
+        )
+        what_would_change_my_mind = (
+            "If business performance no longer justifies the valuation or management guidance weakens materially, the position should be reconsidered."
+        )
+
+    return must_remain_true, what_would_change_my_mind, ambiguity_note
+
+
+def _looks_generic_output(text: str) -> bool:
+    stripped = text.strip()
+    if not stripped:
+        return True
+    if len(stripped.split()) < 6:
+        return True
+    return _text_matches_patterns(stripped, GENERIC_OUTPUT_PATTERNS)
+
+
+def _infer_market_driver(ticker: str, market_data: Any | None) -> tuple[str, str, str]:
+    sector = getattr(market_data, "sector", None) or "its market"
+    industry = getattr(market_data, "industry", None) or "its category"
+    revenue_growth = getattr(market_data, "revenue_growth_yoy", None)
+    earnings_growth = getattr(market_data, "earnings_growth_yoy", None)
+
+    if isinstance(revenue_growth, (int, float)) and revenue_growth > 0.08:
+        return (
+            f"{ticker} looks interesting because the business is still showing real demand in {industry.lower()}, not just narrative momentum.",
+            f"Revenue growth and management commentary in {industry.lower()} need to keep supporting the demand story.",
+            f"If revenue growth stalls or management stops supporting the current demand story in {industry.lower()}, the position should be reconsidered.",
+        )
+    if isinstance(earnings_growth, (int, float)) and earnings_growth > 0.08:
+        return (
+            f"{ticker} looks interesting because the company is turning its position in {sector.lower()} into actual earnings momentum.",
+            f"Earnings growth needs to stay healthy enough to show the business case is real rather than thematic excitement alone.",
+            f"If earnings momentum fades for multiple quarters or margins deteriorate sharply, the position should be reconsidered.",
+        )
+    return (
+        f"{ticker} looks interesting if the company can turn its position in {industry.lower()} into durable operating results rather than just investor excitement.",
+        f"The business needs to keep showing measurable progress in demand, execution, or profitability within {industry.lower()}.",
+        f"If operating results stop validating the current story around {ticker}, the position should be reconsidered.",
+    )
+
+
+def _fallback_initial_draft(ticker: str, market_data: Any | None = None) -> dict[str, str]:
+    why_own_it, must_remain_true, what_would_change_my_mind = _infer_market_driver(ticker, market_data)
+    return {
+        "why_own_it": why_own_it,
+        "must_remain_true": must_remain_true,
+        "what_would_change_my_mind": what_would_change_my_mind,
+    }
+
+
+def _apply_synthesis_guardrails(
+    output: SynthesisOutput,
+    *,
+    ticker: str,
+    answer1: str,
+    answer2: str,
+    investor_profile: str | None,
+) -> SynthesisOutput:
+    interpretation = _normalize_interpretation(output.interpretation)
+    why_own_it = output.why_own_it.strip()
+    must_remain_true = output.must_remain_true.strip()
+    what_would_change_my_mind = output.what_would_change_my_mind.strip()
+    ai_summary = output.ai_summary.strip()
+
+    if investor_profile != "hearsay_driven":
+        inferred_must, inferred_change, inferred_ambiguity = _infer_specific_conditions(
+            ticker,
+            why_text=why_own_it or answer1,
+            change_text=what_would_change_my_mind or answer2,
+            investor_profile=investor_profile,
+        )
+        if _looks_generic_output(must_remain_true) or _text_matches_patterns(must_remain_true, GENERIC_CONDITION_PATTERNS):
+            must_remain_true = inferred_must
+        if _looks_generic_output(what_would_change_my_mind) or _text_matches_patterns(what_would_change_my_mind, GENERIC_CONDITION_PATTERNS):
+            what_would_change_my_mind = inferred_change
+        if not interpretation.get("ambiguity_note") and inferred_ambiguity:
+            interpretation["ambiguity_note"] = inferred_ambiguity
+        if not any(hint.get("kind") == "metric_threshold" for hint in interpretation["watch_hints"]):
+            interpretation["watch_hints"] = _dedupe_watch_hints(
+                [*interpretation["watch_hints"], *_infer_story_watch_hints(f"{why_own_it} {answer1} {answer2}")]
+            )[:3]
+        if interpretation["monitorability"] == "low" and any(
+            hint.get("kind") == "metric_threshold" for hint in interpretation["watch_hints"]
+        ):
+            interpretation["monitorability"] = "medium"
+        return SynthesisOutput(
+            why_own_it=why_own_it or f"Investing in {ticker} for long-term potential.",
+            must_remain_true=must_remain_true or inferred_must,
+            what_would_change_my_mind=what_would_change_my_mind or inferred_change,
+            ai_summary=ai_summary,
+            interpretation=interpretation,
+        )
+
+    inferred_must, inferred_change, inferred_ambiguity = _infer_hearsay_conditions(ticker, answer1, answer2)
+    combined_story_text = f"{why_own_it} {answer1} {answer2}".strip()
+
+    if _looks_generic_output(must_remain_true):
+        must_remain_true = inferred_must
+    if _looks_generic_output(what_would_change_my_mind):
+        what_would_change_my_mind = inferred_change
+    if _text_matches_patterns(why_own_it or answer1, HEARSAY_PATTERNS):
+        why_own_it = (
+            why_own_it or answer1.strip() or f"This started as a rough idea in {ticker}."
+        ).strip()
+        if "operating results" not in why_own_it.lower() and "business performance" not in why_own_it.lower():
+            why_own_it = f"{why_own_it} The case only holds if the underlying business results start validating that story."
+    if not ai_summary:
+        ai_summary = f"{ticker}: this started as a story-driven idea and only holds if the operating results validate it."
+
+    inferred_watch_hints = _infer_story_watch_hints(combined_story_text)
+    if not any(hint.get("kind") == "metric_threshold" for hint in interpretation["watch_hints"]):
+        interpretation["watch_hints"] = _dedupe_watch_hints(
+            [*interpretation["watch_hints"], *inferred_watch_hints]
+        )[:3]
+    if not interpretation.get("ambiguity_note") and inferred_ambiguity:
+        interpretation["ambiguity_note"] = inferred_ambiguity
+    if interpretation["monitorability"] == "low" and any(
+        hint.get("kind") == "metric_threshold" for hint in interpretation["watch_hints"]
+    ):
+        interpretation["monitorability"] = "medium"
+
+    return SynthesisOutput(
+        why_own_it=why_own_it or f"Investing in {ticker} because the story still appears backed by the business.",
+        must_remain_true=must_remain_true,
+        what_would_change_my_mind=what_would_change_my_mind,
+        ai_summary=ai_summary,
+        interpretation=interpretation,
+    )
 
 
 def _build_market_data_section(market_data: Any | None) -> str:
@@ -457,10 +770,14 @@ def _parse_draft_output(data: dict[str, Any], ticker: str) -> dict[str, str]:
     what_would_change_my_mind = data.get("what_would_change_my_mind")
     if not all(isinstance(item, str) for item in (why_own_it, must_remain_true, what_would_change_my_mind)):
         raise ValueError("Invalid draft payload")
+    cleaned_why = _sanitize_time_sensitive_references(why_own_it)
+    cleaned_must = _sanitize_time_sensitive_references(must_remain_true)
+    cleaned_change = _sanitize_time_sensitive_references(what_would_change_my_mind)
+    fallback = _fallback_initial_draft(ticker)
     return {
-        "why_own_it": _sanitize_time_sensitive_references(why_own_it) or f"Investing in {ticker} for its long term potential.",
-        "must_remain_true": _sanitize_time_sensitive_references(must_remain_true) or "The company maintains its market position.",
-        "what_would_change_my_mind": _sanitize_time_sensitive_references(what_would_change_my_mind) or "A fundamental change in the business model.",
+        "why_own_it": fallback["why_own_it"] if _text_matches_patterns(cleaned_why, GENERIC_DRAFT_PATTERNS) else cleaned_why,
+        "must_remain_true": fallback["must_remain_true"] if _text_matches_patterns(cleaned_must, GENERIC_DRAFT_PATTERNS) else cleaned_must,
+        "what_would_change_my_mind": fallback["what_would_change_my_mind"] if _text_matches_patterns(cleaned_change, GENERIC_DRAFT_PATTERNS) else cleaned_change,
     }
 
 
@@ -639,7 +956,7 @@ async def assist_thesis(
             )
 
 
-COUNTER_THESIS_PROMPT = """You are a devil's advocate investment analyst. Given a retail investor's thesis for holding a stock, generate a structured counter-argument to sharpen their thinking.
+COUNTER_THESIS_PROMPT = """You play skeptic on a retail investor's thesis. Stress-test their case; don't flatter it.
 
 Ticker: {ticker}
 Why they own it: {why_own_it}
@@ -660,7 +977,7 @@ Requirements:
 - key_risks: 3-5 concrete risks the investor should monitor
 - blind_spots: 2-3 things the thesis doesn't address but should
 - suggested_additions: 2-3 specific "what would change my mind" criteria the investor should add
-- Be constructive but challenging — the goal is to make the investor think harder
+- Be specific and blunt where the thesis is thin — the goal is a harder, more falsifiable case
 - Output ONLY valid JSON, no markdown fences"""
 
 
@@ -679,33 +996,32 @@ def _fallback_counter_thesis(
     ] or ["general"]
 
     bear_case = (
-        f"The bull case for {ticker} may be overly optimistic. "
-        f"Investors should consider whether the thesis assumptions around "
-        f"{', '.join(labels)} are already priced in or face structural headwinds."
+        f"You may be paying up for {ticker} on {', '.join(labels)} — "
+        f"check whether that story is already in the price or running into real headwinds."
     )
 
     key_risks = [
-        f"Competitive pressure could erode {ticker}'s position",
-        "Macroeconomic downturn may reduce demand",
-        "Valuation may already reflect the optimistic scenario",
+        f"A competitor could take share or pricing power from {ticker}",
+        "A downturn could hit demand harder than the bull case assumes",
+        "The multiple may already bake in the good outcome",
     ]
     if "growth" in labels:
-        key_risks.append("Growth deceleration could trigger a re-rating")
+        key_risks.append("Growth could slow and trigger a multiple reset")
     if "income" in labels:
-        key_risks.append("Dividend sustainability under earnings pressure")
+        key_risks.append("The dividend could come under pressure if earnings slip")
 
     blind_spots = [
-        "Regulatory or geopolitical risks not addressed in thesis",
-        "Management execution risk and capital allocation decisions",
+        "Regulation or geopolitics you did not spell out",
+        "Whether management can actually execute and allocate capital well",
     ]
 
     suggested_additions = [
-        "Set a specific valuation ceiling where the risk/reward no longer holds",
-        "Define a timeline for thesis milestones to be achieved",
+        "Name a valuation level where you would no longer own it",
+        "Name a date or milestone by which the thesis must show up in results",
     ]
     if not what_would_change_my_mind or len(what_would_change_my_mind.strip()) < 10:
         suggested_additions.append(
-            "Add concrete, measurable exit criteria rather than vague conditions"
+            "Add a measurable sell trigger — not 'if things get bad'"
         )
 
     return CounterThesisOutput(
@@ -758,8 +1074,8 @@ async def generate_counter_thesis(
         )
 
 
-DRAFT_THESIS_PROMPT = """You are a smart investing assistant helping a retail investor draft a thesis for a specific stock.
-Write a crisp, specific bull case with named conditions — not generic language.
+DRAFT_THESIS_PROMPT = """Draft a first-pass reason for holding a specific stock.
+Be specific about the business driver and what would break the case — no generic filler.
 
 Rules:
 - Name the specific business driver (e.g. AI inference demand, government contract backlog, network effects, regulatory moat) rather than describing it vaguely.
@@ -785,11 +1101,7 @@ async def generate_initial_draft(ticker: str) -> dict[str, str]:
     clean_ticker = _normalize_ticker(ticker)
 
     if not settings.anthropic_api_key:
-        return {
-            "why_own_it": f"Holding {clean_ticker} as a core position in the portfolio.",
-            "must_remain_true": "Edit this — add the specific condition that must remain true (e.g. revenue growth stays positive, key contract renewals hold).",
-            "what_would_change_my_mind": "Edit this — add the specific event that would trigger a sell (e.g. major customer loss, margin collapse).",
-        }
+        return _fallback_initial_draft(clean_ticker)
 
     try:
         market_data = await fetch_company_data(ticker)
@@ -812,20 +1124,16 @@ async def generate_initial_draft(ticker: str) -> dict[str, str]:
         return _parse_draft_output(data, clean_ticker)
     except Exception as e:
         logger.error(f"Draft thesis generation failed for {ticker}: {e}")
-        return {
-            "why_own_it": f"Holding {clean_ticker} as a core position in the portfolio.",
-            "must_remain_true": "Edit this — add the specific condition that must remain true (e.g. revenue growth stays positive, key contract renewals hold).",
-            "what_would_change_my_mind": "Edit this — add the specific event that would trigger a sell (e.g. major customer loss, margin collapse).",
-        }
+        return _fallback_initial_draft(clean_ticker, market_data)
 
 
 # ---------------------------------------------------------------------------
 # Wizard synthesis — construct a thesis from two Q&A answers
 # ---------------------------------------------------------------------------
 
-SYNTHESIS_PROMPT = """You are an investment thesis assistant helping a retail investor articulate their investment thesis.
+SYNTHESIS_PROMPT = """Turn two short answers into a structured reason for holding a stock.
 
-Based on the investor's answers to two simple questions, synthesise a well-structured thesis that preserves their voice.
+Keep the investor's wording where you can; clean up vagueness, don't corporate-wash it.
 
 Investor profile:
 - {investor_profile_label}
@@ -881,7 +1189,7 @@ def _synthesis_profile_context(investor_profile: str | None) -> tuple[str, str]:
         )
     return (
         "Thesis-driven investor",
-        "The investor likely already thinks in explicit reasons. Preserve structure, keep their voice, and sharpen specificity without over-explaining.",
+        "They likely already have a clear view. Keep their structure, tighten specifics, don't pad.",
     )
 
 
@@ -894,38 +1202,49 @@ def _fallback_synthesize(
     why_own_it = answer1.strip() or f"Investing in {ticker} for long-term growth."
     what_would_change_my_mind = answer2.strip() or "A fundamental change in the business model."
     if investor_profile == "hearsay_driven":
-        why_own_it = (
-            answer1.strip()
-            or f"This started as a rough idea in {ticker}, but the real reason to own it would need to come from durable business performance rather than chatter alone."
-        )
-        what_would_change_my_mind = (
-            answer2.strip()
-            or "If the original story stops showing up in the operating results, the position should be reconsidered."
-        )
+        why_own_it = answer1.strip() or f"This started as a rough idea in {ticker}."
     lowered = why_own_it.lower()
     labels = [
         label
         for label, keywords in THEME_KEYWORDS.items()
         if any(keyword in lowered for keyword in keywords)
     ] or ["user_defined"]
-    return SynthesisOutput(
+    inferred_must, inferred_change, inferred_ambiguity = _infer_specific_conditions(
+        ticker,
+        why_text=why_own_it or answer1,
+        change_text=what_would_change_my_mind or answer2,
+        investor_profile=investor_profile,
+    )
+    output = SynthesisOutput(
         why_own_it=why_own_it,
-        must_remain_true=f"The core investment thesis for {ticker} remains intact.",
-        what_would_change_my_mind=what_would_change_my_mind,
+        must_remain_true=inferred_must,
+        what_would_change_my_mind=what_would_change_my_mind or inferred_change,
         ai_summary=f"{ticker}: {why_own_it[:150]}",
         interpretation={
             "labels": labels[:3],
             "monitorability": "medium",
-            "watch_hints": [
-                {"kind": "price_move_pct", "threshold": 5.0, "rationale": "Prompt a review when price moves sharply."}
-            ],
+            "watch_hints": _infer_story_watch_hints(f"{answer1} {answer2}"),
             "proxy_signals": [],
-            "ambiguity_note": "",
+            "ambiguity_note": inferred_ambiguity,
         },
+    )
+    return _apply_synthesis_guardrails(
+        output,
+        ticker=ticker,
+        answer1=answer1,
+        answer2=answer2,
+        investor_profile=investor_profile,
     )
 
 
-def _parse_synthesis_output(data: dict[str, Any], ticker: str) -> SynthesisOutput:
+def _parse_synthesis_output(
+    data: dict[str, Any],
+    ticker: str,
+    *,
+    answer1: str,
+    answer2: str,
+    investor_profile: str | None,
+) -> SynthesisOutput:
     why_own_it = data.get("why_own_it")
     must_remain_true = data.get("must_remain_true")
     what_would_change_my_mind = data.get("what_would_change_my_mind")
@@ -933,12 +1252,19 @@ def _parse_synthesis_output(data: dict[str, Any], ticker: str) -> SynthesisOutpu
     interpretation = data.get("interpretation")
     if not all(isinstance(v, str) for v in (why_own_it, must_remain_true, what_would_change_my_mind, ai_summary)):
         raise ValueError("Invalid synthesis payload")
-    return SynthesisOutput(
+    output = SynthesisOutput(
         why_own_it=why_own_it.strip() or f"Investing in {ticker} for long-term potential.",
-        must_remain_true=must_remain_true.strip() or "The company maintains its market position.",
-        what_would_change_my_mind=what_would_change_my_mind.strip() or "A fundamental change in the business model.",
+        must_remain_true=must_remain_true.strip() or "",
+        what_would_change_my_mind=what_would_change_my_mind.strip() or "",
         ai_summary=ai_summary.strip(),
         interpretation=_normalize_interpretation(interpretation),
+    )
+    return _apply_synthesis_guardrails(
+        output,
+        ticker=ticker,
+        answer1=answer1,
+        answer2=answer2,
+        investor_profile=investor_profile,
     )
 
 
@@ -985,7 +1311,13 @@ async def synthesize_thesis_from_qa(
             model=settings.anthropic_model,
             max_tokens=1024,
         )
-        return _parse_synthesis_output(data, ticker)
+        return _parse_synthesis_output(
+            data,
+            ticker,
+            answer1=answer1,
+            answer2=answer2,
+            investor_profile=investor_profile,
+        )
     except Exception as e:
         logger.error("Synthesis failed for %s: %s", ticker, e)
         return _fallback_synthesize(
