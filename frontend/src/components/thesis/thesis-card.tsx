@@ -6,6 +6,7 @@ import type { Thesis, ThesisDecomposition } from "@/types";
 interface Props {
   thesis: Thesis;
   decomposition?: ThesisDecomposition | null;
+  investorProfile?: "thesis_driven" | "hearsay_driven" | null;
   onEdit: () => void;
   onInvalidate: () => void;
 }
@@ -65,6 +66,7 @@ function describeWatchHint(hint: Record<string, unknown>): string | null {
     typeof hint.operator === "string" &&
     typeof hint.threshold === "number"
   ) {
+    if (hint.threshold === 0) return null;
     const label = METRIC_LABELS[hint.metric] ?? hint.metric.replaceAll("_", " ");
     return `${label} stays ${hint.operator} ${hint.threshold}.`;
   }
@@ -100,7 +102,7 @@ function describeSignalCheckLogic(signalType: string, config: Record<string, unk
     if (operator === "<=" || operator === "<") return `Flags when ${label} rises above ${fmt} YoY.`;
   }
   if (signalType === "guidance_change") return "Watches guidance for meaningful deterioration.";
-  if (signalType === "earnings_surprise") return "Watches for a material miss versus expectations.";
+  if (signalType === "earnings_surprise") return "Watches for a big miss versus expectations.";
   if (signalType === "dividend_change") return "Watches for a dividend cut or payout policy change.";
   return null;
 }
@@ -138,12 +140,38 @@ function getInterpretation(thesis: Thesis) {
 
 // ── Component ─────────────────────────────────────────────────────────────────
 
-export function ThesisCard({ thesis, decomposition, onEdit, onInvalidate }: Props) {
+export function ThesisCard({ thesis, decomposition, investorProfile, onEdit, onInvalidate }: Props) {
   const { labels, watchHints, monitorability, ambiguityNote } = getInterpretation(thesis);
   const watchDescriptions = watchHints
     .map(describeWatchHint)
     .filter((d): d is string => Boolean(d));
   const activeSignals = getActiveSignals(decomposition);
+  const copy = investorProfile === "thesis_driven"
+    ? {
+        edit: "Edit thesis",
+        invalidate: "Invalidate thesis",
+        stillTrue: "Still true if",
+        breaks: "Breaks if",
+        activeSignals: "Active signals",
+        watching: "Watching for",
+      }
+    : investorProfile === "hearsay_driven"
+      ? {
+          edit: "Edit reason",
+          invalidate: "Invalidate reason",
+          stillTrue: "Still true if",
+          breaks: "Breaks if",
+          activeSignals: "Active signals",
+          watching: "Watching for",
+        }
+      : {
+          edit: "Edit",
+          invalidate: "Invalidate",
+          stillTrue: "Still true if",
+          breaks: "Breaks if",
+          activeSignals: "Active signals",
+          watching: "Watching for",
+        };
 
   return (
     <div className="border border-border bg-card divide-y divide-border/40">
@@ -193,14 +221,14 @@ export function ThesisCard({ thesis, decomposition, onEdit, onInvalidate }: Prop
             onClick={onEdit}
             className="font-mono text-[10px] uppercase tracking-[0.15em] text-primary/60 hover:text-primary transition-colors"
           >
-            Edit
+            {copy.edit}
           </button>
           {thesis.status !== "invalidated" && (
             <button
               onClick={onInvalidate}
               className="font-mono text-[10px] uppercase tracking-[0.15em] text-red-500/40 hover:text-red-600 transition-colors"
             >
-              Invalidate
+              {copy.invalidate}
             </button>
           )}
         </div>
@@ -234,7 +262,7 @@ export function ThesisCard({ thesis, decomposition, onEdit, onInvalidate }: Prop
         {/* Must remain true */}
         <div className={`relative px-5 py-5 border-l-2 ${thesis.must_remain_true ? "border-l-emerald-500/35" : "border-l-amber-400/35"}`}>
           <p className="font-mono text-[10px] uppercase tracking-[0.18em] text-muted-foreground mb-2">
-            Still true if
+            {copy.stillTrue}
           </p>
           {thesis.must_remain_true ? (
             <p className="font-sans text-sm leading-relaxed text-foreground/80">
@@ -250,7 +278,7 @@ export function ThesisCard({ thesis, decomposition, onEdit, onInvalidate }: Prop
         {/* Exit trigger */}
         <div className={`relative px-5 py-5 border-l-2 md:border-l-0 ${thesis.what_would_change_my_mind ? "border-l-red-500/30" : "border-l-border/30"}`}>
           <p className="font-mono text-[10px] uppercase tracking-[0.18em] text-muted-foreground mb-2">
-            Breaks if
+            {copy.breaks}
           </p>
           {thesis.what_would_change_my_mind ? (
             <p className="font-sans text-sm leading-relaxed text-foreground/80">
@@ -268,7 +296,7 @@ export function ThesisCard({ thesis, decomposition, onEdit, onInvalidate }: Prop
       {(activeSignals.length > 0 || watchDescriptions.length > 0) && (
         <div className="px-5 py-4 space-y-3">
           <p className="font-mono text-[10px] uppercase tracking-[0.2em] text-muted-foreground">
-            {activeSignals.length > 0 ? "Active signals" : "Watching for"}
+            {activeSignals.length > 0 ? copy.activeSignals : copy.watching}
           </p>
 
           <div className="space-y-0">

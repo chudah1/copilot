@@ -59,6 +59,15 @@ export function ThesisEditor({ thesis, investorProfile, mode = "write", onSave, 
   const monitorability = typeof interpretationData.monitorability === "string" ? interpretationData.monitorability : null;
   const ambiguityNote = typeof interpretationData.ambiguity_note === "string" ? interpretationData.ambiguity_note : "";
 
+  const PCT_METRICS = new Set(["revenue_growth_yoy", "earnings_growth_yoy", "gross_margin", "operating_margin", "dividend_yield"]);
+  const METRIC_LABELS: Record<string, string> = {
+    revenue_growth_yoy: "Revenue growth (YoY)",
+    earnings_growth_yoy: "Earnings growth (YoY)",
+    pe_ratio: "P/E ratio",
+    dividend_yield: "Dividend yield",
+    gross_margin: "Gross margin",
+    operating_margin: "Operating margin",
+  };
   const watchHintDescriptions = watchHints
     .map((hint) => {
       if (hint.kind === "price_move_pct" && typeof hint.threshold === "number") {
@@ -70,7 +79,13 @@ export function ThesisEditor({ thesis, investorProfile, mode = "write", onSave, 
         typeof hint.operator === "string" &&
         typeof hint.threshold === "number"
       ) {
-        return `${hint.metric.replaceAll("_", " ")} should stay ${hint.operator} ${hint.threshold}.`;
+        if (hint.threshold === 0) return null;
+        const label = METRIC_LABELS[hint.metric] ?? hint.metric.replaceAll("_", " ");
+        const t = hint.threshold as number;
+        const fmt = PCT_METRICS.has(hint.metric)
+          ? `${(Math.abs(t) <= 1 ? t * 100 : t)}%`
+          : String(t);
+        return `${label} stays ${hint.operator} ${fmt}.`;
       }
       return null;
     })
