@@ -1,0 +1,422 @@
+[
+  {
+    "id": "info_nvda_001",
+    "description": "Market-wide rally — NVDA moves with index, thesis is AI GPU fundamentals",
+    "expected_severity": "info",
+    "investor_profile": "thesis_driven",
+    "input": {
+      "ticker": "NVDA",
+      "why_own_it": "NVIDIA dominates AI training GPU market. Hyperscalers pour billions into data centers and NVDA takes the lion's share with CUDA lock-in.",
+      "must_remain_true": "Data center revenue keeps growing above 20% YoY. Gross margins stay above 70%.",
+      "what_would_change_my_mind": "AMD gains real GPU market share. Export restrictions gut China revenue significantly.",
+      "ai_summary": "NVDA is owned for AI data center dominance via CUDA moat and hyperscaler spend.",
+      "event_description": "S&P 500 rallied 2.3% today on softer-than-expected CPI data. NVDA rose 3.1% in line with the broader tech sector move."
+    }
+  },
+  {
+    "id": "info_aapl_002",
+    "description": "New retail store opening — irrelevant to Services margin thesis",
+    "expected_severity": "info",
+    "investor_profile": "thesis_driven",
+    "input": {
+      "ticker": "AAPL",
+      "why_own_it": "Apple Services is a high-margin recurring revenue stream attached to an installed base of 2 billion devices.",
+      "must_remain_true": "Services gross margin stays above 72%. Hardware gross margin stays above 35%.",
+      "what_would_change_my_mind": "Regulatory action forces App Store fee cuts. Services revenue growth slows below 12% YoY.",
+      "ai_summary": "AAPL is owned for Services margin expansion from a 2 billion device installed base.",
+      "event_description": "Apple opened its first retail store in Mumbai, India today with thousands of customers queuing outside."
+    }
+  },
+  {
+    "id": "info_o_003",
+    "description": "Fed holds rates unchanged — consistent with income thesis assumptions",
+    "expected_severity": "info",
+    "investor_profile": "thesis_driven",
+    "input": {
+      "ticker": "O",
+      "why_own_it": "Realty Income is the monthly dividend company. Net lease structure passes costs to tenants and AFFO growth funds dividend increases.",
+      "must_remain_true": "Occupancy stays above 96%. AFFO per share grows at least 3% annually.",
+      "what_would_change_my_mind": "Occupancy drops below 95% for two consecutive quarters. Tenant bankruptcies increase materially.",
+      "ai_summary": "O is owned for reliable monthly dividends backed by net lease AFFO growth.",
+      "event_description": "The Federal Reserve held interest rates steady at 4.25-4.5% as expected, citing continued progress on inflation. No change to dot plot."
+    }
+  },
+  {
+    "id": "info_vz_004",
+    "description": "New iPhone launch boosts phone sales — irrelevant to FCF/dividend thesis",
+    "expected_severity": "info",
+    "investor_profile": "general",
+    "input": {
+      "ticker": "VZ",
+      "why_own_it": "Verizon is a bond proxy with a 6%+ dividend yield covered by stable free cash flow from wireless subscriptions.",
+      "must_remain_true": "Dividend yield stays above 6%. Free cash flow covers the dividend payout with headroom.",
+      "what_would_change_my_mind": "FCF drops below dividend coverage. T-Mobile takes wireless subscriber share materially.",
+      "ai_summary": "VZ is owned for its 6%+ dividend yield backed by stable wireless subscription FCF.",
+      "event_description": "Apple launched the iPhone 17 today, driving strong carrier traffic at Verizon and AT&T stores. Analysts expect upgrade cycle to boost device revenue this quarter."
+    }
+  },
+  {
+    "id": "info_msft_005",
+    "description": "Competitor funding round — OpenAI raises capital, does not threaten Azure thesis",
+    "expected_severity": "info",
+    "investor_profile": "thesis_driven",
+    "input": {
+      "ticker": "MSFT",
+      "why_own_it": "Microsoft has the enterprise distribution advantage to monetise AI through Copilot and Azure OpenAI services.",
+      "must_remain_true": "Azure grows faster than AWS and GCP. Copilot seats grow and convert to paid plans.",
+      "what_would_change_my_mind": "Azure growth decelerates below 25% YoY for two consecutive quarters.",
+      "ai_summary": "MSFT is owned for enterprise AI monetisation via Azure OpenAI and Copilot seats.",
+      "event_description": "OpenAI raised a $3 billion funding round at a $300 billion valuation. The company said it would use funds to expand data centre capacity and hire researchers."
+    }
+  },
+  {
+    "id": "info_googl_006",
+    "description": "Google wins another search quality survey — confirms existing dominant position",
+    "expected_severity": "info",
+    "investor_profile": "thesis_driven",
+    "input": {
+      "ticker": "GOOGL",
+      "why_own_it": "Google search has structural habit lock-in and the best ad targeting data. AI overviews will keep users on Google.",
+      "must_remain_true": "Google search market share stays above 80% globally.",
+      "what_would_change_my_mind": "Bing AI or ChatGPT search takes meaningful query share. Apple switches Safari default search.",
+      "ai_summary": "GOOGL is owned for search market dominance and ad targeting data moat.",
+      "event_description": "A Semrush survey of 5,000 users ranked Google as the most trusted search engine for the 8th consecutive year, with 87% saying they use it as their primary search tool."
+    }
+  },
+  {
+    "id": "warning_nvda_007",
+    "description": "AMD announces competitive GPU — thesis is about NVDA's moat, competitor progress is a pillar risk",
+    "expected_severity": "warning",
+    "investor_profile": "thesis_driven",
+    "input": {
+      "ticker": "NVDA",
+      "why_own_it": "NVIDIA dominates AI training GPU market. Hyperscalers pour billions into data centers and NVDA takes the lion's share with CUDA lock-in.",
+      "must_remain_true": "Data center revenue keeps growing above 20% YoY. Gross margins stay above 70%.",
+      "what_would_change_my_mind": "AMD gains real GPU market share. Export restrictions gut China revenue significantly.",
+      "ai_summary": "NVDA is owned for AI data center dominance via CUDA moat and hyperscaler spend.",
+      "event_description": "AMD announced the MI350 AI accelerator today, claiming 40% better inference throughput than the NVIDIA H100. Microsoft and Meta said they plan to test the new chip in internal workloads alongside their existing NVDA fleet."
+    }
+  },
+  {
+    "id": "warning_amzn_008",
+    "description": "AWS growth decelerates to 18% — thesis requires >20%, approaching threshold",
+    "expected_severity": "warning",
+    "investor_profile": "thesis_driven",
+    "input": {
+      "ticker": "AMZN",
+      "why_own_it": "AWS is the default enterprise cloud. Prime membership creates a recurring revenue flywheel through advertising and subscriptions.",
+      "must_remain_true": "AWS operating income margin stays above 30%. Prime subscriber count keeps growing.",
+      "what_would_change_my_mind": "Azure or GCP takes AWS market share below 30%. Advertising revenue growth decelerates below 15% YoY.",
+      "ai_summary": "AMZN is owned for AWS cloud dominance and Prime advertising flywheel.",
+      "event_description": "Amazon reported Q1 results. AWS revenue grew 18% YoY, down from 22% last quarter and below analyst estimates of 20%. Management cited enterprise optimisation headwinds and said they expected the trend to persist into Q2."
+    }
+  },
+  {
+    "id": "warning_lulu_009",
+    "description": "Gross margin slips to 53% and promotional discounting confirmed — both quantitative and qualitative conditions triggered",
+    "expected_severity": "thesis_breaking",
+    "investor_profile": "thesis_driven",
+    "input": {
+      "ticker": "LULU",
+      "why_own_it": "Lululemon commands premium pricing in athletic wear. Brand loyalty drives full-price sell-through and protects margins.",
+      "must_remain_true": "Gross margin stays above 55%. International revenue grows faster than North America.",
+      "what_would_change_my_mind": "Promotional discounting increases meaningfully. Comparable store sales turn negative.",
+      "ai_summary": "LULU is owned for premium brand pricing power and gross margin protection.",
+      "event_description": "Lululemon reported Q3 earnings. Gross margin came in at 53.1%, down from 56.8% a year ago. Management said increased promotional activity and inventory clearance drove the margin compression."
+    }
+  },
+  {
+    "id": "warning_crm_010",
+    "description": "Salesforce NRR falls to 109% — thesis requires >110%, borderline breach",
+    "expected_severity": "warning",
+    "investor_profile": "thesis_driven",
+    "input": {
+      "ticker": "CRM",
+      "why_own_it": "Salesforce has 20 years of CRM data moat and enterprise switching costs that protect its position.",
+      "must_remain_true": "Salesforce retains above 20% CRM market share. Net revenue retention stays above 110%.",
+      "what_would_change_my_mind": "Microsoft Dynamics or HubSpot take enterprise accounts at scale. Agentforce AI adoption disappoints.",
+      "ai_summary": "CRM is owned for enterprise switching cost moat and data lock-in with expanding AI offerings.",
+      "event_description": "Salesforce disclosed its Q2 supplemental metrics. Net revenue retention fell to 109%, the first time it has dropped below 110% in three years. The company attributed this to customers consolidating cloud spend."
+    }
+  },
+  {
+    "id": "warning_meta_011",
+    "description": "Zuckerberg sells shares — hearsay investor takes this as CEO conviction signal",
+    "expected_severity": "warning",
+    "investor_profile": "hearsay_driven",
+    "input": {
+      "ticker": "META",
+      "why_own_it": "Mark Zuckerberg has demonstrated he can pivot the company. His track record on Instagram and Reels shows he can execute against competition.",
+      "must_remain_true": "Zuckerberg stays in control of the company.",
+      "what_would_change_my_mind": "Evidence of major strategic blunder or loss of control.",
+      "ai_summary": "META is owned on belief in Zuckerberg's execution track record and pivoting ability.",
+      "event_description": "SEC filings show Mark Zuckerberg sold 10 million Meta shares over the past 30 days under a 10b5-1 plan, realising approximately $5.5 billion. This is one of his largest single sales in the past five years."
+    }
+  },
+  {
+    "id": "warning_bx_012",
+    "description": "Middle-market defaults rise — thesis depends on private credit market health",
+    "expected_severity": "warning",
+    "investor_profile": "thesis_driven",
+    "input": {
+      "ticker": "BX",
+      "why_own_it": "Private credit is the fastest growing asset class as banks retreat from middle market lending post-Basel III.",
+      "must_remain_true": "Private credit AUM keeps growing. Fundraising environment stays open for institutional capital.",
+      "what_would_change_my_mind": "Credit default rates spike materially. Banks re-enter middle market lending competitively.",
+      "ai_summary": "BX is owned for AUM growth in private credit as banks retreat from middle market.",
+      "event_description": "The Proskauer Private Credit Default Index showed middle-market loan defaults rose to 2.8% in Q1, the highest since 2020. Two Blackstone-managed CLOs reported increased watchlist exposure."
+    }
+  },
+  {
+    "id": "warning_shop_013",
+    "description": "GMV growth at 22% — barely above 20% floor, Amazon competing harder for merchants",
+    "expected_severity": "warning",
+    "investor_profile": "thesis_driven",
+    "input": {
+      "ticker": "SHOP",
+      "why_own_it": "Shopify is the operating system for SMB e-commerce. Payments take rate expands as more merchants use Shopify Payments.",
+      "must_remain_true": "Merchant Solutions revenue grows faster than Subscription Solutions. Payments penetration keeps rising.",
+      "what_would_change_my_mind": "GMV growth drops below 20%. Amazon competes directly for merchant relationships.",
+      "ai_summary": "SHOP is owned for SMB e-commerce OS position and Payments take rate expansion.",
+      "event_description": "Shopify reported Q2 GMV growth of 22%, down from 31% the prior year. Meanwhile Amazon launched 'Buy with Prime' expansion to 50,000 new merchants, directly targeting Shopify's merchant base."
+    }
+  },
+  {
+    "id": "warning_arkk_014",
+    "description": "ARK underperforms S&P for second consecutive year — nearing stated condition",
+    "expected_severity": "warning",
+    "investor_profile": "hearsay_driven",
+    "input": {
+      "ticker": "ARKK",
+      "why_own_it": "Innovation is the future and disruptive technology companies will dominate the next decade. Cathie Wood picks the right stocks.",
+      "must_remain_true": "",
+      "what_would_change_my_mind": "ARK underperforms the S&P 500 for three consecutive years.",
+      "ai_summary": "ARKK is owned on belief in disruptive innovation and Cathie Wood's stock picking.",
+      "event_description": "ARKK Innovation ETF finished the year down 18% while the S&P 500 returned +24%. This marks the second consecutive year ARK has materially underperformed the index."
+    }
+  },
+  {
+    "id": "thesis_breaking_nvda_015",
+    "description": "US export ban on AI chips to China — China is a material revenue source, directly stated in thesis",
+    "expected_severity": "thesis_breaking",
+    "investor_profile": "thesis_driven",
+    "input": {
+      "ticker": "NVDA",
+      "why_own_it": "NVIDIA dominates AI training GPU market. Hyperscalers pour billions into data centers and NVDA takes the lion's share with CUDA lock-in.",
+      "must_remain_true": "Data center revenue keeps growing above 20% YoY. Gross margins stay above 70%.",
+      "what_would_change_my_mind": "AMD gains real GPU market share. Export restrictions gut China revenue significantly.",
+      "ai_summary": "NVDA is owned for AI data center dominance via CUDA moat and hyperscaler spend.",
+      "event_description": "The US Commerce Department announced new export restrictions banning all sales of NVIDIA H100, H200, and Blackwell chips to China effective immediately. NVIDIA disclosed China accounted for approximately 22% of its data center revenue in the last fiscal year."
+    }
+  },
+  {
+    "id": "thesis_breaking_aapl_016",
+    "description": "EU forces App Store fee cut to 15% — directly stated as the thesis-breaking condition",
+    "expected_severity": "thesis_breaking",
+    "investor_profile": "thesis_driven",
+    "input": {
+      "ticker": "AAPL",
+      "why_own_it": "Apple Services is a high-margin recurring revenue stream attached to an installed base of 2 billion devices.",
+      "must_remain_true": "Services gross margin stays above 72%. Hardware gross margin stays above 35%.",
+      "what_would_change_my_mind": "Regulatory action forces App Store fee cuts. Services revenue growth slows below 12% YoY.",
+      "ai_summary": "AAPL is owned for Services margin expansion from a 2 billion device installed base.",
+      "event_description": "The European Commission issued a final ruling requiring Apple to reduce App Store fees to 15% for all developers in the EU, down from the current 30%. Apple said compliance would reduce Services revenue by approximately $3.5 billion annually."
+    }
+  },
+  {
+    "id": "thesis_breaking_vz_017",
+    "description": "Verizon cuts dividend by 20% — directly breaks the stated income thesis condition",
+    "expected_severity": "thesis_breaking",
+    "investor_profile": "thesis_driven",
+    "input": {
+      "ticker": "VZ",
+      "why_own_it": "Verizon is a bond proxy with a 6%+ dividend yield covered by stable free cash flow from wireless subscriptions.",
+      "must_remain_true": "Dividend yield stays above 6%. Free cash flow covers the dividend payout with headroom.",
+      "what_would_change_my_mind": "FCF drops below dividend coverage. T-Mobile takes wireless subscriber share materially.",
+      "ai_summary": "VZ is owned for its 6%+ dividend yield backed by stable wireless subscription FCF.",
+      "event_description": "Verizon announced it would cut its quarterly dividend by 20% to $0.5825 per share, citing need to reduce debt and invest in 5G spectrum. The new yield at current prices is approximately 4.8%."
+    }
+  },
+  {
+    "id": "thesis_breaking_googl_018",
+    "description": "Apple switches Safari default search to Bing — explicitly stated as thesis-breaking condition",
+    "expected_severity": "thesis_breaking",
+    "investor_profile": "thesis_driven",
+    "input": {
+      "ticker": "GOOGL",
+      "why_own_it": "Google search has structural habit lock-in and the best ad targeting data. AI overviews will keep users on Google.",
+      "must_remain_true": "Google search market share stays above 80% globally.",
+      "what_would_change_my_mind": "Bing AI or ChatGPT search takes meaningful query share. Apple switches Safari default search.",
+      "ai_summary": "GOOGL is owned for search market dominance and ad targeting data moat.",
+      "event_description": "Apple announced it will switch the default search engine in Safari on all Apple devices from Google to Microsoft Bing, effective with iOS 20 and macOS 16 this autumn. Google reportedly paid Apple $22 billion annually for the default position."
+    }
+  },
+  {
+    "id": "thesis_breaking_coin_019",
+    "description": "SEC enforcement action — directly breaks stated regulatory thesis condition",
+    "expected_severity": "thesis_breaking",
+    "investor_profile": "hearsay_driven",
+    "input": {
+      "ticker": "COIN",
+      "why_own_it": "Crypto will go mainstream eventually and Coinbase is the most regulated and trusted US exchange. Regulatory clarity benefits the incumbents.",
+      "must_remain_true": "Coinbase retains its US exchange market share above 50%. Regulatory environment stays constructive.",
+      "what_would_change_my_mind": "SEC enforcement action forces major product changes. Crypto trading volumes drop for more than two quarters.",
+      "ai_summary": "COIN is owned as the regulatory-compliant incumbent in mainstream crypto adoption.",
+      "event_description": "The SEC filed a civil enforcement action against Coinbase alleging unregistered securities offerings across 15 listed tokens. The SEC is seeking disgorgement of profits and an order that would require Coinbase to delist the affected tokens, which account for approximately 35% of its trading volume."
+    }
+  },
+  {
+    "id": "thesis_breaking_o_020",
+    "description": "Occupancy drops to 93% for two consecutive quarters — explicitly breaks the stated floor condition",
+    "expected_severity": "thesis_breaking",
+    "investor_profile": "thesis_driven",
+    "input": {
+      "ticker": "O",
+      "why_own_it": "Realty Income is the monthly dividend company. Net lease structure passes costs to tenants and AFFO growth funds dividend increases.",
+      "must_remain_true": "Occupancy stays above 96%. AFFO per share grows at least 3% annually.",
+      "what_would_change_my_mind": "Occupancy drops below 95% for two consecutive quarters. Tenant bankruptcies increase materially.",
+      "ai_summary": "O is owned for reliable monthly dividends backed by net lease AFFO growth.",
+      "event_description": "Realty Income reported Q2 results. Occupancy fell to 93.1%, the second consecutive quarter below the 95% threshold cited in many analyst models. Five major retail tenants filed for Chapter 11 this quarter, representing 3.2% of annualised base rent."
+    }
+  },
+  {
+    "id": "info_tsla_021",
+    "description": "Rivian raises $1.5B — EV competitor funding round, TSLA thesis is about FSD and energy margins",
+    "expected_severity": "info",
+    "investor_profile": "thesis_driven",
+    "input": {
+      "ticker": "TSLA",
+      "why_own_it": "Tesla's real value is the full self-driving software stack and energy storage business. Hardware margins are secondary to the software monetisation opportunity.",
+      "must_remain_true": "FSD miles driven keeps growing. Energy storage deployments grow above 50% annually.",
+      "what_would_change_my_mind": "A competitor deploys a commercially licensed autonomous vehicle service at scale. Energy storage growth stalls below 20% for two consecutive quarters.",
+      "ai_summary": "TSLA is owned for FSD software monetisation and energy storage growth, not EV market share.",
+      "event_description": "Rivian announced a $1.5 billion funding round co-led by Volkswagen and Amazon. The company said it would use the capital to expand manufacturing capacity and develop its next-generation electric delivery vans."
+    }
+  },
+  {
+    "id": "info_googl_022",
+    "description": "YouTube hits 3B monthly users — positive milestone but thesis is about search share, not YouTube",
+    "expected_severity": "info",
+    "investor_profile": "thesis_driven",
+    "input": {
+      "ticker": "GOOGL",
+      "why_own_it": "Google search has structural habit lock-in and the best ad targeting data. AI overviews will keep users on Google.",
+      "must_remain_true": "Google search market share stays above 80% globally.",
+      "what_would_change_my_mind": "Bing AI or ChatGPT search takes meaningful query share. Apple switches Safari default search.",
+      "ai_summary": "GOOGL is owned for search market dominance and ad targeting data moat.",
+      "event_description": "Google announced that YouTube has surpassed 3 billion monthly active users for the first time, up from 2.7 billion two years ago. The company said watch time on living room devices grew 30% year over year."
+    }
+  },
+  {
+    "id": "info_jpm_023",
+    "description": "Fed releases new bank capital framework — directly threatens stated ROE condition",
+    "expected_severity": "warning",
+    "investor_profile": "thesis_driven",
+    "input": {
+      "ticker": "JPM",
+      "why_own_it": "JPMorgan is the best-managed large US bank with a fortress balance sheet. Dimon's capital allocation discipline means the dividend and buybacks are reliable.",
+      "must_remain_true": "Dividend yield stays above 2.5%. Return on equity stays above 15%.",
+      "what_would_change_my_mind": "JPM cuts its dividend. ROE falls below 12% for two consecutive quarters.",
+      "ai_summary": "JPM is owned for reliable capital returns backed by disciplined balance sheet management.",
+      "event_description": "The Federal Reserve released a revised Basel III endgame capital framework for public comment. The proposal would require large banks to hold 9% more capital on average than current rules. The Fed said final rules would take effect no earlier than 2027."
+    }
+  },
+  {
+    "id": "warning_tsla_024",
+    "description": "Tesla automotive gross margin at 16.8% — 1.2pp below the stated 18% floor",
+    "expected_severity": "warning",
+    "investor_profile": "thesis_driven",
+    "input": {
+      "ticker": "TSLA",
+      "why_own_it": "Tesla's real value is the full self-driving software stack and energy storage business. Hardware margins are secondary to the software monetisation opportunity.",
+      "must_remain_true": "Automotive gross margin stays above 18%. FSD miles driven keeps growing quarter over quarter.",
+      "what_would_change_my_mind": "Gross margin stays below 15% for two consecutive quarters. A competitor deploys a commercially licensed autonomous vehicle service at scale.",
+      "ai_summary": "TSLA is owned for FSD software monetisation with automotive margins as a baseline health check.",
+      "event_description": "Tesla reported Q2 results. Automotive gross margin came in at 16.8%, down from 18.9% a year ago. Management cited continued price reductions in China and increased warranty provisions as the main drivers."
+    }
+  },
+  {
+    "id": "warning_dis_025",
+    "description": "Disney+ loses 2M subscribers — first quarter of decline, two-quarter condition not yet triggered",
+    "expected_severity": "warning",
+    "investor_profile": "thesis_driven",
+    "input": {
+      "ticker": "DIS",
+      "why_own_it": "Disney's IP moat and streaming transition is undervalued. Disney+ will become profitable as content costs normalise and subscriber base matures.",
+      "must_remain_true": "Disney+ subscriber count keeps growing. Content margins improve as the slate shifts to sequels and franchise extensions.",
+      "what_would_change_my_mind": "Disney+ subscriber count declines for two consecutive quarters. A major franchise film fails critically and commercially.",
+      "ai_summary": "DIS is owned for Disney+ subscriber growth and IP monetisation through franchise content.",
+      "event_description": "Disney reported Q3 results. Disney+ lost 2.1 million subscribers during the quarter, the first net decline since launch. Management blamed password-sharing crackdown churn and said they expected recovery in Q4 with the new Marvel slate."
+    }
+  },
+  {
+    "id": "warning_uber_026",
+    "description": "Lyft expands aggressively — direct competitor taking market share, thesis requires Uber above 65%",
+    "expected_severity": "warning",
+    "investor_profile": "thesis_driven",
+    "input": {
+      "ticker": "UBER",
+      "why_own_it": "Uber has a two-sided network effect that makes it nearly impossible to displace. Driver and rider density advantages compound in every city it operates in.",
+      "must_remain_true": "Uber maintains US rideshare market share above 65%. Take rate stays above 27%.",
+      "what_would_change_my_mind": "Lyft or a new entrant takes meaningful share in top 20 US cities. Autonomous vehicle fleets make human drivers obsolete faster than expected.",
+      "ai_summary": "UBER is owned for rideshare network effect dominance and take rate expansion.",
+      "event_description": "Lyft announced it is expanding operations to 20 new US cities and launching a price-match guarantee against Uber for the next six months. Lyft's Q2 rider count grew 18% year over year, its fastest growth rate since 2019."
+    }
+  },
+  {
+    "id": "warning_jpm_027",
+    "description": "Jamie Dimon hints at succession — hearsay investor owns JPM because of Dimon specifically",
+    "expected_severity": "warning",
+    "investor_profile": "hearsay_driven",
+    "input": {
+      "ticker": "JPM",
+      "why_own_it": "Jamie Dimon is the greatest capital allocator in banking. I own JPM because of him, full stop.",
+      "must_remain_true": "Dimon stays as CEO.",
+      "what_would_change_my_mind": "Dimon announces he is leaving or hands over to a successor.",
+      "ai_summary": "JPM is owned purely on conviction in Dimon's leadership and capital allocation track record.",
+      "event_description": "In a CNBC interview, Jamie Dimon said he is working more closely with his senior leadership team on strategic decisions and that he expects his successor to be identified within the next two to three years. He said he has no plans to retire imminently."
+    }
+  },
+  {
+    "id": "thesis_breaking_tsla_028",
+    "description": "Tesla cuts prices again, margin guidance slashed to 12% — investor stated below-15% margin as a sell condition",
+    "expected_severity": "thesis_breaking",
+    "investor_profile": "thesis_driven",
+    "input": {
+      "ticker": "TSLA",
+      "why_own_it": "Tesla's real value is the full self-driving software stack and energy storage business. Hardware margins are secondary to the software monetisation opportunity.",
+      "must_remain_true": "Automotive gross margin stays above 18%. FSD miles driven keeps growing quarter over quarter.",
+      "what_would_change_my_mind": "Gross margin stays below 15% for two consecutive quarters. A competitor deploys a commercially licensed autonomous vehicle service at scale.",
+      "ai_summary": "TSLA is owned for FSD software monetisation with automotive margins as a baseline health check.",
+      "event_description": "Tesla announced across-the-board price cuts of 8-12% on all models globally. The company revised its full-year automotive gross margin guidance down to 12-13%, citing intensifying competition in China. This follows Q1's gross margin of 14.6%, meaning Tesla has now guided below 15% for two consecutive quarters."
+    }
+  },
+  {
+    "id": "thesis_breaking_dis_029",
+    "description": "Disney+ declines for second consecutive quarter — investor's explicit two-quarter exit condition triggered",
+    "expected_severity": "thesis_breaking",
+    "investor_profile": "thesis_driven",
+    "input": {
+      "ticker": "DIS",
+      "why_own_it": "Disney's IP moat and streaming transition is undervalued. Disney+ will become profitable as content costs normalise and subscriber base matures.",
+      "must_remain_true": "Disney+ subscriber count keeps growing. Content margins improve as the slate shifts to sequels and franchise extensions.",
+      "what_would_change_my_mind": "Disney+ subscriber count declines for two consecutive quarters. A major franchise film fails critically and commercially.",
+      "ai_summary": "DIS is owned for Disney+ subscriber growth and IP monetisation through franchise content.",
+      "event_description": "Disney reported Q4 results. Disney+ lost another 3.8 million subscribers, the second consecutive quarter of net losses following Q3's 2.1 million decline. Management said the new Marvel slate underperformed expectations and announced a content budget review."
+    }
+  },
+  {
+    "id": "thesis_breaking_amzn_031",
+    "description": "FTC wins antitrust case requiring AWS divestiture — investor explicitly stated structural breakup as a sell condition",
+    "expected_severity": "thesis_breaking",
+    "investor_profile": "thesis_driven",
+    "input": {
+      "ticker": "AMZN",
+      "why_own_it": "AWS is the default enterprise cloud. Prime membership creates a recurring revenue flywheel through advertising and subscriptions.",
+      "must_remain_true": "AWS operating income margin stays above 30%. Prime subscriber count keeps growing.",
+      "what_would_change_my_mind": "Azure or GCP takes AWS market share below 30%. The government forces a structural separation of AWS from Amazon's retail business.",
+      "ai_summary": "AMZN is owned for AWS cloud dominance and Prime advertising flywheel.",
+      "event_description": "A federal judge ruled in favour of the FTC's antitrust case against Amazon, ordering the company to structurally separate AWS from its retail and marketplace operations within 18 months. Amazon said it would appeal but analysts said the ruling, if upheld, would fundamentally change the company's integrated cost structure."
+    }
+  }
+]

@@ -7,6 +7,7 @@ __pycache__/
 *.db-shm
 *.db-wal
 .pytest_cache/
+backend/tests/eval/results/
 node_modules/
 .next/
 .env.local
