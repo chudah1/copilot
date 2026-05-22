@@ -461,10 +461,10 @@ function describeWatchHint(hint: Record<string, unknown>) {
     typeof hint.operator === "string" &&
     typeof hint.threshold === "number"
   ) {
-    const label = METRIC_LABELS[hint.metric] ?? hint.metric.replaceAll("_", " ");
     if (hint.threshold === 0) {
-      return `${label} stays positive.`;
+      return null;
     }
+    const label = METRIC_LABELS[hint.metric] ?? hint.metric.replaceAll("_", " ");
     return `${label} stays ${hint.operator} ${formatThreshold(hint.metric, hint.threshold)}.`;
   }
   return null;
