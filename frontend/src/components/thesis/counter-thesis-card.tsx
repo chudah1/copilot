@@ -32,8 +32,8 @@ export function CounterThesisCard({ thesisId }: { thesisId: string }) {
       <Card>
         <CardContent className="flex items-center justify-between py-4">
           <div>
-            <p className="text-sm font-medium">Devil&apos;s Advocate</p>
-            <p className="text-xs text-muted-foreground">Generate a bear case to stress-test your reason.</p>
+            <p className="text-sm font-medium">Bear case</p>
+            <p className="text-xs text-muted-foreground">See what could break your reason before the market does.</p>
           </div>
           <Button variant="outline" size="sm" onClick={generate}>
             Challenge reason
@@ -70,7 +70,7 @@ export function CounterThesisCard({ thesisId }: { thesisId: string }) {
     <Card>
       <CardHeader className="cursor-pointer pb-2" onClick={() => setExpanded(!expanded)}>
         <div className="flex items-center justify-between">
-          <CardTitle className="text-base">Devil&apos;s Advocate</CardTitle>
+          <CardTitle className="text-base">Bear case</CardTitle>
           <span className="text-xs text-muted-foreground">{expanded ? "collapse" : "expand"}</span>
         </div>
       </CardHeader>

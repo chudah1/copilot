@@ -10,6 +10,7 @@ from app.models.digest import Digest
 from app.models.earnings_calendar import EarningsCalendar
 from app.models.holding import Holding
 from app.models.monitoring_event import MonitoringEvent
+from app.models.onboarding_state import OnboardingState
 from app.models.thesis import Thesis
 from app.models.thesis_claim import ThesisClaim
 from app.models.thesis_decomposition import ThesisDecomposition
@@ -19,6 +20,7 @@ from app.models.user import User
 from app.services.email import send_digest_email
 
 logger = logging.getLogger(__name__)
+InvestorProfile = str | None
 
 
 def _normalize_datetime(timestamp: datetime) -> datetime:
@@ -39,7 +41,7 @@ def _digest_headline(events_count: int, stale_count: int, missing_count: int, st
         return f"{missing_count} holding{'s' if missing_count != 1 else ''} still lack a thesis."
     if stable_count > 0:
         return f"{stable_count} of your reasons held up this week."
-    return "No material portfolio changes this week."
+    return "Quiet week — nothing touched what you're watching."
 
 
 def _digest_subject(events_count: int, stable_count: int) -> str:
@@ -51,7 +53,13 @@ def _digest_subject(events_count: int, stable_count: int) -> str:
     return "0 of your reasons changed this week"
 
 
-def _digest_summary_points(events_data: list[dict], observations: dict, next_earnings: dict | None = None) -> list[str]:
+def _digest_summary_points(
+    events_data: list[dict],
+    observations: dict,
+    next_earnings: dict | None = None,
+    *,
+    investor_profile: InvestorProfile = None,
+) -> list[str]:
     points: list[str] = []
     if events_data:
         first = events_data[0]
@@ -65,7 +73,8 @@ def _digest_summary_points(events_data: list[dict], observations: dict, next_ear
         points.append(f"Concentration: {observations['concentration_warnings']}")
     stable = observations.get("stable_holdings", [])
     if stable and not points:
-        points.append(f"Stable holdings: {', '.join(item['ticker'] for item in stable[:3])}")
+        prefix = "Stable theses" if investor_profile == "thesis_driven" else "Stable reasons"
+        points.append(f"{prefix}: {', '.join(item['ticker'] for item in stable[:3])}")
     if next_earnings and len(points) < 3:
         days = next_earnings["days_until"]
         if days == 0:
@@ -105,22 +114,51 @@ def _signal_status_text(intact_count: int, weakening_count: int) -> str:
 
 
 def _parse_evidence_parts(evidence_summary: str | None) -> dict[str, str]:
-    """Extract keyed sections from the 'You said: / We watched: / What happened:' format."""
+    """Extract keyed sections and trailing unlabeled lines from evidence summaries."""
     if not evidence_summary:
         return {}
     parts: dict[str, str] = {}
+    body_lines: list[str] = []
+    keyed_prefixes = (
+        "You said",
+        "We watched",
+        "We were watching",
+        "What happened",
+        "Your reason",
+        "Your thesis",
+        "What the app was checking",
+        "What changed",
+        "Why this matters now",
+        "Decision to consider",
+    )
     for line in evidence_summary.split("\n"):
-        for key in ("You said", "We watched", "What happened", "Your reason"):
+        matched = False
+        for key in keyed_prefixes:
             prefix = f"{key}:"
             if line.startswith(prefix):
                 parts[key] = line[len(prefix):].strip().strip('"')
+                matched = True
+                break
+        if not matched and line.strip():
+            body_lines.append(line.strip())
+    if body_lines:
+        parts["_body_0"] = body_lines[0]
+        if len(body_lines) > 1:
+            parts["_body_1"] = body_lines[1]
+        if len(body_lines) > 2:
+            parts["_body_2"] = body_lines[2]
     return parts
 
 
 def _what_happened(event: dict) -> str:
     """One-line fact extracted from the event — suitable for TLDR or subject."""
     evidence = _parse_evidence_parts(event.get("evidence_summary"))
-    return evidence.get("What happened") or event.get("summary", "")
+    return (
+        evidence.get("What changed")
+        or evidence.get("What happened")
+        or evidence.get("_body_0")
+        or event.get("summary", "")
+    )
 
 
 def _tldr_lines(events_data: list[dict]) -> list[str]:
@@ -130,7 +168,7 @@ def _tldr_lines(events_data: list[dict]) -> list[str]:
         verdict = event.get("verdict")
         what = _what_happened(event)
         if verdict == "threatens":
-            lines.append(f"{ticker}: {what} Worth reviewing against your reason.")
+            lines.append(f"{ticker}: {what} — worth a look against your reason.")
         elif verdict == "supports":
             lines.append(f"{ticker}: {what} Aligns with your reason for holding.")
         else:
@@ -147,16 +185,16 @@ def _render_evidence_html(event: dict) -> str:
     parts = _parse_evidence_parts(evidence_summary)
     html_parts = []
 
-    you_said = parts.get("You said") or parts.get("Your reason")
-    we_watched = parts.get("We watched")
-    what_happened = parts.get("What happened")
+    you_said = parts.get("Your thesis") or parts.get("You said") or parts.get("Your reason")
+    we_watched = parts.get("We were watching") or parts.get("What the app was checking") or parts.get("We watched")
+    what_happened = parts.get("What changed") or parts.get("What happened") or parts.get("_body_0")
 
     if you_said:
         html_parts.append(f'<blockquote style="border-left:3px solid #ccc;margin:8px 0;padding:4px 12px;color:#555;">&ldquo;{escape(you_said)}&rdquo;</blockquote>')
     if we_watched:
         html_parts.append(f'<p style="font-size:12px;color:#888;margin:4px 0;">Signal: {escape(we_watched)}</p>')
     if what_happened:
-        html_parts.append(f'<p style="margin:8px 0;"><strong>What changed:</strong> {escape(what_happened)}</p>')
+        html_parts.append(f'<p style="margin:8px 0;">{escape(what_happened)}</p>')
     elif not html_parts:
         # No structured parts — fall back to raw summary
         html_parts.append(f"<p>{escape(event.get('summary', ''))}</p>")
@@ -172,11 +210,24 @@ def _monitoring_receipt(
     events_count: int,
     stable_count: int,
     upcoming_earnings_count: int = 0,
+    *,
+    investor_profile: InvestorProfile = None,
 ) -> str:
-    base = (
-        f"We checked {holdings_count} holding{'s' if holdings_count != 1 else ''} with current reasons. "
-        f"{events_count} produced material evidence. {stable_count} stayed calm."
-    )
+    if investor_profile == "thesis_driven":
+        base = (
+            f"We checked {holdings_count} holding{'s' if holdings_count != 1 else ''} against your written thesis assumptions. "
+            f"{events_count} had something worth a look. {stable_count} were quiet."
+        )
+    elif investor_profile == "hearsay_driven":
+        base = (
+            f"We checked {holdings_count} holding{'s' if holdings_count != 1 else ''} against the reasons you've attached to them. "
+            f"{events_count} had something worth a look. {stable_count} were quiet."
+        )
+    else:
+        base = (
+            f"We checked {holdings_count} holding{'s' if holdings_count != 1 else ''} with current reasons. "
+            f"{events_count} had something worth a look. {stable_count} were quiet."
+        )
     if upcoming_earnings_count > 0:
         noun = "holding" if upcoming_earnings_count == 1 else "holdings"
         verb = "reports" if upcoming_earnings_count == 1 else "report"
@@ -184,17 +235,68 @@ def _monitoring_receipt(
     return base
 
 
-def _oldest_reason_nudge(theses: list[dict]) -> str | None:
+def _oldest_reason_nudge(theses: list[dict], *, investor_profile: InvestorProfile = None) -> str | None:
     candidates = [item for item in theses if item.get("why_own_it") and item.get("thesis_updated_at")]
     if not candidates:
         return None
     oldest = max(candidates, key=lambda item: item["reason_age_days"])
     if oldest["reason_age_days"] < 90:
         return None
+    if investor_profile == "thesis_driven":
+        return (
+            f'You wrote your reason for holding {oldest["name"]} {oldest["reason_age_days"]} days ago. '
+            f"Would you still own it today for the same core assumption?"
+        )
+    if investor_profile == "hearsay_driven":
+        return (
+            f'You wrote your reason for holding {oldest["name"]} {oldest["reason_age_days"]} days ago. '
+            f"Would the same story still convince you today, or does it need a sharper reason?"
+        )
     return (
         f'You wrote your reason for holding {oldest["name"]} {oldest["reason_age_days"]} days ago. '
         f'Would you still buy it today for the same reason?'
     )
+
+
+def _digest_intro_line(has_events: bool, *, investor_profile: InvestorProfile = None) -> str | None:
+    if investor_profile == "thesis_driven":
+        return (
+            "This week&apos;s evidence is framed against the assumptions you wrote down."
+            if has_events
+            else "None of your monitored assumptions moved meaningfully this week."
+        )
+    if investor_profile == "hearsay_driven":
+        return (
+            "This week&apos;s evidence tests whether the original story still holds up as a real reason."
+            if has_events
+            else "Nothing this week challenged the reasons you wrote down."
+        )
+    return None
+
+
+def _event_action_label(*, is_negative: bool, investor_profile: InvestorProfile = None) -> str:
+    if not is_negative:
+        return "View position"
+    if investor_profile == "thesis_driven":
+        return "Review this thesis"
+    if investor_profile == "hearsay_driven":
+        return "Revisit this reason"
+    return "Review this reason"
+
+
+def _stable_section_title(*, investor_profile: InvestorProfile = None) -> str:
+    if investor_profile == "thesis_driven":
+        return "Assumptions still holding"
+    if investor_profile == "hearsay_driven":
+        return "Reasons still holding up"
+    return "Reasons holding up"
+
+
+async def _load_investor_profile(db, user_id: uuid.UUID) -> InvestorProfile:
+    result = await db.execute(
+        select(OnboardingState.investor_profile).where(OnboardingState.user_id == user_id)
+    )
+    return result.scalar_one_or_none()
 
 
 async def _should_skip_user_digest(db, user: User, *, now: datetime) -> bool:
@@ -433,6 +535,7 @@ def _render_digest_html(
     monitoring_receipt: str,
     quiet_nudge: str | None,
     upcoming_earnings: list[dict] | None = None,
+    investor_profile: InvestorProfile = None,
 ) -> str:
     ranked_events = sorted(events_data, key=_event_rank)[:5]
     stable_holdings = observations.get("stable_holdings", [])[:3]
@@ -440,6 +543,9 @@ def _render_digest_html(
     parts = [
         f"<h2>{escape(headline)}</h2>",
     ]
+    intro_line = _digest_intro_line(bool(ranked_events), investor_profile=investor_profile)
+    if intro_line:
+        parts.append(f"<p>{intro_line}</p>")
 
     if ranked_events:
         # TLDR section
@@ -471,21 +577,21 @@ def _render_digest_html(
                 parts.append(f'<p style="font-size:12px;color:#888;margin:8px 0;">Signals: {escape(signal_text)}</p>')
             if verdict_label:
                 parts.append(f'<p style="color:{verdict_color};font-weight:500;margin:8px 0;">{escape(verdict_label)}</p>')
-            action_label = "Review this reason" if is_negative else "View position"
+            action_label = _event_action_label(is_negative=is_negative, investor_profile=investor_profile)
             parts.append(f'<p style="margin:12px 0 0;"><a href="/dashboard/positions/{escape(ticker)}" style="color:#1d4ed8;">→ {action_label}</a></p>')
             parts.append("</div>")
 
         if stable_holdings:
             parts.append("<hr>")
-            parts.append("<h3>Still intact</h3>")
+            parts.append(f"<h3>{escape(_stable_section_title(investor_profile=investor_profile))}</h3>")
             for stable in stable_holdings:
                 parts.append(
                     f"<p><strong>{escape(stable['ticker'])}</strong>: {escape(stable['why_own_it'])}</p>"
                 )
     else:
-        parts.append("<p>Your holdings were quiet this week. No material evidence affected any of your monitored signals.</p>")
+        parts.append("<p>Your holdings were quiet this week. Nothing landed that touched what you&apos;re watching.</p>")
         if stable_holdings:
-            parts.append("<h3>Reasons holding up</h3>")
+            parts.append(f"<h3>{escape(_stable_section_title(investor_profile=investor_profile))}</h3>")
             for stable in stable_holdings:
                 stale_suffix = " This reason is getting stale." if stable.get("stale") else ""
                 parts.append(
@@ -596,6 +702,7 @@ async def run_digest_builder():
                     now=now,
                 )
                 signal_counts = await _load_signal_counts(db, thesis_ids)
+                investor_profile = await _load_investor_profile(db, user_id)
                 events, events_data, event_holding_ids = await _load_events_data(
                     db,
                     user_id=user_id,
@@ -640,8 +747,9 @@ async def run_digest_builder():
                     len(events_data),
                     len(stable_holdings),
                     upcoming_earnings_count=len(upcoming_earnings),
+                    investor_profile=investor_profile,
                 )
-                quiet_nudge = _oldest_reason_nudge(holdings_with_theses) if not events_data else None
+                quiet_nudge = _oldest_reason_nudge(holdings_with_theses, investor_profile=investor_profile) if not events_data else None
                 next_earnings = upcoming_earnings[0] if upcoming_earnings else None
 
                 quiet_streak = _update_quiet_streak(user, has_events=bool(events_data))
@@ -654,6 +762,7 @@ async def run_digest_builder():
                     monitoring_receipt=receipt,
                     quiet_nudge=quiet_nudge,
                     upcoming_earnings=upcoming_earnings if not events_data else None,
+                    investor_profile=investor_profile,
                 )
 
                 digest = Digest(
@@ -668,7 +777,12 @@ async def run_digest_builder():
                         "holdings_count": len(holdings),
                         "stable_holdings_count": len(stable_holdings),
                         "headline": headline,
-                        "summary_points": _digest_summary_points(events_data, observations, next_earnings),
+                        "summary_points": _digest_summary_points(
+                            events_data,
+                            observations,
+                            next_earnings,
+                            investor_profile=investor_profile,
+                        ),
                         "missing_theses_count": len(missing_theses),
                         "stale_theses_count": len(stale_theses),
                         "concentration_warning": concentration_warnings,
@@ -676,6 +790,7 @@ async def run_digest_builder():
                         "quiet_nudge": quiet_nudge,
                         "consecutive_quiet_weeks": quiet_streak,
                         "next_earnings": next_earnings,
+                        "investor_profile": investor_profile,
                     },
                     status="pending",
                 )

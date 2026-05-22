@@ -30,15 +30,66 @@ const verdictBg: Record<string, string> = {
 
 function parseNarrative(text: string) {
   const out: Record<string, string> = {};
+  const body: string[] = [];
   for (const line of text.split("\n")) {
     const i = line.indexOf(":");
-    if (i > 0 && i < 24) {
+    if (i > 0 && i < 28) {
       const k = line.slice(0, i).trim();
-      const v = line.slice(i + 1).trim();
-      if (v) out[k] = v;
+      const v = line.slice(i + 1).trim().replace(/^"|"$/g, "");
+      if (v) {
+        out[k] = v;
+        continue;
+      }
     }
+    if (line.trim()) body.push(line.trim());
   }
+  if (body[0]) out._body0 = body[0];
+  if (body[1]) out._body1 = body[1];
+  if (body[2]) out._body2 = body[2];
   return out;
+}
+
+function eventDecisionCopy(
+  event: MonitoringEvent,
+  investorProfile?: "thesis_driven" | "hearsay_driven" | null,
+) {
+  const narrative = event.evidence_summary ? parseNarrative(event.evidence_summary) : {};
+  const assumption =
+    event.signal_label ??
+    narrative["We were watching"] ??
+    narrative["What the app was checking"] ??
+    narrative["We watched"] ??
+    null;
+  const thesisLine =
+    narrative["Your thesis"] ??
+    narrative["You said"] ??
+    narrative["Your reason"] ??
+    null;
+  const whatChanged =
+    narrative["What changed"] ??
+    narrative["What happened"] ??
+    narrative._body0 ??
+    event.summary;
+  const whyItMatters =
+    narrative["Why this matters now"] ??
+    narrative["Why it matters now"] ??
+    narrative._body1 ??
+    event.ai_analysis ??
+    null;
+
+  const prompt = investorProfile === "hearsay_driven"
+    ? "Does this actually change the original story?"
+    : investorProfile === "thesis_driven"
+      ? "Does this actually weaken the thesis?"
+      : "Does this change the reason enough to act?";
+
+  return {
+    assumption,
+    thesisLine,
+    whatChanged,
+    whyItMatters,
+    prompt,
+  };
 }
 
 // ── Single draggable card ──────────────────────────────────────────────────
@@ -105,10 +156,8 @@ function DraggableCard({ event, index, total, isTop, onSwipe, busy, investorProf
   const leftOpacity = useTransform(x, [-100, -20], [1, 0]);
   const upOpacity = useTransform(y, [-100, -20], [1, 0]);
 
-  const narrative = event.evidence_summary ? parseNarrative(event.evidence_summary) : {};
-  const displayText = narrative["What changed"] ?? narrative["What happened"] ?? event.summary;
+  const narrative = eventDecisionCopy(event, investorProfile);
   const verdict = event.verdict;
-  const thesisLine = narrative["Your thesis"] ?? narrative["You said"] ?? narrative["Your reason"];
 
   const handleDragEnd = (_: unknown, info: { offset: { x: number; y: number }; velocity: { x: number; y: number } }) => {
     if (busy) return;
@@ -162,9 +211,9 @@ function DraggableCard({ event, index, total, isTop, onSwipe, busy, investorProf
               <span className="font-mono text-[10px] uppercase tracking-[0.15em] text-muted-foreground border border-border px-1.5 py-0.5">
                 {event.severity.replace("_", " ")}
               </span>
-              {event.signal_label && (
+              {narrative.assumption && (
                 <span className="font-mono text-[10px] uppercase tracking-[0.12em] text-primary/70">
-                  {event.signal_label}
+                  {narrative.assumption}
                 </span>
               )}
             </div>
@@ -174,18 +223,35 @@ function DraggableCard({ event, index, total, isTop, onSwipe, busy, investorProf
           </div>
 
           {/* Thesis clause quoted */}
-          {thesisLine && (
+          {narrative.thesisLine && (
             <blockquote className="border-l-2 border-primary/30 pl-3 mb-3">
               <p className="font-sans text-xs italic text-muted-foreground leading-relaxed line-clamp-2">
-                &ldquo;{thesisLine}&rdquo;
+                &ldquo;{narrative.thesisLine}&rdquo;
               </p>
             </blockquote>
           )}
 
-          {/* Main event text */}
-          <p className="font-sans text-sm text-foreground leading-relaxed flex-1 overflow-hidden line-clamp-5">
-            {displayText}
-          </p>
+          <div className="space-y-3 flex-1 overflow-hidden">
+            <div>
+              <p className="font-mono text-[10px] uppercase tracking-[0.14em] text-muted-foreground/70 mb-1">
+                What changed
+              </p>
+              <p className="font-sans text-sm text-foreground leading-relaxed line-clamp-4">
+                {narrative.whatChanged}
+              </p>
+            </div>
+
+            {narrative.whyItMatters && (
+              <div>
+                <p className="font-mono text-[10px] uppercase tracking-[0.14em] text-muted-foreground/70 mb-1">
+                  Why it matters
+                </p>
+                <p className="font-sans text-sm text-foreground/80 leading-relaxed line-clamp-4">
+                  {narrative.whyItMatters}
+                </p>
+              </div>
+            )}
+          </div>
 
           {/* Verdict chip */}
           {verdict && (
@@ -193,6 +259,10 @@ function DraggableCard({ event, index, total, isTop, onSwipe, busy, investorProf
               {verdict === "supports" ? "Supports reason" : verdict === "threatens" ? "Threatens reason" : verdict === "review" ? "Warrants review" : "Neutral"}
             </div>
           )}
+
+          <p className="mt-3 font-mono text-[10px] uppercase tracking-[0.14em] text-foreground/60">
+            {narrative.prompt}
+          </p>
 
           {/* Source */}
           {event.source_url && (

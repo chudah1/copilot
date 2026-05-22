@@ -6,7 +6,7 @@ import { AnimatePresence, motion } from "framer-motion";
 import { AuthGuard } from "@/components/layout/auth-guard";
 import { api } from "@/lib/api";
 import { getErrorMessage } from "@/lib/errors";
-import type { DraftStatus, HoldingContext, SynthesisResponse } from "@/types";
+import type { DraftStatus, HoldingContext, SynthesisResponse, Thesis } from "@/types";
 
 // ---------------------------------------------------------------------------
 // Step machine
@@ -38,13 +38,14 @@ const PROFILE_CONTENT: Record<
 > = {
   thesis_driven: {
     label: "I invest from a thesis",
-    title: "You already think in reasons. We help you keep score.",
+    title: "You already have a view. Put it on paper.",
     subtitle:
-      "Turn your investment logic into something explicit, monitored, and reviewable when new evidence lands.",
+      "Two questions, one position — then we watch for news that actually hits what you wrote.",
     welcomeLines: [
-      "One position, two questions — takes 2 minutes.",
-      "We structure the thesis without flattening your thinking.",
-      "You get a monitoring loop tied to what you actually believe.",
+      "One position, two questions — about 2 minutes.",
+      "We structure it without sanding off your wording.",
+      "Alerts only when something touches what you said you believe.",
+      "A regular check-in rhythm, not just panic when the tape moves.",
     ],
     q1: "What is the core thesis behind owning this position?",
     q2: "What specific evidence would tell you that thesis is breaking?",
@@ -55,13 +56,14 @@ const PROFILE_CONTENT: Record<
   },
   hearsay_driven: {
     label: "I often buy from tips, chatter, or momentum",
-    title: "That’s okay. Let’s turn instinct into a real reason.",
+    title: "Tips and themes are fine. Still write the reason down.",
     subtitle:
-      "You do not need a polished thesis to start. We’ll help you turn a rough idea into something you can monitor and revisit calmly.",
+      "No polished essay needed — just enough detail that you can tell later if the idea still works.",
     welcomeLines: [
-      "One position, two questions — takes 2 minutes.",
-      "Start with what caught your attention, even if it was a tip or theme.",
-      "We turn that into a reason you can test instead of just hope for.",
+      "One position, two questions — about 2 minutes.",
+      "Start with what caught your eye, even if it was chatter or momentum.",
+      "We turn that into something you can test, not just hope for.",
+      "Check back on a schedule, not only when you're scared.",
     ],
     q1: "What made this stock interesting enough to buy in the first place?",
     q2: "What would make you admit the original idea is no longer working?",
@@ -153,6 +155,7 @@ function WizardInner() {
   const [holding, setHolding] = useState<HoldingContext | null>(null);
   const [error, setError] = useState("");
   const [loadingHolding, setLoadingHolding] = useState(Boolean(initialWizardState.holdingId));
+  const [savingThesis, setSavingThesis] = useState(false);
   const profile = wizardState.investorProfile;
   const profileContent = profile ? PROFILE_CONTENT[profile] : null;
 
@@ -246,11 +249,31 @@ function WizardInner() {
   };
 
   const handleComplete = async () => {
+    if (!wizardState.holdingId || !wizardState.synthesisResult || !holding) {
+      setError("We couldn't find a thesis to save yet. Please try again.");
+      return;
+    }
+    setSavingThesis(true);
+    setError("");
     try {
-      await api.post("/api/onboarding/complete");
-    } catch {}
-    clearState();
-    router.push("/dashboard");
+      const thesisId = wizardState.synthesisResult.thesis_id;
+      await api.put<Thesis>(`/api/theses/${thesisId}`, {
+        status: "active",
+        confidence: "medium",
+        review_cadence_days: 7,
+        source: "ai_assisted",
+      });
+      await Promise.all([
+        api.post("/api/theses/" + thesisId + "/decompose").catch(() => null),
+        api.post("/api/onboarding/complete"),
+      ]);
+      clearState();
+      router.push(`/dashboard/positions/${holding.ticker}?source=onboarding`);
+    } catch (e) {
+      setError(getErrorMessage(e, "We couldn't save your first thesis yet. Please try again."));
+    } finally {
+      setSavingThesis(false);
+    }
   };
 
   const visibleStep = VISIBLE_STEPS.indexOf(step as (typeof VISIBLE_STEPS)[number]);
@@ -279,7 +302,7 @@ function WizardInner() {
           Let&rsquo;s talk about<br />how you invest.
         </h1>
         <p className="text-base text-muted-foreground leading-relaxed max-w-sm">
-          Pick the path that sounds most like you. We&rsquo;ll tailor the first-run flow so the app meets you where you actually are.
+          Pick what sounds most like you. The questions and wording change a bit — same product either way.
         </p>
       </div>
 
@@ -562,15 +585,18 @@ function WizardInner() {
           </div>
         )}
 
+        {error && <p className="text-sm text-red-600 font-mono">{error}</p>}
+
         <div className="flex items-center gap-6 pt-2">
           <button
             onClick={handleComplete}
+            disabled={savingThesis}
             className="bg-primary text-primary-foreground px-8 py-3 text-sm font-mono tracking-wide hover:bg-primary/90 transition-colors"
           >
-            Go to dashboard →
+            {savingThesis ? "Turning on monitoring…" : "Start monitoring this holding →"}
           </button>
           <button
-            onClick={() => router.push(`/api/onboarding/review-drafts`)}
+            onClick={() => router.push(`/onboarding/review-drafts`)}
             className="text-xs text-muted-foreground hover:text-foreground transition-colors font-mono underline underline-offset-4"
           >
             Review all drafts

@@ -1,7 +1,8 @@
 "use client";
 
-import { useState, useMemo } from "react";
+import { useMemo, useState } from "react";
 import Link from "next/link";
+import { useSearchParams } from "next/navigation";
 import { motion, AnimatePresence } from "framer-motion";
 import useSWR from "swr";
 import { api, fetcher } from "@/lib/api";
@@ -26,6 +27,15 @@ import type {
   QuarterlyReviewCurrent,
   UpcomingEarnings,
 } from "@/types";
+
+interface RecentReviewBannerState {
+  ticker: string;
+  action: "reaffirmed" | "ignored" | "lowered_confidence" | "invalidated" | "not_relevant";
+  assumption_label: string | null;
+  resolved_all: boolean;
+  thesis_status: Thesis["status"];
+  saved_at: string;
+}
 
 // Extracted PositionCard and AttentionCard to src/components/portfolio/
 
@@ -56,18 +66,266 @@ function dashboardCopy(investorProfile: "thesis_driven" | "hearsay_driven" | nul
     emptyBody:
       "The market will test you. Add your positions below and write down exactly why you own them so you don&rsquo;t panic sell when things get tough.",
     draftBanner:
-      "We found some notes to help articulate your conviction for {count}.",
+      "We drafted working reasons for {count}. Review them so the dashboard watches what actually matters.",
     quarterly:
-      "Quarterly review — {count} position{plural} awaiting judgement",
+      "Quarterly review — {count} position{plural} waiting for a fresh decision",
+  };
+}
+
+function dashboardStateCopy(
+  investorProfile: "thesis_driven" | "hearsay_driven" | null,
+  counts: { review: number; watch: number; missing: number },
+  nextEarnings: UpcomingEarnings | null,
+  topAttention: PortfolioPulse["pulses"][number] | null,
+  recentReview: RecentReviewBannerState | null,
+) {
+  const topAttentionLabel =
+    topAttention?.assumption_label?.trim() ||
+    (investorProfile === "hearsay_driven" ? "the original story" : "the core assumption");
+  const topAttentionIsCadencePressure = Boolean(topAttention?.reason?.includes("review cadence"));
+  const recentReviewLabel =
+    recentReview?.assumption_label?.trim() ||
+    (investorProfile === "hearsay_driven" ? "the original story" : "the core assumption");
+  if (counts.review > 0) {
+    return {
+      tone: "border-amber-500/25 bg-amber-500/8",
+      eyebrow: "Decisions pending",
+      title:
+        investorProfile === "hearsay_driven"
+          ? `${counts.review} position${counts.review > 1 ? "s" : ""} need a fresh look before you trust the story.`
+          : `${counts.review} position${counts.review > 1 ? "s" : ""} need thesis review before you treat them as conviction.`,
+      body:
+        topAttention
+          ? topAttentionIsCadencePressure
+            ? `${cleanTicker(topAttention.ticker)} is first in line — ${topAttentionLabel} is overdue for a re-read.${recentReview ? ` You just cleared ${recentReviewLabel} on ${cleanTicker(recentReview.ticker)}.` : ""}`
+            : `${cleanTicker(topAttention.ticker)} is first in line — ${topAttentionLabel} is closest to needing a call.${recentReview ? ` You just cleared ${recentReviewLabel} on ${cleanTicker(recentReview.ticker)}.` : ""}`
+          : counts.watch > 0
+            ? `${counts.watch} more position${counts.watch > 1 ? "s are" : " is"} worth watching, but the review items come first.`
+            : "Start with the review items first; the rest of the portfolio can wait.",
+    };
+  }
+
+  if (counts.watch > 0) {
+    return {
+      tone: "border-sky-500/25 bg-sky-500/8",
+      eyebrow: "Worth watching",
+      title:
+        investorProfile === "hearsay_driven"
+          ? `${counts.watch} position${counts.watch > 1 ? "s are" : " is"} testing the original story, but nothing looks broken yet.`
+          : `${counts.watch} position${counts.watch > 1 ? "s are" : " is"} testing a thesis pillar, but nothing looks broken yet.`,
+      body: topAttention
+        ? topAttentionIsCadencePressure
+          ? `${cleanTicker(topAttention.ticker)} is the clearest watch item because ${topAttentionLabel} is overdue for review even though nothing looks broken yet.${recentReview ? ` You already cleared ${recentReviewLabel} in ${cleanTicker(recentReview.ticker)}.` : ""}`
+          : `${cleanTicker(topAttention.ticker)} is the clearest watch item because ${topAttentionLabel} has the freshest pressure on it.${recentReview ? ` You already cleared ${recentReviewLabel} in ${cleanTicker(recentReview.ticker)}.` : ""}`
+        : "Watch items show which assumptions are wobbling — still below the review queue.",
+    };
+  }
+
+  if (counts.missing > 0) {
+    return {
+      tone: "border-border bg-card",
+      eyebrow: "Monitoring gap",
+      title:
+        investorProfile === "hearsay_driven"
+          ? `${counts.missing} position${counts.missing > 1 ? "s still need" : " still needs"} a real written reason.`
+          : `${counts.missing} position${counts.missing > 1 ? "s still need" : " still needs"} a written thesis before monitoring means much.`,
+      body: "Nothing urgent right now — but you won't know what news matters on these until you write what would change your mind.",
+    };
+  }
+
+  return {
+    tone: "border-emerald-500/25 bg-emerald-500/8",
+    eyebrow: "Nothing needs a decision",
+    title:
+      investorProfile === "hearsay_driven"
+        ? "Your written reasons are calm right now."
+        : "Your written theses look calm right now.",
+    body: nextEarnings
+      ? `${cleanTicker(nextEarnings.ticker)} is the next likely decision point in ${nextEarnings.days_until === 0 ? "today" : nextEarnings.days_until === 1 ? "1 day" : `${nextEarnings.days_until} days`}.${recentReview ? ` You just resolved ${recentReviewLabel} in ${cleanTicker(recentReview.ticker)}.` : ""}`
+      : recentReview
+        ? `You just resolved ${recentReviewLabel} in ${cleanTicker(recentReview.ticker)}. Nothing else is asking for immediate thought right now.`
+        : "Nothing needs a decision today. When you have a minute, re-read the reasons you wrote — stale words are how positions drift.",
+  };
+}
+
+function dashboardStateCta(args: {
+  investorProfile: "thesis_driven" | "hearsay_driven" | null;
+  needsAttention: PortfolioPulse["pulses"];
+  holdings: Holding[];
+  missingHolding: Holding | null;
+  nextUpcomingEarnings: UpcomingEarnings | null;
+}) {
+  const { investorProfile, needsAttention, holdings, missingHolding, nextUpcomingEarnings } = args;
+  const pulseTargetLabel = (pulse: PortfolioPulse["pulses"][number]) =>
+    pulse.assumption_label?.trim() ||
+    (investorProfile === "hearsay_driven" ? "the story" : "the thesis");
+  const topReview = needsAttention.find((pulse) => pulse.pulse_status === "review") ?? null;
+  if (topReview) {
+    return {
+      href: `/dashboard/positions/${topReview.ticker}`,
+      label:
+        investorProfile === "hearsay_driven"
+          ? `Open ${cleanTicker(topReview.ticker)} and review ${pulseTargetLabel(topReview)} →`
+          : `Open ${cleanTicker(topReview.ticker)} and review ${pulseTargetLabel(topReview)} →`,
+    };
+  }
+
+  const topWatch = needsAttention.find((pulse) => pulse.pulse_status === "watch") ?? null;
+  if (topWatch) {
+    return {
+      href: `/dashboard/positions/${topWatch.ticker}`,
+      label:
+        investorProfile === "hearsay_driven"
+          ? `Open ${cleanTicker(topWatch.ticker)} and see why ${pulseTargetLabel(topWatch)} is under pressure →`
+          : `Open ${cleanTicker(topWatch.ticker)} and see why ${pulseTargetLabel(topWatch)} is under pressure →`,
+    };
+  }
+
+  if (missingHolding) {
+    return {
+      href: `/dashboard/positions/${missingHolding.ticker}?source=dashboard_blind_spot`,
+      label:
+        investorProfile === "hearsay_driven"
+          ? `Write the real reason for ${cleanTicker(missingHolding.ticker)} →`
+          : `Write the thesis for ${cleanTicker(missingHolding.ticker)} →`,
+    };
+  }
+
+  if (nextUpcomingEarnings) {
+    return {
+      href: `/dashboard/positions/${nextUpcomingEarnings.ticker}`,
+      label: `Open ${cleanTicker(nextUpcomingEarnings.ticker)} before earnings →`,
+    };
+  }
+
+  const largestHolding = holdings
+    .slice()
+    .sort((a, b) => (b.current_value ?? 0) - (a.current_value ?? 0))[0] ?? null;
+  if (largestHolding) {
+    return {
+      href: `/dashboard/positions/${largestHolding.ticker}`,
+      label: `Open ${cleanTicker(largestHolding.ticker)} →`,
+    };
+  }
+
+  return null;
+}
+
+function isRecentIsoDate(value: string | null | undefined, days: number) {
+  if (!value) return false;
+  const ts = new Date(value).getTime();
+  if (Number.isNaN(ts)) return false;
+  return Date.now() - ts <= days * 24 * 60 * 60 * 1000;
+}
+
+function activationBannerCopy(args: {
+  investorProfile: "thesis_driven" | "hearsay_driven" | null;
+  count: number;
+  tickers: string[];
+}) {
+  const { investorProfile, count, tickers } = args;
+  const joinedTickers = tickers.length > 0 ? tickers.join(", ") : "your positions";
+
+  if (investorProfile === "hearsay_driven") {
+    return {
+      eyebrow: "Portfolio activated",
+      title:
+        count === 1
+          ? `We are now watching the reason behind ${joinedTickers}.`
+          : `We are now watching the reasons behind ${joinedTickers}.`,
+      body:
+        "We'll only ping you when something hits the story you wrote. Quiet means nothing important landed yet.",
+    };
+  }
+
+  if (investorProfile === "thesis_driven") {
+    return {
+      eyebrow: "Portfolio activated",
+      title:
+        count === 1
+          ? `We are now watching the thesis behind ${joinedTickers}.`
+          : `We are now watching the theses behind ${joinedTickers}.`,
+      body:
+        "We'll only ping you when an assumption gets tested. Quiet means your theses look intact for now.",
+    };
+  }
+
+  return {
+    eyebrow: "Portfolio activated",
+    title:
+      count === 1
+        ? `We are now watching the reason behind ${joinedTickers}.`
+        : `We are now watching the reasons behind ${joinedTickers}.`,
+    body:
+      "This dashboard is now tied to what you actually wrote down. Quiet means nothing important changed yet.",
+  };
+}
+
+function recentReviewBannerCopy(
+  review: RecentReviewBannerState,
+  investorProfile: "thesis_driven" | "hearsay_driven" | null,
+) {
+  const target = review.assumption_label?.trim() || (investorProfile === "hearsay_driven" ? "the original story" : "the core assumption");
+  const ticker = cleanTicker(review.ticker);
+
+  if (review.action === "invalidated" || review.thesis_status === "invalidated") {
+    return {
+      eyebrow: "Reviewed just now",
+      title:
+        investorProfile === "hearsay_driven"
+          ? `You marked ${target} as broken for ${ticker}.`
+          : `You marked ${target} as broken for ${ticker}.`,
+      body:
+        investorProfile === "hearsay_driven"
+          ? "That position now needs a rewritten reason or an exit decision before it counts as conviction again."
+          : "That position now needs a rewritten thesis or an exit decision before it counts as conviction again.",
+      href: `/dashboard/positions/${review.ticker}`,
+      cta: investorProfile === "hearsay_driven" ? "Rewrite the reason →" : "Rewrite the thesis →",
+    };
+  }
+
+  return {
+    eyebrow: "Reviewed just now",
+    title:
+      investorProfile === "hearsay_driven"
+        ? `You reviewed ${target} for ${ticker}.`
+        : `You reviewed ${target} for ${ticker}.`,
+    body: review.resolved_all
+      ? (investorProfile === "hearsay_driven"
+          ? "That assumption is back in a monitored quiet state. The next interruption should only happen if the story is tested again."
+          : "That assumption is back in a monitored quiet state. The next interruption should only happen if the thesis is tested again.")
+      : "There are still other items waiting, but the assumption you just reviewed is now on record.",
+    href: `/dashboard/positions/${review.ticker}`,
+    cta: "Open the position →",
   };
 }
 
 // ── Dashboard ──────────────────────────────────────────────────────────────
 
 export default function DashboardPage() {
+  const searchParams = useSearchParams();
   const [draftBannerDismissed, setDraftBannerDismissed] = useState(false);
   const [showAddForm, setShowAddForm] = useState(false);
   const [onboardingBannerVisible, setOnboardingBannerVisible] = useState(false);
+  const [activationBannerDismissed, setActivationBannerDismissed] = useState(() => {
+    if (typeof window === "undefined") return false;
+    return window.localStorage.getItem("dashboard_activation_banner_dismissed") === "1";
+  });
+  const [recentReviewBanner, setRecentReviewBanner] = useState<RecentReviewBannerState | null>(() => {
+    if (typeof window === "undefined") return null;
+    const raw = window.localStorage.getItem("dashboard_recent_review");
+    if (!raw) return null;
+    try {
+      const parsed = JSON.parse(raw) as RecentReviewBannerState;
+      if (!isRecentIsoDate(parsed.saved_at, 7)) {
+        window.localStorage.removeItem("dashboard_recent_review");
+        return null;
+      }
+      return parsed;
+    } catch {
+      return null;
+    }
+  });
 
   // SWR queries
   const { data: holdings, error: holdingsError, mutate: mutateHoldings } = useSWR<Holding[]>("/api/portfolio/holdings", fetcher);
@@ -151,9 +409,11 @@ export default function DashboardPage() {
   // Attention = real monitoring signals only (watch/review from events), not "no thesis" bookkeeping
   const needsAttention = useMemo(() => {
     if (!pulse?.pulses) return [];
-    return pulse.pulses.filter(
-      (p) => (p.pulse_status === "review" || p.pulse_status === "watch") && p.has_thesis,
-    );
+    return pulse.pulses
+      .filter(
+        (p) => (p.pulse_status === "review" || p.pulse_status === "watch") && p.has_thesis,
+      )
+      .sort((a, b) => b.urgency_score - a.urgency_score);
   }, [pulse]);
 
   const reviewCount = useMemo(() => {
@@ -161,18 +421,77 @@ export default function DashboardPage() {
   }, [needsAttention]);
 
   const missingThesisCount = summary?.theses_missing ?? 0;
+  const nextUpcomingEarnings = useMemo(() => {
+    if (!upcomingEarnings.length) return null;
+    return [...upcomingEarnings].sort((a, b) => a.days_until - b.days_until)[0] ?? null;
+  }, [upcomingEarnings]);
+  const dashboardState = dashboardStateCopy(
+    onboardingState?.investor_profile ?? null,
+    { review: reviewCount, watch: needsAttention.filter((p) => p.pulse_status === "watch").length, missing: missingThesisCount },
+    nextUpcomingEarnings,
+    needsAttention[0] ?? null,
+    recentReviewBanner,
+  );
+  const missingHolding = useMemo(() => {
+    if (!holdings) return null;
+    return holdings
+      .filter((holding) => !thesesByHolding[holding.id])
+      .sort((a, b) => (b.current_value ?? 0) - (a.current_value ?? 0))[0] ?? null;
+  }, [holdings, thesesByHolding]);
+  const dashboardStatePrimaryCta = dashboardStateCta({
+    investorProfile: onboardingState?.investor_profile ?? null,
+    needsAttention,
+    holdings: holdings ?? [],
+    missingHolding,
+    nextUpcomingEarnings,
+  });
 
   const sortedHoldings = useMemo(() => {
     if (!holdings) return [];
     return [...holdings].sort((a, b) => {
-      const pa = pulseByHolding[a.id]?.pulse_status ?? "intact";
-      const pb = pulseByHolding[b.id]?.pulse_status ?? "intact";
-      const order: Record<string, number> = { review: 0, watch: 1, intact: 2 };
-      const diff = (order[pa] ?? 2) - (order[pb] ?? 2);
-      if (diff !== 0) return diff;
+      const pulseA = pulseByHolding[a.id];
+      const pulseB = pulseByHolding[b.id];
+      const groupOrder = (holding: Holding, pulse?: PortfolioPulse["pulses"][number]) => {
+        if (pulse?.has_thesis && pulse.pulse_status === "review") return 0;
+        if (pulse?.has_thesis && pulse.pulse_status === "watch") return 1;
+        if (!thesesByHolding[holding.id]) return 2;
+        return 3;
+      };
+      const groupDiff = groupOrder(a, pulseA) - groupOrder(b, pulseB);
+      if (groupDiff !== 0) return groupDiff;
+      const urgencyDiff = (pulseB?.urgency_score ?? 0) - (pulseA?.urgency_score ?? 0);
+      if (urgencyDiff !== 0) return urgencyDiff;
       return (b.current_value ?? 0) - (a.current_value ?? 0);
     });
-  }, [holdings, pulseByHolding]);
+  }, [holdings, pulseByHolding, thesesByHolding]);
+
+  const recentActivation = isRecentIsoDate(onboardingState?.wizard_completed_at, 7) || isRecentIsoDate(onboardingState?.drafts_reviewed_at, 7);
+  const activationSource = searchParams.get("source");
+  const forcedActivationContext = activationSource === "review_drafts" || activationSource === "onboarding";
+  const activatedTickers = useMemo(() => {
+    if (!currentTheses) return [];
+    return currentTheses
+      .slice()
+      .sort((a, b) => new Date(b.updated_at).getTime() - new Date(a.updated_at).getTime())
+      .slice(0, 3)
+      .map((thesis) => {
+        const holding = holdings?.find((item) => item.id === thesis.holding_id);
+        return holding ? cleanTicker(holding.ticker) : null;
+      })
+      .filter((ticker): ticker is string => Boolean(ticker));
+  }, [currentTheses, holdings]);
+  const showActivationBanner = (recentActivation || forcedActivationContext) && !activationBannerDismissed && (currentTheses?.length ?? 0) > 0;
+  const activationCopy = activationBannerCopy({
+    investorProfile: onboardingState?.investor_profile ?? null,
+    count: currentTheses?.length ?? 0,
+    tickers: activatedTickers,
+  });
+  const showRecentReviewBanner = Boolean(
+    recentReviewBanner && isRecentIsoDate(recentReviewBanner.saved_at, 7),
+  );
+  const recentReviewCopy = recentReviewBanner
+    ? recentReviewBannerCopy(recentReviewBanner, onboardingState?.investor_profile ?? null)
+    : null;
 
   // Loading state
   const loading = !holdings && !holdingsError;
@@ -306,6 +625,19 @@ export default function DashboardPage() {
 
           {/* Right: digest + actions */}
           <div className="flex items-center gap-3 flex-wrap">
+            {needsAttention[0] && (
+              <>
+                <div className="hidden xl:flex flex-col text-right max-w-[220px]">
+                  <span className="font-mono text-[10px] uppercase tracking-[0.12em] text-muted-foreground/70">
+                    Hottest assumption
+                  </span>
+                  <span className="font-sans text-xs text-foreground/80 truncate">
+                    {cleanTicker(needsAttention[0].ticker)} · {needsAttention[0].assumption_label?.trim() || (onboardingState?.investor_profile === "hearsay_driven" ? "Original story" : "Core assumption")}
+                  </span>
+                </div>
+                <div className="h-4 w-px bg-border hidden xl:block" />
+              </>
+            )}
             {pulse?.next_digest_at && (
               <DigestCountdown nextDigestAt={pulse.next_digest_at} />
             )}
@@ -331,6 +663,68 @@ export default function DashboardPage() {
 
       {/* ── Banners ─────────────────────────────────────────────────── */}
       <div className="px-8 pt-3 space-y-2 empty:hidden">
+        {showActivationBanner && (
+          <div className="flex items-center justify-between gap-4 border border-emerald-500/20 bg-emerald-50 px-5 py-3">
+            <div className="space-y-1">
+              <p className="font-mono text-[10px] uppercase tracking-[0.18em] text-emerald-700">
+                {activationCopy.eyebrow}
+              </p>
+              <p className="font-sans text-sm text-foreground/85">
+                {activationCopy.title}
+              </p>
+              <p className="font-sans text-xs text-foreground/65">
+                {activationCopy.body}
+              </p>
+            </div>
+            <button
+              onClick={() => {
+                setActivationBannerDismissed(true);
+                if (typeof window !== "undefined") {
+                  window.localStorage.setItem("dashboard_activation_banner_dismissed", "1");
+                }
+              }}
+              className="text-muted-foreground hover:text-foreground text-sm leading-none transition-colors shrink-0"
+              aria-label="Dismiss activation banner"
+            >
+              ✕
+            </button>
+          </div>
+        )}
+
+        {showRecentReviewBanner && recentReviewCopy && (
+          <div className="flex items-center justify-between gap-4 border border-sky-500/20 bg-sky-50 px-5 py-3">
+            <div className="space-y-1">
+              <p className="font-mono text-[10px] uppercase tracking-[0.18em] text-sky-700">
+                {recentReviewCopy.eyebrow}
+              </p>
+              <p className="font-sans text-sm text-foreground/85">
+                {recentReviewCopy.title}
+              </p>
+              <p className="font-sans text-xs text-foreground/65">
+                {recentReviewCopy.body}
+              </p>
+              <Link
+                href={recentReviewCopy.href}
+                className="inline-block font-mono text-[10px] uppercase tracking-[0.15em] text-primary hover:text-primary/75 transition-colors"
+              >
+                {recentReviewCopy.cta}
+              </Link>
+            </div>
+            <button
+              onClick={() => {
+                setRecentReviewBanner(null);
+                if (typeof window !== "undefined") {
+                  window.localStorage.removeItem("dashboard_recent_review");
+                }
+              }}
+              className="text-muted-foreground hover:text-foreground text-sm leading-none transition-colors shrink-0"
+              aria-label="Dismiss recent review banner"
+            >
+              ✕
+            </button>
+          </div>
+        )}
+
         <ErrorBoundary>
           <OnboardingBanner onVisibilityChange={setOnboardingBannerVisible} />
         </ErrorBoundary>
@@ -350,7 +744,11 @@ export default function DashboardPage() {
             </div>
             <div className="flex items-center gap-4 shrink-0 ml-4">
               <Link href="/onboarding/review-drafts" className="font-mono text-[10px] uppercase tracking-[0.15em] text-primary hover:text-primary/70 transition-colors">
-                Review →
+                {onboardingState?.investor_profile === "thesis_driven"
+                  ? "Review theses →"
+                  : onboardingState?.investor_profile === "hearsay_driven"
+                    ? "Review reasons →"
+                    : "Review →"}
               </Link>
               <button onClick={() => setDraftBannerDismissed(true)} className="text-muted-foreground hover:text-foreground text-xs transition-colors">
                 ✕
@@ -394,6 +792,33 @@ export default function DashboardPage() {
       </AnimatePresence>
 
       {/* ── Attention section ────────────────────────────────────────── */}
+      <div className="px-8 pt-5">
+        <motion.div
+          initial={{ opacity: 0, y: -4 }}
+          animate={{ opacity: 1, y: 0 }}
+          transition={{ duration: 0.25 }}
+          className={`border px-5 py-4 space-y-2 ${dashboardState.tone}`}
+        >
+          <p className="font-mono text-[10px] uppercase tracking-[0.18em] text-foreground/60">
+            {dashboardState.eyebrow}
+          </p>
+          <p className="font-display italic text-[1.4rem] leading-tight text-foreground">
+            {dashboardState.title}
+          </p>
+          <p className="font-sans text-sm text-foreground/75 leading-relaxed">
+            {dashboardState.body}
+          </p>
+          {dashboardStatePrimaryCta && (
+            <Link
+              href={dashboardStatePrimaryCta.href}
+              className="inline-block font-mono text-[10px] uppercase tracking-[0.15em] text-primary hover:text-primary/75 transition-colors"
+            >
+              {dashboardStatePrimaryCta.label}
+            </Link>
+          )}
+        </motion.div>
+      </div>
+
       <AnimatePresence>
         {needsAttention.length > 0 && (
           <motion.div
@@ -414,7 +839,13 @@ export default function DashboardPage() {
                   const holding = holdings.find((h) => h.id === p.holding_id);
                   if (!holding) return null;
                   return (
-                    <AttentionCard key={p.holding_id} holding={holding} pulse={p} index={i} />
+                    <AttentionCard
+                      key={p.holding_id}
+                      holding={holding}
+                      pulse={p}
+                      investorProfile={onboardingState?.investor_profile ?? null}
+                      index={i}
+                    />
                   );
                 })}
               </div>

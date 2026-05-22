@@ -16,6 +16,72 @@ const PULSE_RING: Record<string, string> = {
   watch: "ring-1 ring-amber-200",
 };
 
+function cardStatusCopy(args: {
+  hasThesis: boolean;
+  pulse?: HoldingPulse;
+  investorProfile?: "thesis_driven" | "hearsay_driven" | null;
+}) {
+  const { hasThesis, pulse, investorProfile } = args;
+  const cadencePressure = Boolean(pulse?.reason?.includes("review cadence"));
+  const assumptionLabel =
+    pulse?.assumption_label && pulse.assumption_label.trim()
+      ? pulse.assumption_label.trim()
+      : investorProfile === "hearsay_driven"
+        ? "The original story"
+        : "The core assumption";
+  if (!hasThesis) {
+    return {
+      eyebrow: "Monitoring gap",
+      headline:
+        investorProfile === "hearsay_driven"
+          ? "Still no real written reason."
+          : "Still no written thesis.",
+      detail:
+        investorProfile === "hearsay_driven"
+          ? "Write why you own it — otherwise alerts here won't mean much."
+          : "Write the thesis — otherwise alerts here won't mean much.",
+      tone: "text-muted-foreground/70",
+    };
+  }
+
+  if (pulse?.pulse_status === "review") {
+    return {
+      eyebrow: "Needs review",
+      headline:
+        investorProfile === "hearsay_driven"
+          ? `${assumptionLabel} needs a fresh decision.`
+          : `${assumptionLabel} needs a fresh decision.`,
+      detail: pulse.reason || "Something meaningful changed and now needs your verdict.",
+      tone: "text-red-600",
+      subLabel: cadencePressure ? "Review cadence missed" : null,
+    };
+  }
+
+  if (pulse?.pulse_status === "watch") {
+    return {
+      eyebrow: "Worth watching",
+      headline:
+        investorProfile === "hearsay_driven"
+          ? `${assumptionLabel} is being tested.`
+          : `${assumptionLabel} is being tested.`,
+      detail: pulse.reason || "Nothing looks broken yet, but this position is no longer fully quiet.",
+      tone: "text-amber-700",
+      subLabel: cadencePressure ? "Review cadence drifting" : null,
+    };
+  }
+
+  return {
+    eyebrow: "Calm",
+    headline:
+      investorProfile === "hearsay_driven"
+        ? "Reason intact."
+        : "Thesis intact.",
+    detail: "Nothing needs a decision right now.",
+    tone: "text-emerald-700",
+    subLabel: null,
+  };
+}
+
 export function cleanTicker(ticker: string) {
   return ticker.replace(/_US_EQ$/, "").replace(/_EQ$/, "");
 }
@@ -52,10 +118,16 @@ export function PositionCard({
   const pulseStatus = pulse?.pulse_status ?? (thesis ? "intact" : null);
   const dotColor = pulseStatus ? (PULSE_DOT[pulseStatus] ?? "bg-border") : "bg-border";
   const ringClass = pulseStatus ? (PULSE_RING[pulseStatus] ?? "") : "";
+  const hasThesis = Boolean(thesis?.why_own_it);
   const noThesisCta =
     investorProfile === "hearsay_driven"
       ? "+ Turn the story into a reason"
       : "+ Write down your thesis";
+  const statusCopy = cardStatusCopy({
+    hasThesis,
+    pulse,
+    investorProfile,
+  });
 
   return (
     <motion.div
@@ -132,15 +204,37 @@ export function PositionCard({
           {/* Spacer — pushes thesis/CTA flush to bottom */}
           <div className="flex-1" />
 
+          <div className="space-y-1 border-t border-border/60 pt-2.5">
+            <div className="flex items-center justify-between gap-2">
+              <span className={`font-mono text-[10px] uppercase tracking-[0.14em] ${statusCopy.tone}`}>
+                {statusCopy.eyebrow}
+              </span>
+              {pulseStatus && hasThesis && (
+                <span className={`h-1.5 w-1.5 rounded-full ${dotColor}`} />
+              )}
+            </div>
+            {statusCopy.subLabel && (
+              <p className="font-mono text-[10px] uppercase tracking-[0.14em] text-foreground/45">
+                {statusCopy.subLabel}
+              </p>
+            )}
+            <p className="font-sans text-[11px] text-foreground/85 leading-relaxed line-clamp-1">
+              {statusCopy.headline}
+            </p>
+            <p className="font-sans text-[11px] text-muted-foreground leading-relaxed line-clamp-2">
+              {statusCopy.detail}
+            </p>
+          </div>
+
           {/* Thesis snippet or CTA */}
           {thesis?.why_own_it ? (
-            <p className="font-sans text-[11px] italic text-foreground/75 leading-relaxed line-clamp-2 border-t border-border/60 pt-2.5">
+            <p className="font-sans text-[11px] italic text-foreground/75 leading-relaxed line-clamp-2">
               {thesis.why_own_it}
             </p>
           ) : (
             <button
               onClick={(e) => { e.preventDefault(); e.stopPropagation(); onGenerateDraft?.(); }}
-              className="font-mono text-[10px] uppercase tracking-[0.12em] text-muted-foreground/60 hover:text-primary transition-colors border-t border-border/60 pt-2.5 text-left"
+              className="font-mono text-[10px] uppercase tracking-[0.12em] text-muted-foreground/60 hover:text-primary transition-colors text-left"
             >
               {noThesisCta}
             </button>

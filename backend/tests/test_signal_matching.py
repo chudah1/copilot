@@ -302,13 +302,16 @@ def test_build_evidence_summary_tier1_claim_and_signal():
         claim_text="Customer demand remains strong",
         signal_label="iPhone unit sales trend",
         why_own_it=None,
+        severity="warning",
+        verdict="review",
     )
     assert "You said:" in summary
     assert "Customer demand remains strong" in summary
     assert "We watched:" in summary
     assert "iPhone unit sales trend" in summary
-    assert "What happened:" in summary
     assert "Revenue growth slowed to 1.2% YoY" in summary
+    assert "directly threatens" in summary.lower() or "thesis" in summary.lower()
+    assert "Re-read the thesis" in summary or "review" in summary.lower()
 
 
 def test_build_evidence_summary_tier2_claim_only():
@@ -317,11 +320,13 @@ def test_build_evidence_summary_tier2_claim_only():
         claim_text="Revenue keeps growing",
         signal_label=None,
         why_own_it=None,
+        severity="warning",
+        verdict="review",
     )
     assert "You said:" in summary
     assert "Revenue keeps growing" in summary
     assert "We watched:" not in summary
-    assert "What happened:" in summary
+    assert "Earnings surprise was -8.2%" in summary
 
 
 def test_build_evidence_summary_tier3_fallback():
@@ -330,10 +335,44 @@ def test_build_evidence_summary_tier3_fallback():
         claim_text=None,
         signal_label=None,
         why_own_it="I believe AAPL will keep growing services revenue",
+        severity="info",
+        verdict="neutral",
     )
     assert "Your reason:" in summary
     assert "I believe AAPL will keep growing services revenue" in summary
-    assert "What happened:" in summary
+    assert "Price moved 13.3%" in summary
+
+
+def test_build_evidence_summary_for_thesis_driven_profile():
+    summary = build_evidence_summary(
+        candidate={"description": "Revenue growth slowed materially this quarter."},
+        claim_text="Revenue growth must stay strong to support the thesis.",
+        signal_label="Revenue Growth",
+        why_own_it="Own for durable demand and execution.",
+        severity="thesis_breaking",
+        verdict="threatens",
+        investor_profile="thesis_driven",
+    )
+    assert 'Your thesis: "Revenue growth must stay strong to support the thesis."' in summary
+    assert "We were watching: Revenue Growth" in summary
+    assert "Revenue growth slowed materially this quarter." in summary
+    assert "directly threatens" in summary.lower()
+    assert "Re-read the thesis" in summary
+
+
+def test_build_evidence_summary_for_hearsay_driven_profile():
+    summary = build_evidence_summary(
+        candidate={"description": "Management cut guidance after weaker orders."},
+        claim_text=None,
+        signal_label="Guidance Change",
+        why_own_it="AI demand should keep the story alive.",
+        severity="warning",
+        verdict="review",
+        investor_profile="hearsay_driven",
+    )
+    assert 'Your reason: "AI demand should keep the story alive."' in summary
+    assert "Management cut guidance after weaker orders." in summary
+    assert "story" in summary.lower()
 
 
 def test_build_evidence_summary_no_context():

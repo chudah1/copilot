@@ -142,7 +142,7 @@ export function ThesisDecompositionReview({ envelope, loading, saving, onGenerat
           </p>
         </div>
         <p className="font-sans text-sm text-muted-foreground leading-relaxed max-w-lg">
-          The app will read your thesis, identify what conditions need to stay true, and suggest specific data feeds to watch — earnings reports, revenue growth, management commentary, and more.
+          We read your thesis, pull out what has to stay true, and suggest concrete things to watch — earnings, revenue trends, management commentary, and similar.
         </p>
         <div className="flex items-center gap-4 pt-1">
           <button
@@ -194,6 +194,16 @@ export function ThesisDecompositionReview({ envelope, loading, saving, onGenerat
   const confPct = decomposition.decomposition_confidence != null
     ? Math.round(decomposition.decomposition_confidence * 100)
     : null;
+  const needsExplicitConfirmation =
+    envelope.status === "draft" || envelope.status === "partially_confirmed";
+  const showPrimaryConfirm = dirty || needsExplicitConfirmation;
+  const primaryButtonLabel = saving
+    ? "Saving…"
+    : !dirty && envelope.status === "draft"
+      ? "Use recommended setup"
+      : !dirty && envelope.status === "partially_confirmed"
+        ? "Keep this setup"
+        : "Save choices";
 
   return (
     <div className="space-y-6">
@@ -217,6 +227,12 @@ export function ThesisDecompositionReview({ envelope, loading, saving, onGenerat
         {confPct != null && (
           <span className="font-mono text-[9px] text-muted-foreground/60">
             {confPct}% decomp. confidence
+          </span>
+        )}
+
+        {!dirty && envelope.status === "draft" && activeCount > 0 && (
+          <span className="font-mono text-[9px] uppercase tracking-[0.12em] text-primary/80 border border-primary/20 px-2 py-1">
+            Recommended setup preselected
           </span>
         )}
 
@@ -361,14 +377,23 @@ export function ThesisDecompositionReview({ envelope, loading, saving, onGenerat
 
       {/* Footer: meta + actions */}
       <div className="border-t border-border/40 pt-4 flex items-center justify-between gap-4 flex-wrap">
-        <div className="flex items-center gap-3">
-          <p className="font-mono text-[9px] text-muted-foreground/50">
-            Generated {formatDate(decomposition.created_at)}
-          </p>
-          {decomposition.provider && (
-            <span className="font-mono text-[9px] text-muted-foreground/40 uppercase tracking-[0.1em]">
-              via {decomposition.provider}
-            </span>
+        <div className="space-y-1">
+          <div className="flex items-center gap-3 flex-wrap">
+            <p className="font-mono text-[9px] text-muted-foreground/50">
+              Generated {formatDate(decomposition.created_at)}
+            </p>
+            {decomposition.provider && (
+              <span className="font-mono text-[9px] text-muted-foreground/40 uppercase tracking-[0.1em]">
+                via {decomposition.provider}
+              </span>
+            )}
+          </div>
+          {needsExplicitConfirmation && (
+            <p className="font-sans text-xs text-muted-foreground leading-relaxed">
+              {activeCount > 0
+                ? "We pre-picked the setup that best matches your thesis. Keep it or tweak signal by signal."
+                : "Pick at least one signal to watch, then confirm the setup."}
+            </p>
           )}
         </div>
 
@@ -381,17 +406,17 @@ export function ThesisDecompositionReview({ envelope, loading, saving, onGenerat
           </button>
 
           <AnimatePresence>
-            {dirty && (
+            {showPrimaryConfirm && (
               <motion.button
                 initial={{ opacity: 0, x: 6 }}
                 animate={{ opacity: 1, x: 0 }}
                 exit={{ opacity: 0, x: 6 }}
                 transition={{ duration: 0.15 }}
                 onClick={handleConfirm}
-                disabled={saving}
+                disabled={saving || activeCount === 0}
                 className="font-mono text-[9px] uppercase tracking-[0.15em] bg-primary text-primary-foreground px-4 py-1.5 hover:bg-primary/90 transition-colors disabled:opacity-50"
               >
-                {saving ? "Saving…" : "Save choices"}
+                {primaryButtonLabel}
               </motion.button>
             )}
           </AnimatePresence>

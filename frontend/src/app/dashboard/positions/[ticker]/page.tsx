@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { startTransition, useEffect, useState } from "react";
 import { useParams, useSearchParams } from "next/navigation";
 import Link from "next/link";
 import { motion, AnimatePresence } from "framer-motion";
@@ -57,6 +57,48 @@ function ageInDays(dateString: string) {
   return Math.max(0, Math.floor((now - then) / (1000 * 60 * 60 * 24)));
 }
 
+function getStalePressure(thesis: Thesis | undefined) {
+  if (!thesis) return null;
+
+  const daysOld = ageInDays(thesis.updated_at);
+  const cadenceDays = Math.max(thesis.review_cadence_days || 30, 14);
+  const monitorability =
+    thesis.interpretation && typeof thesis.interpretation.monitorability === "string"
+      ? thesis.interpretation.monitorability
+      : null;
+
+  let watchThreshold = Math.max(cadenceDays, 21);
+  let reviewThreshold = Math.max(cadenceDays * 3, 120);
+
+  if (thesis.confidence === "high") {
+    watchThreshold = Math.max(watchThreshold - 7, 21);
+    reviewThreshold = Math.max(reviewThreshold - 14, 90);
+  }
+
+  if (monitorability === "low") {
+    watchThreshold = Math.max(watchThreshold - 7, 14);
+    reviewThreshold = Math.max(reviewThreshold - 14, 75);
+  }
+
+  if (daysOld >= reviewThreshold) {
+    return {
+      level: "review" as const,
+      daysOld,
+      cadenceDays,
+    };
+  }
+
+  if (daysOld >= watchThreshold) {
+    return {
+      level: "watch" as const,
+      daysOld,
+      cadenceDays,
+    };
+  }
+
+  return null;
+}
+
 function getThesisInsights(
   thesis: Thesis | undefined,
   events: MonitoringEvent[],
@@ -67,14 +109,14 @@ function getThesisInsights(
       nextStep:
         investorProfile === "hearsay_driven"
           ? "Start by turning the original story into a real business reason this app can monitor."
-          : "Write your thesis for this position so monitoring has something explicit to watch.",
+          : "Write your thesis for this position so monitoring has something concrete to watch.",
       qualityLabel: "No reason yet",
       qualityTone: "bg-red-500/15 text-red-600",
       statusDot: "text-red-500",
       watchStatus:
         investorProfile === "hearsay_driven"
-          ? "Right now this position has no explicit reason attached to it, so the app cannot separate signal from noise."
-          : "This position is not being monitored against any explicit belief yet.",
+          ? "Right now this position has no written reason attached to it, so we can't tell what matters from headline noise."
+          : "This position is not being monitored against any written belief yet.",
       canReaffirm: false,
     };
   }
@@ -82,7 +124,7 @@ function getThesisInsights(
   const interpretation = thesis.interpretation ?? {};
   const monitorability = typeof interpretation.monitorability === "string" ? interpretation.monitorability : "medium";
   const ambiguity = typeof interpretation.ambiguity_note === "string" ? interpretation.ambiguity_note : "";
-  const stale = ageInDays(thesis.updated_at) > 90;
+  const stalePressure = getStalePressure(thesis);
   const latestEvent = events[0];
 
   if (thesis.status === "needs_review") {
@@ -91,18 +133,24 @@ function getThesisInsights(
       qualityLabel: "Needs review",
       qualityTone: "bg-orange-500/15 text-orange-600",
       statusDot: "text-orange-500",
-      watchStatus: "Monitoring found something worth revisiting in your reason.",
+      watchStatus: "Monitoring found something that hits your reason — worth a look.",
       canReaffirm: true,
     };
   }
 
-  if (stale) {
+  if (stalePressure) {
     return {
-      nextStep: "This reason is old. Re-read it and either confirm it or tighten the language.",
-      qualityLabel: "Stale",
+      nextStep:
+        stalePressure.level === "review"
+          ? "This reason is way past due for a re-read. Update or drop it before you treat it as live conviction."
+          : "This reason is overdue for review. Re-read it and either confirm it or tighten the language.",
+      qualityLabel: stalePressure.level === "review" ? "Needs refresh" : "Stale",
       qualityTone: "bg-amber-500/15 text-amber-700",
       statusDot: "text-amber-500",
-      watchStatus: "Nothing necessarily broke, but this reasoning has not been reviewed in a while.",
+      watchStatus:
+        stalePressure.level === "review"
+          ? `Nothing necessarily broke, but this reasoning is ${stalePressure.daysOld} days old and far past its ${stalePressure.cadenceDays}-day review cadence.`
+          : `Nothing necessarily broke, but this reasoning is ${stalePressure.daysOld} days old and overdue for its ${stalePressure.cadenceDays}-day review cadence.`,
       canReaffirm: true,
     };
   }
@@ -113,14 +161,14 @@ function getThesisInsights(
         ambiguity ||
         (investorProfile === "hearsay_driven"
           ? "Tighten this story into a clearer business reason and a sharper break condition."
-          : "Tighten the thesis so the app can monitor something more precise."),
+          : "Tighten the thesis so we can monitor something more precise."),
       qualityLabel: "Weak signals",
       qualityTone: "bg-muted text-muted-foreground",
       statusDot: "text-muted-foreground",
       watchStatus:
         investorProfile === "hearsay_driven"
           ? "The current reason still reads more like a narrative than a thesis."
-          : "The current reason is too vague for high-confidence monitoring.",
+          : "The current reason is too vague for reliable monitoring.",
       canReaffirm: false,
     };
   }
@@ -130,7 +178,7 @@ function getThesisInsights(
     qualityLabel: "Intact",
     qualityTone: "bg-emerald-500/15 text-emerald-700",
     statusDot: "text-emerald-500",
-    watchStatus: latestEvent ? "Monitoring has context to evaluate new changes against your reason." : "Monitoring is active, no material change flagged.",
+    watchStatus: latestEvent ? "Monitoring has context to evaluate new changes against your reason." : "Monitoring is active, nothing meaningful flagged yet.",
     canReaffirm: false,
   };
 }
@@ -138,13 +186,13 @@ function getThesisInsights(
 function positionCopy(investorProfile: "thesis_driven" | "hearsay_driven" | null) {
   if (investorProfile === "thesis_driven") {
     return {
-      earningsEmpty: "Tighten your thesis so the app knows which assumption should matter the morning after.",
+      earningsEmpty: "Tighten your thesis so we know which assumption should matter the morning after.",
       postEarningsReview: "Review which assumption still holds after the quarter landed.",
       noReasonTitle: "No thesis written yet.",
       noReasonBody: "Write the core reason, the assumption that must stay true, and the condition that would break the thesis.",
       noReasonCta: "Write your thesis",
       monitoringEmptyTitle: "Nothing to monitor yet.",
-      monitoringEmptyBody: "Write your thesis first — monitoring needs an explicit assumption set to test against.",
+      monitoringEmptyBody: "Write your thesis first — monitoring needs an specific assumption set to test against.",
       monitoringEmptyCta: "Go to your thesis →",
       afterEarningsCta: "After earnings?",
     };
@@ -152,26 +200,26 @@ function positionCopy(investorProfile: "thesis_driven" | "hearsay_driven" | null
 
   if (investorProfile === "hearsay_driven") {
     return {
-      earningsEmpty: "Turn the original story into a reason first, so the app knows what evidence should matter the morning after.",
+      earningsEmpty: "Turn the original story into a reason first, so we know what evidence should matter the morning after.",
       postEarningsReview: "Review whether the original story still holds now that the quarter is out.",
       noReasonTitle: "No reason written yet.",
       noReasonBody: "Start with the story behind the position, then turn it into a concrete reason, what has to stay true, and what would break it.",
       noReasonCta: "Write your reason",
       monitoringEmptyTitle: "Nothing to check yet.",
-      monitoringEmptyBody: "Write the real reason first — without that, the app cannot tell signal from noise.",
+      monitoringEmptyBody: "Write the real reason first — without that, we can't tell what matters from noise.",
       monitoringEmptyCta: "Go to your reason →",
       afterEarningsCta: "After earnings?",
     };
   }
 
   return {
-    earningsEmpty: "Tighten your reason so the app knows what evidence should matter the morning after.",
+    earningsEmpty: "Tighten your reason so we know what evidence should matter the morning after.",
     postEarningsReview: "Review whether your reason still holds.",
     noReasonTitle: "No reason written yet.",
     noReasonBody: "Start with the reason this position exists, what has to stay true, and what would make you rethink it.",
     noReasonCta: "Write your reason",
     monitoringEmptyTitle: "Nothing to watch yet.",
-    monitoringEmptyBody: "Write your reason first — monitoring needs an explicit belief to test against.",
+    monitoringEmptyBody: "Write your reason first — monitoring needs an written belief to test against.",
     monitoringEmptyCta: "Go to your reason →",
     afterEarningsCta: "After earnings?",
   };
@@ -181,7 +229,6 @@ function getDecisionPrompt(
   thesis: Thesis | undefined,
   events: MonitoringEvent[],
   investorProfile: "thesis_driven" | "hearsay_driven" | null,
-  daysOld: number,
 ) {
   if (!thesis) {
     return {
@@ -208,6 +255,7 @@ function getDecisionPrompt(
     thesis.interpretation && typeof thesis.interpretation.ambiguity_note === "string"
       ? thesis.interpretation.ambiguity_note
       : "";
+  const stalePressure = getStalePressure(thesis);
   const unresolvedEvent = events.find((event) => !event.review_action);
 
   if (thesis.status === "needs_review" && unresolvedEvent) {
@@ -247,17 +295,17 @@ function getDecisionPrompt(
     };
   }
 
-  if (daysOld > 90) {
+  if (stalePressure) {
     return {
       eyebrow: "Before you keep holding on autopilot",
       title:
         investorProfile === "hearsay_driven"
           ? "Would you still buy this today for the same reason?"
-          : "Would you still underwrite this thesis today?",
+          : "Would you still buy this today for the same thesis?",
       body:
         investorProfile === "hearsay_driven"
-          ? "The reason is old enough that you should re-read it before treating this as active conviction."
-          : "The written thesis is old enough that you should re-underwrite it before treating this as active conviction.",
+          ? `This reason is ${stalePressure.daysOld} days old and behind its ${stalePressure.cadenceDays}-day review cadence. Re-read it before treating this as active conviction.`
+          : `This thesis is ${stalePressure.daysOld} days old and past its ${stalePressure.cadenceDays}-day check-in. Re-read it before you treat it as live conviction.`,
       ctaLabel: "Re-read and refresh it →",
       action: "edit" as const,
       tone: "border-amber-500/25 bg-amber-500/8",
@@ -281,13 +329,13 @@ function getThesisHandoffPrompt(args: {
     return {
       title:
         investorProfile === "hearsay_driven"
-          ? "The reason is written. Next, make it watchable."
-          : "The thesis is written. Next, make it watchable.",
+          ? "The reason is written. Next, define what would really test it."
+          : "The thesis is written. Next, define what would really test it.",
       body:
         investorProfile === "hearsay_driven"
-          ? "Generate signal candidates so the app knows what evidence should actually test this reason."
-          : "Generate signal candidates so the app knows what evidence should actually test this thesis.",
-      ctaLabel: "Generate signals →",
+          ? "Build the first watchlist so we know which evidence should count against this reason and which noise to ignore."
+          : "Build the first watchlist so we know which evidence should count against this thesis and which noise to ignore.",
+      ctaLabel: "Define the first watchlist →",
       action: "generate" as const,
     };
   }
@@ -300,14 +348,41 @@ function getThesisHandoffPrompt(args: {
           : "The watchlist is ready. Now confirm what should count.",
       body:
         investorProfile === "hearsay_driven"
-          ? "The app already suggested a monitoring setup. Review it once so future alerts reflect the reason you actually mean."
-          : "The app already suggested a monitoring setup. Review it once so future alerts reflect the thesis you actually mean.",
+          ? "We already suggested a monitoring setup. Review it once so future alerts reflect the reason you actually mean."
+          : "We already suggested a monitoring setup. Review it once so future alerts reflect the thesis you actually mean.",
       ctaLabel: "Review signals →",
       action: "monitoring" as const,
     };
   }
 
   return null;
+}
+
+function getBlindSpotArrivalCopy(investorProfile: "thesis_driven" | "hearsay_driven" | null) {
+  if (investorProfile == "hearsay_driven") {
+    return {
+      eyebrow: "Blind spot",
+      title: "This position still has no written reason.",
+      body: "Until you turn the original story into a real reason, we can't tell signal from panic here.",
+      cta: "Write the real reason now →",
+    };
+  }
+
+  if (investorProfile === "thesis_driven") {
+    return {
+      eyebrow: "Blind spot",
+      title: "This position still has no written thesis.",
+      body: "Until you've written the thesis, we can't tell whether new evidence is noise or a real assumption break.",
+      cta: "Write the thesis now →",
+    };
+  }
+
+  return {
+    eyebrow: "Blind spot",
+    title: "This position still has no written reason.",
+    body: "Until you've written the reason, we can't tell whether new evidence should change your mind.",
+    cta: "Write the reason now →",
+  };
 }
 
 function getMonitoringCalmState(args: {
@@ -337,15 +412,15 @@ function getMonitoringCalmState(args: {
   const body = hasReviewedEvents
     ? `All reviewed evidence is on file${lastReviewedEventAgeDays != null ? ` and the last decision was ${lastReviewedEventAgeDays} day${lastReviewedEventAgeDays === 1 ? "" : "s"} ago` : ""}.`
     : investorProfile === "hearsay_driven"
-      ? "Monitoring is live and the latest available data did not produce a reason-level decision."
-      : "Monitoring is live and the latest available data did not produce a thesis-level decision.";
+      ? `Monitoring is live and now watching ${activeSignalCount > 0 ? `${activeSignalCount} watchpoint${activeSignalCount === 1 ? "" : "s"}` : "your first watchlist"} so the next interruption is tied to the reason you wrote down.`
+      : `Monitoring is live and now watching ${activeSignalCount > 0 ? `${activeSignalCount} watchpoint${activeSignalCount === 1 ? "" : "s"}` : "your first watchlist"} so the next interruption is tied to the thesis you wrote down.`;
 
   const nextCheck =
     upcomingEarnings && upcomingEarnings.days_until >= 0 && upcomingEarnings.days_until <= 30
       ? `Next likely checkpoint: earnings ${upcomingEarnings.days_until === 0 ? "today" : upcomingEarnings.days_until === 1 ? "tomorrow" : `in ${upcomingEarnings.days_until} days`}.`
       : activeSignalCount > 0
-        ? `The app is actively watching ${activeSignalCount} signal${activeSignalCount === 1 ? "" : "s"} for this position.`
-        : "The app is waiting for a material change that touches one of your monitored assumptions.";
+        ? `We're watching ${activeSignalCount} signal${activeSignalCount === 1 ? "" : "s"} on this position.`
+        : "We're waiting for news that actually hits one of your assumptions.";
 
   return {
     title,
@@ -413,23 +488,43 @@ function getMonitoringPreviewItems(
         detail:
           typeof hint.rationale === "string" && hint.rationale.trim()
             ? hint.rationale.trim()
-            : "This is the first monitoring rule the app can evaluate against your reason.",
+            : "This is the first monitoring rule we can evaluate against your reason.",
       };
     })
     .filter((item): item is { key: string; label: string; detail: string } => Boolean(item))
     .slice(0, 3);
 }
 
-function buildPostSaveNotice(investorProfile: "thesis_driven" | "hearsay_driven" | null): NextStepNotice {
+function buildPostSaveNotice(args: {
+  investorProfile: "thesis_driven" | "hearsay_driven" | null;
+  blindSpotStart?: boolean;
+}): NextStepNotice {
+  const { investorProfile, blindSpotStart = false } = args;
+  if (blindSpotStart) {
+    return {
+      eyebrow: "Blind spot closed",
+      title:
+        investorProfile === "hearsay_driven"
+          ? "Now choose what should actually test this reason."
+          : "Now choose what should actually test this thesis.",
+      body:
+        investorProfile === "hearsay_driven"
+          ? "The position now has a real written reason. Generate the first watchlist so the next alert is tied to the story you actually mean."
+          : "The position now has a real written thesis. Generate the first watchlist so the next alert is tied to the assumption you actually mean.",
+      ctaLabel: "Generate the first watchlist →",
+      action: "generate_signals",
+    };
+  }
+
   return {
     eyebrow: "Reason saved",
     title:
       investorProfile === "hearsay_driven"
-        ? "Next, tell the app what parts of the story to watch."
-        : "Next, turn the thesis into explicit signals.",
+        ? "Next, choose what parts of the story to watch."
+        : "Next, turn the thesis into watchable signals.",
     body:
       investorProfile === "hearsay_driven"
-        ? "Your reason is written down. Generate signal candidates now so the app can separate real evidence from narrative noise."
+        ? "Your reason is written down. Generate signal candidates now so we can separate real evidence from headline churn."
         : "Your thesis is saved. Generate signal candidates now so monitoring knows which assumptions should matter.",
     ctaLabel: "Generate signals now →",
     action: "generate_signals",
@@ -454,31 +549,38 @@ function buildPostDecompositionNotice(
     eyebrow: "Signals ready",
     title:
       investorProfile === "hearsay_driven"
-        ? "Review what the app thinks should test this reason."
-        : "Review what the app thinks should test this thesis.",
+        ? "Review the first tests for this reason."
+        : "Review the first tests for this thesis.",
     body:
       investorProfile === "hearsay_driven"
         ? "The recommended setup is preselected. Keep it if it matches the story you meant, or edit signal by signal."
         : "The recommended setup is preselected. Keep it if it matches your thesis, or edit signal by signal.",
-    ctaLabel: "Review and confirm them →",
+    ctaLabel: "Review the first watchlist →",
     action: "confirm_signals",
   };
 }
 
-function buildPostConfirmationNotice(
-  investorProfile: "thesis_driven" | "hearsay_driven" | null,
-): NextStepNotice {
+function buildPostConfirmationNotice(args: {
+  investorProfile: "thesis_driven" | "hearsay_driven" | null;
+  activeSignalCount: number;
+}): NextStepNotice {
+  const { investorProfile, activeSignalCount } = args;
+  const signalText =
+    activeSignalCount > 0
+      ? `${activeSignalCount} watchpoint${activeSignalCount === 1 ? "" : "s"}`
+      : "an watchlist";
+
   return {
     eyebrow: "Monitoring setup confirmed",
     title:
       investorProfile === "hearsay_driven"
-        ? "The app now knows what would actually test this reason."
-        : "The app now knows what would actually test this thesis.",
+        ? "Alerts now only fire when something hits your reason."
+        : "Alerts now only fire when something hits your thesis.",
     body:
       investorProfile === "hearsay_driven"
-        ? "You do not need to keep checking manually. The next meaningful change will show up here as evidence to review."
-        : "You do not need to keep checking manually. The next meaningful change will show up here as evidence to review.",
-    ctaLabel: "See the live monitoring state →",
+        ? `It is now watching ${signalText}, and it will only pull you back when a real change tests the story you wrote down.`
+        : `It is now watching ${signalText}, and it will only pull you back when a real change tests the thesis you wrote down.`,
+    ctaLabel: "See what is now being watched →",
     action: "monitoring",
   };
 }
@@ -533,8 +635,8 @@ function buildCheckNowNotice(args: {
           : `${result.events_created} change${result.events_created !== 1 ? "s" : ""} may test your thesis.`,
       body:
         investorProfile === "hearsay_driven"
-          ? "The app found new evidence worth a decision. Review it below while the original story is still fresh in your head."
-          : "The app found new evidence worth a decision. Review it below while the thesis is still fresh in your head.",
+          ? "Something new landed that may change the story. Review it below while it's still fresh."
+          : "Something new landed that may change the thesis. Review it below while it's still fresh.",
       ctaLabel: "Review the new evidence →",
       action: "monitoring",
     };
@@ -548,8 +650,8 @@ function buildCheckNowNotice(args: {
         : "Nothing meaningful changed for this thesis.",
     body:
       investorProfile === "hearsay_driven"
-        ? "The app checked the latest available data and did not find a reason-level decision to make right now."
-        : "The app checked the latest available data and did not find a thesis-level decision to make right now.",
+        ? "We checked what's available — nothing yet that forces a call on your reason."
+        : "We checked what's available — nothing yet that forces a call on your thesis.",
     ctaLabel: "Stay on monitoring →",
     action: "monitoring",
   };
@@ -558,6 +660,22 @@ function buildCheckNowNotice(args: {
 function isRecentEvent(dateString: string, days: number) {
   const ageMs = Date.now() - new Date(dateString).getTime();
   return ageMs >= 0 && ageMs <= days * 24 * 60 * 60 * 1000;
+}
+
+function getEventAssumptionLabel(
+  event: MonitoringEvent,
+  investorProfile: "thesis_driven" | "hearsay_driven" | null,
+) {
+  if (event.signal_label && event.signal_label.trim()) {
+    return event.signal_label.trim();
+  }
+
+  if (event.title && event.title.trim()) {
+    return event.title.trim();
+  }
+
+  const prefix = investorProfile === "hearsay_driven" ? "this reason" : "this thesis";
+  return `${prefix} signal`;
 }
 
 // ── Status dot colour ────────────────────────────────────────────────────────
@@ -600,9 +718,15 @@ export default function PositionDetailPage() {
   const [showEarningsReview, setShowEarningsReview] = useState(false);
   const [onboardingState, setOnboardingState] = useState<OnboardingState | null>(null);
   const [nextStepNotice, setNextStepNotice] = useState<NextStepNotice | null>(null);
+  const [hasPromptedBlindSpotEditor, setHasPromptedBlindSpotEditor] = useState(false);
 
   const holding = holdings.find((h) => h.ticker === ticker);
   const activeThesis = theses.find((t) => t.status === "active" || t.status === "draft" || t.status === "needs_review");
+  const fromOnboarding = searchParams.get("source") === "onboarding";
+  const fromBlindSpot = searchParams.get("source") === "dashboard_blind_spot";
+  const latestInvalidatedThesis = [...theses]
+    .filter((t) => t.status === "invalidated")
+    .sort((a, b) => new Date(b.updated_at).getTime() - new Date(a.updated_at).getTime())[0];
 
   useEffect(() => {
     async function load() {
@@ -659,6 +783,36 @@ export default function PositionDetailPage() {
     }
     load();
   }, [ticker]);
+
+  useEffect(() => {
+    if (
+      loading ||
+      hasPromptedBlindSpotEditor ||
+      editing ||
+      !fromBlindSpot ||
+      activeThesis ||
+      latestInvalidatedThesis
+    ) {
+      return;
+    }
+
+    const timeoutId = window.setTimeout(() => {
+      startTransition(() => {
+        setActiveTab("thesis");
+        setEditing(true);
+        setHasPromptedBlindSpotEditor(true);
+      });
+    }, 0);
+
+    return () => window.clearTimeout(timeoutId);
+  }, [
+    activeThesis,
+    editing,
+    fromBlindSpot,
+    hasPromptedBlindSpotEditor,
+    latestInvalidatedThesis,
+    loading,
+  ]);
 
   const runHealthCheck = async (thesisId: string) => {
     try {
@@ -761,7 +915,10 @@ export default function PositionDetailPage() {
         setShowCounterThesis(true);
         setShowAnalysis(true);
         setActiveTab("monitoring");
-        setNextStepNotice(buildPostSaveNotice(onboardingState?.investor_profile ?? null));
+        setNextStepNotice(buildPostSaveNotice({
+          investorProfile: onboardingState?.investor_profile ?? null,
+          blindSpotStart: fromBlindSpot && !activeThesis && !latestInvalidatedThesis,
+        }));
       }
       await refreshConvictionLog();
     } catch (err) {
@@ -820,9 +977,24 @@ export default function PositionDetailPage() {
     try {
       setDecompositionSaving(true);
       const envelope = await api.post<ThesisDecompositionEnvelope>(`/api/theses/${activeThesis.id}/decomposition/confirm`, payload);
+      const confirmedSignalCount =
+        envelope.decomposition?.claims.reduce(
+          (sum, claim) =>
+            sum +
+            claim.entities.reduce(
+              (entitySum, entity) => entitySum + entity.signals.filter((signal) => signal.active).length,
+              0,
+            ),
+          0,
+        ) ?? 0;
       setDecompositionEnvelope(envelope);
       setActiveTab("monitoring");
-      setNextStepNotice(buildPostConfirmationNotice(onboardingState?.investor_profile ?? null));
+      setNextStepNotice(
+        buildPostConfirmationNotice({
+          investorProfile: onboardingState?.investor_profile ?? null,
+          activeSignalCount: confirmedSignalCount,
+        }),
+      );
       await refreshCurrentThesis();
       await refreshConvictionLog();
     } catch (error) {
@@ -851,6 +1023,19 @@ export default function PositionDetailPage() {
       } else if (refreshedEvents && refreshedEvents.every((candidate) => candidate.review_action)) {
         setActiveTab("monitoring");
         setNextStepNotice(buildPostReviewClearNotice(onboardingState?.investor_profile ?? null));
+      }
+      if (typeof window !== "undefined") {
+        window.localStorage.setItem(
+          "dashboard_recent_review",
+          JSON.stringify({
+            ticker: holding.ticker,
+            action,
+            assumption_label: event.signal_label || event.title || null,
+            resolved_all: Boolean(refreshedEvents && refreshedEvents.every((candidate) => candidate.review_action)),
+            thesis_status: result.thesis.status,
+            saved_at: new Date().toISOString(),
+          }),
+        );
       }
       const ageText = result.reason_age_days != null ? ` Reason age: ${result.reason_age_days} days.` : "";
       toast.success(`Logged. Reason is now ${result.thesis.status.replace("_", " ")}.${ageText}`);
@@ -933,15 +1118,10 @@ export default function PositionDetailPage() {
   const earningsWatchList = watchHints.map((h) => describeWatchHint(h)).filter((h): h is string => Boolean(h)).slice(0, 3);
   const unreviewedEvents = events.filter((e) => !e.review_action).length;
   const reviewedEventsCount = events.filter((e) => Boolean(e.review_action)).length;
-  const invalidatedTheses = theses.filter((t) => t.status === "invalidated");
-  const latestInvalidatedThesis = [...invalidatedTheses].sort(
-    (a, b) => new Date(b.updated_at).getTime() - new Date(a.updated_at).getTime(),
-  )[0];
   const decisionPrompt = getDecisionPrompt(
     activeThesis,
     events,
     onboardingState?.investor_profile ?? null,
-    activeThesis ? ageInDays(activeThesis.updated_at) : 0,
   );
   const thesisHandoffPrompt = getThesisHandoffPrompt({
     hasThesis: Boolean(activeThesis),
@@ -950,16 +1130,15 @@ export default function PositionDetailPage() {
     decompositionStatus: decompositionEnvelope?.status ?? null,
     investorProfile: onboardingState?.investor_profile ?? null,
   });
-  const fromOnboarding = searchParams.get("source") === "onboarding";
   const onboardingMonitoringMessage = decompositionLoading
     ? "We’re turning your first reason into watchable signals now."
     : decompositionEnvelope?.decomposition
-        ? "Your first reason is live and the app has started turning it into something monitorable."
-        : "Your first reason is live. The next step is to confirm what the app should actually watch.";
+        ? "Your first reason is live and we've started turning it into something monitorable."
+        : "Your first reason is live. The next step is to confirm what to actually watch.";
   const onboardingMonitoringNextStep = decompositionLoading
-    ? "Next step: give the app a moment to finish turning your reason into signal candidates."
+    ? "Next step: give us a moment to finish turning your reason into signal candidates."
     : decompositionEnvelope?.decomposition
-      ? "Next step: confirm these signals so monitoring becomes explicit and high-trust."
+      ? "Next step: confirm these signals so monitoring becomes clear enough to trust."
       : "Next step: review the first monitoring rules below and tighten anything that feels vague.";
 
   const tabs: { id: TabId; label: string; badge?: number | string }[] = [
@@ -998,10 +1177,18 @@ export default function PositionDetailPage() {
     activeSignalCount,
     investorProfile: onboardingState?.investor_profile ?? null,
   });
+  const invalidatedTheses = theses.filter((t) => t.status === "invalidated");
+  const blindSpotArrivalCopy = getBlindSpotArrivalCopy(onboardingState?.investor_profile ?? null);
+  const firstPendingAssumptionLabel = firstPendingEvent
+    ? getEventAssumptionLabel(firstPendingEvent, onboardingState?.investor_profile ?? null)
+    : null;
   const editorSeedThesis = activeThesis ?? latestInvalidatedThesis ?? null;
-  const editorMode: "write" | "tighten" | "rewrite" =
+  const stalePressure = activeThesis ? getStalePressure(activeThesis) : null;
+  const editorMode: "write" | "first_write" | "tighten" | "rewrite" =
     !activeThesis && latestInvalidatedThesis
       ? "rewrite"
+      : !activeThesis && fromBlindSpot
+        ? "first_write"
       : activeThesis && thesisInsights.qualityLabel === "Weak signals"
         ? "tighten"
         : "write";
@@ -1083,12 +1270,20 @@ export default function PositionDetailPage() {
             </div>
             {activeThesis && (
               <>
-                <span className="text-border text-[10px]">·</span>
-                <span className="font-mono text-[10px] text-muted-foreground/60">
-                  reason {ageInDays(activeThesis.updated_at)}d old
-                </span>
-              </>
-            )}
+              <span className="text-border text-[10px]">·</span>
+              <span className="font-mono text-[10px] text-muted-foreground/60">
+                reason {ageInDays(activeThesis.updated_at)}d old
+              </span>
+              {stalePressure && (
+                <>
+                  <span className="text-border text-[10px]">·</span>
+                  <span className="font-mono text-[10px] text-amber-700/80">
+                    cadence {stalePressure.cadenceDays}d
+                  </span>
+                </>
+              )}
+            </>
+          )}
             {/* Progress indicators */}
             <div className="flex items-center gap-3 ml-auto">
               {steps.map((step, i) => (
@@ -1157,7 +1352,7 @@ export default function PositionDetailPage() {
             {monitoringPreviewItems.length > 0 && (
               <div className="space-y-2">
                 <p className="font-mono text-[10px] uppercase tracking-[0.18em] text-foreground/60">
-                  What the app is beginning to watch
+                  What we&apos;re starting to watch
                 </p>
                 <div className="grid gap-2">
                   {monitoringPreviewItems.map((item) => (
@@ -1173,6 +1368,32 @@ export default function PositionDetailPage() {
             <p className="font-sans text-xs text-foreground/65 leading-relaxed">
               {onboardingMonitoringNextStep}
             </p>
+          </motion.div>
+        )}
+
+        {fromBlindSpot && !activeThesis && !editing && (
+          <motion.div
+            initial={{ opacity: 0, y: -4 }}
+            animate={{ opacity: 1, y: 0 }}
+            className="mt-5 border border-amber-500/25 bg-amber-500/8 px-5 py-4 space-y-3"
+          >
+            <p className="font-mono text-[10px] uppercase tracking-[0.2em] text-amber-700">
+              {blindSpotArrivalCopy.eyebrow}
+            </p>
+            <div className="space-y-1.5">
+              <p className="font-display italic text-[1.35rem] leading-tight text-foreground">
+                {blindSpotArrivalCopy.title}
+              </p>
+              <p className="font-sans text-sm text-foreground/80 leading-relaxed">
+                {blindSpotArrivalCopy.body}
+              </p>
+            </div>
+            <button
+              onClick={() => setEditing(true)}
+              className="font-mono text-[10px] uppercase tracking-[0.15em] text-primary hover:text-primary/80 transition-colors"
+            >
+              {blindSpotArrivalCopy.cta}
+            </button>
           </motion.div>
         )}
 
@@ -1448,7 +1669,7 @@ export default function PositionDetailPage() {
                     <p className="font-sans text-sm text-muted-foreground max-w-sm mx-auto leading-relaxed">
                       {latestInvalidatedThesis
                         ? (onboardingState?.investor_profile === "thesis_driven"
-                            ? "Start from the last written thesis, remove what failed, and write the version you would still underwrite today."
+                            ? "Start from the last thesis, cut what failed, and write the version you'd still own today."
                             : onboardingState?.investor_profile === "hearsay_driven"
                               ? "Start from the last written reason, remove the part of the story that broke, and write the version you would still believe today."
                               : "Start from the last written reason, remove what failed, and write the version you would still believe today.")
@@ -1549,6 +1770,16 @@ export default function PositionDetailPage() {
                               <p className="font-mono text-[10px] uppercase tracking-[0.2em] text-primary">
                                 ● First live evidence
                               </p>
+                              {firstPendingAssumptionLabel && (
+                                <div className="space-y-1">
+                                  <p className="font-mono text-[10px] uppercase tracking-[0.18em] text-foreground/55">
+                                    Assumption under test
+                                  </p>
+                                  <p className="font-sans text-sm text-foreground">
+                                    {firstPendingAssumptionLabel}
+                                  </p>
+                                </div>
+                              )}
                               <div className="space-y-1.5">
                                 <p className="font-display italic text-[1.35rem] leading-tight text-foreground">
                                   {onboardingState?.investor_profile === "hearsay_driven"
@@ -1560,8 +1791,8 @@ export default function PositionDetailPage() {
                                     firstPendingEvent.evidence_summary ||
                                     firstPendingEvent.summary ||
                                     (onboardingState?.investor_profile === "hearsay_driven"
-                                      ? "The app found the first piece of evidence that may change the original story. Decide what it means before you move on."
-                                      : "The app found the first piece of evidence that may change the thesis. Decide what it means before you move on.")}
+                                      ? "First alert that may matter for the story. Decide what it means before you move on."
+                                      : "First alert that may matter for the thesis. Decide what it means before you move on.")}
                                 </p>
                               </div>
                             </div>

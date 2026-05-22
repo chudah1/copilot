@@ -15,6 +15,7 @@ interface Props {
   onReview?: (event: MonitoringEvent, action: ReviewAction, notes?: string) => Promise<void>;
   onEditReason?: (event: MonitoringEvent) => void;
   reviewingEventId?: string | null;
+  investorProfile?: "thesis_driven" | "hearsay_driven" | null;
 }
 
 const severityColors: Record<string, string> = {
@@ -54,6 +55,45 @@ const reviewLabel: Record<string, string> = {
   not_relevant: "Not relevant",
 };
 
+function reviewLanguage(investorProfile?: "thesis_driven" | "hearsay_driven" | null) {
+  if (investorProfile === "thesis_driven") {
+    return {
+      empty: "Nothing new yet. We're still watching this position against your thesis.",
+      title: "What does this do to your thesis?",
+      description: "Log what you decided — it keeps your assumptions and alerts honest.",
+      hold: "Thesis still holds",
+      edit: "Update thesis",
+      lower: "Assumption weaker",
+      broken: "Thesis is broken",
+      irrelevant: "Not relevant",
+    };
+  }
+
+  if (investorProfile === "hearsay_driven") {
+    return {
+      empty: "Nothing new yet. We're still checking whether the reason you wrote still holds.",
+      title: "What does this do to your reason?",
+      description: "Log whether this changes the story, or whether you need to sharpen what you wrote.",
+      hold: "Reason still holds",
+      edit: "Rewrite the reason",
+      lower: "Less sure now",
+      broken: "Story is broken",
+      irrelevant: "Not relevant",
+    };
+  }
+
+  return {
+    empty: "Nothing new yet. We're still watching this position against what you wrote.",
+    title: "What do you want to do?",
+    description: "Log what you decided — it keeps alerts from crying wolf.",
+    hold: "Reason still holds",
+    edit: "Update my reason",
+    lower: "Lower confidence",
+    broken: "Reason is broken",
+    irrelevant: "Not relevant",
+  };
+}
+
 function parseNarrative(text: string) {
   const parsed: Record<string, string> = {};
   for (const line of text.split("\n")) {
@@ -67,16 +107,28 @@ function parseNarrative(text: string) {
   return parsed;
 }
 
+function eventNarrativeFields(event: MonitoringEvent) {
+  const narrative = event.evidence_summary ? parseNarrative(event.evidence_summary) : {};
+  return {
+    youSaid: narrative["Your thesis"] ?? narrative["You said"] ?? narrative["Your reason"] ?? null,
+    weWatched: narrative["We were watching"] ?? narrative["What the app was checking"] ?? narrative["We watched"] ?? event.signal_label ?? null,
+    whatChanged: narrative["What changed"] ?? narrative["What happened"] ?? event.summary,
+    whyItMatters: narrative["Why it matters now"] ?? event.ai_analysis ?? null,
+    rawNarrative: narrative,
+  };
+}
+
 function EvidenceNarrative({ text }: { text: string }) {
   const narrative = parseNarrative(text);
   // "You said" and "We watched" are shown in the card header, skip them here
   const items = [
-    ["What happened", narrative["What happened"]],
+    ["What happened", narrative["What changed"] ?? narrative["What happened"]],
+    ["Why it matters", narrative["Why it matters now"]],
     ["Verdict", narrative["Verdict"]],
   ].filter((item): item is [string, string] => Boolean(item[1]));
 
   if (items.length === 0) {
-    return <p className="mt-2 text-sm text-muted-foreground">{text}</p>;
+    return <p className="mt-2 text-sm text-foreground/80">{text}</p>;
   }
 
   return (
@@ -84,22 +136,23 @@ function EvidenceNarrative({ text }: { text: string }) {
       {items.map(([label, value]) => (
         <p key={label}>
           <span className="font-medium text-muted-foreground">{label}:</span>{" "}
-          {value}
+          <span className="text-foreground/90">{value}</span>
         </p>
       ))}
     </div>
   );
 }
 
-export function EventTimeline({ events, onReview, onEditReason, reviewingEventId }: Props) {
+export function EventTimeline({ events, onReview, onEditReason, reviewingEventId, investorProfile }: Props) {
   const [notesByEvent, setNotesByEvent] = useState<Record<string, string>>({});
+  const copy = reviewLanguage(investorProfile);
 
   if (events.length === 0) {
     return (
       <Card>
         <CardHeader><CardTitle className="text-base">Monitoring Events</CardTitle></CardHeader>
         <CardContent>
-          <p className="text-muted-foreground">No material changes yet. The app is still watching this position against your thesis.</p>
+          <p className="text-foreground/70">{copy.empty}</p>
         </CardContent>
       </Card>
     );
@@ -111,9 +164,9 @@ export function EventTimeline({ events, onReview, onEditReason, reviewingEventId
       <CardContent className="space-y-4">
         {events.map((e) => {
           const verdict = e.verdict ? verdictConfig[e.verdict] : null;
-          const narrative = e.evidence_summary ? parseNarrative(e.evidence_summary) : {};
-          const youSaid = narrative["You said"];
-          const weWatched = narrative["We watched"];
+          const narrative = eventNarrativeFields(e);
+          const youSaid = narrative.youSaid;
+          const weWatched = narrative.weWatched;
 
           return (
             <div key={e.id} className="rounded-xl border p-4">
@@ -127,7 +180,7 @@ export function EventTimeline({ events, onReview, onEditReason, reviewingEventId
               {/* Signal affected — shown prominently when available */}
               {(e.signal_label || weWatched) && (
                 <p className="mt-2 text-sm font-medium text-muted-foreground">
-                  Signal affected:{" "}
+                  Assumption being tested:{" "}
                   <span className="text-foreground">{e.signal_label ?? weWatched}</span>
                 </p>
               )}
@@ -143,7 +196,18 @@ export function EventTimeline({ events, onReview, onEditReason, reviewingEventId
               {e.evidence_summary ? (
                 <EvidenceNarrative text={e.evidence_summary} />
               ) : (
-                <p className="mt-2 text-sm text-muted-foreground">{e.summary}</p>
+                <div className="mt-2 space-y-1 text-sm">
+                  <p>
+                    <span className="font-medium text-muted-foreground">What happened:</span>{" "}
+                    <span className="text-foreground/90">{narrative.whatChanged}</span>
+                  </p>
+                  {narrative.whyItMatters && (
+                    <p>
+                      <span className="font-medium text-muted-foreground">Why it matters:</span>{" "}
+                      <span className="text-foreground/90">{narrative.whyItMatters}</span>
+                    </p>
+                  )}
+                </div>
               )}
 
               {/* Verdict as a sentence */}
@@ -153,20 +217,20 @@ export function EventTimeline({ events, onReview, onEditReason, reviewingEventId
                 </p>
               )}
 
-              {e.ai_analysis && (
-                <p className="mt-2 text-sm italic text-muted-foreground">{e.ai_analysis}</p>
+              {e.ai_analysis && !e.evidence_summary && (
+                <p className="mt-2 text-sm italic text-foreground/75">{e.ai_analysis}</p>
               )}
 
               {e.review_notes && (
-                <p className="mt-1 text-sm text-muted-foreground">Your note: {e.review_notes}</p>
+                <p className="mt-1 text-sm text-foreground/70">Your note: {e.review_notes}</p>
               )}
 
               {/* Review actions — only for unreviewed events */}
               {onReview && !e.review_action && (
                 <div className="mt-4 rounded-lg border bg-muted/20 p-3">
-                  <p className="text-sm font-medium">What do you want to do?</p>
+                  <p className="text-sm font-medium">{copy.title}</p>
                   <p className="mt-1 text-xs text-muted-foreground">
-                    Log the decision so the app can keep the signal quality honest.
+                    {copy.description}
                   </p>
                   <Textarea
                     value={notesByEvent[e.id] ?? ""}
@@ -185,7 +249,7 @@ export function EventTimeline({ events, onReview, onEditReason, reviewingEventId
                       disabled={reviewingEventId === e.id}
                       onClick={() => void onReview(e, "reaffirmed", notesByEvent[e.id])}
                     >
-                      Reason still holds
+                      {copy.hold}
                     </Button>
                     <Button
                       size="sm"
@@ -193,7 +257,7 @@ export function EventTimeline({ events, onReview, onEditReason, reviewingEventId
                       disabled={reviewingEventId === e.id}
                       onClick={() => onEditReason?.(e)}
                     >
-                      Update my reason
+                      {copy.edit}
                     </Button>
                     <Button
                       size="sm"
@@ -201,7 +265,7 @@ export function EventTimeline({ events, onReview, onEditReason, reviewingEventId
                       disabled={reviewingEventId === e.id}
                       onClick={() => void onReview(e, "lowered_confidence", notesByEvent[e.id])}
                     >
-                      Lower confidence
+                      {copy.lower}
                     </Button>
                     <Button
                       size="sm"
@@ -209,7 +273,7 @@ export function EventTimeline({ events, onReview, onEditReason, reviewingEventId
                       disabled={reviewingEventId === e.id}
                       onClick={() => void onReview(e, "invalidated", notesByEvent[e.id])}
                     >
-                      Reason is broken
+                      {copy.broken}
                     </Button>
                     <Button
                       size="sm"
@@ -217,7 +281,7 @@ export function EventTimeline({ events, onReview, onEditReason, reviewingEventId
                       disabled={reviewingEventId === e.id}
                       onClick={() => void onReview(e, "not_relevant", notesByEvent[e.id])}
                     >
-                      Not relevant
+                      {copy.irrelevant}
                     </Button>
                   </div>
                 </div>

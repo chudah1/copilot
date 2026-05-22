@@ -31,7 +31,7 @@ export function SinceLastVisit({ summary, trend, recentEventCount }: SinceLastVi
   }
 
   if (changes.length === 0) {
-    changes.push("no material changes");
+    changes.push("nothing meaningful changed");
   }
 
   return (

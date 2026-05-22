@@ -45,7 +45,7 @@ def _event_title(ticker: str, candidate: dict[str, Any], claim_obj: Any | None) 
         return f"{clean}: insider activity"
 
     if event_type == "edgar_8k":
-        desc = evidence.get("description", "material event")
+        desc = evidence.get("description", "new event")
         return f"{clean}: SEC 8-K — {desc}"
 
     if event_type == "gemini_news":

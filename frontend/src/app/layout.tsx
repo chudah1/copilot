@@ -28,7 +28,7 @@ const jetbrainsMono = JetBrains_Mono({
 
 export const metadata: Metadata = {
   title: "Copilot Investor",
-  description: "You already invest. We help you do it intentionally.",
+  description: "You already invest. Write down why, and get told when the facts move.",
 };
 
 export default function RootLayout({ children }: { children: React.ReactNode }) {

@@ -36,7 +36,7 @@ def _day1_html(holding_name: str, signal_count: int, uncovered_count: int, earni
         noun = "holding" if uncovered_count == 1 else "holdings"
         parts.append(
             f"<p>You have <strong>{uncovered_count} {noun}</strong> without a reason. "
-            f"Holdings without a thesis are blind spots — monitoring can't tell you what matters for them.</p>"
+            f"Positions without a written reason won't get useful alerts — we don't know what to compare news against.</p>"
         )
     parts.append('<p><a href="/dashboard">→ Open dashboard</a></p>')
     return "".join(parts)
@@ -45,8 +45,7 @@ def _day1_html(holding_name: str, signal_count: int, uncovered_count: int, earni
 def _day5_html(uncovered_tickers: list[str]) -> str:
     parts = [
         "<h2>Some of your holdings have no reason — here's why that matters</h2>",
-        "<p>Without a thesis, monitoring can't tell you what matters for each position. "
-        "You're flying blind on these holdings:</p>",
+        "<p>Without a written reason, we can't tell which news should ping you on these names:</p>",
         "<ul>",
     ]
     for ticker in uncovered_tickers[:6]:
