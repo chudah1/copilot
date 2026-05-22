@@ -1,7 +1,7 @@
 "use client";
 
 import { startTransition, useEffect, useState } from "react";
-import { useParams, useSearchParams } from "next/navigation";
+import { useParams, useRouter, useSearchParams } from "next/navigation";
 import Link from "next/link";
 import { motion, AnimatePresence } from "framer-motion";
 import { api } from "@/lib/api";
@@ -706,6 +706,7 @@ const STATUS_DOT: Record<string, string> = {
 export default function PositionDetailPage() {
   const { ticker } = useParams<{ ticker: string }>();
   const searchParams = useSearchParams();
+  const router = useRouter();
   const [activeTab, setActiveTab] = useState<TabId>("thesis");
   const [holdings, setHoldings] = useState<Holding[]>([]);
   const [theses, setTheses] = useState<Thesis[]>([]);
@@ -732,6 +733,8 @@ export default function PositionDetailPage() {
   const [onboardingState, setOnboardingState] = useState<OnboardingState | null>(null);
   const [nextStepNotice, setNextStepNotice] = useState<NextStepNotice | null>(null);
   const [hasPromptedBlindSpotEditor, setHasPromptedBlindSpotEditor] = useState(false);
+  const [deleteConfirming, setDeleteConfirming] = useState(false);
+  const [deleteLoading, setDeleteLoading] = useState(false);
 
   const holding = holdings.find((h) => h.ticker === ticker);
   const activeThesis = theses.find((t) => t.status === "active" || t.status === "draft" || t.status === "needs_review");
@@ -1017,6 +1020,21 @@ export default function PositionDetailPage() {
     }
   };
 
+  const handleDelete = async () => {
+    if (!holding) return;
+    try {
+      setDeleteLoading(true);
+      await api.delete(`/api/portfolio/holdings/${holding.id}`);
+      toast.success("Position removed");
+      router.push("/dashboard");
+    } catch (error) {
+      toast.error(getErrorMessage(error, "Failed to remove position"));
+      setDeleteConfirming(false);
+    } finally {
+      setDeleteLoading(false);
+    }
+  };
+
   const handleReviewEvent = async (
     event: MonitoringEvent,
     action: "reaffirmed" | "ignored" | "lowered_confidence" | "invalidated" | "not_relevant",
@@ -1240,13 +1258,40 @@ export default function PositionDetailPage() {
             >
               ← Portfolio
             </Link>
-            <CheckNowButton
-              holdingId={holding.id}
-              ticker={holding.ticker}
-              currency={holding.currency}
-              investorProfile={onboardingState?.investor_profile ?? null}
-              onComplete={handleCheckNowComplete}
-            />
+            <div className="flex items-center gap-3">
+              {deleteConfirming ? (
+                <div className="flex items-center gap-2">
+                  <span className="font-mono text-[10px] text-muted-foreground">Remove all data?</span>
+                  <button
+                    onClick={handleDelete}
+                    disabled={deleteLoading}
+                    className="font-mono text-[10px] uppercase tracking-[0.15em] text-red-600 hover:text-red-700 transition-colors disabled:opacity-40"
+                  >
+                    {deleteLoading ? "Removing…" : "Confirm"}
+                  </button>
+                  <button
+                    onClick={() => setDeleteConfirming(false)}
+                    className="font-mono text-[10px] uppercase tracking-[0.15em] text-muted-foreground hover:text-foreground transition-colors"
+                  >
+                    Cancel
+                  </button>
+                </div>
+              ) : (
+                <button
+                  onClick={() => setDeleteConfirming(true)}
+                  className="font-mono text-[10px] uppercase tracking-[0.15em] text-muted-foreground/50 hover:text-muted-foreground transition-colors"
+                >
+                  Remove position
+                </button>
+              )}
+              <CheckNowButton
+                holdingId={holding.id}
+                ticker={holding.ticker}
+                currency={holding.currency}
+                investorProfile={onboardingState?.investor_profile ?? null}
+                onComplete={handleCheckNowComplete}
+              />
+            </div>
           </div>
 
           {/* Identity + value row */}

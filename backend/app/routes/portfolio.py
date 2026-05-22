@@ -882,6 +882,41 @@ async def simulate_trade(
     )
 
 
+@router.delete("/holdings/{holding_id}", status_code=status.HTTP_204_NO_CONTENT)
+async def delete_holding(
+    holding_id: uuid.UUID,
+    current_user: User = Depends(get_current_user),
+    db: AsyncSession = Depends(get_db),
+):
+    result = await db.execute(
+        select(Holding).where(Holding.id == holding_id, Holding.user_id == current_user.id)
+    )
+    holding = result.scalar_one_or_none()
+    if holding is None:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Holding not found")
+
+    from app.models.monitoring_event import MonitoringEvent
+    from app.models.conviction_log_entry import ConvictionLogEntry
+    from app.models.quarterly_review_response import QuarterlyReviewResponse
+
+    # Delete in dependency order; Thesis/MonitoringEvent sub-relations cascade automatically
+    for model, col in [
+        (QuarterlyReviewResponse, QuarterlyReviewResponse.holding_id),
+        (MonitoringEvent, MonitoringEvent.holding_id),
+        (ConvictionLogEntry, ConvictionLogEntry.holding_id),
+    ]:
+        rows = await db.execute(select(model).where(col == holding_id))
+        for row in rows.scalars().all():
+            await db.delete(row)
+
+    theses = await db.execute(select(Thesis).where(Thesis.holding_id == holding_id))
+    for thesis in theses.scalars().all():
+        await db.delete(thesis)
+
+    await db.delete(holding)
+    await db.commit()
+
+
 @router.get("/holdings/{holding_id}/conviction-log", response_model=ConvictionLogResponse)
 async def get_conviction_log(
     holding_id: uuid.UUID,
