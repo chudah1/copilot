@@ -208,6 +208,7 @@ def generate_monitoring_candidates(
             getattr(company_data, "earnings_call", None),
             getattr(company_data, "insider_transactions", []),
             now=normalized_now,
+            ticker=company_data.ticker,
         )
     )
 

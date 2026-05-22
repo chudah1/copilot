@@ -106,6 +106,7 @@ def _generate_proxy_candidates(
         getattr(proxy_data, "earnings_call", None),
         getattr(proxy_data, "insider_transactions", []),
         now=now,
+        ticker=proxy_data.ticker,
     )
 
     proxy_market_values = {

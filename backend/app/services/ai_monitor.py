@@ -209,7 +209,7 @@ async def classify_event(
         client = anthropic.AsyncAnthropic(api_key=settings.anthropic_api_key)
         response = await client.messages.create(
             model="claude-sonnet-4-6",
-            max_tokens=512,
+            max_tokens=1024,
             system=_CLASSIFY_SYSTEM,
             messages=[{"role": "user", "content": prompt}],
             timeout=30.0,
@@ -226,5 +226,5 @@ async def classify_event(
             ),
         )
     except Exception as e:
-        logger.error(f"AI classification failed: {e}")
+        logger.error("AI classification failed (%s): %s", type(e).__name__, e)
         return None

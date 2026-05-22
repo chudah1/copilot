@@ -783,6 +783,7 @@ def _build_news_candidate(
     item: NewsItem,
     *,
     now: datetime,
+    ticker: str | None = None,
 ) -> tuple[int, dict[str, Any]] | None:
     if item.published_at < (now - timedelta(days=7)):
         return None
@@ -790,9 +791,17 @@ def _build_news_candidate(
     combined_text = f"{item.headline} {item.summary}".lower()
     topic_match = any(topic in QUALITATIVE_TOPICS for topic in item.topics)
     keyword_match = any(keyword in combined_text for keyword in QUALITATIVE_KEYWORDS)
-    relevance_ok = item.ticker_relevance is None or item.ticker_relevance >= 0.1
-    if not relevance_ok or not (topic_match or keyword_match):
+    if not (topic_match or keyword_match):
         return None
+
+    if item.ticker_relevance is not None:
+        # Alpha Vantage provides a relevance score — use it
+        if item.ticker_relevance < 0.1:
+            return None
+    else:
+        # yfinance news has no relevance score; require the ticker to appear in the text
+        if ticker and ticker.lower() not in combined_text:
+            return None
 
     return (
         3,
@@ -823,6 +832,7 @@ def shortlist_qualitative_candidates(
     *,
     now: datetime | None = None,
     max_candidates: int = 3,
+    ticker: str | None = None,
 ) -> list[dict[str, Any]]:
     reference_now = now or datetime.now(timezone.utc)
     candidates: list[dict[str, Any]] = []
@@ -850,7 +860,7 @@ def shortlist_qualitative_candidates(
         if item.id in seen_ids:
             continue
         seen_ids.add(item.id)
-        news_candidate = _build_news_candidate(item, now=reference_now)
+        news_candidate = _build_news_candidate(item, now=reference_now, ticker=ticker)
         if news_candidate is not None:
             qualitative_candidates.append(news_candidate)
 

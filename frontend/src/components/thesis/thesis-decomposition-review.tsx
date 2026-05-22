@@ -382,11 +382,6 @@ export function ThesisDecompositionReview({ envelope, loading, saving, onGenerat
             <p className="font-mono text-[9px] text-muted-foreground/50">
               Generated {formatDate(decomposition.created_at)}
             </p>
-            {decomposition.provider && (
-              <span className="font-mono text-[9px] text-muted-foreground/40 uppercase tracking-[0.1em]">
-                via {decomposition.provider}
-              </span>
-            )}
           </div>
           {needsExplicitConfirmation && (
             <p className="font-sans text-xs text-muted-foreground leading-relaxed">

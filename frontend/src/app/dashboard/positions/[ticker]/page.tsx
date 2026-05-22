@@ -441,6 +441,16 @@ const METRIC_LABELS: Record<string, string> = {
   debt_to_equity: "Debt / equity",
 };
 
+const PCT_METRICS = new Set(["revenue_growth_yoy", "earnings_growth_yoy", "gross_margin", "operating_margin", "dividend_yield"]);
+
+function formatThreshold(metric: string, value: number): string {
+  if (PCT_METRICS.has(metric)) {
+    const pct = value <= 1 && value >= -1 ? value * 100 : value;
+    return `${pct % 1 === 0 ? pct.toFixed(0) : pct.toFixed(1)}%`;
+  }
+  return String(value);
+}
+
 function describeWatchHint(hint: Record<string, unknown>) {
   if (hint.kind === "price_move_pct" && typeof hint.threshold === "number") {
     return `Price discipline if the stock moves ${hint.threshold}% or more.`;
@@ -452,7 +462,10 @@ function describeWatchHint(hint: Record<string, unknown>) {
     typeof hint.threshold === "number"
   ) {
     const label = METRIC_LABELS[hint.metric] ?? hint.metric.replaceAll("_", " ");
-    return `${label} stays ${hint.operator} ${hint.threshold}.`;
+    if (hint.threshold === 0) {
+      return `${label} stays positive.`;
+    }
+    return `${label} stays ${hint.operator} ${formatThreshold(hint.metric, hint.threshold)}.`;
   }
   return null;
 }
@@ -998,7 +1011,7 @@ export default function PositionDetailPage() {
       await refreshCurrentThesis();
       await refreshConvictionLog();
     } catch (error) {
-      console.error(error);
+      toast.error(getErrorMessage(error, "Failed to save signal setup"));
     } finally {
       setDecompositionSaving(false);
     }

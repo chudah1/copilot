@@ -208,6 +208,8 @@ Requirements:
 - If the user's draft is vague, say so directly in ambiguity_note
 - Include 0-3 watch_hints total
 - For structured output compatibility, every watch_hint must include metric and operator strings. Use empty strings when kind is price_move_pct and those fields do not apply.
+- For growth metrics (revenue_growth_yoy, earnings_growth_yoy), only include a watch_hint if you can infer a meaningful threshold from the thesis (e.g. 10%, 15%). Never use 0 as a threshold — if no specific rate is implied, omit the hint entirely.
+- Thresholds for growth metrics are expressed as decimal fractions (e.g. 0.10 means 10%).
 - Include 0-3 proxy_signals: other tickers (never the held ticker itself) whose news or earnings would inform whether this thesis holds.
 - For each proxy, include:
   - rationale: why it matters in the causal chain
