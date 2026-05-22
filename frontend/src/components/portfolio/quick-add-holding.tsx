@@ -4,6 +4,7 @@ import { useState } from "react";
 import { api } from "@/lib/api";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
+import { TickerSearch } from "@/components/portfolio/ticker-search";
 import type { Holding } from "@/types";
 
 interface QuickAddHoldingProps {
@@ -12,10 +13,16 @@ interface QuickAddHoldingProps {
 
 export function QuickAddHolding({ onAdd }: QuickAddHoldingProps) {
   const [ticker, setTicker] = useState("");
+  const [name, setName] = useState("");
   const [quantity, setQuantity] = useState("");
   const [avgCost, setAvgCost] = useState("");
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
+
+  const handleSelect = (selectedTicker: string, selectedName: string) => {
+    setTicker(selectedTicker);
+    setName(selectedName);
+  };
 
   const handleSubmit = async () => {
     if (!ticker || !quantity || !avgCost) return;
@@ -24,11 +31,12 @@ export function QuickAddHolding({ onAdd }: QuickAddHoldingProps) {
       setError(null);
       await api.post<Holding>("/api/portfolio/holdings", {
         ticker: ticker.toUpperCase(),
-        name: ticker.toUpperCase(),
+        name: name || ticker.toUpperCase(),
         quantity: parseFloat(quantity),
         average_cost_basis: parseFloat(avgCost),
       });
       setTicker("");
+      setName("");
       setQuantity("");
       setAvgCost("");
       onAdd();
@@ -45,7 +53,7 @@ export function QuickAddHolding({ onAdd }: QuickAddHoldingProps) {
       <div className="grid grid-cols-[1fr_1fr_1fr_auto] gap-2 items-end">
         <div>
           <p className="text-[11px] text-muted-foreground mb-1">Ticker</p>
-          <Input placeholder="NVDA" value={ticker} onChange={(e) => setTicker(e.target.value)} className="h-8 text-sm" />
+          <TickerSearch value={ticker} onSelect={handleSelect} />
         </div>
         <div>
           <p className="text-[11px] text-muted-foreground mb-1">Shares</p>

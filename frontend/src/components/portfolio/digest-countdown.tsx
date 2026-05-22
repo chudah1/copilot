@@ -9,16 +9,19 @@ export function DigestCountdown({ nextDigestAt }: { nextDigestAt: string | null 
 
   if (diffMs <= 0) return null;
 
-  const days = Math.floor(diffMs / (1000 * 60 * 60 * 24));
-  const hours = Math.floor((diffMs % (1000 * 60 * 60 * 24)) / (1000 * 60 * 60));
+  const hours = Math.floor(diffMs / (1000 * 60 * 60));
+
+  const todayMidnight = new Date(now.getFullYear(), now.getMonth(), now.getDate());
+  const nextMidnight = new Date(next.getFullYear(), next.getMonth(), next.getDate());
+  const calendarDays = Math.round((nextMidnight.getTime() - todayMidnight.getTime()) / (1000 * 60 * 60 * 24));
 
   let countdown: string;
-  if (days === 0) {
+  if (calendarDays === 0) {
     countdown = `${hours}h`;
-  } else if (days === 1) {
+  } else if (calendarDays === 1) {
     countdown = "Tomorrow";
   } else {
-    countdown = `${days}d`;
+    countdown = `${calendarDays}d`;
   }
 
   const dateLabel = next.toLocaleDateString("en-GB", {
@@ -30,7 +33,7 @@ export function DigestCountdown({ nextDigestAt }: { nextDigestAt: string | null 
   return (
     <div className="inline-flex items-center gap-3 border border-border px-4 py-1.5">
       <span className="font-mono text-[10px] uppercase tracking-[0.18em] text-muted-foreground">
-        Next digest
+        Next review digest
       </span>
       <span className="w-px h-3 bg-border" />
       <span className="font-mono text-[11px] font-medium text-primary tabular-nums">

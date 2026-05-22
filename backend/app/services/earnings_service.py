@@ -48,19 +48,22 @@ async def get_or_refresh_earnings(
     report_date = await _fetch_earnings_date(ticker)
     now = datetime.now(timezone.utc)
 
-    if entry is None:
-        entry = EarningsCalendar(
-            ticker=ticker.upper(),
-            report_date=report_date,
-            source="yfinance",
-            last_refreshed_at=now,
-        )
-        db.add(entry)
-    else:
-        entry.report_date = report_date
-        entry.last_refreshed_at = now
+    try:
+        async with db.begin_nested():
+            if entry is None:
+                entry = EarningsCalendar(
+                    ticker=ticker.upper(),
+                    report_date=report_date,
+                    source="yfinance",
+                    last_refreshed_at=now,
+                )
+                db.add(entry)
+            else:
+                entry.report_date = report_date
+                entry.last_refreshed_at = now
+    except Exception as exc:
+        logger.warning("Could not persist earnings cache for %s: %s", ticker, exc)
 
-    await db.flush()
     return report_date
 
 

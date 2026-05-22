@@ -684,7 +684,7 @@ async def _call_claude(prompt: str) -> ThesisAssistOutput:
     data = await _call_anthropic_json(
         prompt=prompt,
         model=settings.anthropic_model,
-        max_tokens=1024,
+        max_tokens=1500,
     )
     return ThesisAssistOutput(
         why_own_it=str(data["why_own_it"]),
@@ -699,7 +699,7 @@ async def _call_openai_assist(prompt: str) -> ThesisAssistOutput:
     data = await _call_openai_json(
         prompt=prompt,
         model=OPENAI_ASSIST_MODEL,
-        max_tokens=1024,
+        max_tokens=1500,
     )
     return ThesisAssistOutput(
         why_own_it=str(data["why_own_it"]),

@@ -1,6 +1,7 @@
 import uuid
 from datetime import datetime, timezone
 
+import httpx
 from fastapi import APIRouter, BackgroundTasks, Depends, HTTPException, UploadFile, File, status
 from sqlalchemy import select, and_
 from sqlalchemy.ext.asyncio import AsyncSession
@@ -34,6 +35,34 @@ from app.services.csv_parser import parse_csv
 from app.services.market_data import detect_native_currency, fetch_company_data, fetch_company_overview, fetch_live_price, get_fx_rate
 
 router = APIRouter(prefix="/api/portfolio", tags=["portfolio"])
+
+
+@router.get("/search")
+async def search_tickers(q: str, user: User = Depends(get_current_user)):
+    """Proxy Yahoo Finance ticker search for the manual add holding flow."""
+    if not q or len(q.strip()) < 1:
+        return []
+    try:
+        async with httpx.AsyncClient(timeout=5.0) as client:
+            r = await client.get(
+                "https://query2.finance.yahoo.com/v1/finance/search",
+                params={"q": q, "quotesCount": 10, "newsCount": 0, "enableFuzzyQuery": "false"},
+                headers={"User-Agent": "Mozilla/5.0"},
+            )
+        if not r.is_success:
+            return []
+        quotes = r.json().get("quotes", [])
+        return [
+            {
+                "ticker": item["symbol"],
+                "name": item.get("longname") or item.get("shortname") or item["symbol"],
+                "exchange": item.get("exchange", ""),
+            }
+            for item in quotes
+            if item.get("quoteType") in ("EQUITY", "ETF")
+        ][:8]
+    except Exception:
+        return []
 
 
 def _age_in_days(timestamp: datetime) -> int:
