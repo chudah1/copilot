@@ -1,0 +1,482 @@
+[
+  {
+    "id": "intact_nvda_001",
+    "description": "NVDA strong beat — all thesis conditions met, data center dominance intact",
+    "expected_assessment": "thesis_intact",
+    "input": {
+      "ticker": "NVDA",
+      "name": "NVIDIA Corporation",
+      "why_own_it": "NVIDIA dominates AI training GPU market with CUDA lock-in. Hyperscalers keep pouring money into data centers.",
+      "must_remain_true": "Data center revenue grows above 20% YoY. Gross margins stay above 70%.",
+      "what_would_change_my_mind": "AMD gains real GPU market share. Export restrictions gut China revenue.",
+      "claims": [
+        {"id": "c1", "claim_text": "NVDA data center revenue grows above 20% YoY"},
+        {"id": "c2", "claim_text": "NVDA gross margin stays above 70%"},
+        {"id": "c3", "claim_text": "AMD does not take meaningful AI GPU market share from NVDA"}
+      ],
+      "earnings_data": {
+        "fiscal_quarter": "Q1 FY2027",
+        "earnings_surprise_pct": 12.4,
+        "revenue_growth_yoy": 0.78,
+        "earnings_growth_yoy": 1.02,
+        "pe_ratio": 35.2,
+        "market_cap": 3100000000000,
+        "recent_news": [
+          "NVDA data center revenue hit $35.6B, up 78% YoY — another record quarter",
+          "Gross margin expanded to 76.4%, above 70% thesis floor",
+          "AMD MI300X seeing limited enterprise adoption; CUDA still dominant",
+          "TSMC N3 capacity expansion boosts NVDA supply chain confidence",
+          "Microsoft, Google, and Amazon all increased NVDA GPU orders this quarter"
+        ]
+      }
+    }
+  },
+  {
+    "id": "intact_o_002",
+    "description": "Realty Income strong quarter — occupancy and AFFO both above thesis floors",
+    "expected_assessment": "thesis_intact",
+    "input": {
+      "ticker": "O",
+      "name": "Realty Income Corporation",
+      "why_own_it": "Realty Income is the monthly dividend company. Net lease structure passes costs to tenants and AFFO growth funds dividend increases.",
+      "must_remain_true": "Occupancy stays above 96%. AFFO per share grows at least 3% annually.",
+      "what_would_change_my_mind": "Occupancy drops below 95% for two consecutive quarters. Tenant bankruptcies increase materially.",
+      "claims": [
+        {"id": "c1", "claim_text": "Occupancy stays above 96%"},
+        {"id": "c2", "claim_text": "AFFO per share grows at least 3% annually"},
+        {"id": "c3", "claim_text": "Tenant bankruptcy rate does not increase materially"}
+      ],
+      "earnings_data": {
+        "fiscal_quarter": "Q2 2026",
+        "earnings_surprise_pct": 2.1,
+        "revenue_growth_yoy": 0.08,
+        "earnings_growth_yoy": 0.05,
+        "pe_ratio": null,
+        "market_cap": 51000000000,
+        "recent_news": [
+          "Realty Income reports 97.2% occupancy — above 96% thesis floor",
+          "AFFO per share grew 4.1% YoY, above the 3% minimum",
+          "No major tenant bankruptcies this quarter; rent collection at 99.8%",
+          "Monthly dividend increased for the 128th consecutive month",
+          "International portfolio in UK and Europe continues to expand"
+        ]
+      }
+    }
+  },
+  {
+    "id": "intact_aapl_003",
+    "description": "Apple Services strong quarter — margins well above floors, growth above 12% threshold",
+    "expected_assessment": "thesis_intact",
+    "input": {
+      "ticker": "AAPL",
+      "name": "Apple Inc",
+      "why_own_it": "Apple Services is a high-margin recurring revenue stream attached to an installed base of 2 billion devices.",
+      "must_remain_true": "Services gross margin stays above 72%. Hardware gross margin stays above 35%.",
+      "what_would_change_my_mind": "Regulatory action forces App Store fee cuts. Services revenue growth slows below 12% YoY.",
+      "claims": [
+        {"id": "c1", "claim_text": "Services gross margin stays above 72%"},
+        {"id": "c2", "claim_text": "Hardware gross margin stays above 35%"},
+        {"id": "c3", "claim_text": "Services revenue grows above 12% YoY"}
+      ],
+      "earnings_data": {
+        "fiscal_quarter": "Q2 FY2026",
+        "earnings_surprise_pct": 5.3,
+        "revenue_growth_yoy": 0.06,
+        "earnings_growth_yoy": 0.11,
+        "pe_ratio": 28.4,
+        "market_cap": 3300000000000,
+        "recent_news": [
+          "Apple Services gross margin reached 74.1% — comfortably above 72% floor",
+          "Services revenue grew 15.2% YoY, above the 12% required threshold",
+          "Hardware gross margin at 37.8%, above the 35% condition",
+          "App Store regulatory situation stable in US; EU ruling being appealed",
+          "iCloud and Apple TV+ subscriber growth accelerating"
+        ]
+      }
+    }
+  },
+  {
+    "id": "watch_amzn_004",
+    "description": "AMZN mixed quarter — AWS just above 20% floor but decelerating; advertising below 15% threshold",
+    "expected_assessment": "watch",
+    "input": {
+      "ticker": "AMZN",
+      "name": "Amazon.com Inc",
+      "why_own_it": "AWS is the default enterprise cloud. Prime membership creates a recurring revenue flywheel through advertising and subscriptions.",
+      "must_remain_true": "AWS operating income margin stays above 30%. Prime subscriber count keeps growing.",
+      "what_would_change_my_mind": "Azure or GCP takes AWS market share below 30%. Advertising revenue growth decelerates below 15% YoY.",
+      "claims": [
+        {"id": "c1", "claim_text": "AWS operating income margin stays above 30%"},
+        {"id": "c2", "claim_text": "Prime subscriber count keeps growing"},
+        {"id": "c3", "claim_text": "Advertising revenue growth stays above 15% YoY"}
+      ],
+      "earnings_data": {
+        "fiscal_quarter": "Q1 2026",
+        "earnings_surprise_pct": -1.8,
+        "revenue_growth_yoy": 0.09,
+        "earnings_growth_yoy": 0.12,
+        "pe_ratio": 38.1,
+        "market_cap": 2200000000000,
+        "recent_news": [
+          "AWS operating margin at 38% — well above 30% floor",
+          "Advertising revenue grew 13.5% YoY, below the 15% thesis threshold",
+          "AWS cloud market share at 32% globally; Azure gaining ground at 23%",
+          "Prime subscriber count grew 4% globally — growth rate slowing",
+          "Management cited enterprise optimisation as headwind to cloud spending"
+        ]
+      }
+    }
+  },
+  {
+    "id": "watch_crm_005",
+    "description": "Salesforce NRR drops to 108% — below 110% floor; overall growth intact but retention declining",
+    "expected_assessment": "watch",
+    "input": {
+      "ticker": "CRM",
+      "name": "Salesforce Inc",
+      "why_own_it": "Salesforce has 20 years of CRM data moat and enterprise switching costs that protect its position.",
+      "must_remain_true": "Salesforce retains above 20% CRM market share. Net revenue retention stays above 110%.",
+      "what_would_change_my_mind": "Microsoft Dynamics or HubSpot take enterprise accounts at scale. Agentforce AI adoption disappoints.",
+      "claims": [
+        {"id": "c1", "claim_text": "Salesforce retains above 20% CRM market share"},
+        {"id": "c2", "claim_text": "Net revenue retention stays above 110%"},
+        {"id": "c3", "claim_text": "Agentforce AI adoption continues growing"}
+      ],
+      "earnings_data": {
+        "fiscal_quarter": "Q2 FY2027",
+        "earnings_surprise_pct": 1.2,
+        "revenue_growth_yoy": 0.09,
+        "earnings_growth_yoy": 0.14,
+        "pe_ratio": 31.5,
+        "market_cap": 275000000000,
+        "recent_news": [
+          "Salesforce NRR fell to 108%, first drop below 110% in three years",
+          "CRM market share estimated at 21.7% — still above 20% floor",
+          "Agentforce reached 5,000 customers — below analyst expectations of 8,000",
+          "Microsoft Dynamics gained share in mid-market; HubSpot winning SMBs",
+          "Remaining performance obligation grew 11% — forward revenue pipeline solid"
+        ]
+      }
+    }
+  },
+  {
+    "id": "watch_msft_006",
+    "description": "MSFT Azure growth slows to 26% — above 25% single-quarter threshold but trend is concerning",
+    "expected_assessment": "watch",
+    "input": {
+      "ticker": "MSFT",
+      "name": "Microsoft Corporation",
+      "why_own_it": "Microsoft has the enterprise distribution advantage to monetise AI through Copilot and Azure OpenAI services.",
+      "must_remain_true": "Azure grows faster than AWS and GCP. Copilot seats grow and convert to paid plans.",
+      "what_would_change_my_mind": "Azure growth decelerates below 25% YoY for two consecutive quarters.",
+      "claims": [
+        {"id": "c1", "claim_text": "Azure grows faster than AWS and GCP"},
+        {"id": "c2", "claim_text": "Azure YoY growth stays above 25%"},
+        {"id": "c3", "claim_text": "Copilot seats convert to paid plans at scale"}
+      ],
+      "earnings_data": {
+        "fiscal_quarter": "Q3 FY2026",
+        "earnings_surprise_pct": 3.1,
+        "revenue_growth_yoy": 0.13,
+        "earnings_growth_yoy": 0.18,
+        "pe_ratio": 33.7,
+        "market_cap": 3100000000000,
+        "recent_news": [
+          "Azure grew 26% YoY — above 25% floor but down from 31% last quarter",
+          "AWS grew 18% YoY — Azure still faster, but gap is narrowing",
+          "Copilot paid seat penetration at 8% of Microsoft 365 installed base",
+          "GCP grew 28% — now faster than Azure for the first time",
+          "Management flagged compute capacity constraints limiting Azure growth"
+        ]
+      }
+    }
+  },
+  {
+    "id": "watch_vz_007",
+    "description": "Verizon FCF barely covers dividend — dividend maintained but coverage very thin",
+    "expected_assessment": "watch",
+    "input": {
+      "ticker": "VZ",
+      "name": "Verizon Communications",
+      "why_own_it": "Verizon is a bond proxy with a 6%+ dividend yield covered by stable free cash flow from wireless subscriptions.",
+      "must_remain_true": "Dividend yield stays above 6%. Free cash flow covers the dividend payout with headroom.",
+      "what_would_change_my_mind": "FCF drops below dividend coverage. T-Mobile takes wireless subscriber share materially.",
+      "claims": [
+        {"id": "c1", "claim_text": "Dividend yield stays above 6%"},
+        {"id": "c2", "claim_text": "Free cash flow covers the dividend payout with headroom"},
+        {"id": "c3", "claim_text": "T-Mobile does not take material wireless subscriber share"}
+      ],
+      "earnings_data": {
+        "fiscal_quarter": "Q2 2026",
+        "earnings_surprise_pct": -0.5,
+        "revenue_growth_yoy": 0.02,
+        "earnings_growth_yoy": -0.04,
+        "pe_ratio": 9.2,
+        "market_cap": 165000000000,
+        "recent_news": [
+          "Verizon FCF of $3.8B only covers quarterly dividend of $3.6B by 1.06x — thin headroom",
+          "Dividend maintained at $0.665/share; yield remains 6.4% at current price",
+          "T-Mobile added 580K postpaid phone net adds vs Verizon's 219K — share gap widening",
+          "5G spectrum debt repayment consuming $2.1B of FCF this year",
+          "Management reaffirmed full-year FCF guidance of $17.5B"
+        ]
+      }
+    }
+  },
+  {
+    "id": "challenged_lulu_008",
+    "description": "LULU gross margin at 52% — well below 55% floor; comparable store sales turned negative",
+    "expected_assessment": "thesis_challenged",
+    "input": {
+      "ticker": "LULU",
+      "name": "Lululemon Athletica",
+      "why_own_it": "Lululemon commands premium pricing in athletic wear. Brand loyalty drives full-price sell-through and protects margins.",
+      "must_remain_true": "Gross margin stays above 55%. International revenue grows faster than North America.",
+      "what_would_change_my_mind": "Promotional discounting increases meaningfully. Comparable store sales turn negative.",
+      "claims": [
+        {"id": "c1", "claim_text": "Gross margin stays above 55%"},
+        {"id": "c2", "claim_text": "International revenue grows faster than North America"},
+        {"id": "c3", "claim_text": "Comparable store sales remain positive"}
+      ],
+      "earnings_data": {
+        "fiscal_quarter": "Q3 FY2026",
+        "earnings_surprise_pct": -8.2,
+        "revenue_growth_yoy": -0.02,
+        "earnings_growth_yoy": -0.21,
+        "pe_ratio": 22.1,
+        "market_cap": 32000000000,
+        "recent_news": [
+          "Lululemon gross margin fell to 52.3% — 270bps below the 55% thesis floor",
+          "Comparable store sales declined 3% — first negative comp in five years",
+          "North America revenue fell 4%; International grew 6% — international still faster",
+          "Management cited aggressive promotional activity to clear excess inventory",
+          "Online markdowns accelerated; Lululemon running 30% off across multiple categories"
+        ]
+      }
+    }
+  },
+  {
+    "id": "challenged_aapl_009",
+    "description": "AAPL hit by EU App Store ruling and Services growth below 12% threshold",
+    "expected_assessment": "thesis_challenged",
+    "input": {
+      "ticker": "AAPL",
+      "name": "Apple Inc",
+      "why_own_it": "Apple Services is a high-margin recurring revenue stream attached to an installed base of 2 billion devices.",
+      "must_remain_true": "Services gross margin stays above 72%. Hardware gross margin stays above 35%.",
+      "what_would_change_my_mind": "Regulatory action forces App Store fee cuts. Services revenue growth slows below 12% YoY.",
+      "claims": [
+        {"id": "c1", "claim_text": "Services gross margin stays above 72%"},
+        {"id": "c2", "claim_text": "No regulatory action forcing material App Store fee cuts"},
+        {"id": "c3", "claim_text": "Services revenue grows above 12% YoY"}
+      ],
+      "earnings_data": {
+        "fiscal_quarter": "Q3 FY2026",
+        "earnings_surprise_pct": -6.1,
+        "revenue_growth_yoy": -0.01,
+        "earnings_growth_yoy": -0.09,
+        "pe_ratio": 26.3,
+        "market_cap": 2900000000000,
+        "recent_news": [
+          "EU final ruling: App Store fees cut to 15%, effective Q4 — Apple estimates $3.5B revenue impact",
+          "Services revenue grew 9.8% YoY — below the 12% stated condition for the first time",
+          "Services gross margin fell to 70.2% — below the 72% thesis floor",
+          "Apple said EU fee cuts will lower Services segment gross margin by 200-250bps",
+          "Hardware gross margin held at 36.1% — above 35% floor"
+        ]
+      }
+    }
+  },
+  {
+    "id": "challenged_o_010",
+    "description": "Realty Income occupancy drops to 93% — below 95% threshold, second consecutive quarter",
+    "expected_assessment": "thesis_challenged",
+    "input": {
+      "ticker": "O",
+      "name": "Realty Income Corporation",
+      "why_own_it": "Realty Income is the monthly dividend company. Net lease structure passes costs to tenants and AFFO growth funds dividend increases.",
+      "must_remain_true": "Occupancy stays above 96%. AFFO per share grows at least 3% annually.",
+      "what_would_change_my_mind": "Occupancy drops below 95% for two consecutive quarters. Tenant bankruptcies increase materially.",
+      "claims": [
+        {"id": "c1", "claim_text": "Occupancy stays above 96%"},
+        {"id": "c2", "claim_text": "Occupancy does not drop below 95% for two consecutive quarters"},
+        {"id": "c3", "claim_text": "Tenant bankruptcies do not increase materially"}
+      ],
+      "earnings_data": {
+        "fiscal_quarter": "Q2 2026",
+        "earnings_surprise_pct": -4.7,
+        "revenue_growth_yoy": -0.01,
+        "earnings_growth_yoy": -0.06,
+        "pe_ratio": null,
+        "market_cap": 44000000000,
+        "recent_news": [
+          "Occupancy fell to 93.1% — second consecutive quarter below 95% threshold",
+          "Five major retail tenants filed Chapter 11 — represents 3.2% of annualised base rent",
+          "AFFO per share grew only 1.2% YoY — below the 3% required floor",
+          "Management lowered full-year AFFO guidance by 4%",
+          "New lease signings slowing as retail tenant demand weakens"
+        ]
+      }
+    }
+  },
+  {
+    "id": "intact_shop_011",
+    "description": "Shopify strong GMV and Payments take rate expansion — all thesis conditions met",
+    "expected_assessment": "thesis_intact",
+    "input": {
+      "ticker": "SHOP",
+      "name": "Shopify Inc",
+      "why_own_it": "Shopify is the operating system for SMB e-commerce. Payments take rate expands as more merchants use Shopify Payments.",
+      "must_remain_true": "Merchant Solutions revenue grows faster than Subscription Solutions. Payments penetration keeps rising.",
+      "what_would_change_my_mind": "GMV growth drops below 20%. Amazon competes directly for merchant relationships.",
+      "claims": [
+        {"id": "c1", "claim_text": "Merchant Solutions revenue grows faster than Subscription Solutions"},
+        {"id": "c2", "claim_text": "Shopify Payments penetration continues rising"},
+        {"id": "c3", "claim_text": "GMV growth stays above 20%"}
+      ],
+      "earnings_data": {
+        "fiscal_quarter": "Q2 2026",
+        "earnings_surprise_pct": 7.3,
+        "revenue_growth_yoy": 0.27,
+        "earnings_growth_yoy": 0.45,
+        "pe_ratio": 68.4,
+        "market_cap": 145000000000,
+        "recent_news": [
+          "GMV grew 27% YoY — well above the 20% thesis floor",
+          "Merchant Solutions grew 30%, faster than Subscription Solutions at 18%",
+          "Shopify Payments penetration reached 62% of GMV — up from 57% a year ago",
+          "Amazon Buy with Prime seeing slower merchant adoption than expected",
+          "Gross profit dollars grew 33% — mix shift to higher-margin Payments working"
+        ]
+      }
+    }
+  },
+  {
+    "id": "watch_bx_012",
+    "description": "Blackstone AUM still growing but fundraising environment softening; credit defaults rising",
+    "expected_assessment": "watch",
+    "input": {
+      "ticker": "BX",
+      "name": "Blackstone Inc",
+      "why_own_it": "Private credit is the fastest growing asset class as banks retreat from middle market lending post-Basel III.",
+      "must_remain_true": "Private credit AUM keeps growing. Fundraising environment stays open for institutional capital.",
+      "what_would_change_my_mind": "Credit default rates spike materially. Banks re-enter middle market lending competitively.",
+      "claims": [
+        {"id": "c1", "claim_text": "Private credit AUM continues growing"},
+        {"id": "c2", "claim_text": "Fundraising environment stays constructive for institutional capital"},
+        {"id": "c3", "claim_text": "Credit default rates do not spike materially"}
+      ],
+      "earnings_data": {
+        "fiscal_quarter": "Q1 2026",
+        "earnings_surprise_pct": -2.4,
+        "revenue_growth_yoy": 0.08,
+        "earnings_growth_yoy": 0.03,
+        "pe_ratio": 21.7,
+        "market_cap": 185000000000,
+        "recent_news": [
+          "Blackstone credit AUM grew 12% YoY to $345B — but momentum slowing",
+          "Fundraising fell 22% YoY as institutional investors face liquidity constraints",
+          "Middle-market default rate rose to 2.4% — above historical 1.8% average",
+          "Two large sovereign wealth funds reduced private credit allocations",
+          "Banks JPMorgan and Goldman announced new middle-market direct lending products"
+        ]
+      }
+    }
+  },
+  {
+    "id": "challenged_vz_013",
+    "description": "Verizon FCF drops below dividend coverage — dividend maintained but math is broken",
+    "expected_assessment": "thesis_challenged",
+    "input": {
+      "ticker": "VZ",
+      "name": "Verizon Communications",
+      "why_own_it": "Verizon is a bond proxy with a 6%+ dividend yield covered by stable free cash flow from wireless subscriptions.",
+      "must_remain_true": "Dividend yield stays above 6%. Free cash flow covers the dividend payout with headroom.",
+      "what_would_change_my_mind": "FCF drops below dividend coverage. T-Mobile takes wireless subscriber share materially.",
+      "claims": [
+        {"id": "c1", "claim_text": "Free cash flow covers the dividend payout with headroom"},
+        {"id": "c2", "claim_text": "T-Mobile does not take material wireless subscriber share"},
+        {"id": "c3", "claim_text": "Dividend yield stays above 6%"}
+      ],
+      "earnings_data": {
+        "fiscal_quarter": "Q3 2026",
+        "earnings_surprise_pct": -9.4,
+        "revenue_growth_yoy": -0.03,
+        "earnings_growth_yoy": -0.18,
+        "pe_ratio": 8.1,
+        "market_cap": 148000000000,
+        "recent_news": [
+          "Verizon FCF fell to $2.9B — below quarterly dividend obligation of $3.6B",
+          "T-Mobile gained 810K postpaid phone adds vs Verizon's net loss of 95K",
+          "Verizon management maintained dividend guidance — but FCF coverage now broken",
+          "Debt-to-EBITDA ratio rose to 3.1x — approaching covenant limits",
+          "Analysts question whether dividend cut is now inevitable within 12 months"
+        ]
+      }
+    }
+  },
+  {
+    "id": "watch_googl_014",
+    "description": "Google search share at 81% — above 80% floor but trend declining quarter after quarter",
+    "expected_assessment": "watch",
+    "input": {
+      "ticker": "GOOGL",
+      "name": "Alphabet Inc",
+      "why_own_it": "Google search has structural habit lock-in and the best ad targeting data. AI overviews will keep users on Google.",
+      "must_remain_true": "Google search market share stays above 80% globally.",
+      "what_would_change_my_mind": "Bing AI or ChatGPT search takes meaningful query share. Apple switches Safari default search.",
+      "claims": [
+        {"id": "c1", "claim_text": "Google search market share stays above 80% globally"},
+        {"id": "c2", "claim_text": "Bing AI and ChatGPT do not take meaningful query share"},
+        {"id": "c3", "claim_text": "Apple does not switch Safari default search away from Google"}
+      ],
+      "earnings_data": {
+        "fiscal_quarter": "Q2 2026",
+        "earnings_surprise_pct": 2.8,
+        "revenue_growth_yoy": 0.12,
+        "earnings_growth_yoy": 0.19,
+        "pe_ratio": 21.4,
+        "market_cap": 2000000000000,
+        "recent_news": [
+          "Google search market share at 81.2% globally — above 80% floor but down from 88% two years ago",
+          "ChatGPT search reached 4.8% global query share — up from 1.2% a year ago",
+          "Apple Search deal still intact; no indication of switch though rumours persist",
+          "Google ad revenue grew 14% — search monetisation remains strong",
+          "Bing AI share at 5.6% — steady but not accelerating"
+        ]
+      }
+    }
+  },
+  {
+    "id": "challenged_coin_015",
+    "description": "Coinbase loses US market share below 50%, SEC action pending — regulatory thesis in question",
+    "expected_assessment": "thesis_challenged",
+    "input": {
+      "ticker": "COIN",
+      "name": "Coinbase Global Inc",
+      "why_own_it": "Crypto will go mainstream eventually and Coinbase is the most regulated and trusted US exchange. Regulatory clarity benefits the incumbents.",
+      "must_remain_true": "Coinbase retains its US exchange market share above 50%. Regulatory environment stays constructive.",
+      "what_would_change_my_mind": "SEC enforcement action forces major product changes. Crypto trading volumes drop for more than two quarters.",
+      "claims": [
+        {"id": "c1", "claim_text": "Coinbase retains US exchange market share above 50%"},
+        {"id": "c2", "claim_text": "Regulatory environment stays constructive for Coinbase"},
+        {"id": "c3", "claim_text": "Crypto trading volumes do not drop for two consecutive quarters"}
+      ],
+      "earnings_data": {
+        "fiscal_quarter": "Q1 2026",
+        "earnings_surprise_pct": -14.2,
+        "revenue_growth_yoy": -0.31,
+        "earnings_growth_yoy": -0.58,
+        "pe_ratio": null,
+        "market_cap": 42000000000,
+        "recent_news": [
+          "Coinbase US spot market share fell to 47% — first drop below 50% thesis floor",
+          "SEC filed enforcement action alleging 15 tokens are unregistered securities",
+          "Crypto trading volumes down for second consecutive quarter — another stated condition breached",
+          "Binance.US gained share as retail traders shifted platforms",
+          "Coinbase said SEC action could force delisting of affected tokens representing 35% of volume"
+        ]
+      }
+    }
+  }
+]

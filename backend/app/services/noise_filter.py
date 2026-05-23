@@ -25,6 +25,23 @@ COOLDOWN_HOURS: dict[str, int] = {
 }
 DEFAULT_COOLDOWN_HOURS = 24
 
+SEVERITY_RANK: dict[str, int] = {
+    "info": 0,
+    "warning": 1,
+    "thesis_breaking": 2,
+}
+
+EVENT_SPECIFICITY_RANK: dict[str, int] = {
+    "metric_threshold": 5,
+    "earnings_call_transcript": 4,
+    "earnings_surprise": 3,
+    "insider_transaction": 3,
+    "news_or_earnings_candidate": 2,
+    "news_keyword_match": 2,
+    "upcoming_earnings": 1,
+    "price_move": 0,
+}
+
 EVIDENCE_TYPE_MAP: dict[str, str] = {
     "price_move": "price_move",
     "metric_threshold": "metric_breach",
@@ -168,7 +185,7 @@ def apply_priority_suppression(
                 breaking_sources.add(source_id)
 
     if not breaking_sources:
-        return classified
+        return _apply_sibling_specificity_suppression(classified)
 
     filtered = []
     for candidate, severity in classified:
@@ -185,6 +202,83 @@ def apply_priority_suppression(
             )
             continue
         filtered.append((candidate, severity))
+
+    return _apply_sibling_specificity_suppression(filtered)
+
+
+def _candidate_family(event_type: str) -> str | None:
+    if event_type in {
+        "upcoming_earnings",
+        "earnings_surprise",
+        "earnings_call_transcript",
+        "news_or_earnings_candidate",
+        "news_keyword_match",
+    }:
+        return "fundamental"
+    if event_type == "insider_transaction":
+        return "insider"
+    return None
+
+
+def _sibling_group_key(candidate: dict[str, Any]) -> tuple[str, str, str] | None:
+    event_type = candidate.get("event_type", "")
+    family = _candidate_family(event_type)
+    if family is None:
+        return None
+    evidence = candidate.get("evidence", {})
+    signal_id = evidence.get("signal_id")
+    claim_id = evidence.get("claim_id")
+    if not signal_id and not claim_id:
+        return None
+    return (str(signal_id or ""), str(claim_id or ""), family)
+
+
+def _candidate_specificity_tuple(candidate: dict[str, Any], severity: str) -> tuple[int, int]:
+    event_type = candidate.get("event_type", "")
+    return (
+        SEVERITY_RANK.get(severity, 0),
+        EVENT_SPECIFICITY_RANK.get(event_type, 0),
+    )
+
+
+def _apply_sibling_specificity_suppression(
+    classified: list[tuple[dict[str, Any], str]],
+) -> list[tuple[dict[str, Any], str]]:
+    """Within the same claim/signal family, keep the strongest candidate.
+
+    Example: if transcript, upcoming earnings, and generic news all map to the same
+    thesis pillar, keep the most specific/highest-severity sibling instead of
+    surfacing several weaker prompts about the same issue.
+    """
+    best_by_group: dict[tuple[str, str, str], tuple[dict[str, Any], str]] = {}
+
+    for candidate, severity in classified:
+        group_key = _sibling_group_key(candidate)
+        if group_key is None:
+            continue
+        current_best = best_by_group.get(group_key)
+        if current_best is None or _candidate_specificity_tuple(candidate, severity) > _candidate_specificity_tuple(*current_best):
+            best_by_group[group_key] = (candidate, severity)
+
+    if not best_by_group:
+        return classified
+
+    filtered: list[tuple[dict[str, Any], str]] = []
+    for candidate, severity in classified:
+        group_key = _sibling_group_key(candidate)
+        if group_key is None:
+            filtered.append((candidate, severity))
+            continue
+        best_candidate, best_severity = best_by_group[group_key]
+        if candidate is best_candidate and severity == best_severity:
+            filtered.append((candidate, severity))
+            continue
+        logger.debug(
+            "Sibling specificity suppression: dropping %s in favor of %s for group %s",
+            candidate.get("event_type"),
+            best_candidate.get("event_type"),
+            group_key,
+        )
     return filtered
 
 

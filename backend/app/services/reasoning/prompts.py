@@ -1,4 +1,4 @@
-DECOMPOSITION_PROMPT_VERSION = "v5"
+DECOMPOSITION_PROMPT_VERSION = "v6"
 
 DECOMPOSITION_JSON_SCHEMA = {
     "type": "object",
@@ -168,13 +168,15 @@ Return only schema-conforming JSON (no extra keys, no prose). Be concise: ration
 
 Rules:
 - Extract at least one claim whenever any investment rationale is present (even one sentence). Zero claims only if the text is purely descriptive with zero investment intent.
-- Extract claims from all three fields: why_own_it, must_remain_true, and what_would_change_my_mind. The latter two are often the most monitorable.
+- When must_remain_true or what_would_change_my_mind are non-empty, extract at least one claim from each. Skip only fields that say "None provided".
 - Phrase each claim_text as a falsifiable assertion with an implied pass/fail condition — e.g. "Data center revenue grows >20% YoY", not "Company is growing fast."
-- signal_label must be a search-ready phrase specific enough to find relevant news — e.g. "NVDA data center revenue growth", not just "revenue".
-- Populate signal_config_json (metric, operator, threshold/threshold_pct, segment, topic) whenever the signal is quantitative or topic-based.
-- Do not invent numeric thresholds unless the user text clearly implies them.
-- Do not assume proxy entities unless there is a plausible causal relationship.
+- signal_label must be a search-ready phrase that uniquely identifies the signal — include the ticker or company name and the specific metric: e.g. "NVDA data center revenue growth", NOT "revenue growth". Bad: "earnings beat". Good: "AMZN AWS operating income margin".
+- REQUIRED: For every quantitative signal (revenue_growth, earnings_growth, dividend_change, etc.) where the user provides a number, populate signal_config_json with {metric, operator, threshold or threshold_pct}. Example: user says "margins stay above 70%" → {"metric": "gross_margin", "operator": ">=", "threshold_pct": 70}.
+- REQUIRED: For every news_topic or transcript_topic signal, populate signal_config_json.topic with a 3-6 word search phrase. Example: {"topic": "AMD AI GPU market share"}.
+- Empty signal_config_json ({}) is only acceptable for signals where no quantitative threshold and no topic are implied (e.g. earnings_surprise, price_move, insider_transaction).
+- Do not invent numeric thresholds unless the user text clearly implies them. Do not hallucinate entities not grounded in the thesis.
 - Mark speculative mappings with lower confidence and confirmation_required=true.
+- Sparse inputs (vague one-liners, no must_remain_true, no what_would_change_my_mind): set monitorability="low", decomposition_confidence<0.7, confirmation_required=true on all entities.
 - Limit to the 3 most important claims, 3 entities per claim, 3 signals per entity.
 
 Example input:

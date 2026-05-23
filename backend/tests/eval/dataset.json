@@ -1,0 +1,422 @@
+[
+  {
+    "id": "growth_nvda_001",
+    "description": "AI GPU dominance with explicit thresholds and competitor threat",
+    "expected_reason_type": "business_performance",
+    "expected_monitorability": "high",
+    "complexity": "expensive",
+    "input": {
+      "ticker": "NVDA",
+      "name": "NVIDIA Corporation",
+      "why_own_it": "NVIDIA dominates AI training GPU market. Hyperscalers pour billions into data centers and NVDA takes the lion's share with CUDA lock-in.",
+      "must_remain_true": "Data center revenue keeps growing above 20% YoY. Gross margins stay above 70%.",
+      "what_would_change_my_mind": "AMD gains real GPU market share. Export restrictions gut China revenue significantly."
+    }
+  },
+  {
+    "id": "growth_amzn_002",
+    "description": "AWS cloud growth and Prime monetisation",
+    "expected_reason_type": "business_performance",
+    "expected_monitorability": "high",
+    "complexity": "expensive",
+    "input": {
+      "ticker": "AMZN",
+      "name": "Amazon.com Inc",
+      "why_own_it": "AWS is the default enterprise cloud. Prime membership creates a recurring revenue flywheel through advertising and subscriptions.",
+      "must_remain_true": "AWS operating income margin stays above 30%. Prime subscriber count keeps growing.",
+      "what_would_change_my_mind": "Azure or GCP takes AWS market share below 30%. Advertising revenue growth decelerates below 15% YoY."
+    }
+  },
+  {
+    "id": "growth_shop_003",
+    "description": "SMB e-commerce tailwind with payment take rate focus",
+    "expected_reason_type": "business_performance",
+    "expected_monitorability": "high",
+    "complexity": "expensive",
+    "input": {
+      "ticker": "SHOP",
+      "name": "Shopify Inc",
+      "why_own_it": "Shopify is the operating system for SMB e-commerce. Payments take rate expands as more merchants use Shopify Payments.",
+      "must_remain_true": "Merchant Solutions revenue grows faster than Subscription Solutions. Payments penetration keeps rising.",
+      "what_would_change_my_mind": "GMV growth drops below 20%. Amazon competes directly for merchant relationships."
+    }
+  },
+  {
+    "id": "growth_msft_004",
+    "description": "Azure AI market share and Copilot enterprise adoption",
+    "expected_reason_type": "business_performance",
+    "expected_monitorability": "high",
+    "complexity": "expensive",
+    "input": {
+      "ticker": "MSFT",
+      "name": "Microsoft Corporation",
+      "why_own_it": "Microsoft has the enterprise distribution advantage to monetise AI through Copilot and Azure OpenAI services.",
+      "must_remain_true": "Azure grows faster than AWS and GCP. Copilot seats grow and convert to paid plans.",
+      "what_would_change_my_mind": "Azure growth decelerates below 25% YoY for two consecutive quarters."
+    }
+  },
+  {
+    "id": "margins_aapl_005",
+    "description": "Apple Services with explicit margin thresholds",
+    "expected_reason_type": "margins",
+    "expected_monitorability": "high",
+    "complexity": "expensive",
+    "input": {
+      "ticker": "AAPL",
+      "name": "Apple Inc",
+      "why_own_it": "Apple Services is a high-margin recurring revenue stream attached to an installed base of 2 billion devices.",
+      "must_remain_true": "Services gross margin stays above 72%. Hardware gross margin stays above 35%.",
+      "what_would_change_my_mind": "Regulatory action forces App Store fee cuts. Services revenue growth slows below 12% YoY."
+    }
+  },
+  {
+    "id": "margins_lulu_006",
+    "description": "Lululemon premium positioning margin floor",
+    "expected_reason_type": "margins",
+    "expected_monitorability": "high",
+    "complexity": "expensive",
+    "input": {
+      "ticker": "LULU",
+      "name": "Lululemon Athletica",
+      "why_own_it": "Lululemon commands premium pricing in athletic wear. Brand loyalty drives full-price sell-through and protects margins.",
+      "must_remain_true": "Gross margin stays above 55%. International revenue grows faster than North America.",
+      "what_would_change_my_mind": "Promotional discounting increases meaningfully. Comparable store sales turn negative."
+    }
+  },
+  {
+    "id": "competitor_crm_007",
+    "description": "Salesforce market share retention vs Microsoft and HubSpot",
+    "expected_reason_type": "business_performance",
+    "expected_monitorability": "medium",
+    "complexity": "expensive",
+    "input": {
+      "ticker": "CRM",
+      "name": "Salesforce Inc",
+      "why_own_it": "Salesforce has 20 years of CRM data moat and enterprise switching costs that protect its position.",
+      "must_remain_true": "Salesforce retains above 20% CRM market share. Net revenue retention stays above 110%.",
+      "what_would_change_my_mind": "Microsoft Dynamics or HubSpot take enterprise accounts at scale. Agentforce AI adoption disappoints."
+    }
+  },
+  {
+    "id": "competitor_googl_008",
+    "description": "Google search dominance vs Bing AI",
+    "expected_reason_type": "business_performance",
+    "expected_monitorability": "medium",
+    "complexity": "expensive",
+    "input": {
+      "ticker": "GOOGL",
+      "name": "Alphabet Inc",
+      "why_own_it": "Google search has structural habit lock-in and the best ad targeting data. AI overviews will keep users on Google.",
+      "must_remain_true": "Google search market share stays above 80% globally.",
+      "what_would_change_my_mind": "Bing AI or ChatGPT search takes meaningful query share. Apple switches Safari default search."
+    }
+  },
+  {
+    "id": "macro_bx_009",
+    "description": "Private credit growth as banks retreat",
+    "expected_reason_type": "macro_theme",
+    "expected_monitorability": "medium",
+    "complexity": "expensive",
+    "input": {
+      "ticker": "BX",
+      "name": "Blackstone Inc",
+      "why_own_it": "Private credit is the fastest growing asset class as banks retreat from middle market lending post-Basel III.",
+      "must_remain_true": "Private credit AUM keeps growing. Fundraising environment stays open for institutional capital.",
+      "what_would_change_my_mind": "Credit default rates spike materially. Banks re-enter middle market lending competitively."
+    }
+  },
+  {
+    "id": "macro_amat_010",
+    "description": "Semiconductor capex cycle on AI chip demand",
+    "expected_reason_type": "macro_theme",
+    "expected_monitorability": "medium",
+    "complexity": "expensive",
+    "input": {
+      "ticker": "AMAT",
+      "name": "Applied Materials Inc",
+      "why_own_it": "AI chip demand drives a multi-year semiconductor capex cycle. Applied Materials is a picks-and-shovels play on every fab build.",
+      "must_remain_true": "Global semiconductor capex keeps growing. TSMC and Samsung continue capacity expansion.",
+      "what_would_change_my_mind": "AI chip demand plateaus and hyperscaler capex guidance is cut. China export restrictions expand to equipment."
+    }
+  },
+  {
+    "id": "income_vz_011",
+    "description": "Verizon dividend sustainability via FCF",
+    "expected_reason_type": "income",
+    "expected_monitorability": "high",
+    "complexity": "expensive",
+    "input": {
+      "ticker": "VZ",
+      "name": "Verizon Communications",
+      "why_own_it": "Verizon is a bond proxy with a 6%+ dividend yield covered by stable free cash flow from wireless subscriptions.",
+      "must_remain_true": "Dividend yield stays above 6%. Free cash flow covers the dividend payout with headroom.",
+      "what_would_change_my_mind": "FCF drops below dividend coverage. T-Mobile takes wireless subscriber share materially."
+    }
+  },
+  {
+    "id": "income_o_012",
+    "description": "Realty Income monthly dividend with occupancy floor",
+    "expected_reason_type": "income",
+    "expected_monitorability": "high",
+    "complexity": "expensive",
+    "input": {
+      "ticker": "O",
+      "name": "Realty Income Corporation",
+      "why_own_it": "Realty Income is the monthly dividend company. Net lease structure passes costs to tenants and AFFO growth funds dividend increases.",
+      "must_remain_true": "Occupancy stays above 96%. AFFO per share grows at least 3% annually.",
+      "what_would_change_my_mind": "Occupancy drops below 95% for two consecutive quarters. Tenant bankruptcies increase materially."
+    }
+  },
+  {
+    "id": "sparse_tsla_013",
+    "description": "Pure social proof — minimal investment content",
+    "expected_reason_type": "social_proof",
+    "expected_monitorability": "low",
+    "complexity": "cheap",
+    "input": {
+      "ticker": "TSLA",
+      "name": "Tesla Inc",
+      "why_own_it": "I believe in Elon Musk.",
+      "must_remain_true": "",
+      "what_would_change_my_mind": ""
+    }
+  },
+  {
+    "id": "sparse_aapl_014",
+    "description": "One-sentence brand thesis with no specifics",
+    "expected_reason_type": "behavioral",
+    "expected_monitorability": "low",
+    "complexity": "cheap",
+    "input": {
+      "ticker": "AAPL",
+      "name": "Apple Inc",
+      "why_own_it": "Strong brand and ecosystem lock-in.",
+      "must_remain_true": "",
+      "what_would_change_my_mind": ""
+    }
+  },
+  {
+    "id": "sparse_spy_015",
+    "description": "Single-word thesis",
+    "expected_reason_type": "portfolio_role",
+    "expected_monitorability": "low",
+    "complexity": "cheap",
+    "input": {
+      "ticker": "SPY",
+      "name": "SPDR S&P 500 ETF",
+      "why_own_it": "Diversification.",
+      "must_remain_true": "",
+      "what_would_change_my_mind": ""
+    }
+  },
+  {
+    "id": "qualitative_meta_016",
+    "description": "CEO trust thesis — behavioural, no metrics",
+    "expected_reason_type": "behavioral",
+    "expected_monitorability": "low",
+    "complexity": "cheap",
+    "input": {
+      "ticker": "META",
+      "name": "Meta Platforms Inc",
+      "why_own_it": "Mark Zuckerberg has demonstrated he can pivot the company. His track record on Instagram and Reels shows he can execute against competition.",
+      "must_remain_true": "Zuckerberg stays in control of the company.",
+      "what_would_change_my_mind": "Evidence of major strategic blunder or loss of control."
+    }
+  },
+  {
+    "id": "qualitative_brk_017",
+    "description": "Pure Buffett social proof",
+    "expected_reason_type": "social_proof",
+    "expected_monitorability": "low",
+    "complexity": "cheap",
+    "input": {
+      "ticker": "BRK-B",
+      "name": "Berkshire Hathaway",
+      "why_own_it": "Warren Buffett knows what he is doing and has a 60-year track record.",
+      "must_remain_true": "",
+      "what_would_change_my_mind": "Buffett steps down without a clear succession plan."
+    }
+  },
+  {
+    "id": "mixed_pltr_018",
+    "description": "Multi-theme mixed thesis — AI, government, enterprise",
+    "expected_reason_type": "mixed",
+    "expected_monitorability": "medium",
+    "complexity": "expensive",
+    "input": {
+      "ticker": "PLTR",
+      "name": "Palantir Technologies",
+      "why_own_it": "AI data analytics play but also government contracts plus Palantir platform for enterprise, seems well positioned in multiple areas with AIP gaining traction.",
+      "must_remain_true": "US government contracts renew. AIP commercial revenue keeps growing.",
+      "what_would_change_my_mind": "Government budget cuts reduce Palantir contracts. AIP commercial adoption stalls below expectations."
+    }
+  },
+  {
+    "id": "mixed_coin_019",
+    "description": "Macro plus regulatory mixed thesis",
+    "expected_reason_type": "mixed",
+    "expected_monitorability": "medium",
+    "complexity": "expensive",
+    "input": {
+      "ticker": "COIN",
+      "name": "Coinbase Global Inc",
+      "why_own_it": "Crypto will go mainstream eventually and Coinbase is the most regulated and trusted US exchange. Regulatory clarity benefits the incumbents.",
+      "must_remain_true": "Coinbase retains its US exchange market share above 50%. Regulatory environment stays constructive.",
+      "what_would_change_my_mind": "SEC enforcement action forces major product changes. Crypto trading volumes drop for more than two quarters."
+    }
+  },
+  {
+    "id": "unclear_arkk_020",
+    "description": "Vague innovation narrative with social proof",
+    "expected_reason_type": "unclear",
+    "expected_monitorability": "low",
+    "complexity": "cheap",
+    "input": {
+      "ticker": "ARKK",
+      "name": "ARK Innovation ETF",
+      "why_own_it": "Innovation is the future and disruptive technology companies will dominate the next decade. Cathie Wood picks the right stocks.",
+      "must_remain_true": "",
+      "what_would_change_my_mind": "ARK underperforms the S&P 500 for three consecutive years."
+    }
+  },
+  {
+    "id": "uk_shel_021",
+    "description": "Shell energy transition with explicit yield and buyback thresholds (UK/NYSE cross-listed)",
+    "expected_reason_type": "income",
+    "expected_monitorability": "high",
+    "complexity": "expensive",
+    "input": {
+      "ticker": "SHEL",
+      "name": "Shell plc",
+      "why_own_it": "Shell generates $40B+ free cash flow annually and is returning capital aggressively via buybacks. The energy transition is slower than the market prices in, giving Shell a long cash harvest runway.",
+      "must_remain_true": "Annual dividend yield stays above 4%. Share buyback programme stays at least $3B per quarter. Brent crude stays above $60.",
+      "what_would_change_my_mind": "Brent oil drops below $60 and stays there for two quarters. Shell accelerates LNG exit or cuts buyback guidance materially."
+    }
+  },
+  {
+    "id": "uk_azn_022",
+    "description": "AstraZeneca oncology pipeline with revenue CAGR target",
+    "expected_reason_type": "business_performance",
+    "expected_monitorability": "high",
+    "complexity": "expensive",
+    "input": {
+      "ticker": "AZN",
+      "name": "AstraZeneca plc",
+      "why_own_it": "AstraZeneca has the strongest oncology pipeline in pharma. Enhertu and the ADC platform could triple their cancer revenue by 2030.",
+      "must_remain_true": "Oncology revenue grows at least 15% CAGR. No major late-stage trial failures. Tagrisso maintains lung cancer dominance.",
+      "what_would_change_my_mind": "Phase 3 trial failure for Enhertu or datopotamab. Patent cliff accelerates without pipeline replacements. Revenue CAGR drops below 8% for two consecutive years."
+    }
+  },
+  {
+    "id": "uk_lloy_023",
+    "description": "Lloyds UK housing market proxy — sparse qualitative",
+    "expected_reason_type": "macro_theme",
+    "expected_monitorability": "low",
+    "complexity": "cheap",
+    "input": {
+      "ticker": "LLOY",
+      "name": "Lloyds Banking Group",
+      "why_own_it": "UK housing market will recover and Lloyds is the biggest UK mortgage lender.",
+      "must_remain_true": "",
+      "what_would_change_my_mind": ""
+    }
+  },
+  {
+    "id": "etf_xlf_024",
+    "description": "Financials ETF as rate normalisation trade",
+    "expected_reason_type": "macro_theme",
+    "expected_monitorability": "medium",
+    "complexity": "expensive",
+    "input": {
+      "ticker": "XLF",
+      "name": "Financial Select Sector SPDR Fund",
+      "why_own_it": "Banks benefit from higher-for-longer rates through net interest margin expansion. XLF gives diversified exposure to US financials without single-bank risk.",
+      "must_remain_true": "US 10-year Treasury yield stays above 4%. Bank net interest margins hold or expand vs prior year. No major US bank credit quality deterioration.",
+      "what_would_change_my_mind": "Fed cuts rates aggressively below 3%. Credit card delinquency rates spike above 2020 levels. Recession causes loan loss provisions to surge."
+    }
+  },
+  {
+    "id": "etf_qqq_025",
+    "description": "QQQ tech concentration — vague innovation narrative without metrics",
+    "expected_reason_type": "portfolio_role",
+    "expected_monitorability": "low",
+    "complexity": "cheap",
+    "input": {
+      "ticker": "QQQ",
+      "name": "Invesco QQQ Trust",
+      "why_own_it": "Tech will continue to outperform. The Magnificent Seven drive the index and AI makes them stronger.",
+      "must_remain_true": "",
+      "what_would_change_my_mind": "Antitrust breakup of major holdings."
+    }
+  },
+  {
+    "id": "technical_mu_026",
+    "description": "Micron memory cycle with HBM specifics",
+    "expected_reason_type": "business_performance",
+    "expected_monitorability": "high",
+    "complexity": "expensive",
+    "input": {
+      "ticker": "MU",
+      "name": "Micron Technology Inc",
+      "why_own_it": "Micron is the primary beneficiary of HBM3E demand for AI accelerators. NVIDIA H100 and B200 use Micron HBM and production capacity is constrained. DRAM pricing cycle is in early upcycle with industry supply discipline from SK Hynix and Samsung.",
+      "must_remain_true": "HBM ASPs stay above $20/GB. Micron retains at least 25% HBM market share. DRAM industry pricing stays up YoY.",
+      "what_would_change_my_mind": "Samsung or SK Hynix flood HBM supply and compress margins. AI accelerator demand plateaus. Micron loses Nvidia as a primary HBM supplier."
+    }
+  },
+  {
+    "id": "contradictory_bynd_027",
+    "description": "Internally contradictory thesis — bullish on trend but bearish on execution",
+    "expected_reason_type": "unclear",
+    "expected_monitorability": "low",
+    "complexity": "cheap",
+    "input": {
+      "ticker": "BYND",
+      "name": "Beyond Meat Inc",
+      "why_own_it": "Plant-based meat is the future of food but Beyond Meat keeps burning cash and losing market share to private label. I think the category will grow but this specific company might not survive.",
+      "must_remain_true": "",
+      "what_would_change_my_mind": "Beyond Meat achieves positive gross margin consistently."
+    }
+  },
+  {
+    "id": "rambling_ba_028",
+    "description": "Overlong meandering Boeing turnaround thesis",
+    "expected_reason_type": "business_performance",
+    "expected_monitorability": "medium",
+    "complexity": "expensive",
+    "input": {
+      "ticker": "BA",
+      "name": "The Boeing Company",
+      "why_own_it": "Boeing is a duopoly with Airbus and the 737 MAX issues are mostly behind them after the door plug incident, they have a new CEO who is fixing the quality culture, the backlog is massive at over 5000 aircraft which gives years of revenue visibility, airlines are desperate for new fuel-efficient jets and there are only two suppliers, defense contracts provide a floor, and eventually they will get back to positive free cash flow as production ramps, probably by 2026 or so, the valuation is cheap relative to where it should be once they fix manufacturing.",
+      "must_remain_true": "737 MAX and 787 production ramp continues without new safety incidents. Free cash flow turns positive.",
+      "what_would_change_my_mind": "Another major safety incident grounding the 737 MAX. New CEO fails to fix quality culture. 787 program faces further regulatory delays."
+    }
+  },
+  {
+    "id": "income_bns_029",
+    "description": "Bank of Nova Scotia high-yield dividend with payout ratio guard",
+    "expected_reason_type": "income",
+    "expected_monitorability": "high",
+    "complexity": "expensive",
+    "input": {
+      "ticker": "BNS",
+      "name": "Bank of Nova Scotia",
+      "why_own_it": "Scotiabank has a 6%+ dividend yield and Canadian banks have never cut their dividend. Latin America exposure provides growth optionality once EM sentiment improves.",
+      "must_remain_true": "Dividend payout ratio stays below 60% of earnings. CET1 capital ratio stays above 11.5%. Canadian housing market avoids severe correction.",
+      "what_would_change_my_mind": "Canadian housing crash causes credit losses above $5B in a single year. CET1 drops below 11% forcing dividend cut. Latin America operations generate sustained losses."
+    }
+  },
+  {
+    "id": "edge_short_interest_030",
+    "description": "Speculative short-squeeze play — thesis is about market mechanics not fundamentals",
+    "expected_reason_type": "unclear",
+    "expected_monitorability": "low",
+    "complexity": "cheap",
+    "input": {
+      "ticker": "GME",
+      "name": "GameStop Corp",
+      "why_own_it": "High short interest and retail momentum could squeeze shorts again. Ryan Cohen is building something.",
+      "must_remain_true": "",
+      "what_would_change_my_mind": "Short interest drops below 15%. Ryan Cohen sells his stake."
+    }
+  }
+]

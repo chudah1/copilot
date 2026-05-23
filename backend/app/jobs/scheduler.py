@@ -10,6 +10,7 @@ from app.jobs.earnings_refresh import run_earnings_refresh
 from app.jobs.pre_earnings_nudge import run_pre_earnings_nudge
 from app.jobs.post_earnings_eval import run_post_earnings_evaluation
 from app.jobs.onboarding_drip import run_onboarding_drip
+from app.jobs.reengagement import run_reengagement
 
 logger = logging.getLogger(__name__)
 
@@ -35,11 +36,12 @@ def setup_scheduler():
     scheduler.add_job(run_pre_earnings_nudge, "cron", hour=7, minute=30, id="pre_earnings_nudge")
     scheduler.add_job(run_post_earnings_evaluation, "cron", hour=8, minute=0, id="post_earnings_eval")
     scheduler.add_job(run_onboarding_drip, "cron", hour=9, minute=0, id="onboarding_drip")
+    scheduler.add_job(run_reengagement, "cron", hour=10, minute=0, id="reengagement")
 
     scheduler.start()
     logger.info(
-        "Scheduler started with 8 jobs: portfolio_sync, monitoring_run, digest_builder, "
-        "quarterly_review_prep, earnings_refresh, pre_earnings_nudge, post_earnings_eval, onboarding_drip"
+        "Scheduler started with 9 jobs: portfolio_sync, monitoring_run, digest_builder, "
+        "quarterly_review_prep, earnings_refresh, pre_earnings_nudge, post_earnings_eval, onboarding_drip, reengagement"
     )
 
 

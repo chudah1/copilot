@@ -28,6 +28,7 @@ class Settings(BaseSettings):
     openai_api_key: str = ""
     gemini_api_key: str = ""
     resend_api_key: str = ""
+    sentry_dsn: str = ""
     trading212_base_url: str = "https://live.trading212.com/api/v0"
     alpha_vantage_api_key: str = ""
     market_data_provider: str = "yfinance"

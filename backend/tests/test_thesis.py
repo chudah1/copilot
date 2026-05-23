@@ -566,14 +566,14 @@ async def test_decompose_descriptive_thesis_yields_no_auto_active_signals(client
     with patch("app.services.decomposition.get_reasoning_gateway", return_value=MockGateway(gateway_result)):
         response = await client.post(f"/api/theses/{thesis_id}/decompose", headers=auth_headers)
 
-    assert response.status_code == 202
+    assert response.status_code == 200
     envelope = response.json()
-    assert envelope["status"] == "pending"
+    assert envelope["status"] == "failed"
     assert envelope["decomposition"] is None
 
     decomposition_response = await client.get(f"/api/theses/{thesis_id}/decomposition", headers=auth_headers)
     assert decomposition_response.status_code == 200
-    assert decomposition_response.json()["status"] == "pending"
+    assert decomposition_response.json()["status"] == "failed"
 
 
 async def test_decompose_auto_activates_direct_high_confidence_signal_and_syncs_interpretation(client, auth_headers, holding):

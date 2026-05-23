@@ -8,6 +8,45 @@ import { AppShell } from "@/components/layout/app-shell";
 import { formatDate } from "@/lib/utils";
 import type { Digest } from "@/types";
 
+function digestDetailCopy(investorProfile: "thesis_driven" | "hearsay_driven" | null) {
+  if (investorProfile === "thesis_driven") {
+    return {
+      keyTakeaways: "Thesis takeaways",
+      stats: "Thesis stats",
+      stable: "Assumptions intact",
+      missing: "Missing thesis",
+      stale: "Stale thesis",
+      nextEarnings: "Next earnings",
+      unavailable: "Digest content unavailable.",
+      fallbackHeadlinePrefix: "Thesis digest",
+    };
+  }
+
+  if (investorProfile === "hearsay_driven") {
+    return {
+      keyTakeaways: "Reason takeaways",
+      stats: "Reason stats",
+      stable: "Reasons intact",
+      missing: "Missing reason",
+      stale: "Stale reason",
+      nextEarnings: "Next earnings",
+      unavailable: "Digest content unavailable.",
+      fallbackHeadlinePrefix: "Reason digest",
+    };
+  }
+
+  return {
+    keyTakeaways: "Key takeaways",
+    stats: "Digest stats",
+    stable: "Stable",
+    missing: "Missing thesis",
+    stale: "Stale thesis",
+    nextEarnings: "Next earnings",
+    unavailable: "Digest content unavailable.",
+    fallbackHeadlinePrefix: "Digest",
+  };
+}
+
 export default function DigestDetailPage() {
   const { id } = useParams<{ id: string }>();
   const [digest, setDigest] = useState<Digest | null>(null);
@@ -32,6 +71,7 @@ export default function DigestDetailPage() {
     digest.content.missing_theses_count ||
     digest.content.stale_theses_count ||
     digest.content.concentration_warning;
+  const copy = digestDetailCopy(digest.content.investor_profile ?? null);
 
   return (
     <AppShell>
@@ -64,7 +104,7 @@ export default function DigestDetailPage() {
 
           {/* Headline */}
           <h1 className="font-display italic text-[2.25rem] leading-tight text-foreground">
-            {digest.content.headline || `Digest: ${formatDate(digest.period_start)} — ${formatDate(digest.period_end)}`}
+            {digest.content.headline || `${copy.fallbackHeadlinePrefix}: ${formatDate(digest.period_start)} — ${formatDate(digest.period_end)}`}
           </h1>
 
           {/* Meta */}
@@ -80,7 +120,7 @@ export default function DigestDetailPage() {
             {/* Key takeaways */}
             <div className="border border-border/60 bg-card p-5 space-y-3">
               <p className="font-mono text-[9px] uppercase tracking-[0.25em] text-muted-foreground/60">
-                Key takeaways
+                {copy.keyTakeaways}
               </p>
               <div className="space-y-2">
                 {(digest.content.summary_points || []).map((point) => (
@@ -90,7 +130,7 @@ export default function DigestDetailPage() {
                 ))}
                 {digest.content.next_earnings && (
                   <p className="font-sans text-sm text-foreground/80 leading-relaxed">
-                    Next earnings: {digest.content.next_earnings.ticker} reports {formatDate(digest.content.next_earnings.report_date)}.
+                    {copy.nextEarnings}: {digest.content.next_earnings.ticker} reports {formatDate(digest.content.next_earnings.report_date)}.
                   </p>
                 )}
                 {digest.content.quiet_nudge && (
@@ -104,13 +144,13 @@ export default function DigestDetailPage() {
             {/* Stats */}
             <div className="border border-border/60 bg-card p-5 space-y-4">
               <p className="font-mono text-[9px] uppercase tracking-[0.25em] text-muted-foreground/60">
-                Digest stats
+                {copy.stats}
               </p>
               <div className="grid grid-cols-2 gap-4">
                 {[
-                  { label: "Stable", value: String(digest.content.stable_holdings_count || 0) },
-                  { label: "Missing thesis", value: String(digest.content.missing_theses_count || 0), warn: (digest.content.missing_theses_count ?? 0) > 0 },
-                  { label: "Stale thesis", value: String(digest.content.stale_theses_count || 0), warn: (digest.content.stale_theses_count ?? 0) > 0 },
+                  { label: copy.stable, value: String(digest.content.stable_holdings_count || 0) },
+                  { label: copy.missing, value: String(digest.content.missing_theses_count || 0), warn: (digest.content.missing_theses_count ?? 0) > 0 },
+                  { label: copy.stale, value: String(digest.content.stale_theses_count || 0), warn: (digest.content.stale_theses_count ?? 0) > 0 },
                 ].map(({ label, value, warn }) => (
                   <div key={label}>
                     <p className="font-mono text-[9px] uppercase tracking-[0.2em] text-muted-foreground/50">{label}</p>
@@ -140,7 +180,7 @@ export default function DigestDetailPage() {
               dangerouslySetInnerHTML={{ __html: digest.content.html }}
             />
           ) : (
-            <p className="font-sans italic text-muted-foreground">Digest content unavailable.</p>
+            <p className="font-sans italic text-muted-foreground">{copy.unavailable}</p>
           )}
         </div>
       </div>

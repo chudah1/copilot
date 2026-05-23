@@ -14,6 +14,7 @@ ENTITY_SIGNAL_ALLOWLIST: dict[str, set[str]] = {
         "news_topic",
         "insider_transaction",
         "dividend_change",
+        "macro_series_change",  # valid when macro directly drives thesis (e.g. rates → bank NIM)
     },
     "supplier": {
         "price_move",
@@ -49,9 +50,9 @@ ENTITY_SIGNAL_ALLOWLIST: dict[str, set[str]] = {
         "dividend_change",
     },
     "benchmark": {"price_move", "macro_series_change", "news_topic"},
-    "macro_series": {"macro_series_change", "news_topic"},
+    "macro_series": {"macro_series_change", "news_topic", "revenue_growth", "earnings_growth"},  # spending/growth trends can be tracked as revenue metrics
     "commodity": {"price_move", "macro_series_change", "news_topic"},
-    "sector_proxy": {"price_move", "macro_series_change", "news_topic"},
+    "sector_proxy": {"price_move", "macro_series_change", "news_topic", "revenue_growth", "earnings_growth"},
 }
 
 CLAIM_SIGNAL_ALLOWLIST: dict[str, set[str]] = {
@@ -61,7 +62,7 @@ CLAIM_SIGNAL_ALLOWLIST: dict[str, set[str]] = {
     "valuation": {"price_move", "earnings_growth", "dividend_change", "macro_series_change", "news_topic"},
     "cash_flow": {"earnings_growth", "dividend_change", "guidance_change", "transcript_topic", "news_topic"},
     "income": {"dividend_change", "earnings_growth", "price_move", "news_topic"},
-    "macro_tailwind": {"macro_series_change", "price_move", "news_topic"},
+    "macro_tailwind": {"macro_series_change", "price_move", "news_topic", "revenue_growth", "earnings_growth"},
     "portfolio_fit": {"price_move", "news_topic"},
 }
 

@@ -280,19 +280,9 @@ export interface HoldingPulse {
   recent_event_count: number;
 }
 
-export interface RecentEventSummary {
-  holding_id: string;
-  ticker: string;
-  title: string;
-  severity: "info" | "warning" | "thesis_breaking";
-  event_type: string;
-  created_at: string | null;
-}
-
 export interface PortfolioPulse {
   pulses: HoldingPulse[];
   next_digest_at: string | null;
-  recent_events?: RecentEventSummary[];
 }
 
 export interface UpcomingEarnings {

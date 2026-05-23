@@ -8,6 +8,7 @@ from app.services.noise_filter import (
     _apply_evidence_dedup,
     _apply_minimum_relevance,
     _apply_signal_cooldown,
+    _apply_sibling_specificity_suppression,
     _load_recent_evidence_keys,
     apply_priority_suppression,
     filter_candidates,
@@ -224,6 +225,50 @@ def test_priority_suppression_no_source_id_kept():
     ]
     result = apply_priority_suppression(classified)
     assert len(result) == 2
+
+
+def test_sibling_specificity_prefers_transcript_over_upcoming_for_same_claim():
+    claim_id = str(uuid.uuid4())
+    classified = [
+        ({"event_type": "upcoming_earnings", "evidence": {"claim_id": claim_id}}, "warning"),
+        ({"event_type": "earnings_call_transcript", "evidence": {"claim_id": claim_id}}, "warning"),
+    ]
+    result = _apply_sibling_specificity_suppression(classified)
+    assert len(result) == 1
+    assert result[0][0]["event_type"] == "earnings_call_transcript"
+
+
+def test_sibling_specificity_prefers_higher_severity_even_if_less_specific():
+    claim_id = str(uuid.uuid4())
+    classified = [
+        ({"event_type": "earnings_call_transcript", "evidence": {"claim_id": claim_id}}, "warning"),
+        ({"event_type": "news_or_earnings_candidate", "evidence": {"claim_id": claim_id}}, "thesis_breaking"),
+    ]
+    result = _apply_sibling_specificity_suppression(classified)
+    assert len(result) == 1
+    assert result[0][0]["event_type"] == "news_or_earnings_candidate"
+    assert result[0][1] == "thesis_breaking"
+
+
+def test_sibling_specificity_keeps_different_families():
+    claim_id = str(uuid.uuid4())
+    classified = [
+        ({"event_type": "earnings_call_transcript", "evidence": {"claim_id": claim_id}}, "warning"),
+        ({"event_type": "insider_transaction", "evidence": {"claim_id": claim_id}}, "warning"),
+    ]
+    result = _apply_sibling_specificity_suppression(classified)
+    assert len(result) == 2
+
+
+def test_apply_priority_suppression_also_applies_sibling_specificity():
+    claim_id = str(uuid.uuid4())
+    classified = [
+        ({"event_type": "upcoming_earnings", "evidence": {"claim_id": claim_id}}, "warning"),
+        ({"event_type": "news_or_earnings_candidate", "evidence": {"claim_id": claim_id}}, "warning"),
+    ]
+    result = apply_priority_suppression(classified)
+    assert len(result) == 1
+    assert result[0][0]["event_type"] == "news_or_earnings_candidate"
 
 
 # ---------------------------------------------------------------------------

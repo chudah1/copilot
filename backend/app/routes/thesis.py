@@ -79,9 +79,14 @@ async def _get_latest_decomposition_record(
     return result.scalar_one_or_none()
 
 
+def _display_decomposition_status(status: str) -> str:
+    # "pending" would be a lie — there's no background retry job
+    return "failed" if status == "pending" else status
+
+
 def _decomposition_envelope_from_result(result: PersistedDecompositionResult) -> ThesisDecompositionEnvelopeResponse:
     return ThesisDecompositionEnvelopeResponse(
-        status=result.status,
+        status=_display_decomposition_status(result.status),
         message=result.message,
         decomposition=result.decomposition,
     )
@@ -305,8 +310,11 @@ async def get_latest_decomposition(
     if latest is None:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Decomposition not found")
     if latest.status not in VISIBLE_DECOMPOSITION_STATUSES:
-        message = "We saved your thesis and are retrying decomposition." if latest.status == "pending" else latest.last_error
-        return ThesisDecompositionEnvelopeResponse(status=latest.status, message=message, decomposition=None)
+        return ThesisDecompositionEnvelopeResponse(
+            status=_display_decomposition_status(latest.status),
+            message=latest.last_error,
+            decomposition=None,
+        )
     return ThesisDecompositionEnvelopeResponse(status=latest.status, message=None, decomposition=latest)
 
 

@@ -22,6 +22,7 @@ class User(Base):
     onboarding_completed_at: Mapped[datetime | None] = mapped_column(
         TZDateTime(), nullable=True, default=None
     )
+    last_seen_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True, default=None)
 
     broker_connections = relationship("BrokerConnection", back_populates="user")
     holdings = relationship("Holding", back_populates="user")

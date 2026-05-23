@@ -836,38 +836,7 @@ export default function DashboardPage() {
         </motion.div>
       </div>
 
-      {needsAttention.length === 0 && (pulse?.recent_events?.length ?? 0) > 0 && (
-        <div className="px-8 pt-4">
-          <p className="font-mono text-[10px] uppercase tracking-[0.18em] text-muted-foreground mb-2">
-            Recent signals
-          </p>
-          <div className="border border-border divide-y divide-border/40">
-            {pulse!.recent_events!.map((e) => (
-              <Link
-                key={`${e.holding_id}-${e.created_at}`}
-                href={`/dashboard/positions/${e.ticker}`}
-                className="flex items-center gap-3 px-4 py-2.5 hover:bg-muted/30 transition-colors group"
-              >
-                <span className={`h-1.5 w-1.5 rounded-full shrink-0 ${
-                  e.severity === "thesis_breaking" ? "bg-red-500" :
-                  e.severity === "warning" ? "bg-amber-500" : "bg-sky-400"
-                }`} />
-                <span className="font-mono text-[10px] text-muted-foreground/70 shrink-0 w-12 truncate">
-                  {cleanTicker(e.ticker)}
-                </span>
-                <span className="font-sans text-xs text-foreground/80 truncate flex-1 group-hover:text-foreground transition-colors">
-                  {e.title}
-                </span>
-                <span className="font-mono text-[10px] text-muted-foreground/50 shrink-0">
-                  {e.created_at ? `${Math.floor((Date.now() - new Date(e.created_at).getTime()) / 86400000)}d` : ""}
-                </span>
-              </Link>
-            ))}
-          </div>
-        </div>
-      )}
-
-      <AnimatePresence>
+<AnimatePresence>
         {needsAttention.length > 0 && (
           <motion.div
             initial={{ opacity: 0, y: -4 }}

@@ -1,11 +1,14 @@
 "use client";
 
 import { useState } from "react";
+import { api } from "@/lib/api";
+import { getErrorMessage } from "@/lib/errors";
 import { ClaimVerdict, EarningsReviewResult } from "@/types";
 
 interface EarningsReviewModalProps {
   thesisId: string;
   ticker: string;
+  investorProfile?: "thesis_driven" | "hearsay_driven" | null;
   onClose: () => void;
 }
 
@@ -40,29 +43,57 @@ const VERDICT_CONFIG = {
   },
 } as const;
 
-const ASSESSMENT_CONFIG = {
-  thesis_intact: {
-    label: "Reason Intact",
-    color: "#166534",
-    bg: "#f0fdf4",
-    border: "#86efac",
-    icon: "✓",
-  },
-  watch: {
-    label: "Worth Watching",
-    color: "#92400e",
-    bg: "#fffbeb",
-    border: "#fde68a",
-    icon: "⚠",
-  },
-  thesis_challenged: {
-    label: "Reason Challenged",
-    color: "#7f1d1d",
-    bg: "#fef2f2",
-    border: "#fca5a5",
-    icon: "✗",
-  },
-} as const;
+function assessmentConfigForProfile(investorProfile?: "thesis_driven" | "hearsay_driven" | null) {
+  if (investorProfile === "thesis_driven") {
+    return {
+      thesis_intact: {
+        label: "Thesis Intact",
+        color: "#166534",
+        bg: "#f0fdf4",
+        border: "#86efac",
+        icon: "✓",
+      },
+      watch: {
+        label: "Assumption to watch",
+        color: "#92400e",
+        bg: "#fffbeb",
+        border: "#fde68a",
+        icon: "⚠",
+      },
+      thesis_challenged: {
+        label: "Thesis Challenged",
+        color: "#7f1d1d",
+        bg: "#fef2f2",
+        border: "#fca5a5",
+        icon: "✗",
+      },
+    } as const;
+  }
+
+  return {
+    thesis_intact: {
+      label: "Reason Intact",
+      color: "#166534",
+      bg: "#f0fdf4",
+      border: "#86efac",
+      icon: "✓",
+    },
+    watch: {
+      label: "Worth Watching",
+      color: "#92400e",
+      bg: "#fffbeb",
+      border: "#fde68a",
+      icon: "⚠",
+    },
+    thesis_challenged: {
+      label: investorProfile === "hearsay_driven" ? "Story Challenged" : "Reason Challenged",
+      color: "#7f1d1d",
+      bg: "#fef2f2",
+      border: "#fca5a5",
+      icon: "✗",
+    },
+  } as const;
+}
 
 function VerdictCard({ verdict }: { verdict: ClaimVerdict }) {
   const config = VERDICT_CONFIG[verdict.verdict] ?? VERDICT_CONFIG.unclear;
@@ -157,6 +188,7 @@ function VerdictCard({ verdict }: { verdict: ClaimVerdict }) {
 export function EarningsReviewModal({
   thesisId,
   ticker,
+  investorProfile,
   onClose,
 }: EarningsReviewModalProps) {
   const [loading, setLoading] = useState(false);
@@ -167,25 +199,25 @@ export function EarningsReviewModal({
     setLoading(true);
     setError(null);
     try {
-      const res = await fetch(`/api/theses/${thesisId}/earnings-review`, {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-      });
-      if (!res.ok) {
-        const body = await res.json().catch(() => ({}));
-        throw new Error(body.detail || "Review failed");
-      }
-      setResult(await res.json());
-    } catch (e) {
-      setError(e instanceof Error ? e.message : "Something went wrong");
+      const result = await api.post<EarningsReviewResult>(`/api/theses/${thesisId}/earnings-review`);
+      setResult(result);
+    } catch (error: unknown) {
+      setError(getErrorMessage(error, "Review failed"));
     } finally {
       setLoading(false);
     }
   };
 
+  const assessmentMap = assessmentConfigForProfile(investorProfile);
   const assessmentConfig = result
-    ? ASSESSMENT_CONFIG[result.overall_assessment] ?? ASSESSMENT_CONFIG.watch
+    ? assessmentMap[result.overall_assessment] ?? assessmentMap.watch
     : null;
+  const subtitle =
+    investorProfile === "thesis_driven"
+      ? `${ticker} — do the thesis assumptions still hold?`
+      : investorProfile === "hearsay_driven"
+        ? `${ticker} — does the original story still hold up as a reason?`
+        : `${ticker} — does your reason still hold?`;
 
   return (
     <div
@@ -244,7 +276,7 @@ export function EarningsReviewModal({
                 margin: 0,
               }}
             >
-              {ticker} — does your reason still hold?
+              {subtitle}
             </p>
           </div>
           <button

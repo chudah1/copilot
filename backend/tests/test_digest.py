@@ -7,6 +7,7 @@ from app.jobs.digest_builder import run_digest_builder
 from app.models.digest import Digest
 from app.models.earnings_calendar import EarningsCalendar
 from app.models.holding import Holding
+from app.models.onboarding_state import OnboardingState
 from app.models.thesis import Thesis
 from app.models.user import User
 from app.services.auth import hash_password
@@ -228,3 +229,51 @@ async def test_digest_builder_rolls_back_failed_user_and_continues(db, job_sessi
     assert len(digests) == 1
     assert digests[0].user_id == second_user.id
     assert digests[0].status == "sent"
+
+
+async def test_digest_builder_uses_hearsay_profile_copy(db, job_session_factory):
+    user = User(email="story@example.com", password_hash=hash_password("testpass123"))
+    db.add(user)
+    await db.flush()
+
+    db.add(
+        OnboardingState(
+            user_id=user.id,
+            investor_profile="hearsay_driven",
+        )
+    )
+
+    holding = Holding(
+        user_id=user.id,
+        ticker="NVDA",
+        name="NVIDIA",
+        quantity=4,
+        average_cost_basis=500,
+        current_value=2400,
+    )
+    db.add(holding)
+    await db.flush()
+
+    db.add(
+        Thesis(
+            user_id=user.id,
+            holding_id=holding.id,
+            status="active",
+            thesis_kind="company",
+            why_own_it="AI demand should keep driving datacenter GPU growth.",
+            confidence="medium",
+            review_cadence_days=7,
+            source="user",
+            updated_at=datetime.now(timezone.utc) - timedelta(days=120),
+        )
+    )
+    await db.commit()
+
+    with patch("app.jobs.digest_builder.async_session", job_session_factory):
+        with patch("app.jobs.digest_builder.send_digest_email", new_callable=AsyncMock, return_value=True):
+            await run_digest_builder()
+
+    digest = (await db.execute(select(Digest).where(Digest.user_id == user.id))).scalar_one()
+    assert digest.content["investor_profile"] == "hearsay_driven"
+    assert "against the reasons you've attached to them" in digest.content["monitoring_receipt"]
+    assert "Would the same story still convince you today" in (digest.content["quiet_nudge"] or "")

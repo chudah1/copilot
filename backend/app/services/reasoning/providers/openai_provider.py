@@ -85,3 +85,9 @@ class OpenAIReasoningProvider:
         except Exception as exc:
             latency = int((time.perf_counter() - started) * 1000)
             return ReasoningResult(False, "failed", self.name, self.model, DECOMPOSITION_PROMPT_VERSION, None, None, None, latency, str(exc), True)
+
+
+class Gpt4oMiniProvider(OpenAIReasoningProvider):
+    """Cheaper OpenAI tier for simple theses — routed by complexity classifier."""
+    name = "openai_mini"
+    model = "gpt-4o-mini"

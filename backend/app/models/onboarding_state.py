@@ -21,6 +21,7 @@ class OnboardingState(Base):
     day1_email_sent_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
     day5_email_sent_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
     last_email_sent_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
+    reengagement_email_sent_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
     # wizard activation tracking
     drafts_generated_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
     drafts_reviewed_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)

@@ -52,7 +52,7 @@ def _day5_html(uncovered_tickers: list[str]) -> str:
         parts.append(f"<li><strong>{escape(ticker)}</strong></li>")
     parts.append("</ul>")
     parts.append(
-        "<p>Writing a reason takes two minutes. It tells you — and the system — "
+        "<p>Writing a reason takes two minutes. It tells you and the system"
         "exactly what would make you sell.</p>"
     )
     parts.append('<p><a href="/dashboard">→ Add a reason now</a></p>')

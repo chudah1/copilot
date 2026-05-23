@@ -34,6 +34,7 @@ async def test_pulse_holding_without_thesis(client, auth_headers, test_user, db:
     assert len(pulses) == 1
     assert pulses[0]["pulse_status"] == "review"
     assert pulses[0]["has_thesis"] is False
+    assert pulses[0]["urgency_score"] == 100
 
 
 @pytest.mark.asyncio
@@ -113,6 +114,7 @@ async def test_pulse_watch_on_warning_event(client, auth_headers, test_user, db:
         id=uuid.uuid4(), holding_id=holding.id, thesis_id=thesis.id,
         event_type="news_or_earnings_candidate", severity="warning",
         title="Azure growth slowing", summary="Azure growth decelerated to 22%.",
+        ai_analysis="Azure growth is being tested after the slowdown. Review whether the cloud thesis still holds.",
         created_at=datetime.now(timezone.utc),
     )
     db.add(event)
@@ -122,6 +124,10 @@ async def test_pulse_watch_on_warning_event(client, auth_headers, test_user, db:
     pulses = resp.json()["pulses"]
     assert len(pulses) == 1
     assert pulses[0]["pulse_status"] == "watch"
+    assert pulses[0]["assumption_label"] == "Azure growth slowing"
+    assert pulses[0]["latest_event_summary"] == "Azure growth is being tested after the slowdown. Review whether the cloud thesis still holds."
+    assert pulses[0]["latest_event_at"] is not None
+    assert pulses[0]["urgency_score"] > 55
 
 
 @pytest.mark.asyncio
@@ -188,3 +194,57 @@ async def test_pulse_respects_zero_current_value_for_pnl(client, auth_headers, t
     assert resp.status_code == 200
     pulse = resp.json()["pulses"][0]
     assert pulse["pnl_pct"] == -100.0
+
+
+@pytest.mark.asyncio
+async def test_pulse_stale_thesis_uses_review_cadence_for_watch_status(client, auth_headers, test_user, db: AsyncSession):
+    holding = Holding(
+        id=uuid.uuid4(), ticker="SHOP", name="Shopify",
+        quantity=3, average_cost_basis=70, currency="GBP",
+        user_id=test_user.id,
+    )
+    db.add(holding)
+    await db.commit()
+
+    thesis = Thesis(
+        id=uuid.uuid4(), holding_id=holding.id, user_id=test_user.id,
+        status="active", why_own_it="Commerce platform compounding", confidence="medium",
+        review_cadence_days=30,
+        updated_at=datetime.now(timezone.utc) - timedelta(days=52),
+    )
+    db.add(thesis)
+    await db.commit()
+
+    resp = await client.get("/api/portfolio/pulse", headers=auth_headers)
+    assert resp.status_code == 200
+    pulse = resp.json()["pulses"][0]
+    assert pulse["pulse_status"] == "watch"
+    assert pulse["reason"] == "This thesis is 52 days old and 22 days past its review cadence."
+    assert pulse["urgency_score"] > 55
+
+
+@pytest.mark.asyncio
+async def test_pulse_stale_high_confidence_thesis_can_escalate_to_review(client, auth_headers, test_user, db: AsyncSession):
+    holding = Holding(
+        id=uuid.uuid4(), ticker="TSM", name="TSMC",
+        quantity=6, average_cost_basis=90, currency="GBP",
+        user_id=test_user.id,
+    )
+    db.add(holding)
+    await db.commit()
+
+    thesis = Thesis(
+        id=uuid.uuid4(), holding_id=holding.id, user_id=test_user.id,
+        status="active", why_own_it="Foundry leadership", confidence="high",
+        review_cadence_days=30,
+        updated_at=datetime.now(timezone.utc) - timedelta(days=108),
+    )
+    db.add(thesis)
+    await db.commit()
+
+    resp = await client.get("/api/portfolio/pulse", headers=auth_headers)
+    assert resp.status_code == 200
+    pulse = resp.json()["pulses"][0]
+    assert pulse["pulse_status"] == "review"
+    assert pulse["reason"] == "This thesis is 108 days old and far past its 30-day review cadence."
+    assert pulse["urgency_score"] >= 90

@@ -2,8 +2,11 @@ from unittest.mock import AsyncMock, patch
 
 from app.services.ai_thesis import (
     ThesisAssistOutput,
+    _apply_synthesis_guardrails,
     _fallback_assist,
+    _fallback_initial_draft,
     _fallback_synthesize,
+    _parse_synthesis_output,
     _parse_draft_output,
     assist_thesis,
 )
@@ -176,6 +179,34 @@ def test_parse_draft_output_sanitizes_stale_administration_references():
     assert "U.S. federal policy" in result["why_own_it"]
 
 
+def test_parse_draft_output_rewrites_generic_placeholder_language():
+    result = _parse_draft_output(
+        {
+            "why_own_it": "Holding NVDA as a core position in the portfolio.",
+            "must_remain_true": "The company maintains its market position.",
+            "what_would_change_my_mind": "A fundamental change in the business model.",
+        },
+        "NVDA",
+    )
+    assert "core position in the portfolio" not in result["why_own_it"]
+    assert "maintains its market position" not in result["must_remain_true"]
+    assert "fundamental change in the business model" not in result["what_would_change_my_mind"]
+    assert "operating results" in result["what_would_change_my_mind"]
+
+
+def test_fallback_initial_draft_uses_market_data_when_available():
+    class DummyMarketData:
+        sector = "Technology"
+        industry = "Semiconductors"
+        revenue_growth_yoy = 0.24
+        earnings_growth_yoy = 0.12
+
+    result = _fallback_initial_draft("NVDA", DummyMarketData())
+    assert "semiconductors" in result["why_own_it"].lower()
+    assert "revenue growth" in result["must_remain_true"].lower()
+    assert "position should be reconsidered" in result["what_would_change_my_mind"].lower()
+
+
 def test_fallback_synthesize_for_hearsay_investor_sharpens_break_condition():
     result = _fallback_synthesize(
         ticker="NVDA",
@@ -183,5 +214,100 @@ def test_fallback_synthesize_for_hearsay_investor_sharpens_break_condition():
         answer2="",
         investor_profile="hearsay_driven",
     )
-    assert "story stops showing up in the operating results" in result.what_would_change_my_mind
+    assert "management commentary stops backing the original growth story" in result.what_would_change_my_mind
     assert result.why_own_it.startswith("People kept talking") or "rough idea" in result.why_own_it
+    assert "demand story in NVDA" in result.must_remain_true
+    assert any(
+        hint.get("kind") == "metric_threshold" and hint.get("metric") == "revenue_growth_yoy"
+        for hint in result.interpretation["watch_hints"]
+    )
+
+
+def test_parse_synthesis_output_for_hearsay_rewrites_generic_conditions():
+    result = _parse_synthesis_output(
+        {
+            "why_own_it": "Everyone was talking about the AI trade and NVDA seemed like the obvious winner.",
+            "must_remain_true": "The core investment thesis for NVDA remains intact.",
+            "what_would_change_my_mind": "A fundamental change in the business model.",
+            "ai_summary": "Story-driven NVDA idea.",
+            "interpretation": {
+                "labels": ["growth"],
+                "monitorability": "low",
+                "watch_hints": [],
+                "proxy_signals": [],
+                "ambiguity_note": "",
+            },
+        },
+        "NVDA",
+        answer1="Everyone was talking about the AI trade and NVDA seemed like the obvious winner.",
+        answer2="If growth fades for a few quarters.",
+        investor_profile="hearsay_driven",
+    )
+    assert "demand story in NVDA" in result.must_remain_true
+    assert "position should be reconsidered" in result.what_would_change_my_mind
+    assert result.interpretation["monitorability"] == "medium"
+    assert result.interpretation["ambiguity_note"] != ""
+    assert any(
+        hint.get("kind") == "metric_threshold" and hint.get("metric") == "revenue_growth_yoy"
+        for hint in result.interpretation["watch_hints"]
+    )
+
+
+def test_apply_synthesis_guardrails_preserves_non_hearsay_outputs():
+    base = _fallback_synthesize(
+        ticker="MSFT",
+        answer1="Azure growth and enterprise distribution should keep compounding cash flow.",
+        answer2="If cloud growth stalls and margins compress.",
+        investor_profile="thesis_driven",
+    )
+    result = _apply_synthesis_guardrails(
+        base,
+        ticker="MSFT",
+        answer1="Azure growth and enterprise distribution should keep compounding cash flow.",
+        answer2="If cloud growth stalls and margins compress.",
+        investor_profile="thesis_driven",
+    )
+    assert result.must_remain_true == base.must_remain_true
+    assert result.what_would_change_my_mind == base.what_would_change_my_mind
+
+
+def test_fallback_synthesize_for_thesis_driven_avoids_generic_conditions():
+    result = _fallback_synthesize(
+        ticker="ASML",
+        answer1="The EUV backlog and chipmaker capex cycle should keep demand strong.",
+        answer2="",
+        investor_profile="thesis_driven",
+    )
+    assert "core investment thesis" not in result.must_remain_true.lower()
+    assert "demand" in result.must_remain_true.lower()
+    assert "management commentary" in result.what_would_change_my_mind.lower() or "demand softens" in result.what_would_change_my_mind.lower()
+
+
+def test_parse_synthesis_output_for_thesis_driven_rewrites_generic_conditions():
+    result = _parse_synthesis_output(
+        {
+            "why_own_it": "I own ASML because EUV demand and the chip capex cycle should stay strong.",
+            "must_remain_true": "The core investment thesis for ASML remains intact.",
+            "what_would_change_my_mind": "A fundamental change in the business model.",
+            "ai_summary": "ASML thesis.",
+            "interpretation": {
+                "labels": ["growth"],
+                "monitorability": "low",
+                "watch_hints": [],
+                "proxy_signals": [],
+                "ambiguity_note": "",
+            },
+        },
+        "ASML",
+        answer1="I own ASML because EUV demand and the chip capex cycle should stay strong.",
+        answer2="If demand weakens and management stops backing the cycle.",
+        investor_profile="thesis_driven",
+    )
+    assert "core investment thesis" not in result.must_remain_true.lower()
+    assert "demand" in result.must_remain_true.lower()
+    assert "position should be reconsidered" in result.what_would_change_my_mind.lower()
+    assert result.interpretation["monitorability"] == "medium"
+    assert any(
+        hint.get("kind") == "metric_threshold" and hint.get("metric") == "revenue_growth_yoy"
+        for hint in result.interpretation["watch_hints"]
+    )

@@ -1,10 +1,12 @@
 import logging
 
+from app.services.reasoning.complexity import classify_complexity
 from app.services.reasoning.normalizers import normalize_decomposition_output
 from app.services.reasoning.providers import (
     AnthropicReasoningProvider,
     OpenAIReasoningProvider,
 )
+from app.services.reasoning.providers.openai_provider import Gpt4oMiniProvider
 from app.services.reasoning.types import ReasoningRequest, ReasoningResult, ReasoningTaskType
 from app.services.reasoning.validators import (
     output_needs_escalation,
@@ -13,14 +15,18 @@ from app.services.reasoning.validators import (
 
 logger = logging.getLogger(__name__)
 
+# Cheap tier: simple theses (complexity score < 4)
+# gpt-4o-mini first for cost; fall back to gpt-4.1-mini, then Anthropic if OpenAI unavailable
+_CHEAP_PROVIDERS = [Gpt4oMiniProvider(), OpenAIReasoningProvider(), AnthropicReasoningProvider()]
+# Expensive tier: rich theses with explicit thresholds, competitors, all fields filled
+_EXPENSIVE_PROVIDERS = [AnthropicReasoningProvider(), OpenAIReasoningProvider()]
+
 
 class ThesisReasoningGateway:
     def __init__(self, providers: list | None = None):
-        self.providers = providers or [
-            OpenAIReasoningProvider(),
-            AnthropicReasoningProvider(),
-            # GeminiReasoningProvider(),  # Temporarily disabled due to timeout issues
-        ]
+        # When providers is explicitly passed (e.g. in tests), use them directly.
+        # Otherwise, complexity routing selects the tier per-request.
+        self._override_providers = providers
 
     async def run(self, request: ReasoningRequest) -> ReasoningResult:
         if request.task_type == ReasoningTaskType.DECOMPOSE_THESIS:
@@ -39,11 +45,20 @@ class ThesisReasoningGateway:
             retryable=False,
         )
 
+    def _select_providers(self, payload: dict) -> list:
+        if self._override_providers is not None:
+            return self._override_providers
+        tier = classify_complexity(payload)
+        providers = _CHEAP_PROVIDERS if tier == "cheap" else _EXPENSIVE_PROVIDERS
+        logger.debug("Complexity tier '%s' selected for thesis decomposition", tier)
+        return providers
+
     async def _run_decomposition(self, request: ReasoningRequest) -> ReasoningResult:
         last_failure: ReasoningResult | None = None
         original_text = str(request.payload.get("why_own_it", ""))
+        providers = self._select_providers(request.payload)
 
-        for provider in self.providers:
+        for provider in providers:
             try:
                 result = await provider.run(request)
             except Exception as exc:
