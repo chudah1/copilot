@@ -28,10 +28,11 @@ def _resolve_database_url(url: str) -> str:
 
 
 def _asyncpg_engine_kwargs(url: str) -> tuple[str, dict]:
-    """Strip sslmode from URL (asyncpg doesn't accept it) and return connect_args instead."""
+    """Strip libpq-only params from URL (asyncpg doesn't accept them) and return connect_args instead."""
     parsed = urlparse(url)
     params = parse_qs(parsed.query, keep_blank_values=True)
     ssl_mode = params.pop("sslmode", [None])[0]
+    params.pop("channel_binding", None)
     clean_url = urlunparse(parsed._replace(query=urlencode({k: v[0] for k, v in params.items()})))
     connect_args = {}
     if ssl_mode in ("require", "verify-ca", "verify-full"):
