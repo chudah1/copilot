@@ -527,7 +527,7 @@ async def portfolio_pulse(
 ):
     from app.services.pulse import compute_portfolio_pulse
 
-    pulses, next_digest_at, recent_events = await compute_portfolio_pulse(current_user.id, db)
+    pulses, next_digest_at = await compute_portfolio_pulse(current_user.id, db)
     return PortfolioPulseResponse(
         pulses=[
             {
@@ -549,7 +549,6 @@ async def portfolio_pulse(
             for p in pulses
         ],
         next_digest_at=next_digest_at,
-        recent_events=recent_events,
     )
 
 

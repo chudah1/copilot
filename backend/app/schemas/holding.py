@@ -57,19 +57,9 @@ class HoldingPulseResponse(BaseModel):
     recent_event_count: int = 0
 
 
-class RecentEventSummaryResponse(BaseModel):
-    holding_id: uuid.UUID
-    ticker: str
-    title: str
-    severity: str
-    event_type: str
-    created_at: datetime | None = None
-
-
 class PortfolioPulseResponse(BaseModel):
     pulses: list[HoldingPulseResponse]
     next_digest_at: datetime | None = None
-    recent_events: list[RecentEventSummaryResponse] = []
 
 
 class UpcomingEarningsResponse(BaseModel):
