@@ -170,17 +170,6 @@ async def onboarding_banner(
             suggested_holding=SuggestedHolding(id=str(top.id), ticker=top.ticker, name=top.name) if top else None,
         )
 
-    # Within 24h of first reason: monitoring confirmation (shown regardless of coverage)
-    hours_since_first = (now - state.first_reason_written_at.replace(tzinfo=timezone.utc)).total_seconds() / 3600
-    if hours_since_first < 24:
-        return OnboardingBannerResponse(
-            show=True,
-            banner_type="first_reason_monitoring",
-            message="We're watching your first reason. Check back in a few days to see if anything moved.",
-            holdings_count=holdings_count,
-            reasons_count=reasons_count,
-        )
-
     # >50% covered — stop drip banner
     if reasons_count / holdings_count > 0.5:
         return OnboardingBannerResponse(show=False, banner_type=None, message=None, holdings_count=holdings_count, reasons_count=reasons_count)
