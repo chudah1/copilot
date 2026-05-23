@@ -313,16 +313,6 @@ export interface UserPreferences {
   notification_sensitivity: string;
 }
 
-export interface UserNotification {
-  id: string;
-  notification_type: string;
-  holding_id: string | null;
-  thesis_id: string | null;
-  read: boolean;
-  content: string;
-  metadata_json: Record<string, unknown> | null;
-  created_at: string;
-}
 
 export interface PortfolioTrend {
   snapshot_date: string | null;
