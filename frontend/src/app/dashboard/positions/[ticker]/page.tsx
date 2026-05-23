@@ -441,19 +441,8 @@ const METRIC_LABELS: Record<string, string> = {
   debt_to_equity: "Debt / equity",
 };
 
-const PCT_METRICS = new Set(["revenue_growth_yoy", "earnings_growth_yoy", "gross_margin", "operating_margin", "dividend_yield"]);
-const RATIO_KEYWORDS = ["margin", "share", "growth", "yield", "rate", "pct", "percent", "coverage"];
-const LABEL_ABBREVS = new Set(["ai", "ml", "pe", "ev", "roi", "yoy", "qoq", "ytd"]);
-
-function formatMetricLabel(metric: string): string {
-  return metric
-    .replaceAll("_", " ")
-    .replace(/\b\w+/g, w => LABEL_ABBREVS.has(w.toLowerCase()) ? w.toUpperCase() : w[0].toUpperCase() + w.slice(1));
-}
-
-function formatThreshold(metric: string, value: number): string {
-  const isRatio = PCT_METRICS.has(metric) || RATIO_KEYWORDS.some(k => metric.toLowerCase().includes(k));
-  if (isRatio) {
+function formatThreshold(unit: string | undefined, value: number): string {
+  if (unit === "pct") {
     const pct = value <= 1 && value >= -1 ? value * 100 : value;
     return `${pct % 1 === 0 ? pct.toFixed(0) : pct.toFixed(1)}%`;
   }
@@ -473,8 +462,9 @@ function describeWatchHint(hint: Record<string, unknown>) {
     if (hint.threshold === 0) {
       return null;
     }
-    const label = METRIC_LABELS[hint.metric] ?? formatMetricLabel(hint.metric);
-    return `${label} stays ${hint.operator} ${formatThreshold(hint.metric, hint.threshold)}.`;
+    const label = typeof hint.label === "string" ? hint.label : (METRIC_LABELS[hint.metric] ?? hint.metric.replaceAll("_", " "));
+    const unit = typeof hint.unit === "string" ? hint.unit : undefined;
+    return `${label} stays ${hint.operator} ${formatThreshold(unit, hint.threshold)}.`;
   }
   return null;
 }

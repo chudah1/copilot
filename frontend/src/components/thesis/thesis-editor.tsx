@@ -67,8 +67,6 @@ export function ThesisEditor({ thesis, investorProfile, mode = "write", onSave, 
     gross_margin: "Gross margin",
     operating_margin: "Operating margin",
   };
-  const RATIO_KEYWORDS = ["margin", "share", "growth", "yield", "rate", "pct", "percent", "coverage"];
-  const LABEL_ABBREVS = new Set(["ai", "ml", "pe", "ev", "roi", "yoy", "qoq", "ytd"]);
   const watchHintDescriptions = watchHints
     .map((hint) => {
       if (hint.kind === "price_move_pct" && typeof hint.threshold === "number") {
@@ -82,10 +80,10 @@ export function ThesisEditor({ thesis, investorProfile, mode = "write", onSave, 
       ) {
         if (hint.threshold === 0) return null;
         const m = hint.metric;
-        const label = METRIC_LABELS[m] ?? m.replaceAll("_", " ").replace(/\b\w+/g, w => LABEL_ABBREVS.has(w.toLowerCase()) ? w.toUpperCase() : w[0].toUpperCase() + w.slice(1));
+        const label = typeof hint.label === "string" ? hint.label : (METRIC_LABELS[m] ?? m.replaceAll("_", " "));
         const t = hint.threshold as number;
-        const isRatio = RATIO_KEYWORDS.some(k => m.toLowerCase().includes(k));
-        const fmt = isRatio
+        const unit = typeof hint.unit === "string" ? hint.unit : undefined;
+        const fmt = unit === "pct"
           ? `${Math.abs(t) <= 1 ? (t * 100) % 1 === 0 ? (t * 100).toFixed(0) : (t * 100).toFixed(1) : t}%`
           : String(t);
         return `${label} stays ${hint.operator} ${fmt}.`;

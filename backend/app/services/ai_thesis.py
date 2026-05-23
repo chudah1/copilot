@@ -784,6 +784,22 @@ def _parse_draft_output(data: dict[str, Any], ticker: str) -> dict[str, str]:
     }
 
 
+_RATIO_KEYWORDS = {"margin", "share", "growth", "yield", "rate", "pct", "percent", "coverage"}
+_LABEL_ABBREVS = {"ai", "ml", "pe", "ev", "roi", "yoy", "qoq", "ytd"}
+
+
+def _metric_label(metric: str) -> str:
+    return " ".join(
+        w.upper() if w in _LABEL_ABBREVS else w.capitalize()
+        for w in metric.replace("_", " ").split()
+    )
+
+
+def _metric_unit(metric: str) -> str:
+    lower = metric.lower()
+    return "pct" if any(kw in lower for kw in _RATIO_KEYWORDS) else "number"
+
+
 def _normalize_interpretation(interpretation: dict | None) -> dict:
     data = interpretation if isinstance(interpretation, dict) else {}
 
@@ -829,6 +845,8 @@ def _normalize_interpretation(interpretation: dict | None) -> dict:
                     {
                         "kind": "metric_threshold",
                         "metric": metric,
+                        "label": _metric_label(metric),
+                        "unit": _metric_unit(metric),
                         "operator": operator,
                         "threshold": float(threshold),
                         "rationale": str(hint.get("rationale", "")).strip(),

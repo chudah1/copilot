@@ -175,6 +175,8 @@ def _watch_hint_from_signal(signal: ThesisSignal, *, override_claim_id: str | No
         return {
             "kind": "metric_threshold",
             "metric": "revenue_growth_yoy",
+            "label": "Revenue Growth (YoY)",
+            "unit": "pct",
             "operator": operator,
             "threshold": threshold if threshold is not None else 0.0,
             "rationale": signal.rationale or "Revenue growth should stay healthy.",
@@ -188,6 +190,8 @@ def _watch_hint_from_signal(signal: ThesisSignal, *, override_claim_id: str | No
         return {
             "kind": "metric_threshold",
             "metric": "earnings_growth_yoy",
+            "label": "Earnings Growth (YoY)",
+            "unit": "pct",
             "operator": operator,
             "threshold": threshold if threshold is not None else 0.0,
             "rationale": signal.rationale or "Earnings growth should remain healthy.",
@@ -411,6 +415,14 @@ async def generate_decomposition_for_thesis(
     if result.success and result.normalized_output is not None:
         decomposition = await _persist_successful_decomposition(db, thesis, holding, result)
         return PersistedDecompositionResult(status="draft", message=None, decomposition=decomposition)
+
+    # One automatic retry for transient failures (network hiccup, rate limit, etc.)
+    if result.retryable:
+        logger.info("Decomposition failed (retryable) for thesis %s — retrying once", thesis.id)
+        result = await gateway.run(request)
+        if result.success and result.normalized_output is not None:
+            decomposition = await _persist_successful_decomposition(db, thesis, holding, result)
+            return PersistedDecompositionResult(status="draft", message=None, decomposition=decomposition)
 
     decomposition = await _persist_pending_decomposition(db, thesis, result)
     status = decomposition.status
