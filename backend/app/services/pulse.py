@@ -218,12 +218,16 @@ def _combined_event_summary(
     if len(events) == 1:
         return _event_decision_summary(events[0])
 
-    today_events = [event for event in events if event.created_at.date() == now.date()]
-    if len(today_events) < 2:
+    recent_cutoff = now - timedelta(hours=24)
+    recent_batch = [
+        e for e in events
+        if e.created_at is not None and _normalize_datetime(e.created_at) >= recent_cutoff
+    ]
+    if len(recent_batch) < 2:
         return _event_decision_summary(events[0])
 
     labels: list[str] = []
-    for event in today_events:
+    for event in recent_batch:
         label = (
             _event_assumption_label(event, signal_labels=signal_labels, ticker=ticker)
             or event.evidence_type
@@ -239,7 +243,7 @@ def _combined_event_summary(
     preview = ", ".join(labels[:3])
     if len(labels) > 3:
         preview += ", and more"
-    return f"{len(today_events)} new signals today: {preview}."
+    return f"{len(recent_batch)} new signals today: {preview}."
 
 
 async def compute_portfolio_pulse(user_id: uuid.UUID, db: AsyncSession) -> tuple[list[HoldingPulse], datetime]:
