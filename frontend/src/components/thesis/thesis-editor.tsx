@@ -40,9 +40,10 @@ interface Props {
 }
 
 export function ThesisEditor({ thesis, investorProfile, mode = "write", onSave, onAssist, onCancel }: Props) {
-  const [whyOwnIt, setWhyOwnIt] = useState(asText(thesis?.why_own_it));
-  const [mustRemainTrue, setMustRemainTrue] = useState(asText(thesis?.must_remain_true));
-  const [changeMind, setChangeMind] = useState(asText(thesis?.what_would_change_my_mind));
+  const isAiDraft = thesis?.source === "ai_assisted" && thesis?.status === "draft";
+  const [whyOwnIt, setWhyOwnIt] = useState(isAiDraft ? "" : asText(thesis?.why_own_it));
+  const [mustRemainTrue, setMustRemainTrue] = useState(isAiDraft ? "" : asText(thesis?.must_remain_true));
+  const [changeMind, setChangeMind] = useState(isAiDraft ? "" : asText(thesis?.what_would_change_my_mind));
   const [confidence, setConfidence] = useState<"high" | "medium" | "low">(thesis?.confidence ?? "medium");
   const [aiSummary, setAiSummary] = useState(asText(thesis?.ai_summary));
   const [interpretation, setInterpretation] = useState<Record<string, unknown> | null>(thesis?.interpretation ?? null);
