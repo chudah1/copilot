@@ -59,7 +59,6 @@ export function ThesisEditor({ thesis, investorProfile, mode = "write", onSave, 
   const monitorability = typeof interpretationData.monitorability === "string" ? interpretationData.monitorability : null;
   const ambiguityNote = typeof interpretationData.ambiguity_note === "string" ? interpretationData.ambiguity_note : "";
 
-  const PCT_METRICS = new Set(["revenue_growth_yoy", "earnings_growth_yoy", "gross_margin", "operating_margin", "dividend_yield"]);
   const METRIC_LABELS: Record<string, string> = {
     revenue_growth_yoy: "Revenue growth (YoY)",
     earnings_growth_yoy: "Earnings growth (YoY)",
@@ -68,6 +67,8 @@ export function ThesisEditor({ thesis, investorProfile, mode = "write", onSave, 
     gross_margin: "Gross margin",
     operating_margin: "Operating margin",
   };
+  const RATIO_KEYWORDS = ["margin", "share", "growth", "yield", "rate", "pct", "percent", "coverage"];
+  const LABEL_ABBREVS = new Set(["ai", "ml", "pe", "ev", "roi", "yoy", "qoq", "ytd"]);
   const watchHintDescriptions = watchHints
     .map((hint) => {
       if (hint.kind === "price_move_pct" && typeof hint.threshold === "number") {
@@ -80,10 +81,12 @@ export function ThesisEditor({ thesis, investorProfile, mode = "write", onSave, 
         typeof hint.threshold === "number"
       ) {
         if (hint.threshold === 0) return null;
-        const label = METRIC_LABELS[hint.metric] ?? hint.metric.replaceAll("_", " ");
+        const m = hint.metric;
+        const label = METRIC_LABELS[m] ?? m.replaceAll("_", " ").replace(/\b\w+/g, w => LABEL_ABBREVS.has(w.toLowerCase()) ? w.toUpperCase() : w[0].toUpperCase() + w.slice(1));
         const t = hint.threshold as number;
-        const fmt = PCT_METRICS.has(hint.metric)
-          ? `${(Math.abs(t) <= 1 ? t * 100 : t)}%`
+        const isRatio = RATIO_KEYWORDS.some(k => m.toLowerCase().includes(k));
+        const fmt = isRatio
+          ? `${Math.abs(t) <= 1 ? (t * 100) % 1 === 0 ? (t * 100).toFixed(0) : (t * 100).toFixed(1) : t}%`
           : String(t);
         return `${label} stays ${hint.operator} ${fmt}.`;
       }

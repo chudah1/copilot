@@ -56,6 +56,25 @@ const METRIC_LABELS: Record<string, string> = {
   operating_margin: "Operating margin",
 };
 
+const RATIO_KEYWORDS = ["margin", "share", "growth", "yield", "rate", "pct", "percent", "coverage"];
+const LABEL_ABBREVS = new Set(["ai", "ml", "pe", "ev", "roi", "yoy", "qoq", "ytd"]);
+
+function formatMetricLabel(metric: string): string {
+  return metric
+    .replaceAll("_", " ")
+    .replace(/\b\w+/g, w => LABEL_ABBREVS.has(w.toLowerCase()) ? w.toUpperCase() : w[0].toUpperCase() + w.slice(1));
+}
+
+function formatThresholdValue(metric: string, threshold: number): string {
+  const isRatio = RATIO_KEYWORDS.some(k => metric.toLowerCase().includes(k)) ||
+    ["revenue_growth_yoy", "earnings_growth_yoy", "dividend_yield"].includes(metric);
+  if (isRatio) {
+    const pct = Math.abs(threshold) <= 1 ? threshold * 100 : threshold;
+    return `${pct % 1 === 0 ? pct.toFixed(0) : pct.toFixed(1)}%`;
+  }
+  return String(threshold);
+}
+
 function describeWatchHint(hint: Record<string, unknown>): string | null {
   if (hint.kind === "price_move_pct" && typeof hint.threshold === "number") {
     return `Review if price moves ${hint.threshold}% or more.`;
@@ -67,18 +86,10 @@ function describeWatchHint(hint: Record<string, unknown>): string | null {
     typeof hint.threshold === "number"
   ) {
     if (hint.threshold === 0) return null;
-    const label = METRIC_LABELS[hint.metric] ?? hint.metric.replaceAll("_", " ");
-    return `${label} stays ${hint.operator} ${hint.threshold}.`;
+    const label = METRIC_LABELS[hint.metric] ?? formatMetricLabel(hint.metric);
+    return `${label} stays ${hint.operator} ${formatThresholdValue(hint.metric, hint.threshold)}.`;
   }
   return null;
-}
-
-function formatThresholdValue(metric: string, threshold: number): string {
-  if (["revenue_growth_yoy", "earnings_growth_yoy", "dividend_yield"].includes(metric)) {
-    const pct = Math.abs(threshold) <= 1 ? threshold * 100 : threshold;
-    return `${pct}%`;
-  }
-  return `${threshold}`;
 }
 
 function describeSignalCheckLogic(signalType: string, config: Record<string, unknown> | null): string | null {
