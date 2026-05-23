@@ -253,7 +253,7 @@ async def compute_portfolio_pulse(user_id: uuid.UUID, db: AsyncSession) -> tuple
     holdings = list(holdings_result.scalars().all())
 
     if not holdings:
-        return [], _next_sunday_8am()
+        return [], _next_sunday_8am(), []
 
     holding_ids = [h.id for h in holdings]
 
@@ -422,4 +422,18 @@ async def compute_portfolio_pulse(user_id: uuid.UUID, db: AsyncSession) -> tuple
                 recent_event_count=len(events),
             ))
 
-    return pulses, _next_sunday_8am()
+    ticker_by_holding = {h.id: h.ticker for h in holdings}
+    top_events = sorted(all_events, key=lambda e: e.created_at or datetime.min, reverse=True)[:5]
+    recent_events = [
+        {
+            "holding_id": e.holding_id,
+            "ticker": ticker_by_holding.get(e.holding_id, ""),
+            "title": e.title or e.summary or "",
+            "severity": e.severity,
+            "event_type": e.event_type,
+            "created_at": _normalize_datetime(e.created_at),
+        }
+        for e in top_events
+        if e.severity in {"info", "warning", "thesis_breaking"}
+    ]
+    return pulses, _next_sunday_8am(), recent_events

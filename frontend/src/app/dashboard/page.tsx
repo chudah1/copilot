@@ -1,6 +1,6 @@
 "use client";
 
-import { useMemo, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import Link from "next/link";
 import { useSearchParams } from "next/navigation";
 import { motion, AnimatePresence } from "framer-motion";
@@ -218,6 +218,13 @@ function isRecentIsoDate(value: string | null | undefined, days: number) {
   return Date.now() - ts <= days * 24 * 60 * 60 * 1000;
 }
 
+function isRecentIsoHours(value: string | null | undefined, hours: number) {
+  if (!value) return false;
+  const ts = new Date(value).getTime();
+  if (Number.isNaN(ts)) return false;
+  return Date.now() - ts <= hours * 60 * 60 * 1000;
+}
+
 function activationBannerCopy(args: {
   investorProfile: "thesis_driven" | "hearsay_driven" | null;
   count: number;
@@ -317,7 +324,7 @@ export default function DashboardPage() {
     if (!raw) return null;
     try {
       const parsed = JSON.parse(raw) as RecentReviewBannerState;
-      if (!isRecentIsoDate(parsed.saved_at, 7)) {
+      if (!isRecentIsoHours(parsed.saved_at, 2)) {
         window.localStorage.removeItem("dashboard_recent_review");
         return null;
       }
@@ -486,8 +493,15 @@ export default function DashboardPage() {
     count: currentTheses?.length ?? 0,
     tickers: activatedTickers,
   });
+  useEffect(() => {
+    if (showActivationBanner) {
+      window.localStorage.setItem("dashboard_activation_banner_dismissed", "1");
+      setActivationBannerDismissed(true);
+    }
+  }, [showActivationBanner]);
+
   const showRecentReviewBanner = Boolean(
-    recentReviewBanner && isRecentIsoDate(recentReviewBanner.saved_at, 7),
+    recentReviewBanner && isRecentIsoHours(recentReviewBanner.saved_at, 2),
   );
   const recentReviewCopy = recentReviewBanner
     ? recentReviewBannerCopy(recentReviewBanner, onboardingState?.investor_profile ?? null)
@@ -729,49 +743,50 @@ export default function DashboardPage() {
           <OnboardingBanner onVisibilityChange={setOnboardingBannerVisible} />
         </ErrorBoundary>
 
-        {!onboardingBannerVisible && draftStatus && draftStatus.ready > 0 && !draftBannerDismissed && (
-          <div className="flex items-center justify-between border border-primary/25 bg-primary/5 px-5 py-2.5">
-            <div className="flex items-center gap-3">
-              <span className="font-mono text-[10px] uppercase tracking-[0.15em] text-primary border border-primary/30 px-1.5 py-0.5">
-                New
-              </span>
-              <p className="font-sans text-sm text-foreground/80">
-                {copy.draftBanner.replace(
-                  "{count}",
-                  draftStatus.ready === 1 ? "1 position" : `${draftStatus.ready} positions`,
+        {(() => {
+          const showDraft = !onboardingBannerVisible && (draftStatus?.ready ?? 0) > 0 && !draftBannerDismissed;
+          const showQuarterly = (quarterlyReview?.pending_count ?? 0) > 0;
+          if (!showDraft && !showQuarterly) return null;
+          const draftCta = onboardingState?.investor_profile === "thesis_driven" ? "Review theses →"
+            : onboardingState?.investor_profile === "hearsay_driven" ? "Review reasons →"
+            : "Review →";
+          const draftCount = draftStatus?.ready ?? 0;
+          return (
+            <div className="flex items-center justify-between border border-primary/25 bg-primary/5 px-5 py-2.5">
+              <div className="flex items-center gap-3 min-w-0 flex-1">
+                <span className="font-mono text-[10px] uppercase tracking-[0.15em] text-primary border border-primary/30 px-1.5 py-0.5 shrink-0">
+                  {showQuarterly && quarterlyReview ? quarterlyReview.quarter : "New"}
+                </span>
+                <p className="font-sans text-sm text-foreground/80 truncate">
+                  {showDraft && showQuarterly
+                    ? `${draftCount === 1 ? "1 position" : `${draftCount} positions`} to review · ${quarterlyReview!.pending_count} quarterly check${quarterlyReview!.pending_count > 1 ? "s" : ""} due`
+                    : showDraft
+                      ? copy.draftBanner.replace("{count}", draftCount === 1 ? "1 position" : `${draftCount} positions`)
+                      : copy.quarterly
+                          .replace("{count}", String(quarterlyReview!.pending_count))
+                          .replace("{plural}", quarterlyReview!.pending_count > 1 ? "s" : "")}
+                </p>
+              </div>
+              <div className="flex items-center gap-4 shrink-0 ml-4">
+                {showDraft && (
+                  <Link href="/onboarding/review-drafts" className="font-mono text-[10px] uppercase tracking-[0.15em] text-primary hover:text-primary/70 transition-colors whitespace-nowrap">
+                    {draftCta}
+                  </Link>
                 )}
-              </p>
+                {showQuarterly && (
+                  <Link href="/dashboard/quarterly-review" className="font-mono text-[10px] uppercase tracking-[0.15em] text-primary hover:text-primary/70 transition-colors whitespace-nowrap">
+                    Quarterly →
+                  </Link>
+                )}
+                {showDraft && (
+                  <button onClick={() => setDraftBannerDismissed(true)} className="text-muted-foreground hover:text-foreground text-xs transition-colors">
+                    ✕
+                  </button>
+                )}
+              </div>
             </div>
-            <div className="flex items-center gap-4 shrink-0 ml-4">
-              <Link href="/onboarding/review-drafts" className="font-mono text-[10px] uppercase tracking-[0.15em] text-primary hover:text-primary/70 transition-colors">
-                {onboardingState?.investor_profile === "thesis_driven"
-                  ? "Review theses →"
-                  : onboardingState?.investor_profile === "hearsay_driven"
-                    ? "Review reasons →"
-                    : "Review →"}
-              </Link>
-              <button onClick={() => setDraftBannerDismissed(true)} className="text-muted-foreground hover:text-foreground text-xs transition-colors">
-                ✕
-              </button>
-            </div>
-          </div>
-        )}
-
-        {quarterlyReview && quarterlyReview.pending_count > 0 && (
-          <div className="flex items-center justify-between border border-primary/20 bg-primary/5 px-5 py-2.5">
-            <div className="flex items-center gap-3">
-              <span className="font-mono text-[10px] uppercase tracking-[0.15em] text-primary">{quarterlyReview.quarter}</span>
-              <p className="font-sans text-sm text-foreground/80">
-                {copy.quarterly
-                  .replace("{count}", String(quarterlyReview.pending_count))
-                  .replace("{plural}", quarterlyReview.pending_count > 1 ? "s" : "")}
-              </p>
-            </div>
-            <Link href="/dashboard/quarterly-review" className="font-mono text-[10px] uppercase tracking-[0.15em] text-primary hover:text-primary/70 transition-colors whitespace-nowrap shrink-0 ml-4">
-              Begin →
-            </Link>
-          </div>
-        )}
+          );
+        })()}
       </div>
 
       {/* ── Quick add form ───────────────────────────────────────────── */}
@@ -805,9 +820,11 @@ export default function DashboardPage() {
           <p className="font-display italic text-[1.4rem] leading-tight text-foreground">
             {dashboardState.title}
           </p>
-          <p className="font-sans text-sm text-foreground/75 leading-relaxed">
-            {dashboardState.body}
-          </p>
+          {needsAttention.length === 0 && (
+            <p className="font-sans text-sm text-foreground/75 leading-relaxed">
+              {dashboardState.body}
+            </p>
+          )}
           {dashboardStatePrimaryCta && (
             <Link
               href={dashboardStatePrimaryCta.href}
@@ -818,6 +835,37 @@ export default function DashboardPage() {
           )}
         </motion.div>
       </div>
+
+      {needsAttention.length === 0 && (pulse?.recent_events?.length ?? 0) > 0 && (
+        <div className="px-8 pt-4">
+          <p className="font-mono text-[10px] uppercase tracking-[0.18em] text-muted-foreground mb-2">
+            Recent signals
+          </p>
+          <div className="border border-border divide-y divide-border/40">
+            {pulse!.recent_events!.map((e) => (
+              <Link
+                key={`${e.holding_id}-${e.created_at}`}
+                href={`/dashboard/positions/${e.ticker}`}
+                className="flex items-center gap-3 px-4 py-2.5 hover:bg-muted/30 transition-colors group"
+              >
+                <span className={`h-1.5 w-1.5 rounded-full shrink-0 ${
+                  e.severity === "thesis_breaking" ? "bg-red-500" :
+                  e.severity === "warning" ? "bg-amber-500" : "bg-sky-400"
+                }`} />
+                <span className="font-mono text-[10px] text-muted-foreground/70 shrink-0 w-12 truncate">
+                  {cleanTicker(e.ticker)}
+                </span>
+                <span className="font-sans text-xs text-foreground/80 truncate flex-1 group-hover:text-foreground transition-colors">
+                  {e.title}
+                </span>
+                <span className="font-mono text-[10px] text-muted-foreground/50 shrink-0">
+                  {e.created_at ? `${Math.floor((Date.now() - new Date(e.created_at).getTime()) / 86400000)}d` : ""}
+                </span>
+              </Link>
+            ))}
+          </div>
+        </div>
+      )}
 
       <AnimatePresence>
         {needsAttention.length > 0 && (

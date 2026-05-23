@@ -46,17 +46,30 @@ class HoldingPulseResponse(BaseModel):
     name: str
     pulse_status: str  # intact | watch | review
     reason: str
+    assumption_label: str | None = None
     latest_event_summary: str | None = None
     days_since_thesis_update: int | None = None
     has_thesis: bool
+    latest_event_at: datetime | None = None
+    urgency_score: int = 0
     pnl_pct: float | None = None
     last_checked_at: datetime | None = None
     recent_event_count: int = 0
 
 
+class RecentEventSummaryResponse(BaseModel):
+    holding_id: uuid.UUID
+    ticker: str
+    title: str
+    severity: str
+    event_type: str
+    created_at: datetime | None = None
+
+
 class PortfolioPulseResponse(BaseModel):
     pulses: list[HoldingPulseResponse]
     next_digest_at: datetime | None = None
+    recent_events: list[RecentEventSummaryResponse] = []
 
 
 class UpcomingEarningsResponse(BaseModel):

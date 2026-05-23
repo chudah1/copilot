@@ -253,6 +253,7 @@ export interface Digest {
     monitoring_receipt?: string;
     quiet_nudge?: string | null;
     consecutive_quiet_weeks?: number;
+    investor_profile?: "thesis_driven" | "hearsay_driven" | null;
     next_earnings?: {
       ticker: string;
       report_date: string;
@@ -268,17 +269,30 @@ export interface HoldingPulse {
   name: string;
   pulse_status: "intact" | "watch" | "review";
   reason: string;
+  assumption_label: string | null;
   latest_event_summary: string | null;
   days_since_thesis_update: number | null;
   has_thesis: boolean;
+  latest_event_at: string | null;
+  urgency_score: number;
   pnl_pct: number | null;
   last_checked_at: string | null;
   recent_event_count: number;
 }
 
+export interface RecentEventSummary {
+  holding_id: string;
+  ticker: string;
+  title: string;
+  severity: "info" | "warning" | "thesis_breaking";
+  event_type: string;
+  created_at: string | null;
+}
+
 export interface PortfolioPulse {
   pulses: HoldingPulse[];
   next_digest_at: string | null;
+  recent_events?: RecentEventSummary[];
 }
 
 export interface UpcomingEarnings {
