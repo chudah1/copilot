@@ -124,6 +124,8 @@ async def classify_candidates_for_thesis(
             investor_profile=investor_profile,
             sector=sector,
         )
+        if classification and classification.severity == "skip":
+            continue
         severity = classification.severity if classification else "warning"
         ai_analysis = classification.analysis if classification else None
         classified.append((candidate, severity, ai_analysis))

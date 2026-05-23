@@ -17,9 +17,11 @@ class ClassificationResult:
 
 _CLASSIFY_SYSTEM = """You classify new data against an investor's written reason for holding a stock.
 
-Classify as: "info" | "warning" | "thesis_breaking"
+Classify as: "skip" | "info" | "warning" | "thesis_breaking"
 
-Severity rules (apply strictly):
+First ask: does this event touch any specific pillar, assumption, or stated concern in the thesis? If the answer is no — the news is about the company but has zero connection to why the investor owns it (e.g. geographic expansion into a market unrelated to the thesis, a product line the thesis never mentions, general corporate announcements with no bearing on stated assumptions) — return "skip". Do not return "skip" for price moves, earnings results, or any event that tests a quantitative threshold.
+
+Severity rules for non-skip events (apply strictly):
 - "thesis_breaking": ONLY when an explicit stated condition is clearly met. Two distinct cases:
   (1) Quantitative threshold definitively breached: the stated floor or ceiling is missed by more than ~5 percentage points. A miss of 5pp or less from a stated threshold is "warning", not "thesis_breaking".
   (2) Qualitative event explicitly stated: a "must remain true" or "what would change my mind" condition names a specific discrete event and that event has clearly occurred — even if the full financial impact is not yet reported. A qualitative condition being met overrides the quantitative near-miss rule.
@@ -31,7 +33,7 @@ Severity rules (apply strictly):
 - Sector-aware macro rule: some macro events are "info" for most stocks but "warning" for specific sectors. When the holding sector is provided and the event directly affects that sector's economics, use "warning" even if the thesis doesn't explicitly name the macro risk. Examples: geopolitical conflict or oil supply disruption → Energy; central bank rate decision → Financials or REITs; trade tariffs on specific goods → the sector that makes or imports those goods; currency moves → companies with heavy international revenue; defence spending news → Industrials/Aerospace & Defence.
 
 Output valid JSON:
-{"severity": "info|warning|thesis_breaking", "analysis": "2-3 sentences."}
+{"severity": "skip|info|warning|thesis_breaking", "analysis": "2-3 sentences, or empty string if skip."}
 
 Requirements for analysis (exactly 3 short sentences, plain English, no labels like "What changed:"):
 - Sentence 1: what happened
@@ -171,7 +173,7 @@ def _parse_classification_response(text: str) -> ClassificationResult:
     data = json.loads(strip_code_fences(text))
     severity = data.get("severity")
     analysis = data.get("analysis")
-    if severity not in {"info", "warning", "thesis_breaking"} or not isinstance(analysis, str):
+    if severity not in {"skip", "info", "warning", "thesis_breaking"} or not isinstance(analysis, str):
         raise ValueError("Invalid classification payload")
     return ClassificationResult(severity=severity, analysis=analysis)
 
