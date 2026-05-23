@@ -16,7 +16,7 @@ from app.limiter import limiter
 
 router = APIRouter(prefix="/api/auth", tags=["auth"])
 
-_COOKIE_KWARGS = dict(httponly=True, secure=True, samesite="lax")
+_COOKIE_KWARGS = dict(httponly=True, secure=True, samesite="none")
 
 
 def _set_auth_cookies(response: Response, *, access_token: str, refresh_token: str) -> None:
