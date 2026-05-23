@@ -2,10 +2,9 @@ import asyncio
 from logging.config import fileConfig
 
 from alembic import context
-from sqlalchemy.ext.asyncio import create_async_engine
 
 from app.config import settings
-from app.database import Base
+from app.database import Base, make_async_engine
 from app.models import *  # noqa: F403
 
 config = context.config
@@ -28,7 +27,7 @@ def do_run_migrations(connection):
 
 
 async def run_migrations_online():
-    connectable = create_async_engine(settings.database_url)
+    connectable = make_async_engine(settings.database_url)
     async with connectable.connect() as connection:
         await connection.run_sync(do_run_migrations)
     await connectable.dispose()
