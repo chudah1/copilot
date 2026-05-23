@@ -418,5 +418,117 @@
       "must_remain_true": "",
       "what_would_change_my_mind": "Short interest drops below 15%. Ryan Cohen sells his stake."
     }
+  },
+  {
+    "id": "reddit_googl_031",
+    "description": "Berkshire institutional social proof + relative P/E valuation — the classic Reddit 'smart money followed, but is it overvalued?' pattern",
+    "expected_reason_type": "mixed",
+    "expected_monitorability": "medium",
+    "complexity": "expensive",
+    "input": {
+      "ticker": "GOOGL",
+      "name": "Alphabet Inc",
+      "why_own_it": "Berkshire recently increased their investment in Google by 200%, which is very uncharacteristic of Berkshire and shows serious conviction. Google trades at a P/E of 29.57 which looks high but is actually cheap compared to META and MSFT on a like-for-like basis given Google's AI infrastructure and search dominance.",
+      "must_remain_true": "Berkshire maintains or grows their Alphabet position. Google P/E stays below 35. Search market share stays above 80%.",
+      "what_would_change_my_mind": "Berkshire exits the position entirely. P/E expands above 40 without proportional earnings growth. Bing AI or ChatGPT meaningfully erodes search query share."
+    }
+  },
+  {
+    "id": "reddit_nvda_032",
+    "description": "Moonshot price target thesis with hardware-to-software narrative shift — tests whether decomposer extracts falsifiable claims or hallucinates thresholds from a $20T target",
+    "expected_reason_type": "business_performance",
+    "expected_monitorability": "medium",
+    "complexity": "expensive",
+    "input": {
+      "ticker": "NVDA",
+      "name": "NVIDIA Corporation",
+      "why_own_it": "Nvidia will reach $20 trillion market cap by 2030 — 310% upside from here. They're evolving from pure hardware into one of the largest AI software companies. Forward P/E of 40.7 is 26% below their 3-year median of 55. The inference era is only beginning and CUDA lock-in means nobody can switch.",
+      "must_remain_true": "Data center revenue keeps accelerating. CUDA ecosystem remains the default for AI workloads.",
+      "what_would_change_my_mind": "Custom silicon from Google TPUs or AWS Trainium meaningfully displaces Nvidia in inference workloads. Forward P/E re-rates below 30 from multiple compression, not earnings growth."
+    }
+  },
+  {
+    "id": "reddit_tsla_033",
+    "description": "Thesis collapse and pivot — investor admits original EV thesis failed but holds on new narrative; tests handling of contradictory, emotionally held positions",
+    "expected_reason_type": "unclear",
+    "expected_monitorability": "low",
+    "complexity": "cheap",
+    "input": {
+      "ticker": "TSLA",
+      "name": "Tesla Inc",
+      "why_own_it": "The original EV thesis is basically dead — deliveries stalled for two years and margins are being crushed by price cuts. But now Tesla is supposedly a robotics and autonomous vehicle company. FSD, Optimus, Robotaxi. I still hold because Elon is building something nobody else can.",
+      "must_remain_true": "Elon stays focused on Tesla, not other ventures.",
+      "what_would_change_my_mind": "FSD regulatory approval keeps getting delayed past 2026. Robotaxi launches without meaningful commercial revenue within 18 months."
+    }
+  },
+  {
+    "id": "reddit_aapl_034",
+    "description": "Emotional brand thesis anchored to Buffett endorsement — no personal metrics, pure behavioural and celebrity social proof",
+    "expected_reason_type": "behavioral",
+    "expected_monitorability": "low",
+    "complexity": "cheap",
+    "input": {
+      "ticker": "AAPL",
+      "name": "Apple Inc",
+      "why_own_it": "Once you're in the iPhone ecosystem you buy Macs, iPads, AirPods, Apple Watch. Exceptional brand loyalty that persists even when they lag on AI. Warren Buffett calls it the best business he knows — $416 billion in sales with $112 billion net income. I'm not going to bet against that.",
+      "must_remain_true": "",
+      "what_would_change_my_mind": "Regulatory action forces App Store to fully open up. Android finally breaks the ecosystem lock for mainstream users."
+    }
+  },
+  {
+    "id": "reddit_asts_035",
+    "description": "Pre-revenue speculative satellite constellation — no traditional financial metrics, pure narrative and partnership signals; tests hallucination risk on unquantifiable thesis",
+    "expected_reason_type": "macro_theme",
+    "expected_monitorability": "low",
+    "complexity": "cheap",
+    "input": {
+      "ticker": "ASTS",
+      "name": "AST SpaceMobile Inc",
+      "why_own_it": "AST SpaceMobile is building cellular towers in space. They've partnered with AT&T, Verizon, and Vodafone as a wholesale provider. The stock surged 370% after successful test results. This is early-stage SpaceX-like upside if they execute. The TAM is literally everyone on earth with a mobile phone.",
+      "must_remain_true": "AT&T and Verizon partnerships remain active. Satellite launches proceed without major failures.",
+      "what_would_change_my_mind": "Major carrier partner walks away from the agreement. Launch failures or regulatory denials destroy the constellation timeline."
+    }
+  },
+  {
+    "id": "reddit_rddt_036",
+    "description": "Data licensing monetisation catalyst with specific named deal values — tests whether decomposer correctly anchors signals to stated dollar amounts rather than inventing thresholds",
+    "expected_reason_type": "business_performance",
+    "expected_monitorability": "high",
+    "complexity": "expensive",
+    "input": {
+      "ticker": "RDDT",
+      "name": "Reddit Inc",
+      "why_own_it": "Reddit owns one of the most valuable assets on the internet — authentic human conversation at scale. They signed a $60M/year deal with Google and roughly $70M/year with OpenAI for AI training data. Q1 revenue hit $663M with 69% YoY growth. GAAP net margin expanded to 30.8%. The advertising engine is compounding while AI licensing adds high-margin upside.",
+      "must_remain_true": "Revenue growth stays above 40% YoY. GAAP net margin stays above 20%. Google and OpenAI data licensing deals remain active.",
+      "what_would_change_my_mind": "Google kills their data deal or a major algorithm change tanks Reddit engagement. Ad revenue growth decelerates below 30%. AI companies build synthetic data pipelines that make Reddit's corpus redundant."
+    }
+  },
+  {
+    "id": "reddit_rddt_037",
+    "description": "Bearish monetisation thesis — skeptical framing where user sees the asset value but doubts execution; tests whether decomposer handles non-bullish, critical theses correctly",
+    "expected_reason_type": "unclear",
+    "expected_monitorability": "medium",
+    "complexity": "expensive",
+    "input": {
+      "ticker": "RDDT",
+      "name": "Reddit Inc",
+      "why_own_it": "Reddit is a goldmine with potentially the worst monetisation strategy in tech. Ad revenue per user is roughly $3 annually compared to Facebook's $40 and YouTube's $30. They've treated monetisation like it corrupts communities. Users spend over 10 minutes per session but Reddit captures almost none of that value. I'm watching to see if they close the ARPU gap, not buying yet.",
+      "must_remain_true": "ARPU improves meaningfully toward $10+ within two years. Data licensing scales beyond $200M annually.",
+      "what_would_change_my_mind": "ARPU gap vs Meta and YouTube fails to close materially after two annual reporting cycles. Heavy monetisation push triggers a user exodus similar to the 2023 API change."
+    }
+  },
+  {
+    "id": "reddit_amzn_038",
+    "description": "AWS three-business flywheel with AI expansion narrative — data-driven Reddit post with specific margin and market share claims",
+    "expected_reason_type": "business_performance",
+    "expected_monitorability": "high",
+    "complexity": "expensive",
+    "input": {
+      "ticker": "AMZN",
+      "name": "Amazon.com Inc",
+      "why_own_it": "AWS has a 38% operating margin — highest in at least a decade — and contributes 60% of Amazon's total operating income. The AI business within AWS is at triple-digit growth on a multi-billion dollar run rate, mirroring early AWS expansion potential. Meanwhile advertising is quietly becoming a $50B+ business. Amazon is three dominant businesses in one stock.",
+      "must_remain_true": "AWS operating margin stays above 35%. AWS AI and ML revenue maintains triple-digit growth for at least two more quarters. Advertising revenue grows faster than 15% YoY.",
+      "what_would_change_my_mind": "Azure takes AWS cloud market share below 28%. AWS operating margin compresses below 30% due to AI infrastructure capex. Advertising growth decelerates to single digits."
+    }
   }
 ]
