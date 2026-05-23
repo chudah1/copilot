@@ -518,6 +518,48 @@
     }
   },
   {
+    "id": "reddit_diary_bidu_039",
+    "description": "Diary-entry style — qualitative management skepticism + geopolitical drift, no metrics, written like a personal journal. Tests whether decomposer extracts signals from prose or hallucinates thresholds.",
+    "expected_reason_type": "mixed",
+    "expected_monitorability": "low",
+    "complexity": "cheap",
+    "input": {
+      "ticker": "BIDU",
+      "name": "Baidu Inc",
+      "why_own_it": "Bought because I believed Baidu's AI and Apollo autonomous driving represented serious optionality at a cheap valuation. Michael Burry also held a position which gave me early conviction. But I'm growing sceptical of management — the founder feels increasingly out of touch, the shareholder value track record is poor, and the projects are scattered moonshots that don't coalesce into a clear strategy. Starting to wonder if this is an aging utility company with a low-probability AI option rather than a genuine AI compounder.",
+      "must_remain_true": "Apollo robotaxi deployment accelerates meaningfully. Baidu AI Cloud grows faster than domestic competitors.",
+      "what_would_change_my_mind": "A domestic AI competitor clearly displaces Baidu on its core search turf. Geopolitical chip sanctions materially constrain Baidu's AI training capacity. Founder continues ignoring shareholder returns with no buyback or dividend progress."
+    }
+  },
+  {
+    "id": "reddit_notes_strabag_040",
+    "description": "Bullet-note research style — European construction stock, fragmented incomplete sentences, valuation metrics mixed with qualitative acquisition skepticism. Tests handling of note-form input without full prose.",
+    "expected_reason_type": "mixed",
+    "expected_monitorability": "medium",
+    "complexity": "expensive",
+    "input": {
+      "ticker": "STR.VI",
+      "name": "Strabag SE",
+      "why_own_it": "NTM PE of 11x looks cheap. Record order backlog up 8% YoY at 25.4B EUR. Revenue guided to grow to 21B EUR from 18.7B — roughly 20% growth. EBIT margin guided at 4.5% for 2025. Strong infrastructure demand across Europe from energy transition and defence spending. But management talking about acquisitions and acquisitions are usually stupid and a bad use of cash. Cash flow from investing activities heavy at 1.1B. Need to watch whether they overpay for something dumb and destroy the value.",
+      "must_remain_true": "Order backlog stays above 25B EUR. EBIT margin holds above 4%. No major acquisition above 500M EUR announced.",
+      "what_would_change_my_mind": "Management announces a large acquisition at a high multiple. EBIT margin deteriorates below 3.5% from cost overruns. European infrastructure spending slows materially due to budget austerity."
+    }
+  },
+  {
+    "id": "reddit_bear_first_intc_041",
+    "description": "Bear-case-first thesis construction — investor explicitly writes the kill case before the bull case as discipline. Tests whether decomposer handles inverted framing and still extracts falsifiable claims.",
+    "expected_reason_type": "business_performance",
+    "expected_monitorability": "high",
+    "complexity": "expensive",
+    "input": {
+      "ticker": "INTC",
+      "name": "Intel Corporation",
+      "why_own_it": "Bear case first, as discipline requires: Intel lost process leadership to TSMC. Foundry loses money. AMD has been taking server share for years. AI accelerators went to Nvidia. Management execution has been poor for a decade. Now the bull case I am testing: new CEO is cutting costs aggressively, the foundry strategy could work with US CHIPS Act subsidies, and Intel still has entrenched x86 installed base in enterprise. If foundry reaches breakeven by 2026 and server share stabilises, the valuation is pricing in permanent failure.",
+      "must_remain_true": "Gross margin stabilises above 40%. Foundry external customer revenue grows each quarter. Server CPU market share stops declining.",
+      "what_would_change_my_mind": "Foundry business requires further impairment write-downs. Key foundry customer wins fail to materialise by end of 2025. AMD continues taking server share and Intel falls below 70% x86 data centre share."
+    }
+  },
+  {
     "id": "reddit_amzn_038",
     "description": "AWS three-business flywheel with AI expansion narrative — data-driven Reddit post with specific margin and market share claims",
     "expected_reason_type": "business_performance",
