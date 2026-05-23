@@ -1058,7 +1058,7 @@ export default function PositionDetailPage() {
         window.localStorage.setItem(
           "dashboard_recent_review",
           JSON.stringify({
-            ticker: holding.ticker,
+            ticker: holding?.ticker,
             action,
             assumption_label: event.signal_label || event.title || null,
             resolved_all: Boolean(refreshedEvents && refreshedEvents.every((candidate) => candidate.review_action)),
