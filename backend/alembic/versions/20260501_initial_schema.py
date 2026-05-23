@@ -8,6 +8,8 @@ Create Date: 2026-05-01 00:00:00.000000
 from alembic import op
 import sqlalchemy as sa
 
+from app.database import UUIDType
+
 
 revision = "20260501_initial_schema"
 down_revision = None
@@ -19,7 +21,7 @@ def upgrade() -> None:
     # users
     op.create_table(
         "users",
-        sa.Column("id", sa.String(36), nullable=False),
+        sa.Column("id", UUIDType(), nullable=False),
         sa.Column("email", sa.String(255), nullable=False),
         sa.Column("password_hash", sa.String(255), nullable=False),
         sa.Column("preferences", sa.JSON(), nullable=True),
@@ -34,8 +36,8 @@ def upgrade() -> None:
     # broker_connections
     op.create_table(
         "broker_connections",
-        sa.Column("id", sa.String(36), nullable=False),
-        sa.Column("user_id", sa.String(36), nullable=False),
+        sa.Column("id", UUIDType(), nullable=False),
+        sa.Column("user_id", UUIDType(), nullable=False),
         sa.Column("broker_type", sa.String(50), nullable=False),
         sa.Column("encrypted_api_key", sa.LargeBinary(), nullable=True),
         sa.Column("last_synced_at", sa.DateTime(timezone=True), nullable=True),
@@ -48,9 +50,9 @@ def upgrade() -> None:
     # holdings
     op.create_table(
         "holdings",
-        sa.Column("id", sa.String(36), nullable=False),
-        sa.Column("user_id", sa.String(36), nullable=False),
-        sa.Column("broker_connection_id", sa.String(36), nullable=True),
+        sa.Column("id", UUIDType(), nullable=False),
+        sa.Column("user_id", UUIDType(), nullable=False),
+        sa.Column("broker_connection_id", UUIDType(), nullable=True),
         sa.Column("ticker", sa.String(20), nullable=False),
         sa.Column("name", sa.String(255), nullable=False),
         sa.Column("exchange", sa.String(50), nullable=True),
@@ -72,9 +74,9 @@ def upgrade() -> None:
     # theses
     op.create_table(
         "theses",
-        sa.Column("id", sa.String(36), nullable=False),
-        sa.Column("holding_id", sa.String(36), nullable=False),
-        sa.Column("user_id", sa.String(36), nullable=False),
+        sa.Column("id", UUIDType(), nullable=False),
+        sa.Column("holding_id", UUIDType(), nullable=False),
+        sa.Column("user_id", UUIDType(), nullable=False),
         sa.Column("status", sa.String(20), nullable=False, server_default="draft"),
         sa.Column("thesis_kind", sa.String(30), nullable=False, server_default="company"),
         sa.Column("why_own_it", sa.Text(), nullable=False),
@@ -97,8 +99,8 @@ def upgrade() -> None:
     # digests
     op.create_table(
         "digests",
-        sa.Column("id", sa.String(36), nullable=False),
-        sa.Column("user_id", sa.String(36), nullable=False),
+        sa.Column("id", UUIDType(), nullable=False),
+        sa.Column("user_id", UUIDType(), nullable=False),
         sa.Column("sent_at", sa.DateTime(timezone=True), nullable=True),
         sa.Column("period_start", sa.DateTime(timezone=True), nullable=False),
         sa.Column("period_end", sa.DateTime(timezone=True), nullable=False),
@@ -111,9 +113,9 @@ def upgrade() -> None:
     # monitoring_events (signal-linking columns added later by 20260515_signal_linking)
     op.create_table(
         "monitoring_events",
-        sa.Column("id", sa.String(36), nullable=False),
-        sa.Column("holding_id", sa.String(36), nullable=False),
-        sa.Column("thesis_id", sa.String(36), nullable=False),
+        sa.Column("id", UUIDType(), nullable=False),
+        sa.Column("holding_id", UUIDType(), nullable=False),
+        sa.Column("thesis_id", UUIDType(), nullable=False),
         sa.Column("event_type", sa.String(30), nullable=False),
         sa.Column("severity", sa.String(20), nullable=False),
         sa.Column("title", sa.String(500), nullable=False),
@@ -122,7 +124,7 @@ def upgrade() -> None:
         sa.Column("raw_data", sa.JSON(), nullable=True),
         sa.Column("ai_analysis", sa.Text(), nullable=True),
         sa.Column("created_at", sa.DateTime(timezone=True), server_default=sa.text("CURRENT_TIMESTAMP"), nullable=False),
-        sa.Column("included_in_digest_id", sa.String(36), nullable=True),
+        sa.Column("included_in_digest_id", UUIDType(), nullable=True),
         sa.ForeignKeyConstraint(["holding_id"], ["holdings.id"]),
         sa.ForeignKeyConstraint(["included_in_digest_id"], ["digests.id"]),
         sa.ForeignKeyConstraint(["thesis_id"], ["theses.id"]),
@@ -132,8 +134,8 @@ def upgrade() -> None:
     # password_reset_tokens
     op.create_table(
         "password_reset_tokens",
-        sa.Column("id", sa.String(36), nullable=False),
-        sa.Column("user_id", sa.String(36), nullable=False),
+        sa.Column("id", UUIDType(), nullable=False),
+        sa.Column("user_id", UUIDType(), nullable=False),
         sa.Column("token_hash", sa.String(255), nullable=False),
         sa.Column("expires_at", sa.DateTime(timezone=True), nullable=False),
         sa.Column("used_at", sa.DateTime(timezone=True), nullable=True),
@@ -146,8 +148,8 @@ def upgrade() -> None:
     # portfolio_snapshots
     op.create_table(
         "portfolio_snapshots",
-        sa.Column("id", sa.String(36), nullable=False),
-        sa.Column("user_id", sa.String(36), nullable=False),
+        sa.Column("id", UUIDType(), nullable=False),
+        sa.Column("user_id", UUIDType(), nullable=False),
         sa.Column("snapshot_date", sa.Date(), nullable=False),
         sa.Column("total_value", sa.Numeric(16, 2), nullable=False),
         sa.Column("total_cost", sa.Numeric(16, 2), nullable=False),

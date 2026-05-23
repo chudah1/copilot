@@ -8,6 +8,8 @@ Create Date: 2026-05-12 08:30:00.000000
 from alembic import op
 import sqlalchemy as sa
 
+from app.database import UUIDType
+
 
 # revision identifiers, used by Alembic.
 revision = "20260512_add_decomposition"
@@ -19,8 +21,8 @@ depends_on = None
 def upgrade() -> None:
     op.create_table(
         "thesis_decompositions",
-        sa.Column("id", sa.String(length=36), nullable=False),
-        sa.Column("thesis_id", sa.String(length=36), nullable=False),
+        sa.Column("id", UUIDType(), nullable=False),
+        sa.Column("thesis_id", UUIDType(), nullable=False),
         sa.Column("version", sa.Integer(), nullable=False),
         sa.Column("status", sa.String(length=20), nullable=False),
         sa.Column("reason_type", sa.String(length=50), nullable=True),
@@ -42,8 +44,8 @@ def upgrade() -> None:
 
     op.create_table(
         "thesis_claims",
-        sa.Column("id", sa.String(length=36), nullable=False),
-        sa.Column("decomposition_id", sa.String(length=36), nullable=False),
+        sa.Column("id", UUIDType(), nullable=False),
+        sa.Column("decomposition_id", UUIDType(), nullable=False),
         sa.Column("claim_text", sa.Text(), nullable=False),
         sa.Column("claim_type", sa.String(length=50), nullable=True),
         sa.Column("confidence", sa.Numeric(precision=5, scale=4), nullable=True),
@@ -57,8 +59,8 @@ def upgrade() -> None:
 
     op.create_table(
         "thesis_entities",
-        sa.Column("id", sa.String(length=36), nullable=False),
-        sa.Column("claim_id", sa.String(length=36), nullable=False),
+        sa.Column("id", UUIDType(), nullable=False),
+        sa.Column("claim_id", UUIDType(), nullable=False),
         sa.Column("entity_name", sa.String(length=255), nullable=False),
         sa.Column("entity_ticker", sa.String(length=20), nullable=True),
         sa.Column("entity_type", sa.String(length=50), nullable=True),
@@ -76,8 +78,8 @@ def upgrade() -> None:
 
     op.create_table(
         "thesis_signals",
-        sa.Column("id", sa.String(length=36), nullable=False),
-        sa.Column("entity_id", sa.String(length=36), nullable=False),
+        sa.Column("id", UUIDType(), nullable=False),
+        sa.Column("entity_id", UUIDType(), nullable=False),
         sa.Column("signal_type", sa.String(length=50), nullable=False),
         sa.Column("signal_label", sa.String(length=255), nullable=True),
         sa.Column("signal_config_json", sa.JSON(), nullable=True),
