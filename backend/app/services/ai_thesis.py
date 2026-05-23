@@ -153,6 +153,53 @@ THESIS_ASSIST_INTERPRETATION_SCHEMA = {
 }
 
 
+THESIS_ASSIST_FROM_BLANK_PROMPT = """Draft a first-pass reason for holding a specific stock, in the investor's own first-person voice.
+The investor hasn't written anything yet — generate a starting point they can edit and make their own.
+
+Position:
+- Ticker: {ticker}
+- Name: {name}
+- Shares: {quantity}
+- Average cost: {average_cost}
+
+{market_data_section}
+
+Rules:
+- Write in first person throughout: "I own this because...", "I need...", "I'd sell if..."
+- Name the specific business driver rather than describing it vaguely.
+- must_remain_true: a specific, observable condition — not "maintains competitive advantage" or "continues to grow".
+- what_would_change_my_mind: a specific event or scenario, not a vague "if the business deteriorates".
+- Sound like a thoughtful individual investor, not a sell-side analyst.
+- Do NOT use phrases like "long-term potential", "solid fundamentals", or "maintains market position".
+
+Output valid JSON with this exact structure:
+{{
+    "why_own_it": "First-person, 2-3 sentences: 'I own this because [specific driver]...'",
+    "must_remain_true": "First-person: the specific condition(s) the investor needs to stay true.",
+    "what_would_change_my_mind": "First-person: the specific event or scenario that would make them sell.",
+    "ai_summary": "2-3 sentences summarising the thesis in plain English.",
+    "interpretation": {{
+        "labels": ["theme_or_reason"],
+        "monitorability": "high|medium|low",
+        "watch_hints": [
+            {{
+                "kind": "price_move_pct" or "metric_threshold",
+                "threshold": 10.0,
+                "metric": "optional_metric_name",
+                "operator": "optional_operator",
+                "rationale": "Why this would matter to the thesis"
+            }}
+        ],
+        "proxy_signals": [],
+        "ambiguity_note": ""
+    }}
+}}
+
+- Include 0-3 watch_hints. For growth metrics, only set a threshold if you can infer a specific rate from the position data; never use 0. Thresholds for growth metrics are decimal fractions (0.10 = 10%).
+- For structured output compatibility, every watch_hint must include metric and operator strings (use empty strings for price_move_pct).
+- Output ONLY valid JSON, no markdown fences."""
+
+
 THESIS_PROMPT = """You help a retail investor tighten why they own a position — same meaning, clearer words.
 
 Given the position, the user's current thesis draft, and any available market data, produce:
@@ -173,9 +220,9 @@ Position:
 
 Output valid JSON with this exact structure:
 {{
-    "why_own_it": "Refined version of the investor's reason for owning the position.",
-    "must_remain_true": "Refined version of the key condition(s) that must stay true.",
-    "what_would_change_my_mind": "Refined version of the specific break condition or sell trigger.",
+    "why_own_it": "First-person: 'I own this because...' — refined version of the investor's own reason, in their voice.",
+    "must_remain_true": "First-person or direct: the specific condition(s) the investor needs to stay true.",
+    "what_would_change_my_mind": "First-person or direct: the specific event or scenario that would make the investor sell.",
     "ai_summary": "2-3 sentences explaining the thesis in investor language.",
     "interpretation": {{
         "labels": ["theme_or_reason"],
@@ -928,16 +975,26 @@ async def assist_thesis(
         what_would_change_my_mind=what_would_change_my_mind,
         draft_text=draft_text,
     )
-    prompt = THESIS_PROMPT.format(
-        ticker=clean_ticker,
-        name=name,
-        quantity=quantity,
-        average_cost=average_cost,
-        why_own_it=refined_why_own_it or "None provided",
-        must_remain_true=refined_must_remain_true or "None provided",
-        what_would_change_my_mind=refined_change_mind or "None provided",
-        market_data_section=market_data_section,
-    )
+    is_blank = not any([refined_why_own_it, refined_must_remain_true, refined_change_mind])
+    if is_blank:
+        prompt = THESIS_ASSIST_FROM_BLANK_PROMPT.format(
+            ticker=clean_ticker,
+            name=name,
+            quantity=quantity,
+            average_cost=average_cost,
+            market_data_section=market_data_section,
+        )
+    else:
+        prompt = THESIS_PROMPT.format(
+            ticker=clean_ticker,
+            name=name,
+            quantity=quantity,
+            average_cost=average_cost,
+            why_own_it=refined_why_own_it or "None provided",
+            must_remain_true=refined_must_remain_true or "None provided",
+            what_would_change_my_mind=refined_change_mind or "None provided",
+            market_data_section=market_data_section,
+        )
 
     try:
         if not settings.anthropic_api_key:
@@ -1095,24 +1152,25 @@ async def generate_counter_thesis(
         )
 
 
-DRAFT_THESIS_PROMPT = """Draft a first-pass reason for holding a specific stock.
-Be specific about the business driver and what would break the case — no generic filler.
+DRAFT_THESIS_PROMPT = """Draft a first-pass reason for holding a specific stock, written in the investor's own voice.
 
 Rules:
+- Write in first person: "I own this because...", "I need to see...", "I'd sell if..."
 - Name the specific business driver (e.g. AI inference demand, government contract backlog, network effects, regulatory moat) rather than describing it vaguely.
 - must_remain_true must state a specific, observable condition — not platitudes like "maintains competitive advantage" or "continues to grow".
 - what_would_change_my_mind must name a specific event or scenario that would signal the thesis is broken.
 - Do NOT use phrases like "long-term potential", "solid fundamentals", or "maintains market position" — these cannot be monitored.
 - Avoid named politicians or named administrations unless the user explicitly mentioned them. Prefer neutral wording like "U.S. federal policy", "regulatory standards", or "government incentives".
+- Sound like a thoughtful individual investor, not a sell-side analyst.
 
 Ticker: {ticker}
 {market_data_section}
 
 Output valid JSON with this exact structure:
 {{
-    "why_own_it": "2-3 sentences citing the specific business driver and why it holds today.",
-    "must_remain_true": "The specific condition(s) that must hold for the thesis to stay valid.",
-    "what_would_change_my_mind": "The specific event or scenario that would cause a sell."
+    "why_own_it": "First-person, 2-3 sentences: 'I own this because [specific driver]...'",
+    "must_remain_true": "First-person: 'I need [specific observable condition] to stay true...'",
+    "what_would_change_my_mind": "First-person: 'I'd sell if [specific event or scenario]...'"
 }}
 
 Output ONLY valid JSON, no markdown fences."""
