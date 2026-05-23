@@ -123,15 +123,27 @@ def _build_providers(decompose_provider: str) -> list | None:
     from app.services.reasoning.providers import AnthropicReasoningProvider, OpenAIReasoningProvider
     from app.services.reasoning.providers.openai_provider import Gpt4oMiniProvider
     from app.services.reasoning.providers.gemini_provider import GeminiReasoningProvider
+
+    # Latest-model variants — same provider class, model name overridden
+    class Gpt41Provider(OpenAIReasoningProvider):
+        name = "openai_gpt41"
+        model = "gpt-4.1"
+
+    class GeminiProProvider(GeminiReasoningProvider):
+        name = "gemini_pro"
+        model = "gemini-2.5-pro"
+
     mapping = {
-        "anthropic": [AnthropicReasoningProvider()],
-        "openai": [OpenAIReasoningProvider()],
-        "openai-mini": [Gpt4oMiniProvider()],
-        "gemini": [GeminiReasoningProvider()],
+        "anthropic":    [AnthropicReasoningProvider()],
+        "openai":       [OpenAIReasoningProvider()],       # gpt-4.1-mini
+        "openai-mini":  [Gpt4oMiniProvider()],             # gpt-4o-mini
+        "openai-latest":[Gpt41Provider()],                 # gpt-4.1
+        "gemini":       [GeminiReasoningProvider()],       # gemini-2.5-flash
+        "gemini-pro":   [GeminiProProvider()],             # gemini-2.5-pro
     }
     providers = mapping.get(decompose_provider)
     if providers is None:
-        raise ValueError(f"Unknown --provider '{decompose_provider}'. Choose: auto, anthropic, openai, openai-mini, gemini")
+        raise ValueError(f"Unknown --provider '{decompose_provider}'. Choose: auto, anthropic, openai, openai-mini, openai-latest, gemini, gemini-pro")
     return providers
 
 
@@ -292,7 +304,7 @@ async def _main():
     parser.add_argument("--judge", default="claude-sonnet-4-6", help="Judge model")
     parser.add_argument(
         "--provider", default="auto",
-        choices=["auto", "anthropic", "openai", "openai-mini", "gemini"],
+        choices=["auto", "anthropic", "openai", "openai-mini", "openai-latest", "gemini", "gemini-pro"],
         help="Provider for decomposition (auto=complexity routing, default: auto)",
     )
     parser.add_argument("--no-save", action="store_true", help="Don't save results to file")
