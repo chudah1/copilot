@@ -31,8 +31,18 @@ DATASET_PATH = Path(__file__).parent / "dataset.json"
 RESULTS_DIR = Path(__file__).parent / "results"
 
 
+def _strip_fences(raw: str) -> str:
+    raw = raw.strip()
+    if raw.startswith("```"):
+        raw = raw.split("```", 2)[1]
+        if raw.startswith("json"):
+            raw = raw[4:]
+        raw = raw.strip()
+    return raw
+
+
 async def _judge_output(input_case: dict, output: dict, judge_model: str) -> dict:
-    """Send output to judge model, return scores dict."""
+    """Send output to judge model, return scores dict. Tries Anthropic → OpenAI → Gemini."""
     import json as _json
 
     user_msg = JUDGE_USER_TEMPLATE.format(
@@ -44,11 +54,11 @@ async def _judge_output(input_case: dict, output: dict, judge_model: str) -> dic
         output_json=_json.dumps(output, indent=2),
     )
 
-    # Try Anthropic first, fall back to OpenAI
     anthropic_key = os.environ.get("ANTHROPIC_API_KEY", "")
     openai_key = os.environ.get("OPENAI_API_KEY", "")
+    gemini_key = os.environ.get("GEMINI_API_KEY", "")
 
-    anthropic_succeeded = False
+    # Anthropic
     if anthropic_key:
         try:
             import anthropic
@@ -61,42 +71,77 @@ async def _judge_output(input_case: dict, output: dict, judge_model: str) -> dic
                 temperature=0,
             )
             raw = next((b.text for b in response.content if hasattr(b, "text")), "")
-            # Strip markdown fences if model wraps JSON in ```json ... ```
-            raw = raw.strip()
-            if raw.startswith("```"):
-                raw = raw.split("```", 2)[1]
-                if raw.startswith("json"):
-                    raw = raw[4:]
-                raw = raw.strip()
-            anthropic_succeeded = True
+            return json.loads(_strip_fences(raw))
         except Exception:
-            pass  # fall through to OpenAI
+            pass
 
-    if not anthropic_succeeded and openai_key:
-        from openai import AsyncOpenAI
-        client = AsyncOpenAI(api_key=openai_key)
-        response = await client.chat.completions.create(
-            model=judge_model if "gpt" in judge_model else "gpt-4o-mini",
-            messages=[
-                {"role": "system", "content": JUDGE_SYSTEM_PROMPT},
-                {"role": "user", "content": user_msg},
-            ],
-            response_format={"type": "json_object"},
-            temperature=0,
-        )
-        raw = response.choices[0].message.content or "{}"
-    elif not anthropic_succeeded:
-        raise RuntimeError("No ANTHROPIC_API_KEY or OPENAI_API_KEY set")
+    # OpenAI
+    if openai_key:
+        try:
+            from openai import AsyncOpenAI
+            client = AsyncOpenAI(api_key=openai_key)
+            response = await client.chat.completions.create(
+                model=judge_model if "gpt" in judge_model else "gpt-4o-mini",
+                messages=[
+                    {"role": "system", "content": JUDGE_SYSTEM_PROMPT},
+                    {"role": "user", "content": user_msg},
+                ],
+                response_format={"type": "json_object"},
+                temperature=0,
+            )
+            raw = response.choices[0].message.content or "{}"
+            return json.loads(raw)
+        except Exception:
+            pass
 
-    return json.loads(raw)
+    # Gemini
+    if gemini_key:
+        try:
+            from google import genai
+            from google.genai import types as gtypes
+            client = genai.Client(api_key=gemini_key)
+            response = await asyncio.to_thread(
+                client.models.generate_content,
+                model="gemini-2.5-flash",
+                contents=f"{JUDGE_SYSTEM_PROMPT}\n\n{user_msg}",
+                config=gtypes.GenerateContentConfig(
+                    response_mime_type="application/json",
+                    temperature=0,
+                ),
+            )
+            return json.loads(_strip_fences(response.text or "{}"))
+        except Exception:
+            pass
+
+    raise RuntimeError("No ANTHROPIC_API_KEY, OPENAI_API_KEY, or GEMINI_API_KEY available for judging")
 
 
-async def _run_decomposition(input_case: dict) -> dict | None:
+def _build_providers(decompose_provider: str) -> list | None:
+    """Return provider list for the given --provider flag, or None for auto routing."""
+    if decompose_provider == "auto":
+        return None
+    from app.services.reasoning.providers import AnthropicReasoningProvider, OpenAIReasoningProvider
+    from app.services.reasoning.providers.openai_provider import Gpt4oMiniProvider
+    from app.services.reasoning.providers.gemini_provider import GeminiReasoningProvider
+    mapping = {
+        "anthropic": [AnthropicReasoningProvider()],
+        "openai": [OpenAIReasoningProvider()],
+        "openai-mini": [Gpt4oMiniProvider()],
+        "gemini": [GeminiReasoningProvider()],
+    }
+    providers = mapping.get(decompose_provider)
+    if providers is None:
+        raise ValueError(f"Unknown --provider '{decompose_provider}'. Choose: auto, anthropic, openai, openai-mini, gemini")
+    return providers
+
+
+async def _run_decomposition(input_case: dict, decompose_provider: str = "auto") -> dict | None:
     """Run thesis decomposition for a single case. Returns raw output or None on failure."""
     from app.services.reasoning.gateway import ThesisReasoningGateway
     from app.services.reasoning.types import ReasoningRequest, ReasoningTaskType
 
-    gateway = ThesisReasoningGateway()
+    providers = _build_providers(decompose_provider)
+    gateway = ThesisReasoningGateway(providers=providers)
     request = ReasoningRequest(
         task_type=ReasoningTaskType.DECOMPOSE_THESIS,
         thesis_id=f"eval_{input_case['id']}",
@@ -113,6 +158,7 @@ async def run_eval(
     case_ids: list[str] | None = None,
     prompt_version: str = "unknown",
     judge_model: str = "claude-sonnet-4-6",
+    decompose_provider: str = "auto",
     skip_decomposition: bool = False,
     precomputed_outputs: dict | None = None,
 ) -> list[dict]:
@@ -143,7 +189,7 @@ async def run_eval(
         if skip_decomposition and precomputed_outputs:
             output = precomputed_outputs.get(cid)
         else:
-            output = await _run_decomposition(case)
+            output = await _run_decomposition(case, decompose_provider=decompose_provider)
 
         if output is None:
             results.append({
@@ -244,16 +290,22 @@ async def _main():
     parser.add_argument("--case", help="Run a single case by ID")
     parser.add_argument("--prompt-version", default="unknown", help="Prompt version tag (e.g. v5)")
     parser.add_argument("--judge", default="claude-sonnet-4-6", help="Judge model")
+    parser.add_argument(
+        "--provider", default="auto",
+        choices=["auto", "anthropic", "openai", "openai-mini", "gemini"],
+        help="Provider for decomposition (auto=complexity routing, default: auto)",
+    )
     parser.add_argument("--no-save", action="store_true", help="Don't save results to file")
     args = parser.parse_args()
 
     case_ids = [args.case] if args.case else None
-    print(f"\nRunning decomposition evals (prompt={args.prompt_version}, judge={args.judge})...")
+    print(f"\nRunning decomposition evals (prompt={args.prompt_version}, judge={args.judge}, provider={args.provider})...")
 
     results = await run_eval(
         case_ids=case_ids,
         prompt_version=args.prompt_version,
         judge_model=args.judge,
+        decompose_provider=args.provider,
     )
 
     print_table(results, args.prompt_version)
