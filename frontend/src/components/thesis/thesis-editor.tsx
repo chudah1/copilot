@@ -217,6 +217,25 @@ export function ThesisEditor({ thesis, investorProfile, mode = "write", onSave, 
           </p>
         </div>
 
+        {isAiDraft && (
+          <div className="flex items-center justify-between gap-4 rounded-xl border border-primary/20 bg-primary/5 px-4 py-3">
+            <p className="font-sans text-sm text-foreground/75">
+              We prepared a draft based on your position data.
+            </p>
+            <button
+              type="button"
+              onClick={() => {
+                setWhyOwnIt(asText(thesis?.why_own_it));
+                setMustRemainTrue(asText(thesis?.must_remain_true));
+                setChangeMind(asText(thesis?.what_would_change_my_mind));
+              }}
+              className="font-mono text-[10px] uppercase tracking-[0.15em] whitespace-nowrap text-primary hover:text-primary/80 transition-colors"
+            >
+              Load as starting point →
+            </button>
+          </div>
+        )}
+
         <div className="space-y-2">
           <Label>{copy.why}</Label>
           <Textarea
@@ -262,8 +281,8 @@ export function ThesisEditor({ thesis, investorProfile, mode = "write", onSave, 
         <div className="space-y-2">
           <Label>AI Assist</Label>
           <div className="flex gap-2">
-            <Button type="button" variant="outline" onClick={handleAssist} disabled={assisting || whyOwnIt.trim().length === 0}>
-              {assisting ? "Thinking..." : "Refine with AI"}
+            <Button type="button" variant="outline" onClick={handleAssist} disabled={assisting}>
+              {assisting ? "Thinking..." : whyOwnIt.trim().length === 0 ? "Draft with AI" : "Refine with AI"}
             </Button>
           </div>
           {assistError && <p className="text-sm text-red-500">{assistError}</p>}
