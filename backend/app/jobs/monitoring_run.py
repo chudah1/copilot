@@ -220,6 +220,8 @@ async def _fetch_ticker_data(tickers: set[str]) -> dict[str, CompanyData | None]
 
 
 async def run_monitoring():
+    import time
+    started = time.monotonic()
     logger.info("Starting daily monitoring run")
 
     async with async_session() as db:
@@ -334,9 +336,14 @@ async def run_monitoring():
                 )
 
             except Exception as e:
-                logger.error(f"Monitoring failed for thesis {thesis.id}: {e}")
+                logger.error("Monitoring failed for thesis %s: %s", thesis.id, e, exc_info=True)
                 continue
 
         await db.commit()
 
-    logger.info("Daily monitoring run complete")
+    elapsed = time.monotonic() - started
+    logger.info(
+        "Daily monitoring run complete — %d theses processed in %.1fs",
+        len(active_theses),
+        elapsed,
+    )

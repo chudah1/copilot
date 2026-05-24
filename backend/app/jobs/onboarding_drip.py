@@ -186,7 +186,7 @@ async def run_onboarding_drip():
                 await db.commit()
 
             except Exception as exc:
-                logger.error(f"Onboarding drip failed for user {state.user_id}: {exc}")
+                logger.error("Onboarding drip failed for user %s: %s", state.user_id, exc, exc_info=True)
                 continue
 
     logger.info("Onboarding drip job complete")

@@ -80,7 +80,7 @@ async def run_quarterly_review_prep(
                             nudge_count += 1
 
             except Exception as exc:
-                logger.error("Quarterly review prep failed for user %s: %s", user.id, exc)
+                logger.error("Quarterly review prep failed for user %s: %s", user.id, exc, exc_info=True)
                 continue
 
         await db.commit()

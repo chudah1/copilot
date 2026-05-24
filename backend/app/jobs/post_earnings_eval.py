@@ -81,6 +81,7 @@ async def run_post_earnings_evaluation() -> None:
                     holding.ticker,
                     holding.user_id,
                     exc,
+                    exc_info=True,
                 )
 
     logger.info("Post-earnings evaluation complete: %d holdings evaluated", evaluated)

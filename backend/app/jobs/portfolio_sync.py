@@ -14,6 +14,8 @@ logger = logging.getLogger(__name__)
 
 
 async def run_portfolio_sync():
+    import time
+    started = time.monotonic()
     logger.info("Starting portfolio sync job")
 
     async with async_session() as db:
@@ -61,10 +63,11 @@ async def run_portfolio_sync():
             except PermissionError:
                 conn.status = "disconnected"
                 await db.commit()
-                logger.warning(f"Connection {conn.id} disconnected — API key revoked")
+                logger.warning("Connection %s disconnected — API key revoked", conn.id)
             except Exception as e:
                 conn.status = "error"
                 await db.commit()
-                logger.error(f"Sync failed for connection {conn.id}: {e}")
+                logger.error("Sync failed for connection %s: %s", conn.id, e, exc_info=True)
 
-    logger.info("Portfolio sync job complete")
+    elapsed = time.monotonic() - started
+    logger.info("Portfolio sync job complete — %d connections checked in %.1fs", len(connections), elapsed)

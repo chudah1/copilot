@@ -671,6 +671,8 @@ async def _load_signal_counts(db, thesis_ids: list[uuid.UUID]) -> dict[str, tupl
 
 
 async def run_digest_builder():
+    import time
+    started = time.monotonic()
     logger.info("Starting weekly digest builder")
 
     now = datetime.now(timezone.utc)
@@ -822,4 +824,5 @@ async def run_digest_builder():
                 logger.exception("Digest build failed for user %s", user_id)
                 continue
 
-    logger.info("Weekly digest builder complete")
+    elapsed = time.monotonic() - started
+    logger.info("Weekly digest builder complete in %.1fs", elapsed)
