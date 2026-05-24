@@ -11,6 +11,7 @@ import { Label } from "@/components/ui/label";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { getErrorMessage } from "@/lib/errors";
+import { TickerSearch } from "@/components/portfolio/ticker-search";
 import type { BrokerConnection, Holding } from "@/types";
 
 export default function ConnectPage() {
@@ -50,6 +51,11 @@ export default function ConnectPage() {
     } finally {
       setBrokerLoading(false);
     }
+  };
+
+  const handleTickerSelect = (selectedTicker: string, selectedName: string) => {
+    setTicker(selectedTicker);
+    setName(selectedName);
   };
 
   const handleManual = async (e: React.FormEvent) => {
@@ -231,15 +237,14 @@ export default function ConnectPage() {
               </CardHeader>
               <CardContent>
                 <form onSubmit={handleManual} className="space-y-4">
+                  <div className="space-y-2">
+                    <Label>Stock</Label>
+                    <TickerSearch value={ticker} onSelect={handleTickerSelect} />
+                    {name && (
+                      <p className="text-xs text-muted-foreground">{name}</p>
+                    )}
+                  </div>
                   <div className="grid grid-cols-2 gap-4">
-                    <div className="space-y-2">
-                      <Label htmlFor="ticker">Ticker</Label>
-                      <Input id="ticker" value={ticker} onChange={(e) => setTicker(e.target.value)} placeholder="AAPL" required />
-                    </div>
-                    <div className="space-y-2">
-                      <Label htmlFor="name">Company Name</Label>
-                      <Input id="name" value={name} onChange={(e) => setName(e.target.value)} placeholder="Apple Inc" required />
-                    </div>
                     <div className="space-y-2">
                       <Label htmlFor="quantity">Quantity</Label>
                       <Input id="quantity" type="number" step="any" value={quantity} onChange={(e) => setQuantity(e.target.value)} required />
@@ -253,7 +258,7 @@ export default function ConnectPage() {
                     Good for a lightweight trial. Add 1-3 positions first, then create a thesis for each and see how the product feels before importing everything else.
                   </div>
                   {manualError && <p className="text-sm text-red-500">{manualError}</p>}
-                  <Button type="submit" disabled={manualLoading}>
+                  <Button type="submit" disabled={manualLoading || !ticker || !quantity || !avgCost}>
                     {manualLoading ? "Adding..." : "Add Holding"}
                   </Button>
                 </form>
