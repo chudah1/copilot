@@ -339,6 +339,18 @@ async def add_manual_holding(
     current_user: User = Depends(get_current_user),
     db: AsyncSession = Depends(get_db),
 ):
+    existing = await db.scalar(
+        select(Holding).where(
+            Holding.user_id == current_user.id,
+            Holding.ticker == body.ticker.upper(),
+        )
+    )
+    if existing:
+        raise HTTPException(
+            status_code=status.HTTP_409_CONFLICT,
+            detail=f"{body.ticker.upper()} is already in your portfolio.",
+        )
+
     # Try to enrich with market data if sector/geography not provided
     enriched_sector = body.sector
     enriched_geography = body.geography

@@ -64,12 +64,12 @@ def _market_values(company_data: CompanyData) -> dict[str, float]:
 async def _classify_candidates(
     thesis: Thesis,
     raw_candidates: list[dict],
+    ticker: str | None = None,
+    company_name: str | None = None,
 ) -> list[ClassifiedCandidate]:
     classified: list[ClassifiedCandidate] = []
     for candidate in raw_candidates:
         description = candidate.get("description", "")
-        severity = None
-        ai_analysis = None
 
         try:
             result = await classify_event(
@@ -78,21 +78,22 @@ async def _classify_candidates(
                 what_would_change_my_mind=thesis.what_would_change_my_mind,
                 ai_summary=thesis.ai_summary,
                 event_description=description,
+                ticker=ticker,
+                company_name=company_name,
             )
         except Exception:
             logger.exception("Health check classification failed for thesis %s", thesis.id)
             result = None
 
-        if result:
-            severity = result.severity
-            ai_analysis = result.analysis
+        if result is None:
+            continue
 
         classified.append(
             ClassifiedCandidate(
                 event_type=candidate.get("event_type", "unknown"),
                 description=description,
-                severity=severity,
-                ai_analysis=ai_analysis,
+                severity=result.severity,
+                ai_analysis=result.analysis,
             )
         )
     return classified
@@ -115,7 +116,12 @@ async def run_health_check(thesis: Thesis, holding: Holding) -> HealthCheckResul
         holding.current_price,
     )
 
-    classified = await _classify_candidates(thesis, raw_candidates)
+    classified = await _classify_candidates(
+        thesis,
+        raw_candidates,
+        ticker=holding.ticker,
+        company_name=holding.name,
+    )
     watch_hints_status = check_metric_watch_hints(thesis.interpretation, _market_values(company_data))
 
     return HealthCheckResult(

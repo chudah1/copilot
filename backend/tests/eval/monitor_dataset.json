@@ -406,6 +406,81 @@
     }
   },
   {
+    "id": "skip_nvda_032",
+    "description": "ETF named after ticker — NVDY distribution announcement, article is about the ETF not NVIDIA",
+    "expected_severity": "skip",
+    "investor_profile": "thesis_driven",
+    "input": {
+      "ticker": "NVDA",
+      "company_name": "NVIDIA Corporation",
+      "why_own_it": "NVIDIA dominates AI training GPU market. Hyperscalers pour billions into data centers and NVDA takes the lion's share with CUDA lock-in.",
+      "must_remain_true": "Data center revenue keeps growing above 20% YoY. Gross margins stay above 70%.",
+      "what_would_change_my_mind": "AMD gains real GPU market share. Export restrictions gut China revenue significantly.",
+      "ai_summary": "NVDA is owned for AI data center dominance via CUDA moat and hyperscaler spend.",
+      "event_description": "YieldMax Short NVDA Option Income Strategy ETF (NVDY) announces weekly distribution of $0.2697 per share. The YieldMax Short NVDA Option Income Strategy ETF has announced a weekly distribution of $0.2697 per share. This distribution is noteworthy for investors looking for income from option-based strategies on NVIDIA."
+    }
+  },
+  {
+    "id": "skip_nvda_033",
+    "description": "Competitor product launch mentioning NVIDIA in passing — article is primarily about AMD",
+    "expected_severity": "skip",
+    "investor_profile": "thesis_driven",
+    "input": {
+      "ticker": "NVDA",
+      "company_name": "NVIDIA Corporation",
+      "why_own_it": "NVIDIA dominates AI training GPU market. Hyperscalers pour billions into data centers and NVDA takes the lion's share with CUDA lock-in.",
+      "must_remain_true": "Data center revenue keeps growing above 20% YoY. Gross margins stay above 70%.",
+      "what_would_change_my_mind": "AMD gains real GPU market share. Export restrictions gut China revenue significantly.",
+      "ai_summary": "NVDA is owned for AI data center dominance via CUDA moat and hyperscaler spend.",
+      "event_description": "AMD reports record quarterly revenue of $7.4 billion, driven by strong MI300X data centre GPU sales. AMD CEO Lisa Su said the company shipped over $1 billion of MI300X accelerators last quarter and expects to double that run rate. The article notes AMD is competing in the same accelerator market currently led by NVIDIA."
+    }
+  },
+  {
+    "id": "skip_msft_034",
+    "description": "Customer earnings report — Oracle cloud results appear in Microsoft feed because article mentions Azure",
+    "expected_severity": "skip",
+    "investor_profile": "thesis_driven",
+    "input": {
+      "ticker": "MSFT",
+      "company_name": "Microsoft Corporation",
+      "why_own_it": "Microsoft has the enterprise distribution advantage to monetise AI through Copilot and Azure OpenAI services.",
+      "must_remain_true": "Azure grows faster than AWS and GCP. Copilot seats grow and convert to paid plans.",
+      "what_would_change_my_mind": "Azure growth decelerates below 25% YoY for two consecutive quarters.",
+      "ai_summary": "MSFT is owned for enterprise AI monetisation via Azure OpenAI and Copilot seats.",
+      "event_description": "Oracle reported Q3 earnings with cloud infrastructure revenue up 49% YoY to $2.7 billion. CEO Safra Catz said Oracle Cloud Infrastructure is winning enterprise workloads away from older hyperscalers. Oracle shares rose 12% after hours. The company said it signed multi-billion dollar contracts with several Fortune 500 customers who are migrating from legacy on-premises systems."
+    }
+  },
+  {
+    "id": "skip_aapl_035",
+    "description": "Leveraged ETF rebalance — ProShares 3x Apple ETF distribution, not about Apple itself",
+    "expected_severity": "skip",
+    "investor_profile": "thesis_driven",
+    "input": {
+      "ticker": "AAPL",
+      "company_name": "Apple Inc.",
+      "why_own_it": "Apple Services is a high-margin recurring revenue stream attached to an installed base of 2 billion devices.",
+      "must_remain_true": "Services gross margin stays above 72%. Hardware gross margin stays above 35%.",
+      "what_would_change_my_mind": "Regulatory action forces App Store fee cuts. Services revenue growth slows below 12% YoY.",
+      "ai_summary": "AAPL is owned for Services margin expansion from a 2 billion device installed base.",
+      "event_description": "Direxion Daily AAPL Bull 2X Shares (AAPU) announced a 1-for-5 reverse split effective next Monday to bring the share price back above $5. The fund provides 2x daily leveraged exposure to Apple Inc. common stock. After the split, shareholders will hold fewer shares at a proportionally higher price with no change to total position value."
+    }
+  },
+  {
+    "id": "skip_nvda_036",
+    "description": "Supplier news — TSMC capacity expansion mentioned alongside NVDA as a customer, article is primarily about TSMC",
+    "expected_severity": "skip",
+    "investor_profile": "thesis_driven",
+    "input": {
+      "ticker": "NVDA",
+      "company_name": "NVIDIA Corporation",
+      "why_own_it": "NVIDIA dominates AI training GPU market. Hyperscalers pour billions into data centers and NVDA takes the lion's share with CUDA lock-in.",
+      "must_remain_true": "Data center revenue keeps growing above 20% YoY. Gross margins stay above 70%.",
+      "what_would_change_my_mind": "AMD gains real GPU market share. Export restrictions gut China revenue significantly.",
+      "ai_summary": "NVDA is owned for AI data center dominance via CUDA moat and hyperscaler spend.",
+      "event_description": "TSMC announced a $40 billion investment to expand its Arizona fab capacity through 2028. The company said N3 and N2 process node demand from Apple, NVIDIA, and AMD is driving the buildout. TSMC CEO CC Wei said Arizona fabs will reach cost parity with Taiwan by 2026. TSMC shares rose 4% on the news."
+    }
+  },
+  {
     "id": "thesis_breaking_amzn_031",
     "description": "FTC wins antitrust case requiring AWS divestiture — investor explicitly stated structural breakup as a sell condition",
     "expected_severity": "thesis_breaking",

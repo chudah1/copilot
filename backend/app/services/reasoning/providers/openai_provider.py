@@ -19,13 +19,16 @@ class OpenAIReasoningProvider:
     name = "openai"
     model = "gpt-4.1-mini"
     timeout_seconds = 60
+    schema_strict = True
+    temperature: float | None = 0  # None = omit (required for o-series reasoning models)
     _cache = TTLCache(ttl_seconds=settings.llm_response_cache_ttl_seconds)
 
     def _response_schema(self) -> dict:
-        # OpenAI Structured Outputs is stricter than our cross-provider schema:
-        # nested objects cannot stay open-ended or partially optional. For the
-        # OpenAI adapter, we collapse signal_config_json to a closed empty
-        # object and let richer providers supply more detailed configs.
+        if not self.schema_strict:
+            return DECOMPOSITION_JSON_SCHEMA
+        # OpenAI Structured Outputs strict mode requires every key in properties
+        # to appear in required. signal_config_json is an open object, so we
+        # collapse it to a closed empty object for strict-mode providers.
         schema = copy.deepcopy(DECOMPOSITION_JSON_SCHEMA)
         signal_config_json = (
             schema["properties"]["claims"]["items"]["properties"]["entities"]["items"]["properties"]["signals"]["items"]["properties"]["signal_config_json"]
@@ -55,6 +58,9 @@ class OpenAIReasoningProvider:
                 return ReasoningResult(True, "success", self.name, self.model, DECOMPOSITION_PROMPT_VERSION, None, cached, None, latency, None, True)
 
             client = AsyncOpenAI(api_key=settings.openai_api_key)
+            extra: dict = {}
+            if self.temperature is not None:
+                extra["temperature"] = self.temperature
             response = await client.chat.completions.create(
                 model=self.model,
                 prompt_cache_key=settings.openai_prompt_cache_key,
@@ -63,7 +69,7 @@ class OpenAIReasoningProvider:
                     "type": "json_schema",
                     "json_schema": {
                         "name": "thesis_decomposition",
-                        "strict": True,
+                        "strict": self.schema_strict,
                         "schema": self._response_schema(),
                     },
                 },
@@ -71,8 +77,8 @@ class OpenAIReasoningProvider:
                     {"role": "system", "content": DECOMPOSITION_SYSTEM_PROMPT},
                     {"role": "user", "content": build_decomposition_prompt(request.payload)},
                 ],
-                temperature=0,
                 timeout=self.timeout_seconds,
+                **extra,
             )
             text = response.choices[0].message.content or "{}"
             raw = json.loads(text)

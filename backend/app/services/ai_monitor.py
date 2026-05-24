@@ -19,7 +19,7 @@ _CLASSIFY_SYSTEM = """You classify new data against an investor's written reason
 
 Classify as: "skip" | "info" | "warning" | "thesis_breaking"
 
-First ask: does this event touch any specific pillar, assumption, or stated concern in the thesis? If the answer is no — the news is about the company but has zero connection to why the investor owns it (e.g. geographic expansion into a market unrelated to the thesis, a product line the thesis never mentions, general corporate announcements with no bearing on stated assumptions) — return "skip". Do not return "skip" for price moves, earnings results, or any event that tests a quantitative threshold.
+First ask: is this event primarily about the holding itself (the ticker and company named in the prompt)? If the article is primarily about a different company — an ETF that references the ticker in its name, a customer, a competitor, or a third party — return "skip" even if the ticker appears in the text. Then ask: does this event touch any specific pillar, assumption, or stated concern in the thesis? If the answer is no — the news is about the company but has zero connection to why the investor owns it (e.g. geographic expansion into a market unrelated to the thesis, a product line the thesis never mentions, general corporate announcements with no bearing on stated assumptions) — return "skip". Do not return "skip" for price moves, earnings results, or any event that tests a quantitative threshold.
 
 Severity rules for non-skip events (apply strictly):
 - "thesis_breaking": ONLY when an explicit stated condition is clearly met. Two distinct cases:
@@ -44,7 +44,9 @@ Do not use filler ("worth noting", "decision pressure", "it's important to", "la
 
 Output ONLY valid JSON."""
 
-_CLASSIFY_USER_TEMPLATE = """Thesis:
+_CLASSIFY_USER_TEMPLATE = """Holding: {ticker} ({company_name})
+
+Thesis:
 - Why own it: {why_own_it}
 - What must remain true: {must_remain_true}
 - What would change the user's mind: {what_would_change_my_mind}
@@ -155,9 +157,13 @@ def _build_classification_prompt(
     event_description: str,
     investor_profile: str | None = None,
     sector: str | None = None,
+    ticker: str | None = None,
+    company_name: str | None = None,
 ) -> str:
     investor_profile_label, investor_profile_guidance = _classification_profile_context(investor_profile)
     return _CLASSIFY_USER_TEMPLATE.format(
+        ticker=ticker or "Unknown",
+        company_name=company_name or ticker or "Unknown",
         why_own_it=why_own_it,
         must_remain_true=must_remain_true or "Not specified",
         what_would_change_my_mind=what_would_change_my_mind or "Not specified",
@@ -186,6 +192,8 @@ async def classify_event(
     event_description: str,
     investor_profile: str | None = None,
     sector: str | None = None,
+    ticker: str | None = None,
+    company_name: str | None = None,
 ) -> ClassificationResult | None:
     prompt = _build_classification_prompt(
         why_own_it=why_own_it,
@@ -195,6 +203,8 @@ async def classify_event(
         event_description=event_description,
         investor_profile=investor_profile,
         sector=sector,
+        ticker=ticker,
+        company_name=company_name,
     )
     try:
         if not settings.anthropic_api_key:
@@ -218,6 +228,8 @@ async def classify_event(
         )
         text = response.content[0].text.strip()
         parsed = _parse_classification_response(text)
+        if parsed.severity == "skip":
+            return None
         return ClassificationResult(
             severity=parsed.severity,
             analysis=_normalize_analysis_text(

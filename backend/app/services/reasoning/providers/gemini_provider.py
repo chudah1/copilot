@@ -18,6 +18,7 @@ class GeminiReasoningProvider:
     name = "gemini"
     model = "gemini-2.5-flash"
     timeout_seconds = 30
+    max_output_tokens = 1800
     _cache = TTLCache(ttl_seconds=settings.llm_response_cache_ttl_seconds)
 
     async def run(self, request: ReasoningRequest) -> ReasoningResult:
@@ -42,7 +43,7 @@ class GeminiReasoningProvider:
             client = genai.Client(
                 api_key=settings.gemini_api_key,
                 http_options={
-                    "timeout": self.timeout_seconds,
+                    "timeout": self.timeout_seconds * 1000,
                     # Retry transient provider-side failures (429/5xx). Timeouts are handled below.
                     "retry_options": {
                         "attempts": 2,
@@ -64,7 +65,7 @@ class GeminiReasoningProvider:
                         "response_mime_type": "application/json",
                         "response_json_schema": DECOMPOSITION_JSON_SCHEMA,
                         "temperature": 0,
-                        "max_output_tokens": 1800,
+                        "max_output_tokens": self.max_output_tokens,
                     },
                 )
 

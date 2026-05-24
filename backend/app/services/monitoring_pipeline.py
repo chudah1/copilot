@@ -112,6 +112,8 @@ async def classify_candidates_for_thesis(
     *,
     investor_profile: str | None = None,
     sector: str | None = None,
+    ticker: str | None = None,
+    company_name: str | None = None,
 ) -> list[tuple[dict[str, Any], str, str | None]]:
     classified: list[tuple[dict[str, Any], str, str | None]] = []
     for candidate in candidates:
@@ -123,8 +125,10 @@ async def classify_candidates_for_thesis(
             event_description=candidate_description_for_classifier(candidate),
             investor_profile=investor_profile,
             sector=sector,
+            ticker=ticker,
+            company_name=company_name,
         )
-        if classification and classification.severity == "skip":
+        if classification is None or classification.severity == "skip":
             continue
         severity = classification.severity if classification else "warning"
         ai_analysis = classification.analysis if classification else None

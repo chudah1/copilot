@@ -129,21 +129,45 @@ def _build_providers(decompose_provider: str) -> list | None:
         name = "openai_gpt41"
         model = "gpt-4.1"
 
+    class O3Provider(OpenAIReasoningProvider):
+        name = "openai_o3"
+        model = "o3"
+        timeout_seconds = 180
+        schema_strict = False   # o3 strict mode rejects open additionalProperties objects
+        temperature = None      # o3 only supports default temperature (1)
+
     class GeminiProProvider(GeminiReasoningProvider):
         name = "gemini_pro"
         model = "gemini-2.5-pro"
+        max_output_tokens = 8192
+        timeout_seconds = 90
+
+    class Gemini35FlashProvider(GeminiReasoningProvider):
+        name = "gemini_35flash"
+        model = "gemini-3.5-flash"
+        max_output_tokens = 4096
+        timeout_seconds = 60
+
+    class Gemini31ProProvider(GeminiReasoningProvider):
+        name = "gemini_31pro"
+        model = "gemini-3.1-pro-preview"
+        max_output_tokens = 8192
+        timeout_seconds = 90
 
     mapping = {
-        "anthropic":    [AnthropicReasoningProvider()],
-        "openai":       [OpenAIReasoningProvider()],       # gpt-4.1-mini
-        "openai-mini":  [Gpt4oMiniProvider()],             # gpt-4o-mini
-        "openai-latest":[Gpt41Provider()],                 # gpt-4.1
-        "gemini":       [GeminiReasoningProvider()],       # gemini-2.5-flash
-        "gemini-pro":   [GeminiProProvider()],             # gemini-2.5-pro
+        "anthropic":       [AnthropicReasoningProvider()],
+        "openai":          [OpenAIReasoningProvider()],        # gpt-4.1-mini
+        "openai-mini":     [Gpt4oMiniProvider()],              # gpt-4o-mini
+        "openai-latest":   [Gpt41Provider()],                  # gpt-4.1
+        "openai-o3":       [O3Provider()],                     # o3 (frontier reasoning)
+        "gemini":          [GeminiReasoningProvider()],        # gemini-2.5-flash
+        "gemini-pro":      [GeminiProProvider()],              # gemini-2.5-pro
+        "gemini-35flash":  [Gemini35FlashProvider()],          # gemini-3.5-flash (frontier)
+        "gemini-31pro":    [Gemini31ProProvider()],            # gemini-3.1-pro-preview (frontier)
     }
     providers = mapping.get(decompose_provider)
     if providers is None:
-        raise ValueError(f"Unknown --provider '{decompose_provider}'. Choose: auto, anthropic, openai, openai-mini, openai-latest, gemini, gemini-pro")
+        raise ValueError(f"Unknown --provider '{decompose_provider}'. Choose: auto, anthropic, openai, openai-mini, openai-latest, openai-o3, gemini, gemini-pro, gemini-35flash, gemini-31pro")
     return providers
 
 
@@ -304,7 +328,7 @@ async def _main():
     parser.add_argument("--judge", default="claude-sonnet-4-6", help="Judge model")
     parser.add_argument(
         "--provider", default="auto",
-        choices=["auto", "anthropic", "openai", "openai-mini", "openai-latest", "gemini", "gemini-pro"],
+        choices=["auto", "anthropic", "openai", "openai-mini", "openai-latest", "openai-o3", "gemini", "gemini-pro", "gemini-35flash", "gemini-31pro"],
         help="Provider for decomposition (auto=complexity routing, default: auto)",
     )
     parser.add_argument("--no-save", action="store_true", help="Don't save results to file")

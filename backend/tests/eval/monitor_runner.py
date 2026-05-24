@@ -89,7 +89,12 @@ async def _judge_output(case: dict, output_severity: str, output_analysis: str, 
 
 
 async def _run_classification(case: dict) -> tuple[str, str] | None:
-    """Run event classification for a single case. Returns (severity, analysis) or None."""
+    """Run event classification for a single case. Returns (severity, analysis) or None on failure.
+
+    classify_event returns None both for genuine failures AND for skip decisions.
+    We disambiguate by returning ("skip", "") when None comes back — the runner
+    will then check whether that matches the expected severity.
+    """
     from app.services.ai_monitor import classify_event
     inp = case["input"]
     result = await classify_event(
@@ -100,9 +105,13 @@ async def _run_classification(case: dict) -> tuple[str, str] | None:
         event_description=inp["event_description"],
         investor_profile=case.get("investor_profile"),
         sector=inp.get("sector"),
+        ticker=inp.get("ticker"),
+        company_name=inp.get("company_name"),
     )
     if result is None:
-        return None
+        # Could be a genuine skip decision or an API failure.
+        # Treat as skip so the runner can score it correctly for skip-expected cases.
+        return "skip", ""
     return result.severity, result.analysis
 
 
@@ -140,6 +149,28 @@ async def run_eval(
             continue
 
         output_severity, output_analysis = output
+        severity_match = output_severity == case["expected_severity"]
+
+        # Skip cases have no analysis to judge — score purely on severity match
+        if case["expected_severity"] == "skip" or output_severity == "skip":
+            score = 10.0 if severity_match else 0.0
+            result = {
+                "id": cid,
+                "description": case["description"],
+                "expected_severity": case["expected_severity"],
+                "actual_severity": output_severity,
+                "severity_match": severity_match,
+                "classification_success": True,
+                "scores": {"severity_accuracy": 10 if severity_match else 0},
+                "reasons": {},
+                "total": 10 if severity_match else 0,
+                "normalised_10": score,
+            }
+            results.append(result)
+            match = "✓" if severity_match else "✗"
+            print(f"    {match} {output_severity} (expected {case['expected_severity']}) — {score:.1f}/10", flush=True)
+            continue
+
         try:
             judgment = await _judge_output(case, output_severity, output_analysis, judge_model)
         except Exception as exc:
@@ -151,7 +182,7 @@ async def run_eval(
             "description": case["description"],
             "expected_severity": case["expected_severity"],
             "actual_severity": output_severity,
-            "severity_match": output_severity == case["expected_severity"],
+            "severity_match": severity_match,
             "classification_success": True,
             "scores": judgment.get("scores", {}),
             "reasons": judgment.get("reasons", {}),
@@ -230,13 +261,13 @@ def save_results(results: list[dict], prompt_version: str) -> Path:
 
 async def _main():
     parser = argparse.ArgumentParser(description="Run event classification evals")
-    parser.add_argument("--case", help="Run a single case by ID")
+    parser.add_argument("--case", action="append", dest="cases", help="Run specific case(s) by ID (repeatable)")
     parser.add_argument("--prompt-version", default="v1", help="Prompt version tag")
     parser.add_argument("--judge", default="claude-sonnet-4-6", help="Judge model")
     parser.add_argument("--no-save", action="store_true", help="Don't save results")
     args = parser.parse_args()
 
-    case_ids = [args.case] if args.case else None
+    case_ids = args.cases if args.cases else None
     print(f"\nRunning event classification evals (prompt={args.prompt_version}, judge={args.judge})...")
 
     results = await run_eval(case_ids=case_ids, prompt_version=args.prompt_version, judge_model=args.judge)

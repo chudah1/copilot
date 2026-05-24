@@ -313,6 +313,8 @@ async def run_monitoring():
                     candidates,
                     investor_profile=investor_profile,
                     sector=holding.sector,
+                    ticker=holding.ticker,
+                    company_name=holding.name,
                 )
 
                 # Rule 3: Priority suppression (post-classification)

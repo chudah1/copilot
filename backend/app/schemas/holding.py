@@ -24,8 +24,8 @@ class ManualHoldingRequest(BaseModel):
     ticker: str
     name: str
     exchange: str | None = None
-    quantity: float
-    average_cost_basis: float
+    quantity: float = Field(gt=0)
+    average_cost_basis: float = Field(gt=0)
     currency: str = "GBP"
     sector: str | None = None
     geography: str | None = None

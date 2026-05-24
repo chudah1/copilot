@@ -57,11 +57,11 @@ export function QuickAddHolding({ onAdd }: QuickAddHoldingProps) {
         </div>
         <div>
           <p className="text-[11px] text-muted-foreground mb-1">Shares</p>
-          <Input type="number" placeholder="10" value={quantity} onChange={(e) => setQuantity(e.target.value)} className="h-8 text-sm" />
+          <Input type="number" placeholder="10" min="0.000001" step="any" value={quantity} onChange={(e) => setQuantity(e.target.value)} className="h-8 text-sm" />
         </div>
         <div>
           <p className="text-[11px] text-muted-foreground mb-1">Avg cost</p>
-          <Input type="number" step="0.01" placeholder="135.00" value={avgCost} onChange={(e) => setAvgCost(e.target.value)} className="h-8 text-sm" />
+          <Input type="number" step="0.01" min="0.000001" placeholder="135.00" value={avgCost} onChange={(e) => setAvgCost(e.target.value)} className="h-8 text-sm" />
         </div>
         <Button size="sm" onClick={handleSubmit} disabled={loading || !ticker || !quantity || !avgCost}>
           {loading ? "..." : "Add"}

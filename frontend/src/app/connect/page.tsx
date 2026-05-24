@@ -247,11 +247,11 @@ export default function ConnectPage() {
                   <div className="grid grid-cols-2 gap-4">
                     <div className="space-y-2">
                       <Label htmlFor="quantity">Quantity</Label>
-                      <Input id="quantity" type="number" step="any" value={quantity} onChange={(e) => setQuantity(e.target.value)} required />
+                      <Input id="quantity" type="number" step="any" min="0.000001" value={quantity} onChange={(e) => setQuantity(e.target.value)} required />
                     </div>
                     <div className="space-y-2">
                       <Label htmlFor="avgCost">Average Cost</Label>
-                      <Input id="avgCost" type="number" step="any" value={avgCost} onChange={(e) => setAvgCost(e.target.value)} required />
+                      <Input id="avgCost" type="number" step="any" min="0.000001" value={avgCost} onChange={(e) => setAvgCost(e.target.value)} required />
                     </div>
                   </div>
                   <div className="rounded-lg bg-muted/30 p-3 text-sm text-muted-foreground">
