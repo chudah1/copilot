@@ -1149,7 +1149,7 @@ async def generate_counter_thesis(
         )
         return _parse_counter_thesis_output(data)
     except Exception as e:
-        logger.error(f"Counter-thesis generation failed for {ticker}: {e}")
+        logger.error("Counter-thesis generation failed for %s: %s", ticker, e, exc_info=True)
         return _fallback_counter_thesis(
             why_own_it=why_own_it,
             must_remain_true=must_remain_true,
@@ -1209,7 +1209,7 @@ async def generate_initial_draft(ticker: str) -> dict[str, str]:
         )
         return _parse_draft_output(data, clean_ticker)
     except Exception as e:
-        logger.error(f"Draft thesis generation failed for {ticker}: {e}")
+        logger.error("Draft thesis generation failed for %s: %s", ticker, e, exc_info=True)
         return _fallback_initial_draft(clean_ticker, market_data)
 
 

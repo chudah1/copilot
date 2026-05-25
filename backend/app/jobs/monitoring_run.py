@@ -247,6 +247,10 @@ async def run_monitoring():
             try:
                 company_data = ticker_data.get(holding.ticker.upper())
 
+                if company_data is None:
+                    logger.warning("No market data for %s — skipping thesis %s", holding.ticker, thesis.id)
+                    continue
+
                 # Direct ticker candidates
                 candidates = generate_monitoring_candidates(
                     thesis.interpretation,

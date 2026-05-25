@@ -839,11 +839,15 @@ async def run_digest_builder():
                     e.included_in_digest_id = digest.id
 
                 if html_content:
-                    sent = await send_digest_email(
-                        to_email=user.email,
-                        subject=subject,
-                        html_content=html_content,
-                    )
+                    try:
+                        sent = await send_digest_email(
+                            to_email=user.email,
+                            subject=subject,
+                            html_content=html_content,
+                        )
+                    except Exception:
+                        logger.exception("send_digest_email raised for user %s", user_id)
+                        sent = False
                     digest.status = "sent" if sent else "failed"
                     digest.sent_at = datetime.now(timezone.utc) if sent else None
                     if sent:

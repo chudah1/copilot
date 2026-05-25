@@ -62,7 +62,7 @@ class MarketSnapshot:
 
 @dataclass
 class CheckNowResult:
-    status: str  # completed | rate_limited
+    status: str  # completed | rate_limited | no_data
     events_created: int = 0
     next_available_at: datetime | None = None
     created_event_ids: list[uuid.UUID] = field(default_factory=list)
@@ -162,11 +162,15 @@ async def run_check_now(
         return CheckNowResult(status="rate_limited", next_available_at=next_available)
 
     # Fetch market data
+    company_data = None
     try:
         company_data = await fetch_company_data(holding.ticker)
-    except Exception as exc:
+    except Exception:
         logger.exception("Failed to fetch market data for %s", holding.ticker)
-        raise RuntimeError("market_data_unavailable") from exc
+
+    if company_data is None:
+        logger.warning("No market data available for %s — skipping check", holding.ticker)
+        return CheckNowResult(status="no_data")
 
     # Generate monitoring candidates
     previous_price = float(holding.current_price) if holding.current_price is not None else None

@@ -204,6 +204,9 @@ async def sync_broker(
             detail="Trading 212 credentials are no longer valid. Reconnect your account.",
         )
 
+    if not positions:
+        logger.warning("Trading212 sync returned 0 positions for connection %s — portfolio may be empty or API permissions insufficient", connection.id)
+
     synced_holdings = []
     for pos in positions:
         existing_result = await db.execute(
@@ -233,7 +236,7 @@ async def sync_broker(
                     h_geography = overview["country"] if overview["country"] != "Unknown" else None
                     h_name = overview["name"] if overview["name"] != pos.ticker else pos.ticker
             except Exception:
-                pass
+                logger.warning("Failed to enrich sector/geography for %s", pos.ticker, exc_info=True)
 
             holding = Holding(
                 user_id=current_user.id,
@@ -269,7 +272,7 @@ async def sync_broker(
                         if holding.name == pos.ticker and overview["name"] != pos.ticker:
                             holding.name = overview["name"]
                 except Exception:
-                    pass
+                    logger.warning("Failed to backfill sector/geography for %s", pos.ticker, exc_info=True)
 
         synced_holdings.append(holding)
 

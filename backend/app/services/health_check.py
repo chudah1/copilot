@@ -124,6 +124,18 @@ async def run_health_check(thesis: Thesis, holding: Holding) -> HealthCheckResul
     )
     watch_hints_status = check_metric_watch_hints(thesis.interpretation, _market_values(company_data))
 
+    # If candidates existed but none classified (API failure), surface that
+    # rather than silently returning all_clear
+    if raw_candidates and not classified:
+        logger.warning(
+            "All %d candidates failed classification for thesis %s — returning check_failed",
+            len(raw_candidates),
+            thesis.id,
+        )
+        assessment = "check_failed"
+    else:
+        assessment = _assess(classified)
+
     return HealthCheckResult(
         ticker=holding.ticker,
         current_price=company_data.current_price,
@@ -135,5 +147,5 @@ async def run_health_check(thesis: Thesis, holding: Holding) -> HealthCheckResul
         candidates=classified,
         watch_hints_status=watch_hints_status,
         recent_news_count=len(company_data.news_items),
-        thesis_assessment=_assess(classified),
+        thesis_assessment=assessment,
     )
