@@ -236,25 +236,26 @@ def _monitoring_receipt(
     *,
     investor_profile: InvestorProfile = None,
 ) -> str:
-    if investor_profile == "thesis_driven":
-        base = (
-            f"We checked {holdings_count} holding{'s' if holdings_count != 1 else ''} against your written thesis assumptions. "
-            f"{events_count} had something worth a look. {stable_count} were quiet."
-        )
-    elif investor_profile == "hearsay_driven":
-        base = (
-            f"We checked {holdings_count} holding{'s' if holdings_count != 1 else ''} against the reasons you've attached to them. "
-            f"{events_count} had something worth a look. {stable_count} were quiet."
-        )
+    noun = "holding" if holdings_count == 1 else "holdings"
+    if events_count > 0:
+        flagged = f"{events_count} flagged"
+        if investor_profile == "thesis_driven":
+            base = f"Checked {holdings_count} {noun} against your written assumptions — {flagged}."
+        elif investor_profile == "hearsay_driven":
+            base = f"Checked {holdings_count} {noun} against your reasons — {flagged}."
+        else:
+            base = f"Checked {holdings_count} {noun} — {flagged}."
     else:
-        base = (
-            f"We checked {holdings_count} holding{'s' if holdings_count != 1 else ''} with current reasons. "
-            f"{events_count} had something worth a look. {stable_count} were quiet."
-        )
+        if investor_profile == "thesis_driven":
+            base = f"Checked {holdings_count} {noun} against your written assumptions — all quiet."
+        elif investor_profile == "hearsay_driven":
+            base = f"Checked {holdings_count} {noun} against your reasons — all quiet."
+        else:
+            base = f"Checked {holdings_count} {noun} — all quiet."
     if upcoming_earnings_count > 0:
-        noun = "holding" if upcoming_earnings_count == 1 else "holdings"
+        enoun = "holding" if upcoming_earnings_count == 1 else "holdings"
         verb = "reports" if upcoming_earnings_count == 1 else "report"
-        base += f" {upcoming_earnings_count} {noun} {verb} earnings soon."
+        base += f" {upcoming_earnings_count} {enoun} {verb} earnings soon."
     return base
 
 
