@@ -44,13 +44,36 @@ def _digest_headline(events_count: int, stale_count: int, missing_count: int, st
     return "Quiet week — nothing touched what you're watching."
 
 
-def _digest_subject(events_count: int, stable_count: int) -> str:
+def _digest_subject(
+    events_count: int,
+    stable_count: int,
+    *,
+    upcoming_earnings: list[dict] | None = None,
+    oldest_stale_name: str | None = None,
+    oldest_stale_days: int | None = None,
+    missing_count: int = 0,
+) -> str:
     if events_count > 0:
         verb = "needs" if events_count == 1 else "need"
         return f"{events_count} of your reasons {verb} review this week"
+    # Quiet week — lead with something worth opening for
+    if upcoming_earnings:
+        next_e = upcoming_earnings[0]
+        days = next_e["days_until"]
+        ticker = next_e["ticker"].replace("_US_EQ", "").replace("_EQ", "")
+        if days == 0:
+            return f"{ticker} reports today — here's what to watch"
+        if days == 1:
+            return f"{ticker} reports tomorrow — here's what to watch"
+        return f"{ticker} reports in {days} days — here's what to watch"
+    if oldest_stale_name and oldest_stale_days and oldest_stale_days >= 90:
+        return f"You haven't revisited your {oldest_stale_name} thesis in {oldest_stale_days} days"
+    if missing_count > 0:
+        noun = "holding" if missing_count == 1 else "holdings"
+        return f"{missing_count} of your {noun} still {'has' if missing_count == 1 else 'have'} no reason attached"
     if stable_count > 0:
-        return f"{stable_count} of your reasons held up this week"
-    return "0 of your reasons changed this week"
+        return f"Your portfolio held up this week — {stable_count} reason{'s' if stable_count != 1 else ''} checked"
+    return "Weekly portfolio check — nothing flagged this week"
 
 
 def _digest_summary_points(
@@ -743,7 +766,19 @@ async def run_digest_builder():
                     len(missing_theses),
                     len(stable_holdings),
                 )
-                subject = _digest_subject(len(events_data), len(stable_holdings))
+                _stale_nudge_item = max(
+                    [item for item in holdings_with_theses if item.get("why_own_it") and item.get("reason_age_days", 0) >= 90],
+                    key=lambda item: item["reason_age_days"],
+                    default=None,
+                )
+                subject = _digest_subject(
+                    len(events_data),
+                    len(stable_holdings),
+                    upcoming_earnings=upcoming_earnings or None,
+                    oldest_stale_name=_stale_nudge_item["name"] if _stale_nudge_item else None,
+                    oldest_stale_days=_stale_nudge_item["reason_age_days"] if _stale_nudge_item else None,
+                    missing_count=len(missing_theses),
+                )
                 receipt = _monitoring_receipt(
                     len(holdings),
                     len(events_data),
