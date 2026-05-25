@@ -171,6 +171,7 @@ Rules:
 - what_would_change_my_mind: a specific event or scenario, not a vague "if the business deteriorates".
 - Sound like a thoughtful individual investor, not a sell-side analyst.
 - Do NOT use phrases like "long-term potential", "solid fundamentals", or "maintains market position".
+- Ground the draft in the recent news headlines provided above — reference what is actually happening now, not generic statements from your training data. If recent news is not provided, use what you know but keep claims conservative.
 
 Output valid JSON with this exact structure:
 {{
@@ -575,13 +576,19 @@ def _apply_synthesis_guardrails(
 def _build_market_data_section(market_data: Any | None) -> str:
     if not market_data:
         return "Market Data: Not available. Use your knowledge of this company."
-    return (
-        "Market Data:\n"
-        f"- Sector: {market_data.sector}\n"
-        f"- Industry: {market_data.industry}\n"
-        f"- Revenue Growth: {_format_metric_pct(market_data.revenue_growth_yoy)}\n"
-        f"- Earnings Growth: {_format_metric_pct(market_data.earnings_growth_yoy)}"
-    )
+    lines = [
+        "Market Data:",
+        f"- Sector: {market_data.sector}",
+        f"- Industry: {market_data.industry}",
+        f"- Revenue Growth: {_format_metric_pct(market_data.revenue_growth_yoy)}",
+        f"- Earnings Growth: {_format_metric_pct(market_data.earnings_growth_yoy)}",
+    ]
+    recent_headlines = [h for h in (market_data.recent_news or []) if h][:5]
+    if recent_headlines:
+        lines.append("- Recent news (last 7 days, use these to ground the draft in current context):")
+        for headline in recent_headlines:
+            lines.append(f"  • {headline}")
+    return "\n".join(lines)
 
 
 async def _call_anthropic_json(
