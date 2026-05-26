@@ -33,6 +33,24 @@ async def send_earnings_alert_email(to_email: str, subject: str, html_content: s
     return _send_email_via_resend("Copilot Investor <alerts@copilotinvestor.com>", to_email, subject, html_content)
 
 
+async def send_health_band_drop_email(
+    to_email: str, ticker: str, prev_label: str, new_label: str, score: int
+) -> bool:
+    label_colors = {"Healthy": "#16a34a", "At Risk": "#d97706", "Broken": "#dc2626"}
+    color = label_colors.get(new_label, "#6b7280")
+    html = (
+        f"<h2>Thesis health update for <strong>{ticker}</strong></h2>"
+        f"<p>Your thesis dropped from <strong>{prev_label}</strong> to "
+        f'<strong style="color:{color}">{new_label}</strong> (score: {score}/100).</p>'
+        "<p>Recent monitoring events have weakened one or more of your core claims. "
+        "Review them to understand what changed and whether your thesis still holds.</p>"
+        f'<p><a href="{settings.frontend_url}/dashboard" '
+        'style="font-size:16px;font-weight:bold">Review thesis →</a></p>'
+    )
+    subject = f"{ticker} thesis dropped to {new_label}"
+    return _send_email_via_resend("Copilot Investor <alerts@copilotinvestor.com>", to_email, subject, html)
+
+
 async def send_password_reset_email(to_email: str, reset_token: str) -> bool:
     reset_url = f"{settings.frontend_url}/reset-password?token={reset_token}"
     html = (

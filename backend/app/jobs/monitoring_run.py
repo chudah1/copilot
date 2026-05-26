@@ -11,6 +11,7 @@ from app.models.holding import Holding
 from app.models.thesis import Thesis
 from app.models.monitoring_event import MonitoringEvent
 from app.services.monitoring import check_metric_watch_hints, generate_monitoring_candidates
+from app.services.thesis_health import maybe_notify_band_drop, refresh_thesis_health
 from app.services.market_data import CompanyData, fetch_company_data, shortlist_qualitative_candidates
 from app.services.noise_filter import (
     apply_priority_suppression,
@@ -338,6 +339,18 @@ async def run_monitoring():
                     now=now,
                     investor_profile=investor_profile,
                 )
+
+                score, new_label, prev_label = await refresh_thesis_health(
+                    db, thesis, claims, decomposition, now=now
+                )
+                if thesis.user and thesis.user.email:
+                    await maybe_notify_band_drop(
+                        user_email=thesis.user.email,
+                        ticker=holding.ticker,
+                        prev_label=prev_label,
+                        new_label=new_label,
+                        score=score,
+                    )
 
             except Exception as e:
                 logger.error("Monitoring failed for thesis %s: %s", thesis.id, e, exc_info=True)

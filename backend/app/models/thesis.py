@@ -30,6 +30,8 @@ class Thesis(Base):
     )
     invalidated_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
     invalidation_reason: Mapped[str | None] = mapped_column(Text, nullable=True)
+    health_score: Mapped[int | None] = mapped_column(Integer, nullable=True)
+    health_label: Mapped[str | None] = mapped_column(String(10), nullable=True)
 
     holding = relationship("Holding", back_populates="theses")
     user = relationship("User", back_populates="theses")
