@@ -63,8 +63,7 @@ export default function LandingPage() {
             maxWidth: 1050,
           }}
         >
-          You&apos;re holding stocks.<br />
-          Are you investing,<br />
+          You bought it for a reason.<br />
           <span
             style={{
               background: `linear-gradient(135deg, ${mk.accent} 0%, ${mk.accentDeep} 100%)`,
@@ -73,7 +72,7 @@ export default function LandingPage() {
               backgroundClip: "text",
             }}
           >
-            or just hoping?
+            Do you still know what it was?
           </span>
         </h1>
 
@@ -87,8 +86,9 @@ export default function LandingPage() {
             color: mk.pencil,
           }}
         >
-          penKeep is where you write the reason you bought each stock.
-          We tell you when that reason might have changed.
+          Write the reason you bought each stock. penKeep watches earnings,
+          filings, and news against it — and tells you when something that
+          matters to your thesis moves.
         </p>
 
         <div style={{ marginTop: "clamp(24px,3vw,32px)", display: "flex", flexWrap: "wrap", gap: 10, alignItems: "center" }}>
@@ -470,7 +470,7 @@ export default function LandingPage() {
           Write your first<br /><span style={{ color: mk.accent }}>thesis.</span>
         </h2>
         <p style={{ fontFamily: mk.sans, fontSize: "clamp(16px,1.8vw,18px)", color: mk.pencil, margin: 0, maxWidth: 480 }}>
-          Free at launch. We&apos;ll email you when it&apos;s ready.
+          Free to start. Join the waitlist and we&apos;ll be in touch before launch.
         </p>
         <WaitlistForm />
       </section>
