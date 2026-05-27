@@ -1,7 +1,15 @@
 from __future__ import annotations
 
+import logging
+import re
 import uuid
 from typing import Any
+
+logger = logging.getLogger(__name__)
+
+_EMBED_MODEL = "text-embedding-3-small"
+_SCORE_THRESHOLD = 0.30
+_MAX_SENTENCES = 8
 
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
@@ -106,6 +114,49 @@ def candidate_summary_for_storage(candidate: dict[str, Any]) -> str:
     return stored_summary
 
 
+async def _thesis_aware_highlights(
+    full_text: str,
+    why_own_it: str | None,
+    must_remain_true: str | None,
+    what_would_change_my_mind: str | None,
+) -> list[str] | None:
+    """Return thesis-relevant sentences from a transcript via embedding similarity.
+
+    Returns None on any failure so the caller can fall back to keyword highlights.
+    text-embedding-3-small returns unit vectors, so dot product == cosine similarity.
+    """
+    try:
+        from openai import AsyncOpenAI
+
+        claim_texts = [t for t in [why_own_it, must_remain_true, what_would_change_my_mind] if t and t.strip()]
+        if not claim_texts:
+            return None
+
+        sentences = [s.strip() for s in re.split(r"(?<=[.!?])\s+", full_text) if len(s.strip()) > 40]
+        if not sentences:
+            return None
+
+        client = AsyncOpenAI(api_key=settings.openai_api_key)
+        resp = await client.embeddings.create(model=_EMBED_MODEL, input=claim_texts + sentences)
+        vecs = [d.embedding for d in resp.data]
+
+        claim_vecs = vecs[: len(claim_texts)]
+        sent_vecs = vecs[len(claim_texts):]
+
+        scored: list[tuple[float, str]] = []
+        for sent_vec, sentence in zip(sent_vecs, sentences):
+            score = max(sum(a * b for a, b in zip(sent_vec, cv)) for cv in claim_vecs)
+            if score >= _SCORE_THRESHOLD:
+                scored.append((score, sentence))
+
+        scored.sort(key=lambda x: x[0], reverse=True)
+        return [s for _, s in scored[:_MAX_SENTENCES]] or None
+
+    except Exception as exc:
+        logger.warning("Transcript embedding extraction failed, falling back to keywords: %s", exc)
+        return None
+
+
 async def classify_candidates_for_thesis(
     thesis: Thesis,
     candidates: list[dict[str, Any]],
@@ -117,6 +168,33 @@ async def classify_candidates_for_thesis(
 ) -> list[tuple[dict[str, Any], str, str | None]]:
     classified: list[tuple[dict[str, Any], str, str | None]] = []
     for candidate in candidates:
+        # Thesis-aware transcript enrichment: replace generic keyword highlights
+        # with embedding-selected sentences before classification.
+        if candidate.get("event_type") == "earnings_call_transcript":
+            full_text = candidate.get("evidence", {}).get("full_transcript")
+            if full_text:
+                smart = await _thesis_aware_highlights(
+                    full_text,
+                    thesis.why_own_it,
+                    thesis.must_remain_true,
+                    thesis.what_would_change_my_mind,
+                )
+                if smart:
+                    sentiment_label = candidate.get("evidence", {}).get("sentiment_label")
+                    sentiment_suffix = f" Transcript sentiment is {sentiment_label.lower()}." if sentiment_label else ""
+                    candidate = {
+                        **candidate,
+                        "description": (
+                            f"{candidate.get('evidence', {}).get('quarter') or 'Latest'} earnings call: "
+                            f"{' '.join(smart[:3])}{sentiment_suffix}"
+                        ).strip(),
+                        "evidence": {
+                            **candidate.get("evidence", {}),
+                            "highlights": smart,
+                            "full_transcript": None,  # drop before storage
+                        },
+                    }
+
         classification = await classify_event(
             why_own_it=thesis.why_own_it,
             must_remain_true=thesis.must_remain_true,

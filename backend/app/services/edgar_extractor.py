@@ -23,6 +23,32 @@ logger = logging.getLogger(__name__)
 
 _CONTENT_LIMIT = 6000  # chars of press release text passed to Claude
 
+_SECTION_RE = re.compile(
+    r"(?i)\b(results\s+of\s+operations|financial\s+highlights?|revenue\s+highlights?|"
+    r"operating\s+results|business\s+highlights?|quarterly\s+highlights?|"
+    r"outlook|guidance|full[\s\-]year|fourth\s+quarter|third\s+quarter|"
+    r"second\s+quarter|first\s+quarter|q[1-4]\s+20\d{2})\b"
+)
+
+
+def _extract_relevant_sections(text: str) -> str:
+    """Return the most relevant slice of a press release for LLM analysis.
+
+    Tries to start from the first results/guidance heading rather than from
+    char 0 (which is typically boilerplate and safe-harbor text).
+    Falls back to the first financial figure occurrence, then raw truncation.
+    """
+    match = _SECTION_RE.search(text)
+    if match:
+        return text[match.start(): match.start() + _CONTENT_LIMIT]
+
+    dollar = re.search(r"\$[\d,]+", text)
+    if dollar:
+        start = max(0, dollar.start() - 200)
+        return text[start: start + _CONTENT_LIMIT]
+
+    return text[:_CONTENT_LIMIT]
+
 _EXTRACTION_PROMPT = """\
 Extract key financial metrics from this earnings press release and assess whether \
 the results confirm or threaten the investment thesis.
@@ -32,7 +58,7 @@ Investment thesis:
 - Must remain true: {must_remain_true}
 - What would change mind: {what_would_change_my_mind}
 
-Press release (first {limit} chars):
+Press release (results/guidance section, up to {limit} chars):
 {content}
 
 Return ONLY valid JSON — no markdown, no prose:
@@ -130,12 +156,13 @@ async def _extract_with_claude(content: str, thesis: Thesis) -> dict[str, Any] |
     try:
         import anthropic
         client = anthropic.AsyncAnthropic(api_key=settings.anthropic_api_key)
+        relevant = _extract_relevant_sections(content)
         prompt = _EXTRACTION_PROMPT.format(
             why_own_it=thesis.why_own_it or "",
             must_remain_true=thesis.must_remain_true or "Not specified",
             what_would_change_my_mind=thesis.what_would_change_my_mind or "Not specified",
-            content=content[:_CONTENT_LIMIT],
-            limit=_CONTENT_LIMIT,
+            content=relevant,
+            limit=len(relevant),
         )
         response = await client.messages.create(
             model="claude-haiku-4-5-20251001",

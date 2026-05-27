@@ -305,6 +305,7 @@ class TranscriptSignal:
     sentiment_label: str | None
     highlights: list[str]
     excerpt: str
+    full_text: str | None = None
 
 
 @dataclass
@@ -593,6 +594,7 @@ def _parse_alpha_vantage_transcript(payload: dict[str, Any]) -> TranscriptSignal
         sentiment_label=sentiment_label,
         highlights=highlights,
         excerpt=excerpt,
+        full_text=transcript_text[:30_000] if transcript_text else None,
     )
 
 
@@ -724,6 +726,7 @@ def _build_transcript_candidate(
                 "highlights": earnings_call.highlights,
                 "excerpt": earnings_call.excerpt,
                 "transcript_id": f"transcript:{earnings_call.quarter or 'latest'}",
+                "full_transcript": earnings_call.full_text,
             },
         },
     )
