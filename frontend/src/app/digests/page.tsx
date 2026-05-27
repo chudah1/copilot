@@ -119,7 +119,7 @@ export default function DigestsPage() {
                   </div>
 
                   {/* Headline */}
-                  <p className="font-sans text-[15px] text-foreground leading-snug group-hover:text-primary transition-colors">
+                  <p className="font-display italic text-[1.1rem] text-foreground leading-snug group-hover:text-primary transition-colors">
                     {d.content.headline || copy.fallbackHeadline}
                   </p>
 

@@ -4,9 +4,6 @@ import { useState } from "react";
 import Link from "next/link";
 import { useAuth } from "@/lib/auth";
 import { Button } from "@/components/ui/button";
-import { Input } from "@/components/ui/input";
-import { Label } from "@/components/ui/label";
-import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { getErrorMessage } from "@/lib/errors";
 
 export default function RegisterPage() {
@@ -37,36 +34,68 @@ export default function RegisterPage() {
 
   return (
     <div className="flex min-h-screen items-center justify-center px-4">
-      <Card className="w-full max-w-md">
-        <CardHeader>
-          <CardTitle>Create account</CardTitle>
-          <CardDescription>Stop second-guessing your trades.</CardDescription>
-        </CardHeader>
-        <CardContent>
-          <form onSubmit={handleSubmit} className="space-y-4">
-            <div className="space-y-2">
-              <Label htmlFor="email">Email</Label>
-              <Input id="email" type="email" value={email} onChange={(e) => setEmail(e.target.value)} required />
-            </div>
-            <div className="space-y-2">
-              <Label htmlFor="password">Password</Label>
-              <Input id="password" type="password" value={password} onChange={(e) => setPassword(e.target.value)} required />
-              {password.length > 0 && (
-                <p className={`font-mono text-[10px] tracking-[0.1em] transition-colors ${passwordOk ? "text-emerald-600" : "text-muted-foreground"}`}>
-                  {passwordOk ? "✓ 8+ characters" : `${password.length}/8 characters`}
-                </p>
-              )}
-            </div>
-            {error && <p className="text-sm text-destructive" role="alert">{error}</p>}
-            <Button type="submit" className="w-full" loading={loading}>
-              Create account
-            </Button>
-          </form>
-          <p className="mt-4 text-center text-sm text-muted-foreground">
-            Already have an account? <Link href="/login" className="underline">Sign in</Link>
+      <div className="w-full max-w-sm border border-border/60 bg-card p-8 space-y-6">
+        <div>
+          <p className="font-mono text-[10px] uppercase tracking-[0.2em] text-muted-foreground mb-2">
+            penKeep
           </p>
-        </CardContent>
-      </Card>
+          <h1 className="font-display italic text-[2rem] leading-tight text-foreground">
+            Keep your thinking honest.
+          </h1>
+        </div>
+
+        <form onSubmit={handleSubmit} className="space-y-4">
+          <div className="space-y-1.5">
+            <label htmlFor="email" className="font-mono text-[10px] uppercase tracking-[0.15em] text-muted-foreground block">
+              Email
+            </label>
+            <input
+              id="email"
+              type="email"
+              value={email}
+              onChange={(e) => setEmail(e.target.value)}
+              required
+              className="w-full border border-border bg-background px-3 py-2 font-sans text-sm text-foreground placeholder:text-muted-foreground/50 focus:outline-none focus:border-foreground/30"
+            />
+          </div>
+
+          <div className="space-y-1.5">
+            <label htmlFor="password" className="font-mono text-[10px] uppercase tracking-[0.15em] text-muted-foreground block">
+              Password
+            </label>
+            <input
+              id="password"
+              type="password"
+              value={password}
+              onChange={(e) => setPassword(e.target.value)}
+              required
+              className="w-full border border-border bg-background px-3 py-2 font-sans text-sm text-foreground placeholder:text-muted-foreground/50 focus:outline-none focus:border-foreground/30"
+            />
+            {password.length > 0 && (
+              <p className={`font-mono text-[10px] tracking-[0.1em] transition-colors ${passwordOk ? "text-emerald-600" : "text-muted-foreground/60"}`}>
+                {passwordOk ? "✓ 8+ characters" : `${password.length}/8 characters`}
+              </p>
+            )}
+          </div>
+
+          {error && (
+            <p className="font-sans text-sm text-destructive" role="alert">
+              {error}
+            </p>
+          )}
+
+          <Button type="submit" className="w-full" loading={loading} disabled={password.length > 0 && !passwordOk}>
+            <span className="font-mono text-[11px] uppercase tracking-[0.15em]">Create account</span>
+          </Button>
+        </form>
+
+        <p className="font-mono text-[10px] text-muted-foreground/70 text-center">
+          Already have an account?{" "}
+          <Link href="/login" className="underline underline-offset-2 hover:text-foreground transition-colors">
+            Sign in
+          </Link>
+        </p>
+      </div>
     </div>
   );
 }

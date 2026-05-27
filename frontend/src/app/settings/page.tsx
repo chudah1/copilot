@@ -32,13 +32,13 @@ function Toggle({
         aria-checked={checked}
         aria-labelledby={id}
         onClick={() => onChange(!checked)}
-        className={`relative inline-flex h-6 w-11 shrink-0 cursor-pointer rounded-full border-2 border-transparent transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 focus-visible:ring-offset-background ${
-          checked ? "bg-primary" : "bg-border"
+        className={`relative inline-flex h-5 w-9 shrink-0 cursor-pointer border transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 focus-visible:ring-offset-background ${
+          checked ? "bg-primary border-primary" : "bg-transparent border-border"
         }`}
       >
         <span
-          className={`pointer-events-none inline-block h-5 w-5 rounded-full shadow-lg ring-0 transition-transform ${
-            checked ? "translate-x-5 bg-background" : "translate-x-0 bg-muted-foreground/60"
+          className={`pointer-events-none inline-block h-3 w-3 m-0.5 transition-transform ${
+            checked ? "translate-x-4 bg-primary-foreground" : "translate-x-0 bg-muted-foreground/50"
           }`}
         />
       </button>
