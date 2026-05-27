@@ -18,7 +18,7 @@ interface OnboardingBannerData {
   } | null;
 }
 
-export function OnboardingBanner({ onVisibilityChange }: { onVisibilityChange?: (visible: boolean) => void }) {
+export function OnboardingBanner({ onVisibilityChange, suppress }: { onVisibilityChange?: (visible: boolean) => void; suppress?: boolean }) {
   const [banner, setBanner] = useState<OnboardingBannerData | null>(null);
   const [dismissed, setDismissed] = useState(false);
   const [onboardingState, setOnboardingState] = useState<OnboardingState | null>(null);
@@ -32,10 +32,10 @@ export function OnboardingBanner({ onVisibilityChange }: { onVisibilityChange?: 
       .catch(() => null);
   }, []);
 
-  const visible = Boolean(banner?.show && !dismissed);
+  const visible = Boolean(banner?.show && !dismissed && !suppress);
   useEffect(() => { onVisibilityChange?.(visible); }, [visible, onVisibilityChange]);
 
-  if (!banner || !banner.show || dismissed) return null;
+  if (!banner || !banner.show || dismissed || suppress) return null;
 
   const { banner_type, message, suggested_holding } = banner;
 

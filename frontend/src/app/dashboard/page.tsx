@@ -677,8 +677,8 @@ export default function DashboardPage() {
 
       {/* ── Banners ─────────────────────────────────────────────────── */}
       <div className="px-4 sm:px-8 pt-3 space-y-2 empty:hidden">
-        {/* Only one contextual banner shown at a time — recent review takes priority over activation */}
-        {showActivationBanner && !showRecentReviewBanner && (
+        {/* Only one contextual banner at a time — quarterly and recent review both take priority over activation */}
+        {showActivationBanner && !showRecentReviewBanner && !(quarterlyReview && quarterlyReview.pending_count > 0) && (
           <div className="flex items-center justify-between gap-4 border border-emerald-500/20 bg-emerald-50 px-5 py-3">
             <div className="space-y-1">
               <p className="font-mono text-[10px] uppercase tracking-[0.18em] text-emerald-700">
@@ -741,7 +741,10 @@ export default function DashboardPage() {
         )}
 
         <ErrorBoundary>
-          <OnboardingBanner onVisibilityChange={setOnboardingBannerVisible} />
+          <OnboardingBanner
+            onVisibilityChange={setOnboardingBannerVisible}
+            suppress={(quarterlyReview?.pending_count ?? 0) > 0}
+          />
         </ErrorBoundary>
 
         {(() => {
