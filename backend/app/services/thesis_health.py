@@ -89,7 +89,8 @@ def compute_health_score(
 
         claim_conf = None
         if event.claim_id and event.claim_id in claims_by_id:
-            claim_conf = float(claims_by_id[event.claim_id].confidence or 1.0)
+            conf = claims_by_id[event.claim_id].confidence
+            claim_conf = float(conf) if conf is not None else None
         multiplier = _claim_multiplier(claim_conf)
 
         delta += base_weight * decay * multiplier
@@ -104,7 +105,7 @@ async def refresh_thesis_health(
     claims: list[ThesisClaim] | None,
     decomposition: ThesisDecomposition | None,
     now: datetime | None = None,
-) -> tuple[int, str]:
+) -> tuple[int, str, str | None]:
     from app.models.monitoring_event import MonitoringEvent
     from app.models.conviction_log_entry import ConvictionLogEntry
 
@@ -119,16 +120,19 @@ async def refresh_thesis_health(
         .where(ConvictionLogEntry.entry_type == "evidence_reviewed")
     )
     reviewed_rows = reviewed_result.all()
-    reviewed_ids: set[uuid.UUID] = set()
+    reviewed_signal_ids: set[uuid.UUID] = set()
+    reviewed_claim_ids: set[uuid.UUID] = set()
     for row in reviewed_rows:
         if row.signal_id:
-            reviewed_ids.add(row.signal_id)
+            reviewed_signal_ids.add(row.signal_id)
         if row.claim_id:
-            reviewed_ids.add(row.claim_id)
+            reviewed_claim_ids.add(row.claim_id)
 
     event_ids_for_reviewed: set[uuid.UUID] = set()
     for event in events:
-        if event.signal_id in reviewed_ids or event.claim_id in reviewed_ids:
+        sig_reviewed = event.signal_id and event.signal_id in reviewed_signal_ids
+        claim_reviewed = event.claim_id and event.claim_id in reviewed_claim_ids
+        if sig_reviewed or claim_reviewed:
             event_ids_for_reviewed.add(event.id)
 
     decomp_confidence = float(decomposition.decomposition_confidence) if (
@@ -150,6 +154,9 @@ async def refresh_thesis_health(
     return score, label, prev_label
 
 
+_BAND_ORDER = {"Healthy": 2, "At Risk": 1, "Broken": 0}
+
+
 async def maybe_notify_band_drop(
     user_email: str,
     ticker: str,
@@ -161,6 +168,8 @@ async def maybe_notify_band_drop(
 
     if prev_label is None or prev_label == new_label:
         return
+    if _BAND_ORDER.get(new_label, 0) >= _BAND_ORDER.get(prev_label, 2):
+        return  # improvement or same level — don't notify
     await send_health_band_drop_email(
         to_email=user_email,
         ticker=ticker,

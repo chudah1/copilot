@@ -1,13 +1,14 @@
 from __future__ import annotations
 
 import logging
-from dataclasses import dataclass, field
-from datetime import date
+from dataclasses import dataclass
+from datetime import datetime, timezone
 from typing import Any
 
 logger = logging.getLogger(__name__)
 
 # In-memory cache: {ticker:YYYY-MM-DD} → StressTestResult
+# Process-local — does not synchronise across uvicorn workers. Replace with Redis for multi-worker deployments.
 _cache: dict[str, StressTestResult] = {}
 
 
@@ -54,7 +55,7 @@ async def run_stress_test(
 ) -> StressTestResult:
     ticker = ticker.upper()
     use_cache = draft_thesis is None
-    cache_key = f"{ticker}:{date.today().isoformat()}"
+    cache_key = f"{ticker}:{datetime.now(timezone.utc).date().isoformat()}"
 
     if use_cache and cache_key in _cache:
         cached = _cache[cache_key]
@@ -64,7 +65,7 @@ async def run_stress_test(
             key_risks=cached.key_risks,
             blind_spots=cached.blind_spots,
             what_to_watch=cached.what_to_watch,
-            current_price=cached.current_price,
+            current_price=current_price,  # always use live price, not cached
             cached=True,
         )
 

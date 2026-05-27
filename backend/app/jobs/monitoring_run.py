@@ -4,6 +4,7 @@ from datetime import datetime, timezone
 from typing import Any
 
 from sqlalchemy import select
+from sqlalchemy.orm import selectinload
 
 from app.config import settings
 from app.database import async_session
@@ -228,6 +229,7 @@ async def run_monitoring():
     async with async_session() as db:
         result = await db.execute(
             select(Thesis)
+            .options(selectinload(Thesis.user))
             .where(Thesis.status.in_(["active", "needs_review"]))
         )
         active_theses = result.scalars().all()
@@ -310,6 +312,17 @@ async def run_monitoring():
                     holding.current_value = float(holding.quantity) * company_data.current_price
 
                 if not candidates:
+                    score, new_label, prev_label = await refresh_thesis_health(
+                        db, thesis, claims, decomposition, now=now
+                    )
+                    if thesis.user and thesis.user.email:
+                        await maybe_notify_band_drop(
+                            user_email=thesis.user.email,
+                            ticker=holding.ticker,
+                            prev_label=prev_label,
+                            new_label=new_label,
+                            score=score,
+                        )
                     continue
 
                 # Noise suppression: filter before classification (rules 1, 2, 4)
