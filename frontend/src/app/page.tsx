@@ -7,7 +7,7 @@ import { mk } from "./_mkt/tokens";
 
 const STEPS_COPY = [
   { n: "01", t: "Write your reason", d: "Not a target price or a thesis template. Just: why do you own this? One or two sentences is plenty." },
-  { n: "02", t: "We watch",          d: "Earnings, filings, analyst commentary, management tone, insider moves — all mapped to the reason you wrote." },
+  { n: "02", t: "We watch",          d: "Earnings, filings, analyst commentary, management tone, insider moves. All mapped to the reason you wrote." },
   { n: "03", t: "You hear from us",  d: "When something you specifically care about moves, we send one note. That's it. Silence the rest of the time is on purpose." },
 ];
 
@@ -64,7 +64,7 @@ export default function LandingPage() {
           }}
         >
           You&apos;re holding stocks.<br />
-          Are you investing —<br />
+          Are you investing,<br />
           <span
             style={{
               background: `linear-gradient(135deg, ${mk.accent} 0%, ${mk.accentDeep} 100%)`,
@@ -87,8 +87,8 @@ export default function LandingPage() {
             color: mk.pencil,
           }}
         >
-          penKeep is a second brain for your portfolio. Write the reason you bought each stock —
-          and let us tell you when that reason might have changed.
+          penKeep is where you write the reason you bought each stock.
+          We tell you when that reason might have changed.
         </p>
 
         <div style={{ marginTop: "clamp(24px,3vw,32px)", display: "flex", flexWrap: "wrap", gap: 10, alignItems: "center" }}>
@@ -160,7 +160,7 @@ export default function LandingPage() {
           Press play.
         </h2>
         <p style={{ fontFamily: mk.sans, fontSize: "clamp(16px,1.8vw,19px)", lineHeight: 1.5, color: mk.pencil, marginTop: 14, maxWidth: 640 }}>
-          Someone bought Tesla in March 2024. Here&apos;s how the reason they wrote moved through the year — and
+          Someone bought Tesla in March 2024. Here&apos;s how the reason they wrote moved through the year, and
           the moment penKeep would have flagged it.
         </p>
         <div style={{ marginTop: "clamp(28px,4vw,44px)" }}>
@@ -235,7 +235,7 @@ export default function LandingPage() {
               ))}
             </div>
             <div style={{ fontFamily: mk.sans, fontSize: 13, color: mk.pencil, marginTop: "auto" }}>
-              The &ldquo;diff since you bought&rdquo; view — your reason, what we observed, side by side.
+              The &ldquo;diff since you bought&rdquo; view: your reason, what we observed, side by side.
             </div>
           </div>
 
@@ -318,7 +318,7 @@ export default function LandingPage() {
             <div style={{ fontFamily: mk.mono, fontSize: 11, textTransform: "uppercase", letterSpacing: "0.1em", color: mk.accent }}>steel-man yourself</div>
             <div style={{ fontFamily: mk.sans, fontSize: 22, fontWeight: 600, lineHeight: 1.1 }}>The bear case beside your bull case.</div>
             <div style={{ fontSize: 13, color: mk.ink, lineHeight: 1.5 }}>
-              Optional, but the best users write one. Stronger conviction or a faster exit — both fine.
+              Optional, but the best users write one. Stronger conviction or a faster exit. Both fine.
             </div>
           </div>
 
@@ -338,7 +338,7 @@ export default function LandingPage() {
           >
             <div style={{ fontFamily: mk.mono, fontSize: 11, textTransform: "uppercase", letterSpacing: "0.1em", color: mk.pencil }}>thesis history</div>
             <div style={{ fontFamily: mk.sans, fontSize: "clamp(22px,2.5vw,30px)", fontWeight: 600, lineHeight: 1.1, letterSpacing: "-0.02em" }}>
-              Your reason is a living document — versioned, diffable, yours.
+              Your reason is a living document: versioned, diffable, yours.
             </div>
             <div style={{ display: "flex", gap: 8, marginTop: 6, flexWrap: "wrap" }}>
               {[["v1", "Apr"], ["v2", "Jan"], ["v3", "Mar"], ["v4 · current", "Jun"]].map(([n, d], i) => (

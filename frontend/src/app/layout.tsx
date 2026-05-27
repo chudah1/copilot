@@ -39,7 +39,7 @@ const geistMono = Geist_Mono({
 });
 
 export const metadata: Metadata = {
-  title: "penKeep — Never forget why you bought",
+  title: "penKeep · Never forget why you bought",
   description: "Write the reason you bought each stock. Get told when that reason might have changed.",
 };
 

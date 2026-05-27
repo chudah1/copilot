@@ -22,7 +22,7 @@ export default function SecurityPage() {
           Your reasons<br />stay your reasons.
         </h1>
         <p style={{ fontFamily: mk.sans, fontSize: "clamp(17px,1.8vw,20px)", lineHeight: 1.55, color: mk.pencil, marginTop: "clamp(18px,2vw,28px)", maxWidth: 680 }}>
-          We&apos;ve built penKeep around one promise — we know what you own, but we never act on it.
+          We&apos;ve built penKeep around one promise: we know what you own, but we never act on it.
           Below is what that means in practice.
         </p>
       </section>

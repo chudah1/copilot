@@ -50,14 +50,14 @@ export default function ManifestoPage() {
         >
           The honest reason most retail investors lose money is not because they&apos;re stupid.
           It&apos;s because they bought a stock for a reason that{" "}
-          <em style={{ color: mk.accent }}>made sense at the time</em> — and then never wrote it down.
+          <em style={{ color: mk.accent }}>made sense at the time</em>, and then never wrote it down.
         </p>
 
         <div style={{ fontFamily: mk.sans, fontSize: "clamp(16px,1.8vw,18px)", lineHeight: 1.7, color: mk.inkSoft, display: "flex", flexDirection: "column", gap: 16 }}>
           <p style={{ margin: 0 }}>
             Six months later, you check the price. It&apos;s down. Or up. You feel something. You
-            tell yourself a story — &ldquo;the market doesn&apos;t understand it yet&rdquo; or &ldquo;I should
-            have sold&rdquo; — and the story has nothing to do with the original reason you bought,
+            tell yourself a story: &ldquo;the market doesn&apos;t understand it yet&rdquo; or &ldquo;I should
+            have sold.&rdquo; The story has nothing to do with the original reason you bought,
             because the original reason is gone.
           </p>
           <p style={{ margin: 0 }}>
@@ -80,21 +80,21 @@ export default function ManifestoPage() {
             letterSpacing: "-0.015em",
           }}
         >
-          The tools we had were trying to help us <em style={{ color: mk.accent }}>trade</em> —
-          when what we wanted was to <em style={{ color: mk.accent }}>invest</em>.
+          The tools we had were trying to help us <em style={{ color: mk.accent }}>trade</em>.
+          We wanted to <em style={{ color: mk.accent }}>invest</em>.
         </div>
 
         <div style={{ fontFamily: mk.sans, fontSize: "clamp(16px,1.8vw,18px)", lineHeight: 1.7, color: mk.inkSoft, display: "flex", flexDirection: "column", gap: 16 }}>
           <p style={{ margin: 0 }}>
             A trader watches the price. An investor watches the reason. Brokers are built for
             traders. Trackers are built for traders. The default loop of modern fintech is to
-            open the app, see green or red, and feel something. That&apos;s not investing — that&apos;s
+            open the app, see green or red, and feel something. That&apos;s not investing. That&apos;s
             being entertained by your own savings.
           </p>
           <p style={{ margin: 0 }}>
             So we set out to build the opposite. An app that asks you, gently, on a Sunday,
-            why you own each thing. An app that&apos;s quiet for a quarter, and then — when something
-            you actually care about moves — sends one short note. No buy buttons. No &ldquo;you&apos;re up
+            why you own each thing. An app that&apos;s quiet for a quarter. Then, when something
+            you actually care about moves, one short note. No buy buttons. No &ldquo;you&apos;re up
             0.4%.&rdquo; No charts you stare at while waiting for the train.
           </p>
         </div>
@@ -119,7 +119,7 @@ export default function ManifestoPage() {
         <div style={{ fontFamily: mk.sans, fontSize: "clamp(16px,1.8vw,18px)", lineHeight: 1.7, color: mk.inkSoft, display: "flex", flexDirection: "column", gap: 16, marginTop: 16 }}>
           <p style={{ margin: 0 }}>
             If you&apos;ve ever bought a stock and forgotten why, penKeep is for you. If you&apos;ve ever
-            held on past the reason being broken — or sold a winner because of noise — penKeep
+            held on past the reason being broken, or sold a winner because of noise, penKeep
             is for you. If you&apos;d rather check your app once a month than ten times a day, we
             built this for you.
           </p>
