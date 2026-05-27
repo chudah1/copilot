@@ -107,7 +107,7 @@ export default function ReviewDraftsPage() {
       <div className="min-h-screen bg-background">
         <div className="border-b border-border/60 px-6 py-4 flex items-center justify-between">
           <span className="font-mono text-xs text-muted-foreground tracking-wide">
-            Copilot Investor
+            penKeep
           </span>
           <Link
             href="/dashboard"

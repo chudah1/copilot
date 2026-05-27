@@ -44,13 +44,13 @@ def _send_confirmation(email: str) -> None:
         import resend
         resend.api_key = settings.resend_api_key
         resend.Emails.send({
-            "from": "penKeep <noreply@penkeep.com>",
+            "from": "penKeep <noreply@penkeep.io>",
             "to": email,
             "subject": "You're on the penKeep waitlist",
             "html": (
                 "<p>Thanks for joining the penKeep waitlist.</p>"
                 "<p>We'll email you when it's ready. In the meantime, "
-                "read the <a href='https://penkeep.com/manifesto'>manifesto</a>.</p>"
+                "read the <a href='https://penkeep.io/manifesto'>manifesto</a>.</p>"
                 "<p style='color:#7a7268;font-size:13px'>— The penKeep team</p>"
             ),
         })

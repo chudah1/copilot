@@ -92,7 +92,7 @@ export default function SecurityPage() {
             ["Encryption", "Broker API keys encrypted at rest (Fernet AES). TLS in transit."],
             ["Hosting", "Railway cloud hosting. Database backups managed by the platform."],
             ["Access controls", "We keep engineer access to production data minimal."],
-            ["Vulnerability program", "Responsible disclosure at security@penkeep.com."],
+            ["Vulnerability program", "Responsible disclosure at security@penkeep.io."],
             ["Dependencies", "Minimal dependency surface area."],
           ].map(([h, b]) => (
             <div key={h} style={{ background: mk.card, border: `1px solid ${mk.pencilLight}`, borderRadius: 14, padding: 20 }}>
@@ -124,8 +124,8 @@ export default function SecurityPage() {
         >
           {[
             ["Export", "We're building export to Markdown and JSON. Contact us if you need your data before that ships."],
-            ["Delete", "Email privacy@penkeep.com to delete your account and data. We'll confirm within 7 days."],
-            ["Subject-access requests", "Email privacy@penkeep.com and we reply within 14 days, free."],
+            ["Delete", "Email privacy@penkeep.io to delete your account and data. We'll confirm within 7 days."],
+            ["Subject-access requests", "Email privacy@penkeep.io and we reply within 14 days, free."],
           ].map(([h, b]) => (
             <div key={h} style={{ background: mk.card, border: `1px solid ${mk.pencilLight}`, borderRadius: 14, padding: 18 }}>
               <div style={{ fontFamily: mk.sans, fontSize: 17, fontWeight: 600 }}>{h}</div>
@@ -142,7 +142,7 @@ export default function SecurityPage() {
           publicly about what we learned. That&apos;s the deal.
         </p>
         <div style={{ marginTop: 24, fontFamily: mk.mono, fontSize: 11, color: mk.pencil, letterSpacing: "0.08em" }}>
-          Security questions → <span style={{ color: mk.ink }}>security@penkeep.com</span>
+          Security questions → <span style={{ color: mk.ink }}>security@penkeep.io</span>
         </div>
       </section>
     </>

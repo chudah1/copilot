@@ -93,7 +93,7 @@ def _build_post_earnings_email(ticker: str, name: str | None, events_created: in
     signal_word = f"{events_created} signal{'s' if events_created != 1 else ''}"
     return f"""
     <div style="font-family:Georgia,serif;max-width:600px;margin:0 auto;background:#faf8f5;padding:40px 32px;">
-      <p style="font-size:11px;letter-spacing:0.2em;text-transform:uppercase;color:#8b7355;font-family:monospace;margin:0 0 28px;">Copilot Investor &middot; Post-Earnings Review</p>
+      <p style="font-size:11px;letter-spacing:0.2em;text-transform:uppercase;color:#8b7355;font-family:monospace;margin:0 0 28px;">penKeep &middot; Post-Earnings Review</p>
       <h1 style="font-size:26px;font-weight:400;color:#2d1f0e;margin:0 0 16px;font-style:italic;line-height:1.3;">{ticker} reported — {signal_word} touched your reason</h1>
       <p style="color:#5c4a2a;font-size:15px;line-height:1.7;margin:0 0 24px;">{company} has reported earnings. We evaluated the results against your reason and found {signal_word} worth reviewing.</p>
       <a href="{position_url}" style="display:inline-block;font-family:monospace;font-size:11px;letter-spacing:0.15em;text-transform:uppercase;color:#8b4513;text-decoration:none;border:1px solid #8b4513;padding:10px 20px;">Review what changed &rarr;</a>

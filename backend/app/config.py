@@ -32,7 +32,7 @@ class Settings(BaseSettings):
     trading212_base_url: str = "https://live.trading212.com/api/v0"
     alpha_vantage_api_key: str = ""
     market_data_provider: str = "yfinance"
-    edgar_user_agent: str = "CopilotInvestor contact@copilotinvestor.app"
+    edgar_user_agent: str = "penKeep contact@penkeep.io"
     frontend_url: str = "http://localhost:3000"
 
     # LLM optimizations / reliability

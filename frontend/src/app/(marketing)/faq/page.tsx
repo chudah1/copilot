@@ -39,7 +39,7 @@ const FAQS = [
       ["Which brokers are supported?",
         "At launch: Trading 212, plus CSV upload. We're adding more through 2026."],
       ["Where is my data?",
-        "Encrypted at rest. Your thesis notes are scoped to your account; we don't read them for ad targeting, and we don't sell them. Email privacy@penkeep.com to request an export or to delete your account."],
+        "Encrypted at rest. Your thesis notes are scoped to your account; we don't read them for ad targeting, and we don't sell them. Email privacy@penkeep.io to request an export or to delete your account."],
     ],
   },
   {
@@ -137,7 +137,7 @@ export default function FAQPage() {
         </h1>
         <p style={{ fontFamily: mk.sans, fontSize: "clamp(17px,1.8vw,19px)", lineHeight: 1.55, color: mk.pencil, marginTop: "clamp(18px,2vw,24px)", maxWidth: 600 }}>
           The short answers are here. If you have something else,
-          email <span style={{ color: mk.ink, fontWeight: 500 }}>hi@penkeep.com</span>.
+          email <span style={{ color: mk.ink, fontWeight: 500 }}>hi@penkeep.io</span>.
         </p>
       </section>
 

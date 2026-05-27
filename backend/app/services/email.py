@@ -22,15 +22,15 @@ def _send_email_via_resend(from_addr: str, to_email: str, subject: str, html: st
 
 
 async def send_digest_email(to_email: str, subject: str, html_content: str) -> bool:
-    return _send_email_via_resend("Copilot Investor <digest@copilotinvestor.com>", to_email, subject, html_content)
+    return _send_email_via_resend("penKeep <digest@penkeep.io>", to_email, subject, html_content)
 
 
 async def send_onboarding_email(to_email: str, subject: str, html_content: str) -> bool:
-    return _send_email_via_resend("Copilot Investor <hello@copilotinvestor.com>", to_email, subject, html_content)
+    return _send_email_via_resend("penKeep <hello@penkeep.io>", to_email, subject, html_content)
 
 
 async def send_earnings_alert_email(to_email: str, subject: str, html_content: str) -> bool:
-    return _send_email_via_resend("Copilot Investor <alerts@copilotinvestor.com>", to_email, subject, html_content)
+    return _send_email_via_resend("penKeep <alerts@penkeep.io>", to_email, subject, html_content)
 
 
 async def send_health_band_drop_email(
@@ -48,15 +48,15 @@ async def send_health_band_drop_email(
         'style="font-size:16px;font-weight:bold">Review thesis →</a></p>'
     )
     subject = f"{ticker} thesis dropped to {new_label}"
-    return _send_email_via_resend("Copilot Investor <alerts@copilotinvestor.com>", to_email, subject, html)
+    return _send_email_via_resend("penKeep <alerts@penkeep.io>", to_email, subject, html)
 
 
 async def send_password_reset_email(to_email: str, reset_token: str) -> bool:
     reset_url = f"{settings.frontend_url}/reset-password?token={reset_token}"
     html = (
         "<h2>Reset your password</h2>"
-        "<p>Click the link below to reset your Copilot Investor password. It expires in 1 hour.</p>"
+        "<p>Click the link below to reset your penKeep password. It expires in 1 hour.</p>"
         f'<p><a href="{reset_url}" style="font-size:18px;font-weight:bold">Reset my password</a></p>'
         "<p>If you didn't request this, ignore this email.</p>"
     )
-    return _send_email_via_resend("Copilot Investor <noreply@copilotinvestor.com>", to_email, "Reset your password", html)
+    return _send_email_via_resend("penKeep <noreply@penkeep.io>", to_email, "Reset your password", html)

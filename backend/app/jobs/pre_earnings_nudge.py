@@ -137,7 +137,7 @@ def _build_pre_earnings_email(ticker: str, name: str | None, days_until: int, da
     position_url = f"{settings.frontend_url}/dashboard/positions/{ticker}"
     return f"""
     <div style="font-family:Georgia,serif;max-width:600px;margin:0 auto;background:#faf8f5;padding:40px 32px;">
-      <p style="font-size:11px;letter-spacing:0.2em;text-transform:uppercase;color:#8b7355;font-family:monospace;margin:0 0 28px;">Copilot Investor &middot; Earnings Alert</p>
+      <p style="font-size:11px;letter-spacing:0.2em;text-transform:uppercase;color:#8b7355;font-family:monospace;margin:0 0 28px;">penKeep &middot; Earnings Alert</p>
       <h1 style="font-size:26px;font-weight:400;color:#2d1f0e;margin:0 0 16px;font-style:italic;line-height:1.3;">{ticker} reports in {days_label}</h1>
       <p style="color:#5c4a2a;font-size:15px;line-height:1.7;margin:0 0 8px;">{company} is scheduled to report on <strong>{date_str}</strong>.</p>
       {signals_html}

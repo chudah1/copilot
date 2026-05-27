@@ -102,7 +102,7 @@ export default function SettingsPage() {
             Preferences
           </h1>
           <p className="font-sans text-sm text-muted-foreground mt-2">
-            Control when and how Copilot Investor contacts you.
+            Control when and how penKeep contacts you.
           </p>
           {summary && (
             <div className={`mt-4 border px-4 py-3 text-sm font-sans leading-relaxed ${

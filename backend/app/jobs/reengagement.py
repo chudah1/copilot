@@ -97,7 +97,7 @@ def _build_reengagement_html(ticker: str, name: str | None, event: MonitoringEve
     return f"""
     <div style="font-family:Georgia,serif;max-width:600px;margin:0 auto;background:#faf8f5;padding:40px 32px;">
       <p style="font-size:11px;letter-spacing:0.15em;text-transform:uppercase;color:#8b7355;margin:0 0 24px;">
-        Copilot Investor
+        penKeep
       </p>
       <h2 style="font-size:22px;font-weight:normal;color:#2c1810;margin:0 0 16px;font-style:italic;">
         Something moved on {ticker_escaped}
