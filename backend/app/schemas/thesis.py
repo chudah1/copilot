@@ -196,6 +196,21 @@ class ConfirmDecompositionRequest(BaseModel):
     signals: list[ConfirmDecompositionSignalRequest] = []
 
 
+class StressTestRequest(BaseModel):
+    ticker: str
+    draft_thesis: str | None = None
+
+
+class StressTestResponse(BaseModel):
+    ticker: str
+    bear_case: str
+    key_risks: list[str]
+    blind_spots: list[str]
+    what_to_watch: list[str]
+    current_price: float | None
+    cached: bool
+
+
 class InvalidateThesisRequest(BaseModel):
     reason: str
 

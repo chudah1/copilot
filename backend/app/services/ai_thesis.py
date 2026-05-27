@@ -1530,3 +1530,101 @@ async def generate_draft_theses_for_user(
             await db.commit()
     except Exception:
         logger.exception("Background draft generation crashed for user %s", user_id)
+
+
+_STRESS_TEST_PROMPT = """You are a skeptical buy-side analyst reviewing a retail investor's pre-purchase thesis.
+Stress-test it hard. Don't flatter it.
+
+Ticker: {ticker}
+{price_context}{headlines_context}{thesis_context}
+Output valid JSON with this exact structure:
+{{
+    "bear_case": "2-3 sentences — the strongest argument against buying {ticker} right now.",
+    "key_risks": ["risk1", "risk2", "risk3"],
+    "blind_spots": ["blind_spot1", "blind_spot2"],
+    "what_to_watch": ["signal1", "signal2", "signal3"]
+}}
+
+Requirements:
+- bear_case: specific, grounded in the context provided — reference price level or recent news if available
+- key_risks: 3-5 concrete, falsifiable risks
+- blind_spots: 2-3 things the thesis assumes or ignores (omit if no thesis provided)
+- what_to_watch: 2-4 specific monitorable signals — metrics, events, or dates to track
+- Output ONLY valid JSON, no markdown fences"""
+
+
+def _parse_stress_test_output(data: dict) -> "StressTestOutput":
+    from app.services.stress_test import StressTestOutput
+
+    bear_case = data.get("bear_case") or "Valuation risk not addressed."
+    return StressTestOutput(
+        bear_case=bear_case,
+        key_risks=[str(r) for r in (data.get("key_risks") or []) if str(r).strip()][:5],
+        blind_spots=[str(b) for b in (data.get("blind_spots") or []) if str(b).strip()][:3],
+        what_to_watch=[str(w) for w in (data.get("what_to_watch") or []) if str(w).strip()][:4],
+    )
+
+
+def _fallback_stress_test(ticker: str, draft_thesis: str | None) -> "StressTestOutput":
+    from app.services.stress_test import StressTestOutput
+
+    return StressTestOutput(
+        bear_case=(
+            f"{ticker} may already have the bull case priced in. "
+            "Verify the valuation against peers before committing capital."
+        ),
+        key_risks=[
+            "Valuation may leave little margin of safety",
+            "Macro headwinds could hit the sector",
+            "Execution risk if growth thesis is unproven",
+        ],
+        blind_spots=(
+            ["The thesis doesn't specify what would make you sell"]
+            if draft_thesis
+            else []
+        ),
+        what_to_watch=[
+            "Next earnings revenue and margin vs consensus",
+            "Analyst price target revisions over next 90 days",
+        ],
+    )
+
+
+async def generate_stress_test_analysis(
+    ticker: str,
+    draft_thesis: str | None,
+    current_price: float | None,
+    recent_headlines: list[str],
+) -> "StressTestOutput":
+    price_context = (
+        f"Current price: ${current_price:.2f}\n" if current_price is not None else ""
+    )
+    headlines_context = (
+        "Recent headlines:\n" + "\n".join(f"- {h}" for h in recent_headlines[:5]) + "\n"
+        if recent_headlines
+        else ""
+    )
+    thesis_context = (
+        f"Investor's draft thesis: {draft_thesis}\n" if draft_thesis else ""
+    )
+
+    prompt = _STRESS_TEST_PROMPT.format(
+        ticker=ticker,
+        price_context=price_context,
+        headlines_context=headlines_context,
+        thesis_context=thesis_context,
+    )
+
+    if not settings.anthropic_api_key:
+        return _fallback_stress_test(ticker, draft_thesis)
+
+    try:
+        data = await _call_anthropic_json(
+            prompt=prompt,
+            model=settings.anthropic_model,
+            max_tokens=1024,
+        )
+        return _parse_stress_test_output(data)
+    except Exception as e:
+        logger.error("Stress test generation failed for %s: %s", ticker, e, exc_info=True)
+        return _fallback_stress_test(ticker, draft_thesis)

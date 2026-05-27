@@ -149,6 +149,9 @@ app.include_router(quarterly_review_router)
 from app.routes.notifications import router as notifications_router
 app.include_router(notifications_router)
 
+from app.routes.research import router as research_router
+app.include_router(research_router)
+
 
 @app.get("/health")
 async def health():
