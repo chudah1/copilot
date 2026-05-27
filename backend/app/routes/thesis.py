@@ -504,6 +504,7 @@ async def thesis_health_check(
         thesis_id=thesis.id,
         ticker=check.ticker,
         current_price=check.current_price,
+        currency=thesis.holding.currency or "GBP",
         sector=check.sector,
         pe_ratio=check.pe_ratio,
         market_cap=check.market_cap,

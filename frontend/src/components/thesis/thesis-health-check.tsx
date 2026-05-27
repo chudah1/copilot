@@ -2,6 +2,7 @@
 
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
+import { formatCurrency } from "@/lib/utils";
 import type { HealthCheckResult } from "@/types";
 
 const ASSESSMENT_CONFIG = {
@@ -91,7 +92,7 @@ export function ThesisHealthCheck({
           {result.current_price != null && (
             <div>
               <p className="text-muted-foreground">Price</p>
-              <p className="font-semibold">${result.current_price.toFixed(2)}</p>
+              <p className="font-semibold">{formatCurrency(result.current_price, result.currency)}</p>
             </div>
           )}
           {result.sector && (

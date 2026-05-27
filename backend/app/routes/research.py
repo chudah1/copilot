@@ -2,7 +2,7 @@ from fastapi import APIRouter, Request
 from app.limiter import limiter
 from app.schemas.thesis import StressTestRequest, StressTestResponse
 from app.services.stress_test import run_stress_test
-from app.services.market_data import fetch_company_data
+from app.services.market_data import fetch_company_data, detect_native_currency
 
 router = APIRouter(prefix="/api/research", tags=["research"])
 
@@ -34,5 +34,6 @@ async def stress_test(request: Request, body: StressTestRequest):
         blind_spots=result.blind_spots,
         what_to_watch=result.what_to_watch,
         current_price=result.current_price,
+        currency=detect_native_currency(ticker),
         cached=result.cached,
     )

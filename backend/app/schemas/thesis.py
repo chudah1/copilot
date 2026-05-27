@@ -208,6 +208,7 @@ class StressTestResponse(BaseModel):
     blind_spots: list[str]
     what_to_watch: list[str]
     current_price: float | None
+    currency: str = "USD"
     cached: bool
 
 
@@ -235,6 +236,7 @@ class HealthCheckResponse(BaseModel):
     thesis_id: uuid.UUID
     ticker: str
     current_price: float | None = None
+    currency: str = "GBP"
     sector: str | None = None
     pe_ratio: float | None = None
     market_cap: float | None = None

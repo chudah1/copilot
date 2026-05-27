@@ -48,6 +48,7 @@ export interface StressTestResult {
   blind_spots: string[];
   what_to_watch: string[];
   current_price: number | null;
+  currency: string;
   cached: boolean;
 }
 
@@ -351,6 +352,7 @@ export interface HealthCheckResult {
   thesis_id: string;
   ticker: string;
   current_price: number | null;
+  currency: string;
   sector: string | null;
   pe_ratio: number | null;
   market_cap: number | null;

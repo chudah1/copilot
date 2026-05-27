@@ -6,6 +6,7 @@ import { motion, AnimatePresence } from "framer-motion";
 import { AlertTriangle, Eye, Shield, TrendingDown, ArrowRight, CheckCircle } from "lucide-react";
 import { api } from "@/lib/api";
 import { useAuth } from "@/lib/auth";
+import { formatCurrency } from "@/lib/utils";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { toast } from "sonner";
@@ -137,7 +138,7 @@ export default function ResearchPage() {
           >
             {result.current_price && (
               <p className="font-mono text-[11px] text-muted-foreground">
-                Current price: <span className="text-foreground tabular-nums">${result.current_price.toFixed(2)}</span>
+                Current price: <span className="text-foreground tabular-nums">{formatCurrency(result.current_price, result.currency)}</span>
                 {result.cached && <span className="ml-2 text-muted-foreground/60">(cached)</span>}
               </p>
             )}
