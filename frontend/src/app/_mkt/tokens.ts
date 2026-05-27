@@ -1,0 +1,16 @@
+export const mk = {
+  paper: '#f5f3ee',
+  card: '#ffffff',
+  cardSoft: '#faf8f3',
+  ink: '#15140f',
+  inkSoft: '#3a3833',
+  pencil: '#7a7268',
+  pencilLight: '#dcd6c8',
+  accent: 'oklch(0.66 0.16 35)',
+  accentDeep: 'oklch(0.54 0.18 30)',
+  accentSoft: '#fce4d6',
+  green: 'oklch(0.62 0.10 155)',
+  greenSoft: '#dceadc',
+  sans: 'var(--font-geist), "Geist", system-ui, sans-serif',
+  mono: 'var(--font-geist-mono), "Geist Mono", monospace',
+} as const;

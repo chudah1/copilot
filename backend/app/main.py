@@ -152,6 +152,9 @@ app.include_router(notifications_router)
 from app.routes.research import router as research_router
 app.include_router(research_router)
 
+from app.routes.waitlist import router as waitlist_router
+app.include_router(waitlist_router)
+
 
 @app.get("/health")
 async def health():

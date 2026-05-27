@@ -1,5 +1,5 @@
 import type { Metadata } from "next";
-import { Cormorant, Instrument_Sans, JetBrains_Mono } from "next/font/google";
+import { Cormorant, Instrument_Sans, JetBrains_Mono, Geist, Geist_Mono } from "next/font/google";
 import "./globals.css";
 import { AuthProvider } from "@/lib/auth";
 
@@ -26,15 +26,27 @@ const jetbrainsMono = JetBrains_Mono({
   display: "swap",
 });
 
+const geist = Geist({
+  subsets: ["latin"],
+  variable: "--font-geist",
+  display: "swap",
+});
+
+const geistMono = Geist_Mono({
+  subsets: ["latin"],
+  variable: "--font-geist-mono",
+  display: "swap",
+});
+
 export const metadata: Metadata = {
-  title: "Copilot Investor",
-  description: "You already invest. Write down why, and get told when the facts move.",
+  title: "penKeep — Never forget why you bought",
+  description: "Write the reason you bought each stock. Get told when that reason might have changed.",
 };
 
 export default function RootLayout({ children }: { children: React.ReactNode }) {
   return (
     <html lang="en">
-      <body className={`${cormorant.variable} ${instrumentSans.variable} ${jetbrainsMono.variable} antialiased`}>
+      <body className={`${cormorant.variable} ${instrumentSans.variable} ${jetbrainsMono.variable} ${geist.variable} ${geistMono.variable} antialiased`}>
         <AuthProvider>{children}</AuthProvider>
       </body>
     </html>
