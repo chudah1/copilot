@@ -83,6 +83,18 @@ def _ensure_sqlite_dev_compatibility(conn) -> None:
             conn.execute(text("ALTER TABLE thesis_signals ADD COLUMN label_refreshed_at DATETIME"))
             logger.info("Added missing thesis_signals.label_refreshed_at column for local SQLite compatibility")
 
+    if "thesis_health_snapshots" not in tables:
+        conn.execute(text(
+            "CREATE TABLE IF NOT EXISTS thesis_health_snapshots ("
+            "id TEXT PRIMARY KEY, "
+            "thesis_id TEXT NOT NULL REFERENCES theses(id) ON DELETE CASCADE, "
+            "score INTEGER NOT NULL, "
+            "label VARCHAR(10) NOT NULL, "
+            "computed_at DATETIME DEFAULT CURRENT_TIMESTAMP)"
+        ))
+        conn.execute(text("CREATE INDEX IF NOT EXISTS ix_thesis_health_snapshots_thesis_id ON thesis_health_snapshots(thesis_id)"))
+        logger.info("Created thesis_health_snapshots table for local SQLite compatibility")
+
     if "onboarding_states" in tables:
         ob_columns = {column["name"] for column in inspector.get_columns("onboarding_states")}
         for col in ("drafts_generated_at", "drafts_reviewed_at", "wizard_skipped_at", "wizard_completed_at"):

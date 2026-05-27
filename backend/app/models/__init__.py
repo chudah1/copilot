@@ -17,6 +17,7 @@ from app.models.quarterly_review import QuarterlyReview
 from app.models.quarterly_review_response import QuarterlyReviewResponse
 from app.models.onboarding_state import OnboardingState
 from app.models.onboarding_draft import OnboardingDraft
+from app.models.thesis_health_snapshot import ThesisHealthSnapshot
 
 __all__ = [
     "User",
@@ -38,4 +39,5 @@ __all__ = [
     "QuarterlyReviewResponse",
     "OnboardingState",
     "OnboardingDraft",
+    "ThesisHealthSnapshot",
 ]

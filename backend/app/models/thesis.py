@@ -55,3 +55,9 @@ class Thesis(Base):
         order_by="desc(ConvictionLogEntry.created_at)",
     )
     quarterly_review_responses = relationship("QuarterlyReviewResponse", back_populates="thesis")
+    health_snapshots = relationship(
+        "ThesisHealthSnapshot",
+        back_populates="thesis",
+        cascade="all, delete-orphan",
+        order_by="desc(ThesisHealthSnapshot.computed_at)",
+    )

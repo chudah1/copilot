@@ -152,6 +152,12 @@ export interface MonitoringEvent {
   created_at: string;
 }
 
+export interface ThesisHealthSnapshot {
+  score: number;
+  label: string;
+  computed_at: string;
+}
+
 export interface MonitoringEventReviewResponse {
   id: string;
   monitoring_event_id: string;

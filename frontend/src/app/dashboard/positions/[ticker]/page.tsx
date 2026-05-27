@@ -9,6 +9,7 @@ import { getErrorMessage } from "@/lib/errors";
 import { formatCurrency, formatDate } from "@/lib/utils";
 import { toast } from "sonner";
 import { ThesisCard } from "@/components/thesis/thesis-card";
+import { ThesisDiffView } from "@/components/thesis/thesis-diff-view";
 import { ConvictionLog } from "@/components/thesis/conviction-log";
 import { ThesisDecompositionReview } from "@/components/thesis/thesis-decomposition-review";
 import { ThesisEditor } from "@/components/thesis/thesis-editor";
@@ -33,6 +34,7 @@ import type {
   Thesis,
   ThesisAssistResponse,
   ThesisDecompositionEnvelope,
+  ThesisHealthSnapshot,
   UpcomingEarnings,
 } from "@/types";
 
@@ -733,6 +735,7 @@ export default function PositionDetailPage() {
   const [loading, setLoading] = useState(true);
   const [healthCheck, setHealthCheck] = useState<HealthCheckResult | null>(null);
   const [healthCheckLoading, setHealthCheckLoading] = useState(false);
+  const [healthSnapshots, setHealthSnapshots] = useState<ThesisHealthSnapshot[]>([]);
   const [showCounterThesis, setShowCounterThesis] = useState(false);
   const [showAnalysis, setShowAnalysis] = useState(false);
   const [showPositionDetails, setShowPositionDetails] = useState(false);
@@ -789,6 +792,9 @@ export default function PositionDetailPage() {
             // Background health check — detects recent earnings without requiring a monitoring event
             void api.post<HealthCheckResult>(`/api/theses/${latestThesis.id}/health-check`)
               .then(setHealthCheck)
+              .catch(() => null);
+            void api.get<ThesisHealthSnapshot[]>(`/api/theses/${latestThesis.id}/health-history`)
+              .then(setHealthSnapshots)
               .catch(() => null);
           } else {
             setDecompositionEnvelope(null);
@@ -1724,6 +1730,15 @@ export default function PositionDetailPage() {
                     investorProfile={onboardingState?.investor_profile ?? null}
                     onEdit={() => setEditing(true)}
                     onInvalidate={() => setInvalidateOpen(true)}
+                  />
+                )}
+
+                {/* Thesis diff — claims vs evidence */}
+                {activeThesis && !editing && decompositionEnvelope?.decomposition && (
+                  <ThesisDiffView
+                    decomposition={decompositionEnvelope.decomposition}
+                    monitoringEvents={events}
+                    healthSnapshots={healthSnapshots}
                   />
                 )}
 

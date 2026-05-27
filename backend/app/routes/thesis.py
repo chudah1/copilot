@@ -662,3 +662,29 @@ async def earnings_review(
         log_entry_id=log_entry.id,
         reviewed_at=reviewed_at,
     )
+
+
+@router.get("/{thesis_id}/health-history")
+async def get_health_history(
+    thesis_id: uuid.UUID,
+    user: User = Depends(get_current_user),
+    db: AsyncSession = Depends(get_db),
+):
+    from app.models.thesis_health_snapshot import ThesisHealthSnapshot
+    result = await db.execute(
+        select(Thesis)
+        .where(Thesis.id == thesis_id, Thesis.user_id == user.id)
+    )
+    if result.scalar_one_or_none() is None:
+        raise HTTPException(status_code=404, detail="Thesis not found")
+
+    snaps = await db.execute(
+        select(ThesisHealthSnapshot)
+        .where(ThesisHealthSnapshot.thesis_id == thesis_id)
+        .order_by(ThesisHealthSnapshot.computed_at.asc())
+        .limit(90)
+    )
+    return [
+        {"score": s.score, "label": s.label, "computed_at": s.computed_at.isoformat()}
+        for s in snaps.scalars().all()
+    ]

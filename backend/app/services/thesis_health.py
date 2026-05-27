@@ -151,6 +151,15 @@ async def refresh_thesis_health(
     thesis.health_score = score
     thesis.health_label = label
 
+    from app.models.thesis_health_snapshot import ThesisHealthSnapshot
+    snapshot = ThesisHealthSnapshot(
+        thesis_id=thesis.id,
+        score=score,
+        label=label,
+        computed_at=now or datetime.now(timezone.utc),
+    )
+    db.add(snapshot)
+
     return score, label, prev_label
 
 
