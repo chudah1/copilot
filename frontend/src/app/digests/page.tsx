@@ -53,7 +53,7 @@ export default function DigestsPage() {
 
   return (
     <AppShell>
-      <div className="max-w-4xl mx-auto px-8 py-10">
+      <div className="max-w-4xl mx-auto px-4 sm:px-8 py-10">
 
         {/* Page header */}
         <div className="border-b border-border pb-6 mb-8">

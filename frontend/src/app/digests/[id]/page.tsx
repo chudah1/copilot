@@ -47,9 +47,12 @@ function digestDetailCopy(investorProfile: "thesis_driven" | "hearsay_driven" | 
   };
 }
 
+const POINTS_INITIAL = 5;
+
 export default function DigestDetailPage() {
   const { id } = useParams<{ id: string }>();
   const [digest, setDigest] = useState<Digest | null>(null);
+  const [showAllPoints, setShowAllPoints] = useState(false);
 
   useEffect(() => {
     api.get<Digest>(`/api/digests/${id}`).then(setDigest);
@@ -58,7 +61,7 @@ export default function DigestDetailPage() {
   if (!digest) {
     return (
       <AppShell>
-        <div className="max-w-4xl mx-auto px-8 py-10 animate-pulse">
+        <div className="max-w-4xl mx-auto px-4 sm:px-8 py-10 animate-pulse">
           <div className="h-2.5 w-16 bg-muted rounded mb-8" />
           <div className="border-b border-border pb-7 mb-8 space-y-3">
             <div className="flex gap-3">
@@ -101,7 +104,7 @@ export default function DigestDetailPage() {
 
   return (
     <AppShell>
-      <div className="max-w-4xl mx-auto px-8 py-10">
+      <div className="max-w-4xl mx-auto px-4 sm:px-8 py-10">
 
         {/* Back link */}
         <Link
@@ -149,11 +152,22 @@ export default function DigestDetailPage() {
                 {copy.keyTakeaways}
               </p>
               <div className="space-y-2">
-                {(digest.content.summary_points || []).map((point) => (
+                {(showAllPoints
+                  ? (digest.content.summary_points || [])
+                  : (digest.content.summary_points || []).slice(0, POINTS_INITIAL)
+                ).map((point) => (
                   <p key={point} className="font-sans text-sm text-foreground/80 leading-relaxed">
                     {point}
                   </p>
                 ))}
+                {(digest.content.summary_points?.length ?? 0) > POINTS_INITIAL && !showAllPoints && (
+                  <button
+                    onClick={() => setShowAllPoints(true)}
+                    className="font-mono text-[10px] uppercase tracking-[0.15em] text-muted-foreground hover:text-foreground transition-colors"
+                  >
+                    Show {(digest.content.summary_points?.length ?? 0) - POINTS_INITIAL} more →
+                  </button>
+                )}
                 {digest.content.next_earnings && (
                   <p className="font-sans text-sm text-foreground/80 leading-relaxed">
                     {copy.nextEarnings}: {digest.content.next_earnings.ticker} reports {formatDate(digest.content.next_earnings.report_date)}.

@@ -747,6 +747,7 @@ export default function PositionDetailPage() {
   const [deleteConfirming, setDeleteConfirming] = useState(false);
   const [deleteLoading, setDeleteLoading] = useState(false);
   const [thesisSubTab, setThesisSubTab] = useState<ThesisSubTab>("thesis");
+  const [headerCollapsed, setHeaderCollapsed] = useState(false);
 
   const holding = holdings.find((h) => h.ticker === ticker);
   const activeThesis = theses.find((t) => t.status === "active" || t.status === "draft" || t.status === "needs_review");
@@ -844,6 +845,12 @@ export default function PositionDetailPage() {
     latestInvalidatedThesis,
     loading,
   ]);
+
+  useEffect(() => {
+    const onScroll = () => setHeaderCollapsed(window.scrollY > 80);
+    window.addEventListener("scroll", onScroll, { passive: true });
+    return () => window.removeEventListener("scroll", onScroll);
+  }, []);
 
   const runHealthCheck = async (thesisId: string) => {
     try {
@@ -1369,7 +1376,7 @@ export default function PositionDetailPage() {
           </div>
 
           {/* Identity + value row */}
-          <div className="flex items-end justify-between gap-6 pb-3">
+          <div className={`flex items-end justify-between gap-6 pb-3 overflow-hidden transition-all duration-200 ${headerCollapsed ? "max-h-0 pb-0 opacity-0 sm:max-h-40 sm:pb-3 sm:opacity-100" : "max-h-40"}`}>
             <div>
               <h1 className="font-display italic text-[3.5rem] leading-none text-primary tracking-tight">
                 {cleanTicker(holding.ticker)}
@@ -1392,7 +1399,7 @@ export default function PositionDetailPage() {
           </div>
 
           {/* Status ribbon */}
-          <div className="flex items-center gap-4 pb-3">
+          <div className={`flex items-center gap-4 pb-3 overflow-hidden transition-all duration-200 ${headerCollapsed ? "max-h-0 pb-0 opacity-0 sm:max-h-20 sm:pb-3 sm:opacity-100" : "max-h-20"}`}>
             {/* Pulse dot + label */}
             <div className="flex items-center gap-2">
               <span className={`h-1.5 w-1.5 rounded-full ${STATUS_DOT[activeThesis?.status ?? "no_thesis"] ?? "bg-border"}`} />

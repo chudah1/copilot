@@ -6,6 +6,9 @@
 @custom-variant dark (&:is(.dark *));
 
 @theme inline {
+  --color-status-intact: var(--status-intact);
+  --color-status-watch:  var(--status-watch);
+  --color-status-review: var(--status-review);
   --color-background: var(--background);
   --color-foreground: var(--foreground);
   --font-sans: var(--font-instrument);
@@ -51,6 +54,11 @@
 }
 
 :root {
+  /* ── Status semantic tokens ── */
+  --status-intact: oklch(0.440 0.110 155);   /* forest green  */
+  --status-watch:  oklch(0.540 0.130 72);    /* amber         */
+  --status-review: oklch(0.510 0.195 22);    /* deep red      */
+
   /* ── The Investment Ledger — aged paper, sharp edges, serious money ── */
   --background: oklch(0.948 0.018 78);         /* genuine parchment — cream with warmth */
   --foreground: oklch(0.112 0.010 45);         /* rich warm ink, slightly darker */

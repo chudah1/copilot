@@ -91,7 +91,7 @@ export default function SettingsPage() {
 
   return (
     <AppShell>
-      <div className="max-w-2xl mx-auto px-8 py-10 space-y-8">
+      <div className="max-w-2xl mx-auto px-4 sm:px-8 py-10 space-y-8">
 
         {/* Page header */}
         <div className="border-b border-border pb-6">
