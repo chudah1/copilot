@@ -39,6 +39,16 @@ export interface Thesis {
   invalidation_reason: string | null;
 }
 
+export interface StressTestResult {
+  ticker: string;
+  bear_case: string;
+  key_risks: string[];
+  blind_spots: string[];
+  what_to_watch: string[];
+  current_price: number | null;
+  cached: boolean;
+}
+
 export interface ThesisAssistResponse {
   why_own_it: string;
   must_remain_true: string;
