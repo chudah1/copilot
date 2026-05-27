@@ -79,6 +79,9 @@ def _ensure_sqlite_dev_compatibility(conn) -> None:
             logger.info(
                 "Added missing thesis_signals.consecutive_ignores column for local SQLite compatibility"
             )
+        if "label_refreshed_at" not in thesis_signal_columns:
+            conn.execute(text("ALTER TABLE thesis_signals ADD COLUMN label_refreshed_at DATETIME"))
+            logger.info("Added missing thesis_signals.label_refreshed_at column for local SQLite compatibility")
 
     if "onboarding_states" in tables:
         ob_columns = {column["name"] for column in inspector.get_columns("onboarding_states")}

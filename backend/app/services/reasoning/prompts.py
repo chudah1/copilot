@@ -177,7 +177,7 @@ Rules:
 - Do not invent numeric thresholds unless the user text clearly implies them. Do not hallucinate entities not grounded in the thesis.
 - Mark speculative mappings with lower confidence and confirmation_required=true.
 - Sparse inputs (vague one-liners, no must_remain_true, no what_would_change_my_mind): set monitorability="low", decomposition_confidence<0.7, confirmation_required=true on all entities.
-- Limit to the 3 most important claims, 3 entities per claim, 3 signals per entity.
+- Extract as many distinct falsifiable claims as genuinely exist, up to 5. Use at most 3 entities per claim, 3 signals per entity. Do not pad to reach 5 — if the thesis has 2 strong claims, return 2.
 
 Example input:
   Ticker: NVDA | why_own_it: "NVIDIA dominates AI training GPUs. Hyperscalers pour money into data centers and NVDA takes the lion's share."

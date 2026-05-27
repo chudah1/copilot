@@ -24,6 +24,7 @@ class ThesisSignal(Base):
     raw_extraction_json: Mapped[dict | None] = mapped_column(JSON, nullable=True)
     last_fired_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
     consecutive_ignores: Mapped[int] = mapped_column(Integer, default=0, server_default="0")
+    label_refreshed_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now())
 
     entity = relationship("ThesisEntity", back_populates="signals")

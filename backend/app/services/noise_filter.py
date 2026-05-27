@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import logging
+import re
 import uuid
 from datetime import datetime, timedelta, timezone
 from typing import Any
@@ -302,6 +303,58 @@ def _apply_minimum_relevance(
     return filtered
 
 
+_NEWS_EVENT_TYPES = {"gemini_news", "news_or_earnings_candidate", "news_keyword_match"}
+
+
+def _headline_prefix(text: str, words: int = 6) -> str:
+    clean = re.sub(r"[^a-z0-9\s]", "", text.lower())
+    return " ".join(clean.split()[:words])
+
+
+def _apply_cross_source_dedup(candidates: list[dict[str, Any]]) -> list[dict[str, Any]]:
+    """Deduplicate same-story news that arrived from multiple sources in one run.
+
+    Uses (evidence_type_family, headline_prefix) as the key. Keeps the
+    candidate with the higher event specificity rank; ties go to first seen.
+    """
+    seen: dict[tuple[str, str], int] = {}  # key → index in `kept`
+    kept: list[dict[str, Any]] = []
+
+    for candidate in candidates:
+        event_type = candidate.get("event_type", "")
+        if event_type not in _NEWS_EVENT_TYPES:
+            kept.append(candidate)
+            continue
+
+        evidence = candidate.get("evidence", {})
+        headline = evidence.get("headline", "") or candidate.get("description", "")
+        prefix = _headline_prefix(headline)
+        if not prefix:
+            kept.append(candidate)
+            continue
+
+        key = ("news", prefix)
+        if key not in seen:
+            seen[key] = len(kept)
+            kept.append(candidate)
+        else:
+            existing_idx = seen[key]
+            existing = kept[existing_idx]
+            if (
+                EVENT_SPECIFICITY_RANK.get(event_type, 0)
+                > EVENT_SPECIFICITY_RANK.get(existing.get("event_type", ""), 0)
+            ):
+                kept[existing_idx] = candidate
+                logger.debug(
+                    "Cross-source dedup: replaced %s with higher-specificity %s for '%s'",
+                    existing.get("event_type"),
+                    event_type,
+                    prefix,
+                )
+
+    return kept
+
+
 async def filter_candidates(
     candidates: list[dict[str, Any]],
     holding_id: uuid.UUID,
@@ -314,6 +367,9 @@ async def filter_candidates(
         return candidates
 
     existing_keys = await _load_recent_evidence_keys(db, holding_id)
+
+    # Rule 0: Cross-source dedup (same story from Gemini + Alpha Vantage in same run)
+    candidates = _apply_cross_source_dedup(candidates)
 
     # Rule 1: Evidence dedup (scoped by evidence_type + source_id)
     candidates = _apply_evidence_dedup(candidates, existing_keys)
