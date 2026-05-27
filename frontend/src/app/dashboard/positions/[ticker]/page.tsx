@@ -690,6 +690,14 @@ function getEventAssumptionLabel(
   return `${prefix} signal`;
 }
 
+// ── Health chip colours ───────────────────────────────────────────────────────
+
+const HEALTH_CHIP: Record<string, string> = {
+  Healthy: "text-emerald-700 bg-emerald-500/10",
+  "At Risk": "text-amber-700 bg-amber-500/10",
+  Broken: "text-red-600 bg-red-500/10",
+};
+
 // ── Status dot colour ────────────────────────────────────────────────────────
 
 const STATUS_DOT: Record<string, string> = {
@@ -1325,6 +1333,14 @@ export default function PositionDetailPage() {
                 {thesisInsights.qualityLabel}
               </span>
             </div>
+            {activeThesis?.health_label && (
+              <>
+                <span className="text-border text-[10px]">·</span>
+                <span className={`font-mono text-[10px] uppercase tracking-[0.12em] px-1.5 py-0.5 ${HEALTH_CHIP[activeThesis.health_label] ?? ""}`}>
+                  {activeThesis.health_score != null ? `${activeThesis.health_score} · ` : ""}{activeThesis.health_label}
+                </span>
+              </>
+            )}
             {activeThesis && (
               <>
               <span className="text-border text-[10px]">·</span>

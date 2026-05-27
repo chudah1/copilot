@@ -5,6 +5,12 @@ import { motion } from "framer-motion";
 import { formatCurrency, formatPercent } from "@/lib/utils";
 import type { Holding, Thesis, HoldingPulse, LivePrice, UpcomingEarnings } from "@/types";
 
+const HEALTH_CHIP: Record<string, string> = {
+  Healthy: "text-emerald-700 bg-emerald-500/10",
+  "At Risk": "text-amber-700 bg-amber-500/10",
+  Broken: "text-red-600 bg-red-500/10",
+};
+
 const PULSE_DOT: Record<string, string> = {
   intact: "bg-emerald-500",
   watch: "bg-amber-400",
@@ -209,9 +215,16 @@ export function PositionCard({
               <span className={`font-mono text-[10px] uppercase tracking-[0.14em] ${statusCopy.tone}`}>
                 {statusCopy.eyebrow}
               </span>
-              {pulseStatus && hasThesis && (
-                <span className={`h-1.5 w-1.5 rounded-full ${dotColor}`} />
-              )}
+              <div className="flex items-center gap-2">
+                {thesis?.health_label && (
+                  <span className={`font-mono text-[9px] uppercase tracking-[0.12em] px-1.5 py-0.5 ${HEALTH_CHIP[thesis.health_label] ?? ""}`}>
+                    {thesis.health_label}
+                  </span>
+                )}
+                {pulseStatus && hasThesis && (
+                  <span className={`h-1.5 w-1.5 rounded-full ${dotColor}`} />
+                )}
+              </div>
             </div>
             {statusCopy.subLabel && (
               <p className="font-mono text-[10px] uppercase tracking-[0.14em] text-foreground/45">

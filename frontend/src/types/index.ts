@@ -37,6 +37,8 @@ export interface Thesis {
   updated_at: string;
   invalidated_at: string | null;
   invalidation_reason: string | null;
+  health_score: number | null;
+  health_label: "Healthy" | "At Risk" | "Broken" | null;
 }
 
 export interface StressTestResult {
