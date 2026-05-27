@@ -46,7 +46,7 @@ export default function SecurityPage() {
                 ["Your thesis notes", "Encrypted at rest. Scoped to your account. Never read for ads or training without your explicit opt-in."],
                 ["Your tickers and rough sizing", "Used to decide which signals are relevant to you."],
                 ["Your alert preferences", "Tone, delivery, quiet hours."],
-                ["Email + sign-in", "Standard auth. We use a passkey-first flow."],
+                ["Email + sign-in", "Standard email and password auth with JWT sessions."],
               ].map(([h, b]) => (
                 <div key={h}>
                   <div style={{ fontFamily: mk.sans, fontSize: 17, fontWeight: 600, letterSpacing: "-0.01em" }}>{h}</div>
@@ -62,7 +62,7 @@ export default function SecurityPage() {
             <div style={{ display: "flex", flexDirection: "column", gap: 14 }}>
               {[
                 ["Your trade history", "We don't ingest it. You don't need to share it. The broker connection only reads positions, not transactions."],
-                ["Payment / banking info", "We never see it. Stripe handles checkout when you upgrade."],
+                ["Payment / banking info", "We never see it. Billing for any future premium tier will be handled by a third-party processor."],
                 ["Your real-time positions for trading", "We poll positions on a schedule. We don't subscribe to a tick stream, because we don't need one."],
                 ["Sharing with third parties", "We don't sell or share your thesis notes. Period."],
               ].map(([h, b]) => (
@@ -89,12 +89,11 @@ export default function SecurityPage() {
           className="max-md:grid-cols-1"
         >
           {[
-            ["Encryption", "AES-256 at rest. TLS 1.3 in transit. Per-tenant data keys."],
-            ["Hosting", "Railway on AWS. EU users default to EU region."],
-            ["Backups", "Daily snapshots, 30-day retention, point-in-time restore."],
-            ["Access controls", "Engineer access to production data is logged, audited, and requires a written reason."],
-            ["Vulnerability program", "Responsible disclosure at security@penkeep.com. Quarterly reviews."],
-            ["Dependencies", "Minimal surface area. Dependency audit on every release."],
+            ["Encryption", "Broker API keys encrypted at rest (Fernet AES). TLS in transit."],
+            ["Hosting", "Railway cloud hosting. Database backups managed by the platform."],
+            ["Access controls", "We keep engineer access to production data minimal."],
+            ["Vulnerability program", "Responsible disclosure at security@penkeep.com."],
+            ["Dependencies", "Minimal dependency surface area."],
           ].map(([h, b]) => (
             <div key={h} style={{ background: mk.card, border: `1px solid ${mk.pencilLight}`, borderRadius: 14, padding: 20 }}>
               <div style={{ fontFamily: mk.sans, fontSize: 18, fontWeight: 600, letterSpacing: "-0.01em" }}>{h}</div>
@@ -124,8 +123,8 @@ export default function SecurityPage() {
           className="max-md:grid-cols-1"
         >
           {[
-            ["Export", "Download all your thesis notes as Markdown, or your full history as JSON."],
-            ["Delete", "One button in settings. Full account & note deletion, retained only in encrypted backups for 30 days."],
+            ["Export", "We're building export to Markdown and JSON. Contact us if you need your data before that ships."],
+            ["Delete", "Email privacy@penkeep.com to delete your account and data. We'll confirm within 7 days."],
             ["Subject-access requests", "Email privacy@penkeep.com and we reply within 14 days, free."],
           ].map(([h, b]) => (
             <div key={h} style={{ background: mk.card, border: `1px solid ${mk.pencilLight}`, borderRadius: 14, padding: 18 }}>

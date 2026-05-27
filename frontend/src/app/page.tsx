@@ -283,7 +283,7 @@ export default function LandingPage() {
             <div style={{ fontFamily: mk.mono, fontSize: 11, textTransform: "uppercase", letterSpacing: "0.1em", color: mk.pencil }}>evidence, not vibes</div>
             <div style={{ fontFamily: mk.sans, fontSize: 22, fontWeight: 600, lineHeight: 1.1 }}>Every signal has sources.</div>
             <div style={{ display: "flex", flexWrap: "wrap", gap: 5, marginTop: 4 }}>
-              {["Bloomberg", "Reuters", "FT", "SEC filings", "10-Q", "earnings calls", "analyst notes"].map((s) => (
+              {["News & press releases", "SEC filings", "10-Q", "8-K", "earnings calls", "insider filings"].map((s) => (
                 <span
                   key={s}
                   style={{

@@ -28,6 +28,7 @@ export function MarketingFooter() {
       <div style={{ display: "flex", gap: 18, flexWrap: "wrap" }}>
         {[
           { label: "Manifesto", href: "/manifesto" },
+          { label: "Pricing", href: "/pricing" },
           { label: "FAQ", href: "/faq" },
           { label: "Security", href: "/security" },
         ].map(({ label, href }) => (

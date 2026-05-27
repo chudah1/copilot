@@ -10,6 +10,7 @@ const STARTERS = [
     name: "NVIDIA",
     text: "AI infra is the next decade. NVDA is picks-and-shovels — Jensen is generational.",
     tags: ["AI infra", "Founder bet"],
+    health: { label: "Healthy", score: 84 } as const,
     signals: [
       { i: "↑", t: "Hyperscaler capex guides ↑", trend: "up" },
       { i: "·", t: "NVDA data-center revenue", trend: "up" },
@@ -21,6 +22,7 @@ const STARTERS = [
     name: "Tesla",
     text: "Tesla is an EV story plus robotaxi optionality nobody is pricing.",
     tags: ["EV cycle", "Founder bet"],
+    health: { label: "At Risk", score: 54 } as const,
     signals: [
       { i: "·", t: "Quarterly EV deliveries", trend: "bumpy" },
       { i: "·", t: "Robotaxi / FSD milestones", trend: "flat" },
@@ -32,6 +34,7 @@ const STARTERS = [
     name: "Rolls-Royce",
     text: "Civil aero turnaround + defence backlog. 18-month horizon.",
     tags: ["Turnaround", "Defence + aero"],
+    health: { label: "Healthy", score: 78 } as const,
     signals: [
       { i: "·", t: "Civil-aero margin trajectory", trend: "up" },
       { i: "·", t: "Defence order book", trend: "up" },
@@ -43,6 +46,7 @@ const STARTERS = [
     name: "Apple",
     text: "Apple is a cash machine compounding through Services. A low-vol hold.",
     tags: ["Services flywheel"],
+    health: { label: "Healthy", score: 76 } as const,
     signals: [
       { i: "↑", t: "Services revenue growth", trend: "up" },
       { i: "·", t: "Installed base / churn", trend: "flat" },
@@ -239,16 +243,34 @@ export function ThesisDemo() {
             animation: "mkFadeIn 320ms ease-out",
           }}
         >
-          <div
-            style={{
-              fontFamily: mk.mono,
-              fontSize: 11,
-              letterSpacing: "0.1em",
-              textTransform: "uppercase",
-              color: mk.pencil,
-            }}
-          >
-            We extracted →
+          <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", gap: 10, flexWrap: "wrap" }}>
+            <div
+              style={{
+                fontFamily: mk.mono,
+                fontSize: 11,
+                letterSpacing: "0.1em",
+                textTransform: "uppercase",
+                color: mk.pencil,
+              }}
+            >
+              We extracted →
+            </div>
+            <span
+              key={pickedId + "-health"}
+              style={{
+                padding: "4px 10px",
+                borderRadius: 999,
+                background: picked.health.label === "Healthy" ? mk.greenSoft : picked.health.label === "At Risk" ? mk.accentSoft : "#fce4d6",
+                color: picked.health.label === "Healthy" ? mk.green : mk.accent,
+                fontFamily: mk.mono,
+                fontSize: 10,
+                fontWeight: 600,
+                letterSpacing: "0.06em",
+                animation: "mkFadeIn 360ms ease-out",
+              }}
+            >
+              {picked.health.label} · {picked.health.score}
+            </span>
           </div>
           <div style={{ display: "flex", flexWrap: "wrap", gap: 6, minHeight: 28 }}>
             {picked.tags.map((t) => (

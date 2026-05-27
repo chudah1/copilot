@@ -22,7 +22,7 @@ const FAQS = [
     cat: "Signals & alerts",
     items: [
       ["What kinds of signals do you watch?",
-        "Earnings & guidance, news / press releases, analyst sentiment, insider trades, sector trend signals, price moves relative to your thesis. You choose what's on; default is everything except social/creator sentiment."],
+        "Earnings & guidance, news & press releases, SEC filings (10-Q, 8-K), earnings call transcripts, insider transactions, and price moves relative to your thesis."],
       ["How often will I hear from you?",
         "Almost never. The product is silent by default. The only push you'll get is a \"your reason may have changed\" note, typically a few per quarter across a portfolio of 10 to 15 stocks."],
       ["What if a signal is wrong?",
@@ -39,7 +39,7 @@ const FAQS = [
       ["Which brokers are supported?",
         "At launch: Trading 212, plus CSV upload. We're adding more through 2026."],
       ["Where is my data?",
-        "Encrypted at rest. Your thesis notes are scoped to your account; we don't read them for ad targeting, and we don't sell them. You can export everything as Markdown or JSON, and you can delete your account from settings."],
+        "Encrypted at rest. Your thesis notes are scoped to your account; we don't read them for ad targeting, and we don't sell them. Email privacy@penkeep.com to request an export or to delete your account."],
     ],
   },
   {
