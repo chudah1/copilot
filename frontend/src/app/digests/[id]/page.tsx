@@ -58,10 +58,36 @@ export default function DigestDetailPage() {
   if (!digest) {
     return (
       <AppShell>
-        <div className="flex items-center justify-center min-h-[calc(100vh-52px)]">
-          <p className="font-mono text-[10px] uppercase tracking-[0.2em] text-muted-foreground animate-pulse">
-            Loading…
-          </p>
+        <div className="max-w-4xl mx-auto px-8 py-10 animate-pulse">
+          <div className="h-2.5 w-16 bg-muted rounded mb-8" />
+          <div className="border-b border-border pb-7 mb-8 space-y-3">
+            <div className="flex gap-3">
+              <div className="h-2.5 w-10 bg-muted rounded" />
+              <div className="h-2.5 w-20 bg-muted/60 rounded" />
+            </div>
+            <div className="h-10 w-3/4 bg-muted rounded" />
+            <div className="h-2.5 w-48 bg-muted/60 rounded" />
+          </div>
+          <div className="grid gap-5 md:grid-cols-[1.2fr_0.8fr] mb-10">
+            <div className="border border-border/60 bg-card p-5 space-y-3">
+              <div className="h-2 w-20 bg-muted rounded" />
+              {[1, 2, 3].map(i => <div key={i} className="h-3.5 w-full bg-muted/60 rounded" />)}
+            </div>
+            <div className="border border-border/60 bg-card p-5 space-y-4">
+              <div className="h-2 w-16 bg-muted rounded" />
+              <div className="grid grid-cols-2 gap-4">
+                {[1, 2, 3].map(i => (
+                  <div key={i}>
+                    <div className="h-2 w-14 bg-muted/60 rounded" />
+                    <div className="h-6 w-8 bg-muted rounded mt-1" />
+                  </div>
+                ))}
+              </div>
+            </div>
+          </div>
+          <div className="border-t border-border/60 pt-8 space-y-3">
+            {[1, 2, 3, 4].map(i => <div key={i} className="h-3 bg-muted/40 rounded" style={{ width: `${85 - i * 5}%` }} />)}
+          </div>
         </div>
       </AppShell>
     );

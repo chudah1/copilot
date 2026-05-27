@@ -23,10 +23,7 @@ export function Navbar() {
           className="flex items-baseline gap-2 group"
         >
           <span className="font-display text-[1.25rem] font-semibold italic text-primary tracking-tight leading-none">
-            Copilot
-          </span>
-          <span className="font-mono text-[0.6rem] uppercase tracking-[0.3em] text-muted-foreground/70 group-hover:text-muted-foreground transition-colors">
-            Investor
+            penKeep
           </span>
         </Link>
 

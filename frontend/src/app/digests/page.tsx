@@ -42,9 +42,10 @@ function digestArchiveCopy(investorProfile: "thesis_driven" | "hearsay_driven" |
 
 export default function DigestsPage() {
   const [digests, setDigests] = useState<Digest[]>([]);
+  const [loading, setLoading] = useState(true);
 
   useEffect(() => {
-    api.get<Digest[]>("/api/digests").then(setDigests);
+    api.get<Digest[]>("/api/digests").then(setDigests).finally(() => setLoading(false));
   }, []);
 
   const investorProfile = digests[0]?.content.investor_profile ?? null;
@@ -67,7 +68,27 @@ export default function DigestsPage() {
           </p>
         </div>
 
-        {digests.length === 0 ? (
+        {loading ? (
+          <div className="animate-pulse space-y-0">
+            {[1, 2, 3].map((i) => (
+              <div key={i} className="flex items-start justify-between gap-6 border-b border-border/60 py-6">
+                <div className="flex-1 space-y-2.5">
+                  <div className="h-2.5 w-40 bg-muted rounded" />
+                  <div className="h-4 w-3/4 bg-muted rounded" />
+                  <div className="h-3 w-1/2 bg-muted/60 rounded" />
+                  <div className="flex gap-4 pt-1">
+                    <div className="h-2.5 w-14 bg-muted/50 rounded" />
+                    <div className="h-2.5 w-16 bg-muted/50 rounded" />
+                  </div>
+                </div>
+                <div className="shrink-0 space-y-1.5 text-right">
+                  <div className="h-2.5 w-10 bg-muted rounded" />
+                  <div className="h-2.5 w-16 bg-muted/60 rounded" />
+                </div>
+              </div>
+            ))}
+          </div>
+        ) : digests.length === 0 ? (
           <div className="py-16 text-center">
             <p className="font-display italic text-2xl text-foreground/60 mb-3">
               No digests yet.

@@ -38,7 +38,8 @@ import type {
   UpcomingEarnings,
 } from "@/types";
 
-type TabId = "thesis" | "monitoring" | "history";
+type TabId = "thesis" | "monitoring";
+type ThesisSubTab = "thesis" | "signals" | "log";
 type NextStepAction = "edit" | "generate_signals" | "confirm_signals" | "monitoring";
 
 interface NextStepNotice {
@@ -745,6 +746,7 @@ export default function PositionDetailPage() {
   const [hasPromptedBlindSpotEditor, setHasPromptedBlindSpotEditor] = useState(false);
   const [deleteConfirming, setDeleteConfirming] = useState(false);
   const [deleteLoading, setDeleteLoading] = useState(false);
+  const [thesisSubTab, setThesisSubTab] = useState<ThesisSubTab>("thesis");
 
   const holding = holdings.find((h) => h.ticker === ticker);
   const activeThesis = theses.find((t) => t.status === "active" || t.status === "draft" || t.status === "needs_review");
@@ -943,7 +945,8 @@ export default function PositionDetailPage() {
         runHealthCheck(savedThesisId);
         setShowCounterThesis(true);
         setShowAnalysis(true);
-        setActiveTab("monitoring");
+        setActiveTab("thesis");
+        setThesisSubTab("thesis");
         setNextStepNotice(buildPostSaveNotice({
           investorProfile: onboardingState?.investor_profile ?? null,
           blindSpotStart: fromBlindSpot && !activeThesis && !latestInvalidatedThesis,
@@ -990,7 +993,8 @@ export default function PositionDetailPage() {
       setDecompositionLoading(true);
       const envelope = await api.post<ThesisDecompositionEnvelope>(`/api/theses/${activeThesis.id}/decompose`);
       setDecompositionEnvelope(envelope);
-      setActiveTab("monitoring");
+      setActiveTab("thesis");
+      setThesisSubTab("signals");
       setNextStepNotice(buildPostDecompositionNotice(envelope, onboardingState?.investor_profile ?? null));
       await refreshCurrentThesis();
     } catch (error) {
@@ -1117,8 +1121,65 @@ export default function PositionDetailPage() {
   // ── Loading ──────────────────────────────────────────────────────────────
 
   if (loading) return (
-    <div className="flex items-center justify-center min-h-[calc(100vh-53px)]">
-      <p className="font-mono text-[10px] uppercase tracking-widest text-muted-foreground animate-pulse">Loading…</p>
+    <div className="min-h-[calc(100vh-53px)] animate-pulse">
+      <div className="sticky top-[52px] z-20 bg-background border-b border-border/60">
+        <div className="max-w-5xl mx-auto px-6 lg:px-10">
+          <div className="flex items-center justify-between pt-4 pb-2">
+            <div className="h-2.5 w-20 bg-muted rounded" />
+            <div className="h-7 w-24 bg-muted rounded" />
+          </div>
+          <div className="flex items-end justify-between gap-6 pb-3">
+            <div>
+              <div className="h-14 w-32 bg-muted rounded" />
+              <div className="h-3 w-40 bg-muted rounded mt-2" />
+            </div>
+            <div className="text-right space-y-1.5">
+              <div className="h-8 w-28 bg-muted rounded" />
+              <div className="h-4 w-20 bg-muted rounded" />
+            </div>
+          </div>
+          <div className="flex gap-1 pb-3">
+            <div className="h-3 w-20 bg-muted/60 rounded" />
+            <div className="h-3 w-24 bg-muted/40 rounded ml-3" />
+          </div>
+          <div className="flex gap-6 pb-0.5">
+            <div className="h-8 w-24 bg-muted/50 rounded" />
+            <div className="h-8 w-24 bg-muted/30 rounded" />
+          </div>
+        </div>
+      </div>
+      <div className="max-w-5xl mx-auto px-6 lg:px-10 py-8 space-y-4">
+        <div className="flex gap-6 mb-2">
+          <div className="h-3 w-14 bg-muted rounded" />
+          <div className="h-3 w-14 bg-muted/50 rounded" />
+          <div className="h-3 w-10 bg-muted/40 rounded" />
+        </div>
+        <div className="border border-border/60 bg-card rounded-sm p-6 space-y-4">
+          <div className="h-3 w-16 bg-muted rounded" />
+          <div className="space-y-2">
+            <div className="h-4 w-full bg-muted rounded" />
+            <div className="h-4 w-5/6 bg-muted rounded" />
+            <div className="h-4 w-3/4 bg-muted rounded" />
+          </div>
+          <div className="grid grid-cols-3 gap-3 pt-2">
+            {[1, 2, 3].map(i => (
+              <div key={i} className="h-16 bg-muted/40 rounded" />
+            ))}
+          </div>
+        </div>
+        <div className="border border-border/60 bg-card/50 rounded-sm p-5 space-y-3">
+          <div className="h-3 w-20 bg-muted rounded" />
+          {[1, 2].map(i => (
+            <div key={i} className="border border-border/40 p-3 rounded-sm space-y-2">
+              <div className="flex items-center gap-2">
+                <div className="h-2 w-2 bg-muted rounded-full" />
+                <div className="h-3 w-32 bg-muted rounded" />
+              </div>
+              <div className="h-2.5 w-5/6 bg-muted/60 rounded ml-4" />
+            </div>
+          ))}
+        </div>
+      </div>
     </div>
   );
 
@@ -1188,7 +1249,6 @@ export default function PositionDetailPage() {
   const tabs: { id: TabId; label: string; badge?: number | string }[] = [
     { id: "thesis", label: "Your reason" },
     { id: "monitoring", label: "Monitoring", badge: unreviewedEvents > 0 ? unreviewedEvents : undefined },
-    { id: "history", label: "History", badge: convictionLog?.entries.length ?? undefined },
   ];
 
   const steps = [
@@ -1247,7 +1307,8 @@ export default function PositionDetailPage() {
       return;
     }
     if (action === "generate_signals") {
-      setActiveTab("monitoring");
+      setActiveTab("thesis");
+      setThesisSubTab("signals");
       void handleGenerateDecomposition();
       return;
     }
@@ -1383,7 +1444,7 @@ export default function PositionDetailPage() {
             {tabs.map((tab) => (
               <button
                 key={tab.id}
-                onClick={() => setActiveTab(tab.id)}
+                onClick={() => { setActiveTab(tab.id); if (tab.id === "thesis") setThesisSubTab("thesis"); }}
                 className="relative pb-3 px-3 font-mono text-[10px] uppercase tracking-[0.2em] transition-colors flex items-center gap-2"
                 style={{ color: activeTab === tab.id ? "var(--primary)" : "var(--muted-foreground)" }}
               >
@@ -1696,12 +1757,11 @@ export default function PositionDetailPage() {
                     </div>
                     <button
                       onClick={() => {
+                        setActiveTab("thesis");
+                        setThesisSubTab("signals");
                         if (thesisHandoffPrompt.action === "generate") {
-                          setActiveTab("monitoring");
                           void handleGenerateDecomposition();
-                          return;
                         }
-                        setActiveTab("monitoring");
                       }}
                       className="font-mono text-[10px] uppercase tracking-[0.15em] text-primary px-4 py-2 hover:text-primary/80 transition-colors shrink-0"
                     >
@@ -1722,24 +1782,149 @@ export default function PositionDetailPage() {
                   />
                 )}
 
-                {/* Thesis card */}
+                {/* ── Sub-tabs (when thesis exists and not editing) ───────── */}
                 {activeThesis && !editing && (
-                  <ThesisCard
-                    thesis={activeThesis}
-                    decomposition={decompositionEnvelope?.decomposition ?? null}
-                    investorProfile={onboardingState?.investor_profile ?? null}
-                    onEdit={() => setEditing(true)}
-                    onInvalidate={() => setInvalidateOpen(true)}
-                  />
-                )}
+                  <>
+                    <div className="flex gap-1 -mx-1 border-b border-border/40">
+                      {(
+                        [
+                          { id: "thesis" as ThesisSubTab, label: "Thesis" },
+                          { id: "signals" as ThesisSubTab, label: "Signals", badge: hasActiveSignals ? activeSignalCount : undefined },
+                          { id: "log" as ThesisSubTab, label: "Log", badge: (convictionLog?.entries.length ?? 0) > 0 ? convictionLog!.entries.length : undefined },
+                        ]
+                      ).map((sub) => (
+                        <button
+                          key={sub.id}
+                          onClick={() => setThesisSubTab(sub.id)}
+                          className="relative pb-3 px-3 font-mono text-[10px] uppercase tracking-[0.18em] transition-colors flex items-center gap-1.5"
+                          style={{ color: thesisSubTab === sub.id ? "var(--primary)" : "var(--muted-foreground)" }}
+                        >
+                          {sub.label}
+                          {sub.badge !== undefined && (
+                            <span className="font-mono text-[9px] text-muted-foreground/50 tabular-nums">{sub.badge}</span>
+                          )}
+                          {thesisSubTab === sub.id && (
+                            <motion.div layoutId="thesis-sub-indicator" className="absolute bottom-0 left-0 right-0 h-px bg-primary" transition={{ type: "spring", stiffness: 400, damping: 35 }} />
+                          )}
+                        </button>
+                      ))}
+                    </div>
 
-                {/* Thesis diff — claims vs evidence */}
-                {activeThesis && !editing && decompositionEnvelope?.decomposition && (
-                  <ThesisDiffView
-                    decomposition={decompositionEnvelope.decomposition}
-                    monitoringEvents={events}
-                    healthSnapshots={healthSnapshots}
-                  />
+                    {/* ── Thesis sub-tab ──────────────────────────────────── */}
+                    {thesisSubTab === "thesis" && (
+                      <div className="space-y-6">
+                        <ThesisCard
+                          thesis={activeThesis}
+                          decomposition={decompositionEnvelope?.decomposition ?? null}
+                          investorProfile={onboardingState?.investor_profile ?? null}
+                          onEdit={() => setEditing(true)}
+                          onInvalidate={() => setInvalidateOpen(true)}
+                        />
+                        {(healthCheck || healthCheckLoading || showCounterThesis) && (
+                          <div className="space-y-4 border-t border-border/40 pt-6">
+                            <button onClick={() => setShowAnalysis((s) => !s)} className="font-mono text-[10px] uppercase tracking-[0.2em] text-muted-foreground hover:text-foreground transition-colors">
+                              {showAnalysis ? "▲" : "▼"} Analysis
+                            </button>
+                            {showAnalysis && (
+                              <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} className="space-y-4">
+                                {(healthCheck || healthCheckLoading) && (
+                                  <ThesisHealthCheck result={healthCheck} loading={healthCheckLoading} investorProfile={onboardingState?.investor_profile ?? null} />
+                                )}
+                                {showCounterThesis && <CounterThesisCard thesisId={activeThesis.id} />}
+                              </motion.div>
+                            )}
+                          </div>
+                        )}
+                        <div className="border-t border-border/40 pt-5">
+                          <button onClick={() => setShowPositionDetails((s) => !s)} className="font-mono text-[10px] uppercase tracking-[0.2em] text-muted-foreground hover:text-foreground transition-colors">
+                            {showPositionDetails ? "▲" : "▼"} Position details
+                          </button>
+                          {showPositionDetails && (
+                            <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} className="grid grid-cols-2 md:grid-cols-4 gap-3 mt-4">
+                              {[
+                                { label: "Shares", value: String(holding.quantity) },
+                                { label: "Avg cost", value: formatCurrency(holding.average_cost_basis) },
+                                { label: "Current value", value: formatCurrency(value) },
+                                { label: "P&L", value: `${pnl >= 0 ? "+" : ""}${formatCurrency(pnl)}`, colored: true },
+                              ].map(({ label, value: v, colored }) => (
+                                <div key={label} className="border border-border/60 bg-card px-4 py-3">
+                                  <p className="font-mono text-[10px] uppercase tracking-[0.15em] text-muted-foreground">{label}</p>
+                                  <p className={`font-mono text-lg tabular-nums mt-1.5 ${colored ? (pnl >= 0 ? "text-emerald-700" : "text-red-600") : "text-foreground"}`}>{v}</p>
+                                </div>
+                              ))}
+                            </motion.div>
+                          )}
+                        </div>
+                      </div>
+                    )}
+
+                    {/* ── Signals sub-tab ─────────────────────────────────── */}
+                    {thesisSubTab === "signals" && (
+                      <div className="space-y-8">
+                        {decompositionEnvelope?.decomposition ? (
+                          <ThesisDiffView
+                            decomposition={decompositionEnvelope.decomposition}
+                            monitoringEvents={events}
+                            healthSnapshots={healthSnapshots}
+                          />
+                        ) : (
+                          !decompositionLoading && (
+                            <div className="py-10 text-center space-y-3">
+                              <p className="font-display italic text-xl text-foreground/50">No signals defined yet.</p>
+                              <p className="font-sans text-sm text-muted-foreground max-w-xs mx-auto leading-relaxed">
+                                Generate a watchlist from your thesis and confirm which signals should count as evidence.
+                              </p>
+                              <button onClick={handleGenerateDecomposition} className="font-mono text-[10px] uppercase tracking-[0.15em] border border-primary/40 text-primary px-5 py-2.5 hover:border-primary transition-colors">
+                                Generate signals
+                              </button>
+                            </div>
+                          )
+                        )}
+                        <div className={decompositionEnvelope?.decomposition ? "border-t border-border/40 pt-6 space-y-3" : ""}>
+                          {decompositionEnvelope?.decomposition && (
+                            <p className="font-mono text-[10px] uppercase tracking-[0.2em] text-muted-foreground">Signal setup</p>
+                          )}
+                          <ThesisDecompositionReview
+                            key={`${decompositionEnvelope?.decomposition?.id ?? "empty"}:${decompositionEnvelope?.status ?? "none"}`}
+                            envelope={decompositionEnvelope}
+                            loading={decompositionLoading}
+                            saving={decompositionSaving}
+                            onGenerate={handleGenerateDecomposition}
+                            onConfirm={handleConfirmDecomposition}
+                          />
+                        </div>
+                      </div>
+                    )}
+
+                    {/* ── Log sub-tab ─────────────────────────────────────── */}
+                    {thesisSubTab === "log" && (
+                      <>
+                        <ConvictionLog
+                          data={convictionLog}
+                          loading={convictionLogLoading}
+                          saving={noteSaving}
+                          onAddNote={activeThesis ? handleAddManualNote : undefined}
+                          investorProfile={onboardingState?.investor_profile ?? null}
+                        />
+                        {invalidatedTheses.length > 0 && (
+                          <div className="border-t border-border/40 pt-6 space-y-3">
+                            <p className="font-mono text-[10px] uppercase tracking-[0.2em] text-muted-foreground">
+                              {onboardingState?.investor_profile === "thesis_driven" ? "Previous theses" : "Previous reasons"}
+                            </p>
+                            {invalidatedTheses.map((t) => (
+                              <div key={t.id} className="border-l-2 border-border/60 pl-4 py-3 space-y-1.5">
+                                <p className="font-sans text-sm text-foreground/70 leading-relaxed italic">&ldquo;{t.why_own_it}&rdquo;</p>
+                                {t.invalidation_reason && (
+                                  <p className="font-sans text-xs text-muted-foreground">Closed: {t.invalidation_reason}</p>
+                                )}
+                                <p className="font-mono text-[10px] text-muted-foreground/60">{formatDate(t.updated_at)}</p>
+                              </div>
+                            ))}
+                          </div>
+                        )}
+                      </>
+                    )}
+                  </>
                 )}
 
                 {/* No thesis empty state */}
@@ -1774,56 +1959,6 @@ export default function PositionDetailPage() {
                   </div>
                 )}
 
-                {/* Analysis (health check + counter thesis) */}
-                {activeThesis && (healthCheck || healthCheckLoading || showCounterThesis) && (
-                  <div className="space-y-4 border-t border-border/40 pt-6">
-                    <button
-                      onClick={() => setShowAnalysis((s) => !s)}
-                      className="font-mono text-[10px] uppercase tracking-[0.2em] text-muted-foreground hover:text-foreground transition-colors"
-                    >
-                      {showAnalysis ? "▲" : "▼"} Analysis
-                    </button>
-                    {showAnalysis && (
-                      <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} className="space-y-4">
-                        {(healthCheck || healthCheckLoading) && (
-                          <ThesisHealthCheck
-                            result={healthCheck}
-                            loading={healthCheckLoading}
-                            investorProfile={onboardingState?.investor_profile ?? null}
-                          />
-                        )}
-                        {showCounterThesis && <CounterThesisCard thesisId={activeThesis.id} />}
-                      </motion.div>
-                    )}
-                  </div>
-                )}
-
-                {/* Position metrics */}
-                <div className="border-t border-border/40 pt-5">
-                  <button
-                    onClick={() => setShowPositionDetails((s) => !s)}
-                    className="font-mono text-[10px] uppercase tracking-[0.2em] text-muted-foreground hover:text-foreground transition-colors"
-                  >
-                    {showPositionDetails ? "▲" : "▼"} Position details
-                  </button>
-                  {showPositionDetails && (
-                    <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} className="grid grid-cols-2 md:grid-cols-4 gap-3 mt-4">
-                      {[
-                        { label: "Shares", value: String(holding.quantity) },
-                        { label: "Avg cost", value: formatCurrency(holding.average_cost_basis) },
-                        { label: "Current value", value: formatCurrency(value) },
-                        { label: "P&L", value: `${pnl >= 0 ? "+" : ""}${formatCurrency(pnl)}`, colored: true },
-                      ].map(({ label, value: v, colored }) => (
-                        <div key={label} className="border border-border/60 bg-card px-4 py-3">
-                          <p className="font-mono text-[10px] uppercase tracking-[0.15em] text-muted-foreground">{label}</p>
-                          <p className={`font-mono text-lg tabular-nums mt-1.5 ${colored ? (pnl >= 0 ? "text-emerald-700" : "text-red-600") : "text-foreground"}`}>
-                            {v}
-                          </p>
-                        </div>
-                      ))}
-                    </motion.div>
-                  )}
-                </div>
               </>
             )}
 
@@ -1958,41 +2093,6 @@ export default function PositionDetailPage() {
                       )}
                     </section>
 
-                    {/* ── SIGNALS SECTION ─────────────────────────────── */}
-                    <section className="border-t border-border/40 pt-8 space-y-4">
-                      <div className="flex items-center justify-between">
-                        <div>
-                          <p className="font-mono text-[10px] uppercase tracking-[0.2em] text-muted-foreground mb-0.5">
-                            Watching for
-                          </p>
-                          <p className="font-sans text-xs text-muted-foreground/70">
-                            {onboardingState?.investor_profile === "thesis_driven"
-                              ? "Signals derived from your thesis"
-                              : onboardingState?.investor_profile === "hearsay_driven"
-                                ? "Signals derived from the reason you wrote down"
-                                : "Signals derived from your thesis"}
-                          </p>
-                        </div>
-                        {!hasSignals && !decompositionLoading && (
-                          <button
-                            onClick={handleGenerateDecomposition}
-                            className="font-mono text-[10px] uppercase tracking-[0.15em] border border-primary/40 text-primary px-4 py-2 hover:border-primary transition-colors"
-                          >
-                            Generate signals
-                          </button>
-                        )}
-                      </div>
-
-                      <ThesisDecompositionReview
-                        key={`${decompositionEnvelope?.decomposition?.id ?? "empty"}:${decompositionEnvelope?.status ?? "none"}`}
-                        envelope={decompositionEnvelope}
-                        loading={decompositionLoading}
-                        saving={decompositionSaving}
-                        onGenerate={handleGenerateDecomposition}
-                        onConfirm={handleConfirmDecomposition}
-                      />
-                    </section>
-
                     {/* ── EVIDENCE SECTION ────────────────────────────── */}
                     {events.some((e) => e.review_action) && (
                       <section className="border-t border-border/40 pt-8 space-y-4">
@@ -2033,42 +2133,6 @@ export default function PositionDetailPage() {
                   </>
                 )}
               </div>
-            )}
-
-            {/* ─── HISTORY TAB ─────────────────────────────────────────── */}
-            {activeTab === "history" && (
-              <>
-                <ConvictionLog
-                  data={convictionLog}
-                  loading={convictionLogLoading}
-                  saving={noteSaving}
-                  onAddNote={activeThesis ? handleAddManualNote : undefined}
-                  investorProfile={onboardingState?.investor_profile ?? null}
-                />
-
-                {invalidatedTheses.length > 0 && (
-                  <div className="border-t border-border/40 pt-6 space-y-3">
-                    <p className="font-mono text-[10px] uppercase tracking-[0.2em] text-muted-foreground">
-                      {onboardingState?.investor_profile === "thesis_driven" ? "Previous theses" : "Previous reasons"}
-                    </p>
-                    {invalidatedTheses.map((t) => (
-                      <div key={t.id} className="border-l-2 border-border/60 pl-4 py-3 space-y-1.5">
-                        <p className="font-sans text-sm text-foreground/70 leading-relaxed italic">
-                          &ldquo;{t.why_own_it}&rdquo;
-                        </p>
-                        {t.invalidation_reason && (
-                          <p className="font-sans text-xs text-muted-foreground">
-                            Closed: {t.invalidation_reason}
-                          </p>
-                        )}
-                        <p className="font-mono text-[10px] text-muted-foreground/60">
-                          {formatDate(t.updated_at)}
-                        </p>
-                      </div>
-                    ))}
-                  </div>
-                )}
-              </>
             )}
 
           </motion.div>
