@@ -13,18 +13,11 @@ async def stress_test(request: Request, body: StressTestRequest):
     ticker = body.ticker.upper().strip()
 
     company_data = await fetch_company_data(ticker)
-    current_price = company_data.current_price if company_data else None
-    recent_headlines = (
-        [n.headline for n in (company_data.news_items or [])[:5]]
-        if company_data and company_data.news_items
-        else []
-    )
 
     result = await run_stress_test(
         ticker=ticker,
         draft_thesis=body.draft_thesis,
-        current_price=current_price,
-        recent_headlines=recent_headlines,
+        company_data=company_data,
     )
 
     return StressTestResponse(

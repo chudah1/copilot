@@ -34,26 +34,25 @@ class StressTestResult:
 async def _generate(
     ticker: str,
     draft_thesis: str | None,
-    current_price: float | None,
-    recent_headlines: list[str],
+    company_data: Any,
 ) -> StressTestOutput:
     from app.services.ai_thesis import generate_stress_test_analysis
 
     return await generate_stress_test_analysis(
         ticker=ticker,
         draft_thesis=draft_thesis,
-        current_price=current_price,
-        recent_headlines=recent_headlines,
+        company_data=company_data,
+        current_price=company_data.current_price if company_data else None,
     )
 
 
 async def run_stress_test(
     ticker: str,
     draft_thesis: str | None,
-    current_price: float | None,
-    recent_headlines: list[str],
+    company_data: Any = None,
 ) -> StressTestResult:
     ticker = ticker.upper()
+    current_price = company_data.current_price if company_data else None
     use_cache = draft_thesis is None
     cache_key = f"{ticker}:{datetime.now(timezone.utc).date().isoformat()}"
 
@@ -72,8 +71,7 @@ async def run_stress_test(
     output = await _generate(
         ticker=ticker,
         draft_thesis=draft_thesis,
-        current_price=current_price,
-        recent_headlines=recent_headlines,
+        company_data=company_data,
     )
 
     result = StressTestResult(

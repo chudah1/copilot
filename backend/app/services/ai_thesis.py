@@ -1536,7 +1536,7 @@ _STRESS_TEST_PROMPT = """You are a skeptical buy-side analyst reviewing a retail
 Stress-test it hard. Don't flatter it.
 
 Ticker: {ticker}
-{price_context}{headlines_context}{thesis_context}
+{context}{thesis_context}
 Output valid JSON with this exact structure:
 {{
     "bear_case": "2-3 sentences — the strongest argument against buying {ticker} right now.",
@@ -1546,10 +1546,10 @@ Output valid JSON with this exact structure:
 }}
 
 Requirements:
-- bear_case: specific, grounded in the context provided — reference price level or recent news if available
-- key_risks: 3-5 concrete, falsifiable risks
-- blind_spots: 2-3 things the thesis assumes or ignores (omit if no thesis provided)
-- what_to_watch: 2-4 specific monitorable signals — metrics, events, or dates to track
+- bear_case: specific, grounded in the context provided — reference valuation, growth rates, or news where available
+- key_risks: 3-5 concrete, falsifiable risks — reference actual metrics from the context where possible
+- blind_spots: 2-3 assumptions the thesis makes or ignores (omit if no thesis provided)
+- what_to_watch: 2-4 signals — each must name the metric, the threshold that signals a problem, and when to check it (use actual dates where available). Example: "If revenue growth falls below 8% at next earnings (~2025-07-24), thesis is at risk."
 - Output ONLY valid JSON, no markdown fences"""
 
 
@@ -1590,28 +1590,131 @@ def _fallback_stress_test(ticker: str, draft_thesis: str | None) -> "StressTestO
     )
 
 
+def _build_stress_test_context(
+    company_data: "CompanyData | None",
+    current_price: float | None,
+) -> str:
+    from datetime import datetime, timedelta, timezone
+
+    if company_data is None:
+        return f"Current price: ${current_price:.2f}\n" if current_price is not None else ""
+
+    lines: list[str] = []
+
+    price = company_data.current_price or current_price
+    if price is not None:
+        lines.append(f"Current price: ${price:.2f}")
+
+    sector_parts = [p for p in (company_data.sector, company_data.industry) if p]
+    if sector_parts:
+        lines.append(f"Sector: {' / '.join(sector_parts)}")
+
+    if company_data.market_cap is not None:
+        mc = company_data.market_cap
+        if mc >= 1_000_000_000_000:
+            mc_str = f"${mc / 1_000_000_000_000:.1f}T"
+        elif mc >= 1_000_000_000:
+            mc_str = f"${mc / 1_000_000_000:.1f}B"
+        else:
+            mc_str = f"${mc / 1_000_000:.0f}M"
+        lines.append(f"Market cap: {mc_str}")
+
+    if company_data.pe_ratio is not None:
+        lines.append(f"P/E ratio: {company_data.pe_ratio:.1f}x")
+
+    if company_data.revenue_growth_yoy is not None:
+        lines.append(f"Revenue growth (YoY): {company_data.revenue_growth_yoy * 100:+.1f}%")
+
+    if company_data.earnings_growth_yoy is not None:
+        lines.append(f"Earnings growth (YoY): {company_data.earnings_growth_yoy * 100:+.1f}%")
+
+    if company_data.dividend_yield is not None and company_data.dividend_yield > 0:
+        lines.append(f"Dividend yield: {company_data.dividend_yield:.2f}%")
+
+    if company_data.recent_earnings_surprise_pct is not None:
+        surprise = company_data.recent_earnings_surprise_pct
+        lines.append(
+            f"Recent earnings surprise: {surprise:+.1f}% ({'beat' if surprise > 0 else 'miss'})"
+        )
+
+    if company_data.upcoming_earnings_date is not None:
+        lines.append(
+            f"Next earnings: ~{company_data.upcoming_earnings_date.strftime('%Y-%m-%d')}"
+        )
+
+    fundamentals = "\n".join(lines) + "\n" if lines else ""
+
+    # News filtered by ticker relevance
+    news_context = ""
+    if company_data.news_items:
+        relevant = [n for n in company_data.news_items if (n.ticker_relevance or 0) > 0.5]
+        if len(relevant) < 2:
+            relevant = company_data.news_items[:3]
+        else:
+            relevant = sorted(relevant, key=lambda n: n.ticker_relevance or 0, reverse=True)[:5]
+
+        def _sentiment_label(score: float | None) -> str:
+            if score is None:
+                return "neutral"
+            return "positive" if score >= 0.15 else "negative" if score <= -0.15 else "neutral"
+
+        news_lines = [f"- [{_sentiment_label(n.sentiment)}] {n.headline}" for n in relevant]
+        news_context = "Recent news:\n" + "\n".join(news_lines) + "\n"
+
+    # Senior insider transactions in last 90 days over $100K
+    insider_context = ""
+    if company_data.insider_transactions:
+        cutoff = datetime.now(timezone.utc) - timedelta(days=90)
+        senior_keywords = ("ceo", "cfo", "coo", "chief", "founder", "president")
+        buy_keywords = ("buy", "bought", "purchase", "acqui")
+        qualifying = [
+            t for t in company_data.insider_transactions
+            if (
+                t.transaction_date and t.transaction_date >= cutoff
+                and any(kw in (t.title or "").lower() for kw in senior_keywords)
+                and (t.value or 0) > 100_000
+            )
+        ]
+        if qualifying:
+            t = qualifying[0]
+            action = "bought" if any(kw in (t.transaction_type or "").lower() for kw in buy_keywords) else "sold"
+            value_str = (
+                f"${t.value / 1_000_000:.1f}M" if t.value and t.value >= 1_000_000
+                else f"${t.value:,.0f}" if t.value else ""
+            )
+            date_str = t.transaction_date.strftime("%Y-%m-%d") if t.transaction_date else ""
+            shares_str = f"{int(t.shares or 0):,} shares"
+            insider_context = (
+                f"Recent insider activity: {t.insider_name} ({t.title}) {action} "
+                f"{shares_str}{' (' + value_str + ')' if value_str else ''} on {date_str}\n"
+            )
+
+    # Earnings call tone
+    call_context = ""
+    if company_data.earnings_call:
+        ec = company_data.earnings_call
+        call_lines = [f"Last earnings call tone: {ec.sentiment_label or 'neutral'}"]
+        if ec.highlights:
+            call_lines.append("Key highlights:")
+            for h in ec.highlights[:3]:
+                call_lines.append(f"- {h}")
+        call_context = "\n".join(call_lines) + "\n"
+
+    return fundamentals + news_context + insider_context + call_context
+
+
 async def generate_stress_test_analysis(
     ticker: str,
     draft_thesis: str | None,
-    current_price: float | None,
-    recent_headlines: list[str],
+    company_data: "CompanyData | None" = None,
+    current_price: float | None = None,
 ) -> "StressTestOutput":
-    price_context = (
-        f"Current price: ${current_price:.2f}\n" if current_price is not None else ""
-    )
-    headlines_context = (
-        "Recent headlines:\n" + "\n".join(f"- {h}" for h in recent_headlines[:5]) + "\n"
-        if recent_headlines
-        else ""
-    )
-    thesis_context = (
-        f"Investor's draft thesis: {draft_thesis}\n" if draft_thesis else ""
-    )
+    context = _build_stress_test_context(company_data, current_price)
+    thesis_context = f"Investor's draft thesis: {draft_thesis}\n" if draft_thesis else ""
 
     prompt = _STRESS_TEST_PROMPT.format(
         ticker=ticker,
-        price_context=price_context,
-        headlines_context=headlines_context,
+        context=context,
         thesis_context=thesis_context,
     )
 

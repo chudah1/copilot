@@ -66,6 +66,8 @@ async def _classify_candidates(
     raw_candidates: list[dict],
     ticker: str | None = None,
     company_name: str | None = None,
+    sector: str | None = None,
+    investor_profile: str | None = None,
 ) -> list[ClassifiedCandidate]:
     classified: list[ClassifiedCandidate] = []
     for candidate in raw_candidates:
@@ -80,6 +82,8 @@ async def _classify_candidates(
                 event_description=description,
                 ticker=ticker,
                 company_name=company_name,
+                sector=sector,
+                investor_profile=investor_profile,
             )
         except Exception:
             logger.exception("Health check classification failed for thesis %s", thesis.id)
@@ -121,6 +125,8 @@ async def run_health_check(thesis: Thesis, holding: Holding) -> HealthCheckResul
         raw_candidates,
         ticker=holding.ticker,
         company_name=holding.name,
+        sector=company_data.sector,
+        investor_profile=thesis.interpretation.get("investor_profile") if thesis.interpretation else None,
     )
     watch_hints_status = check_metric_watch_hints(thesis.interpretation, _market_values(company_data))
 

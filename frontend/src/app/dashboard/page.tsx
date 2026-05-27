@@ -602,7 +602,7 @@ export default function DashboardPage() {
                 </span>
                 {(livePnlPct != null ? livePnlPct : summary?.total_pnl_pct) != null && (
                   <span className={`font-mono text-sm tabular-nums ${(livePnl ?? summary?.total_pnl ?? 0) >= 0 ? "text-emerald-700" : "text-red-600"}`}>
-                    {(livePnl ?? summary?.total_pnl ?? 0) >= 0 ? "+" : ""}{formatPercent(livePnlPct ?? summary?.total_pnl_pct ?? 0)}
+                    {formatPercent(livePnlPct ?? summary?.total_pnl_pct ?? 0)}
                   </span>
                 )}
                 {hasLivePrices && (

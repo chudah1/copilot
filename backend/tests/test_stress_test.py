@@ -22,8 +22,7 @@ async def test_no_thesis_returns_bear_case():
         result = await run_stress_test(
             ticker="NVDA",
             draft_thesis=None,
-            current_price=None,
-            recent_headlines=[],
+            company_data=None,
         )
 
     assert result.bear_case == "The stock is overvalued."
@@ -40,8 +39,7 @@ async def test_with_thesis_returns_blind_spots():
         result = await run_stress_test(
             ticker="NVDA",
             draft_thesis="I believe NVDA dominates AI chips.",
-            current_price=None,
-            recent_headlines=[],
+            company_data=None,
         )
 
     assert len(result.blind_spots) > 0
@@ -57,8 +55,7 @@ async def test_what_to_watch_not_empty():
         result = await run_stress_test(
             ticker="AAPL",
             draft_thesis=None,
-            current_price=None,
-            recent_headlines=[],
+            company_data=None,
         )
 
     assert len(result.what_to_watch) >= 1
@@ -72,8 +69,8 @@ async def test_no_thesis_result_is_cached():
     generate_mock = AsyncMock(return_value=mock_result)
 
     with patch("app.services.stress_test._generate", generate_mock):
-        await run_stress_test("TSLA", None, None, [])
-        result = await run_stress_test("TSLA", None, None, [])
+        await run_stress_test("TSLA", None)
+        result = await run_stress_test("TSLA", None)
 
     assert generate_mock.call_count == 1
     assert result.cached is True
@@ -87,32 +84,34 @@ async def test_with_thesis_not_cached():
     generate_mock = AsyncMock(return_value=mock_result)
 
     with patch("app.services.stress_test._generate", generate_mock):
-        r1 = await run_stress_test("TSLA", "I believe in Tesla's energy business.", None, [])
-        r2 = await run_stress_test("TSLA", "I believe in Tesla's energy business.", None, [])
+        r1 = await run_stress_test("TSLA", "I believe in Tesla's energy business.")
+        r2 = await run_stress_test("TSLA", "I believe in Tesla's energy business.")
 
     assert generate_mock.call_count == 2
     assert r1.cached is False
     assert r2.cached is False
 
 
-# --- Behavior 6: market context passed through to generator ---
+# --- Behavior 6: company_data passed through to generator ---
 
 @pytest.mark.asyncio
 async def test_market_context_passed_to_generator():
+    from unittest.mock import MagicMock
     mock_result = _make_counter_output()
     generate_mock = AsyncMock(return_value=mock_result)
+
+    mock_company_data = MagicMock()
+    mock_company_data.current_price = 420.0
 
     with patch("app.services.stress_test._generate", generate_mock):
         await run_stress_test(
             ticker="MSFT",
             draft_thesis=None,
-            current_price=420.0,
-            recent_headlines=["MSFT beats Q3 earnings", "Azure growth slows"],
+            company_data=mock_company_data,
         )
 
     call_kwargs = generate_mock.call_args
-    assert call_kwargs.kwargs.get("current_price") == 420.0
-    assert len(call_kwargs.kwargs.get("recent_headlines", [])) == 2
+    assert call_kwargs.kwargs.get("company_data") is mock_company_data
 
 
 # --- helpers ---
