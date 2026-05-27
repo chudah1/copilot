@@ -587,7 +587,7 @@ export default function DashboardPage() {
         initial={{ opacity: 0 }}
         animate={{ opacity: 1 }}
         transition={{ duration: 0.35 }}
-        className="border-b border-border bg-card px-8 py-4"
+        className="border-b border-border bg-card px-4 sm:px-8 py-4"
       >
         <div className="flex items-center justify-between gap-6 flex-wrap">
           {/* Left: portfolio total */}
@@ -612,6 +612,20 @@ export default function DashboardPage() {
                   </span>
                 )}
               </div>
+            </div>
+
+            {/* Mobile stats row */}
+            <div className="flex sm:hidden items-center gap-3 mt-1">
+              {[
+                { label: "Pos", value: String(summary?.holdings_count ?? 0) },
+                { label: "Mon", value: String(summary?.theses_active ?? 0) },
+                ...(reviewCount > 0 ? [{ label: "Rev", value: String(reviewCount), accent: true }] : []),
+              ].map(({ label, value, accent }) => (
+                <span key={label} className="font-mono text-[10px] text-muted-foreground">
+                  <span className={`tabular-nums ${accent ? "text-primary" : ""}`}>{value}</span>
+                  {" "}{label}
+                </span>
+              ))}
             </div>
 
             {/* Divider */}
@@ -679,7 +693,7 @@ export default function DashboardPage() {
       <div className="px-4 sm:px-8 pt-3 space-y-2 empty:hidden">
         {/* Only one contextual banner at a time — recent review takes priority over activation */}
         {showActivationBanner && !showRecentReviewBanner && (
-          <div className="flex items-center justify-between gap-4 border border-emerald-500/20 bg-emerald-50 px-5 py-3">
+          <div className="flex items-center justify-between gap-4 border border-emerald-500/20 bg-emerald-500/8 px-5 py-3">
             <div className="space-y-1">
               <p className="font-mono text-[10px] uppercase tracking-[0.18em] text-emerald-700">
                 {activationCopy.eyebrow}
@@ -707,7 +721,7 @@ export default function DashboardPage() {
         )}
 
         {showRecentReviewBanner && recentReviewCopy && (
-          <div className="flex items-center justify-between gap-4 border border-sky-500/20 bg-sky-50 px-5 py-3">
+          <div className="flex items-center justify-between gap-4 border border-sky-500/25 bg-sky-500/8 px-5 py-3">
             <div className="space-y-1">
               <p className="font-mono text-[10px] uppercase tracking-[0.18em] text-sky-700">
                 {recentReviewCopy.eyebrow}
@@ -799,7 +813,7 @@ export default function DashboardPage() {
             animate={{ opacity: 1, height: "auto" }}
             exit={{ opacity: 0, height: 0 }}
             transition={{ duration: 0.2 }}
-            className="overflow-hidden px-8 pt-3"
+            className="overflow-hidden px-4 sm:px-8 pt-3"
           >
             <div className="border border-border bg-card p-5">
               <QuickAddHolding onAdd={() => { setShowAddForm(false); void refresh(); }} />
@@ -809,7 +823,7 @@ export default function DashboardPage() {
       </AnimatePresence>
 
       {/* ── Attention section ────────────────────────────────────────── */}
-      <div className="px-8 pt-5">
+      <div className="px-4 sm:px-8 pt-5">
         <motion.div
           initial={{ opacity: 0, y: -4 }}
           animate={{ opacity: 1, y: 0 }}
@@ -822,11 +836,9 @@ export default function DashboardPage() {
           <p className="font-display italic text-[1.4rem] leading-tight text-foreground">
             {dashboardState.title}
           </p>
-          {needsAttention.length === 0 && (
-            <p className="font-sans text-sm text-foreground/75 leading-relaxed">
-              {dashboardState.body}
-            </p>
-          )}
+          <p className="font-sans text-sm text-foreground/75 leading-relaxed">
+            {dashboardState.body}
+          </p>
           {dashboardStatePrimaryCta && (
             <Link
               href={dashboardStatePrimaryCta.href}
@@ -844,7 +856,7 @@ export default function DashboardPage() {
             initial={{ opacity: 0, y: -4 }}
             animate={{ opacity: 1, y: 0 }}
             transition={{ duration: 0.3, delay: 0.1 }}
-            className="px-8 pt-5"
+            className="px-4 sm:px-8 pt-5"
           >
             <div className="flex items-center gap-3 mb-3">
               <p className="font-mono text-[10px] uppercase tracking-[0.18em] text-muted-foreground">
@@ -874,7 +886,7 @@ export default function DashboardPage() {
       </AnimatePresence>
 
       {/* ── Positions grid ───────────────────────────────────────────── */}
-      <div className="px-8 pt-6 pb-8 flex-1">
+      <div className="px-4 sm:px-8 pt-6 pb-8 flex-1">
         <div className="flex items-center justify-between mb-4">
           <div className="flex items-center gap-2">
             <p className="font-mono text-[10px] uppercase tracking-[0.18em] text-muted-foreground">
@@ -908,7 +920,7 @@ export default function DashboardPage() {
       {/* ── Footer strip ─────────────────────────────────────────────── */}
       {(upcomingEarnings.length > 0) && (
         <ErrorBoundary>
-          <div className="border-t border-border bg-card px-8 py-3">
+          <div className="border-t border-border bg-card px-4 sm:px-8 py-3">
             <div className="flex items-center gap-6 overflow-x-auto">
               <p className="font-mono text-[10px] uppercase tracking-[0.18em] text-muted-foreground shrink-0">
                 Upcoming earnings

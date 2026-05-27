@@ -18,8 +18,8 @@ const PULSE_DOT: Record<string, string> = {
 };
 
 const PULSE_RING: Record<string, string> = {
-  review: "ring-1 ring-red-200",
-  watch: "ring-1 ring-amber-200",
+  review: "ring-1 ring-red-500/20",
+  watch: "ring-1 ring-amber-500/20",
 };
 
 function cardStatusCopy(args: {
