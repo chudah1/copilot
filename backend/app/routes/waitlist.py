@@ -1,11 +1,12 @@
 import logging
 from datetime import datetime, timezone
 
-from fastapi import APIRouter
+from fastapi import APIRouter, Request
 from pydantic import BaseModel, EmailStr
 from sqlalchemy import text
 
 from app.database import async_session
+from app.limiter import limiter
 
 logger = logging.getLogger(__name__)
 
@@ -17,10 +18,12 @@ class WaitlistRequest(BaseModel):
 
 
 @router.post("", status_code=201)
-async def join_waitlist(body: WaitlistRequest):
+@limiter.limit("5/hour")
+async def join_waitlist(request: Request, body: WaitlistRequest):
+    inserted = False
     async with async_session() as db:
         try:
-            await db.execute(
+            result = await db.execute(
                 text(
                     "INSERT INTO waitlist_entries (email, joined_at) "
                     "VALUES (:email, :joined_at) "
@@ -29,10 +32,12 @@ async def join_waitlist(body: WaitlistRequest):
                 {"email": str(body.email), "joined_at": datetime.now(timezone.utc)},
             )
             await db.commit()
+            inserted = result.rowcount > 0
         except Exception as exc:
             logger.warning("Waitlist insert failed: %s", exc)
 
-    _send_confirmation(str(body.email))
+    if inserted:
+        _send_confirmation(str(body.email))
     return {"ok": True}
 
 
