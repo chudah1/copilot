@@ -107,14 +107,12 @@ export default function ResearchPage() {
 
             <Button
               onClick={runStressTest}
-              disabled={loading}
+              loading={loading}
               className="w-full"
             >
-              {loading ? (
-                <span className="font-mono text-[11px] uppercase tracking-[0.15em]">Analysing...</span>
-              ) : (
-                <span className="font-mono text-[11px] uppercase tracking-[0.15em]">Run Stress Test</span>
-              )}
+              <span className="font-mono text-[11px] uppercase tracking-[0.15em]">
+                {loading ? "Analysing..." : "Run Stress Test"}
+              </span>
             </Button>
 
             {!isAuthenticated && (

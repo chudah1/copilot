@@ -1,7 +1,9 @@
 "use client";
 
+import { useState } from "react";
 import Link from "next/link";
 import { usePathname } from "next/navigation";
+import { Menu, X } from "lucide-react";
 import { useAuth } from "@/lib/auth";
 
 const NAV_LINKS = [
@@ -13,22 +15,20 @@ const NAV_LINKS = [
 export function Navbar() {
   const { logout } = useAuth();
   const pathname = usePathname();
+  const [open, setOpen] = useState(false);
 
   return (
-    <nav className="border-b border-border bg-card">
-      <div className="flex items-center justify-between px-8 h-[54px]">
+    <nav className="border-b border-border bg-card relative z-40">
+      <div className="flex items-center justify-between px-4 sm:px-8 h-[54px]">
         {/* Wordmark */}
-        <Link
-          href="/dashboard"
-          className="flex items-baseline gap-2 group"
-        >
+        <Link href="/dashboard" className="flex items-baseline gap-2 group">
           <span className="font-display text-[1.25rem] font-semibold italic text-primary tracking-tight leading-none">
             penKeep
           </span>
         </Link>
 
-        {/* Nav items */}
-        <div className="flex items-center gap-1">
+        {/* Desktop nav */}
+        <div className="hidden sm:flex items-center gap-1">
           {NAV_LINKS.map(({ href, label }) => {
             const active = pathname === href || (href !== "/dashboard" && pathname.startsWith(href));
             return (
@@ -36,15 +36,11 @@ export function Navbar() {
                 key={href}
                 href={href}
                 className={`relative px-4 py-1 font-mono text-[10px] uppercase tracking-[0.2em] transition-colors ${
-                  active
-                    ? "text-foreground"
-                    : "text-muted-foreground hover:text-foreground/80"
+                  active ? "text-foreground" : "text-muted-foreground hover:text-foreground/80"
                 }`}
               >
                 {label}
-                {active && (
-                  <span className="absolute inset-x-4 bottom-0 h-[2px] bg-primary" />
-                )}
+                {active && <span className="absolute inset-x-4 bottom-0 h-[2px] bg-primary" />}
               </Link>
             );
           })}
@@ -56,7 +52,48 @@ export function Navbar() {
             Sign out
           </button>
         </div>
+
+        {/* Mobile hamburger */}
+        <button
+          onClick={() => setOpen((v) => !v)}
+          className="sm:hidden p-2 text-muted-foreground hover:text-foreground transition-colors"
+          aria-label={open ? "Close menu" : "Open menu"}
+        >
+          {open ? <X className="w-5 h-5" /> : <Menu className="w-5 h-5" />}
+        </button>
       </div>
+
+      {/* Mobile drawer */}
+      {open && (
+        <div className="sm:hidden absolute top-[54px] inset-x-0 border-b border-border bg-card shadow-md">
+          <div className="flex flex-col py-2">
+            {NAV_LINKS.map(({ href, label }) => {
+              const active = pathname === href || (href !== "/dashboard" && pathname.startsWith(href));
+              return (
+                <Link
+                  key={href}
+                  href={href}
+                  onClick={() => setOpen(false)}
+                  className={`px-6 py-3 font-mono text-[10px] uppercase tracking-[0.2em] transition-colors border-l-2 ${
+                    active
+                      ? "text-foreground border-primary"
+                      : "text-muted-foreground hover:text-foreground border-transparent"
+                  }`}
+                >
+                  {label}
+                </Link>
+              );
+            })}
+            <div className="h-px bg-border mx-6 my-1" />
+            <button
+              onClick={() => { setOpen(false); logout(); }}
+              className="px-6 py-3 text-left font-mono text-[10px] uppercase tracking-[0.2em] text-muted-foreground hover:text-foreground transition-colors"
+            >
+              Sign out
+            </button>
+          </div>
+        </div>
+      )}
     </nav>
   );
 }

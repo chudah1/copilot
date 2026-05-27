@@ -676,8 +676,9 @@ export default function DashboardPage() {
       </motion.div>
 
       {/* ── Banners ─────────────────────────────────────────────────── */}
-      <div className="px-8 pt-3 space-y-2 empty:hidden">
-        {showActivationBanner && (
+      <div className="px-4 sm:px-8 pt-3 space-y-2 empty:hidden">
+        {/* Only one contextual banner shown at a time — recent review takes priority over activation */}
+        {showActivationBanner && !showRecentReviewBanner && (
           <div className="flex items-center justify-between gap-4 border border-emerald-500/20 bg-emerald-50 px-5 py-3">
             <div className="space-y-1">
               <p className="font-mono text-[10px] uppercase tracking-[0.18em] text-emerald-700">
