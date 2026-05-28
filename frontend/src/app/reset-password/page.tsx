@@ -5,9 +5,6 @@ import { useRouter, useSearchParams } from "next/navigation";
 import Link from "next/link";
 import { api } from "@/lib/api";
 import { Button } from "@/components/ui/button";
-import { Input } from "@/components/ui/input";
-import { Label } from "@/components/ui/label";
-import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { getErrorMessage } from "@/lib/errors";
 
 export default function ResetPasswordPage() {
@@ -46,53 +43,71 @@ export default function ResetPasswordPage() {
   if (!token) {
     return (
       <div className="flex min-h-screen items-center justify-center px-4">
-        <Card className="w-full max-w-md">
-          <CardHeader>
-            <CardTitle>Invalid link</CardTitle>
-            <CardDescription>This reset link is missing or malformed.</CardDescription>
-          </CardHeader>
-          <CardContent>
-            <Link href="/forgot-password" className="font-mono text-[10px] uppercase tracking-[0.15em] text-primary hover:text-primary/70 transition-colors">
-              Request a new reset link →
-            </Link>
-          </CardContent>
-        </Card>
+        <div className="w-full max-w-sm border border-border/60 bg-card p-8 space-y-4">
+          <div>
+            <p className="font-mono text-[10px] uppercase tracking-[0.2em] text-muted-foreground mb-2">
+              penKeep
+            </p>
+            <h1 className="font-display italic text-[2rem] leading-tight text-foreground">
+              Invalid link.
+            </h1>
+          </div>
+          <p className="font-sans text-sm text-muted-foreground leading-relaxed">
+            This reset link is missing or malformed.
+          </p>
+          <Link
+            href="/forgot-password"
+            className="font-mono text-[10px] uppercase tracking-[0.15em] text-primary hover:text-primary/70 transition-colors block"
+          >
+            Request a new reset link →
+          </Link>
+        </div>
       </div>
     );
   }
 
   return (
     <div className="flex min-h-screen items-center justify-center px-4">
-      <Card className="w-full max-w-md">
-        <CardHeader>
-          <CardTitle>New password</CardTitle>
-          <CardDescription>Choose something you haven't used before.</CardDescription>
-        </CardHeader>
-        <CardContent>
-          <form onSubmit={handleSubmit} className="space-y-4">
-            <div className="space-y-2">
-              <Label htmlFor="password">New password</Label>
-              <Input
-                id="password"
-                type="password"
-                value={password}
-                onChange={(e) => setPassword(e.target.value)}
-                required
-                autoFocus
-              />
-              {password.length > 0 && (
-                <p className={`font-mono text-[10px] tracking-[0.1em] transition-colors ${passwordOk ? "text-emerald-600" : "text-muted-foreground"}`}>
-                  {passwordOk ? "✓ 8+ characters" : `${password.length}/8 characters`}
-                </p>
-              )}
-            </div>
-            {error && <p className="text-sm text-destructive" role="alert">{error}</p>}
-            <Button type="submit" className="w-full" loading={loading}>
-              Set new password
-            </Button>
-          </form>
-        </CardContent>
-      </Card>
+      <div className="w-full max-w-sm border border-border/60 bg-card p-8 space-y-6">
+        <div>
+          <p className="font-mono text-[10px] uppercase tracking-[0.2em] text-muted-foreground mb-2">
+            penKeep
+          </p>
+          <h1 className="font-display italic text-[2rem] leading-tight text-foreground">
+            New password.
+          </h1>
+        </div>
+
+        <form onSubmit={handleSubmit} className="space-y-4">
+          <div className="space-y-1.5">
+            <label htmlFor="password" className="font-mono text-[10px] uppercase tracking-[0.15em] text-muted-foreground block">
+              New password
+            </label>
+            <input
+              id="password"
+              type="password"
+              value={password}
+              onChange={(e) => setPassword(e.target.value)}
+              required
+              autoFocus
+              className="w-full border border-border bg-background px-3 py-2 font-sans text-sm text-foreground placeholder:text-muted-foreground/50 focus:outline-none focus:border-foreground/30"
+            />
+            {password.length > 0 && (
+              <p className={`font-mono text-[10px] tracking-[0.1em] transition-colors ${passwordOk ? "text-emerald-600" : "text-muted-foreground/60"}`}>
+                {passwordOk ? "✓ 8+ characters" : `${password.length}/8 characters`}
+              </p>
+            )}
+          </div>
+
+          {error && (
+            <p className="font-sans text-sm text-destructive" role="alert">{error}</p>
+          )}
+
+          <Button type="submit" className="w-full" loading={loading} disabled={password.length > 0 && !passwordOk}>
+            <span className="font-mono text-[11px] uppercase tracking-[0.15em]">Set new password</span>
+          </Button>
+        </form>
+      </div>
     </div>
   );
 }

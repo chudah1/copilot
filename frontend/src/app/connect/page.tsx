@@ -6,16 +6,53 @@ import { api } from "@/lib/api";
 import { AuthGuard } from "@/components/layout/auth-guard";
 import { Navbar } from "@/components/layout/navbar";
 import { Button } from "@/components/ui/button";
-import { Input } from "@/components/ui/input";
-import { Label } from "@/components/ui/label";
-import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
-import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { getErrorMessage } from "@/lib/errors";
 import { TickerSearch } from "@/components/portfolio/ticker-search";
 import type { BrokerConnection, Holding } from "@/types";
 
+type TabId = "csv" | "manual" | "broker";
+
+const TABS: { id: TabId; label: string }[] = [
+  { id: "csv", label: "CSV Upload" },
+  { id: "manual", label: "Manual Entry" },
+  { id: "broker", label: "Trading 212 API" },
+];
+
+function Field({
+  id,
+  label,
+  note,
+  children,
+}: {
+  id?: string;
+  label: string;
+  note?: string;
+  children: React.ReactNode;
+}) {
+  return (
+    <div className="space-y-1.5">
+      <label htmlFor={id} className="font-mono text-[10px] uppercase tracking-[0.15em] text-muted-foreground block">
+        {label}
+      </label>
+      {children}
+      {note && <p className="font-sans text-xs text-muted-foreground/70 leading-relaxed">{note}</p>}
+    </div>
+  );
+}
+
+function Note({ children }: { children: React.ReactNode }) {
+  return (
+    <div className="border border-border/40 bg-muted/30 px-3 py-2.5">
+      <p className="font-sans text-xs text-muted-foreground leading-relaxed">{children}</p>
+    </div>
+  );
+}
+
+const inputCls = "w-full border border-border bg-background px-3 py-2 font-sans text-sm text-foreground placeholder:text-muted-foreground/50 focus:outline-none focus:border-foreground/30";
+
 export default function ConnectPage() {
   const router = useRouter();
+  const [tab, setTab] = useState<TabId>("csv");
 
   const [apiKey, setApiKey] = useState("");
   const [apiSecret, setApiSecret] = useState("");
@@ -51,11 +88,6 @@ export default function ConnectPage() {
     } finally {
       setBrokerLoading(false);
     }
-  };
-
-  const handleTickerSelect = (selectedTicker: string, selectedName: string) => {
-    setTicker(selectedTicker);
-    setName(selectedName);
   };
 
   const handleManual = async (e: React.FormEvent) => {
@@ -113,23 +145,29 @@ export default function ConnectPage() {
   return (
     <AuthGuard>
       <Navbar />
-      <main className="mx-auto max-w-2xl px-4 py-10">
-        <div className="mb-8 border-b border-foreground/20 pb-6">
-          <p className="font-mono text-[10px] uppercase tracking-[0.3em] text-muted-foreground mb-3">Getting started</p>
-          <h1 className="font-display italic text-[2.5rem] leading-tight text-foreground tracking-tight mb-3">
+      <main className="max-w-2xl mx-auto px-4 sm:px-8 py-10">
+
+        {/* Header */}
+        <div className="border-b border-border pb-7 mb-8">
+          <p className="font-mono text-[10px] uppercase tracking-[0.3em] text-muted-foreground mb-2">
+            Getting started
+          </p>
+          <h1 className="font-display italic text-[2.5rem] leading-tight text-foreground mb-3">
             Connect your portfolio.
           </h1>
           <p className="font-sans text-sm text-muted-foreground leading-relaxed max-w-lg">
-            Start by importing what you actually own. Then capture why each important position exists, what must remain true, and what would trigger a review.
+            Import what you own. Then write why each position exists — what must stay true, and what would make you reconsider.
           </p>
+
+          {/* Steps */}
           <div className="grid grid-cols-3 gap-px mt-6 border border-border">
             {[
               { n: "01", title: "Import holdings", body: "CSV, manual entry, or Trading 212." },
               { n: "02", title: "Write top theses", body: "Start with your biggest positions." },
               { n: "03", title: "Get monitored", body: "We watch for changes that matter to your reasoning." },
             ].map(({ n, title, body }) => (
-              <div key={n} className="bg-muted/40 px-4 py-4">
-                <p className="font-mono text-[10px] tracking-[0.2em] text-primary mb-2">{n}</p>
+              <div key={n} className="bg-muted/30 px-4 py-4">
+                <p className="font-mono text-[10px] tracking-[0.2em] text-primary mb-1.5">{n}</p>
                 <p className="font-sans text-sm font-medium text-foreground">{title}</p>
                 <p className="font-sans text-xs text-muted-foreground mt-1 leading-relaxed">{body}</p>
               </div>
@@ -137,135 +175,122 @@ export default function ConnectPage() {
           </div>
         </div>
 
-        <Card className="mb-6">
-          <CardHeader>
-            <CardTitle>Choose the fastest path</CardTitle>
-            <CardDescription>Pick the import method that gets you to thesis setup with the least friction.</CardDescription>
-          </CardHeader>
-          <CardContent className="grid gap-4 md:grid-cols-3">
-            <div className="rounded-xl border p-4">
-              <p className="font-medium">CSV Upload</p>
-              <p className="mt-1 text-sm text-muted-foreground">Best if you already have an export and want the quickest start.</p>
+        {/* Tab strip */}
+        <div className="flex gap-1 border-b border-border mb-6 -mx-1">
+          {TABS.map((t) => (
+            <button
+              key={t.id}
+              onClick={() => setTab(t.id)}
+              className={`relative px-3 pb-3 pt-1 font-mono text-[10px] uppercase tracking-[0.18em] transition-colors ${
+                tab === t.id ? "text-foreground" : "text-muted-foreground hover:text-foreground/70"
+              }`}
+            >
+              {t.label}
+              {tab === t.id && (
+                <span className="absolute bottom-0 inset-x-3 h-px bg-primary" />
+              )}
+            </button>
+          ))}
+        </div>
+
+        {/* CSV tab */}
+        {tab === "csv" && (
+          <form onSubmit={handleCsvUpload} className="space-y-4">
+            <Field id="csvFile" label="CSV file" note="Trading 212 transaction export or a file with columns: ticker, name, quantity, average_cost_basis.">
+              <input
+                id="csvFile"
+                type="file"
+                accept=".csv"
+                onChange={(e) => setCsvFile(e.target.files?.[0] || null)}
+                required
+                className={inputCls}
+              />
+            </Field>
+            <Note>
+              Fastest path for most people. Once imported, head to your top 3 positions and write why each one exists.
+            </Note>
+            {csvError && <p className="font-sans text-sm text-destructive" role="alert">{csvError}</p>}
+            {csvResult && <p className="font-sans text-sm text-emerald-600">{csvResult}</p>}
+            <Button type="submit" loading={csvLoading} disabled={!csvFile}>
+              <span className="font-mono text-[11px] uppercase tracking-[0.15em]">Upload & Import</span>
+            </Button>
+          </form>
+        )}
+
+        {/* Manual tab */}
+        {tab === "manual" && (
+          <form onSubmit={handleManual} className="space-y-4">
+            <Field label="Stock">
+              <TickerSearch value={ticker} onSelect={(t, n) => { setTicker(t); setName(n); }} />
+              {name && <p className="font-sans text-xs text-muted-foreground mt-1">{name}</p>}
+            </Field>
+            <div className="grid grid-cols-2 gap-4">
+              <Field id="quantity" label="Quantity">
+                <input
+                  id="quantity"
+                  type="number"
+                  step="any"
+                  min="0.000001"
+                  value={quantity}
+                  onChange={(e) => setQuantity(e.target.value)}
+                  required
+                  className={inputCls}
+                />
+              </Field>
+              <Field id="avgCost" label="Average cost">
+                <input
+                  id="avgCost"
+                  type="number"
+                  step="any"
+                  min="0.000001"
+                  value={avgCost}
+                  onChange={(e) => setAvgCost(e.target.value)}
+                  required
+                  className={inputCls}
+                />
+              </Field>
             </div>
-            <div className="rounded-xl border p-4">
-              <p className="font-medium">Manual Entry</p>
-              <p className="mt-1 text-sm text-muted-foreground">Best for testing the product with a few positions first.</p>
-            </div>
-            <div className="rounded-xl border p-4">
-              <p className="font-medium">Trading 212 API</p>
-              <p className="mt-1 text-sm text-muted-foreground">Best if you want your holdings to stay synced automatically.</p>
-            </div>
-          </CardContent>
-        </Card>
+            <Note>
+              Add 1–3 positions first, write a thesis for each, and see how the product feels before importing everything else.
+            </Note>
+            {manualError && <p className="font-sans text-sm text-destructive" role="alert">{manualError}</p>}
+            <Button type="submit" loading={manualLoading} disabled={!ticker || !quantity || !avgCost}>
+              <span className="font-mono text-[11px] uppercase tracking-[0.15em]">Add Holding</span>
+            </Button>
+          </form>
+        )}
 
-        <Tabs defaultValue="csv">
-          <TabsList className="mb-4">
-            <TabsTrigger value="csv">CSV Upload</TabsTrigger>
-            <TabsTrigger value="manual">Manual Entry</TabsTrigger>
-            <TabsTrigger value="broker">Trading 212 API</TabsTrigger>
-          </TabsList>
-
-          <TabsContent value="broker">
-            <Card>
-              <CardHeader>
-                <CardTitle>Connect Trading 212</CardTitle>
-                <CardDescription>
-                  Generate credentials in Trading 212 Settings &gt; API. Works with live and practice accounts.
-                </CardDescription>
-              </CardHeader>
-              <CardContent>
-                <form onSubmit={handleConnect} className="space-y-4">
-                  <div className="space-y-2">
-                    <Label htmlFor="apiKey">API Key</Label>
-                    <Input id="apiKey" type="password" value={apiKey} onChange={(e) => setApiKey(e.target.value)} required />
-                  </div>
-                  <div className="space-y-2">
-                    <Label htmlFor="apiSecret">Secret Key <span className="text-muted-foreground font-normal">(if provided)</span></Label>
-                    <Input id="apiSecret" type="password" value={apiSecret} onChange={(e) => setApiSecret(e.target.value)} />
-                  </div>
-                  <div className="rounded-lg bg-muted/30 p-3 text-sm text-muted-foreground">
-                    Leave secret key blank if Trading 212 only gave you one key. Don&rsquo;t set an IP restriction when generating — leave it unrestricted.
-                  </div>
-                  {brokerError && <p className="text-sm text-red-500">{brokerError}</p>}
-                  <Button type="submit" disabled={brokerLoading}>
-                    {brokerLoading ? "Connecting..." : "Connect & Sync"}
-                  </Button>
-                </form>
-              </CardContent>
-            </Card>
-          </TabsContent>
-
-          <TabsContent value="csv">
-            <Card>
-              <CardHeader>
-                <CardTitle>Upload CSV</CardTitle>
-                <CardDescription>
-                  Upload a Trading 212 transaction export or a generic CSV with columns:
-                  ticker, name, quantity, average_cost_basis.
-                </CardDescription>
-              </CardHeader>
-              <CardContent>
-                <form onSubmit={handleCsvUpload} className="space-y-4">
-                  <div className="space-y-2">
-                    <Label htmlFor="csvFile">CSV File</Label>
-                    <Input
-                      id="csvFile"
-                      type="file"
-                      accept=".csv"
-                      onChange={(e) => setCsvFile(e.target.files?.[0] || null)}
-                      required
-                    />
-                  </div>
-                  <div className="rounded-lg bg-muted/30 p-3 text-sm text-muted-foreground">
-                    Fastest path for most people. Once imported, head straight to your top 3 positions and capture why they exist.
-                  </div>
-                  {csvError && <p className="text-sm text-red-500">{csvError}</p>}
-                  {csvResult && <p className="text-sm text-green-600">{csvResult}</p>}
-                  <Button type="submit" disabled={csvLoading || !csvFile}>
-                    {csvLoading ? "Uploading..." : "Upload & Import"}
-                  </Button>
-                </form>
-              </CardContent>
-            </Card>
-          </TabsContent>
-
-          <TabsContent value="manual">
-            <Card>
-              <CardHeader>
-                <CardTitle>Add Position Manually</CardTitle>
-                <CardDescription>Enter your holdings one at a time.</CardDescription>
-              </CardHeader>
-              <CardContent>
-                <form onSubmit={handleManual} className="space-y-4">
-                  <div className="space-y-2">
-                    <Label>Stock</Label>
-                    <TickerSearch value={ticker} onSelect={handleTickerSelect} />
-                    {name && (
-                      <p className="text-xs text-muted-foreground">{name}</p>
-                    )}
-                  </div>
-                  <div className="grid grid-cols-2 gap-4">
-                    <div className="space-y-2">
-                      <Label htmlFor="quantity">Quantity</Label>
-                      <Input id="quantity" type="number" step="any" min="0.000001" value={quantity} onChange={(e) => setQuantity(e.target.value)} required />
-                    </div>
-                    <div className="space-y-2">
-                      <Label htmlFor="avgCost">Average Cost</Label>
-                      <Input id="avgCost" type="number" step="any" min="0.000001" value={avgCost} onChange={(e) => setAvgCost(e.target.value)} required />
-                    </div>
-                  </div>
-                  <div className="rounded-lg bg-muted/30 p-3 text-sm text-muted-foreground">
-                    Good for a lightweight trial. Add 1-3 positions first, then create a thesis for each and see how the product feels before importing everything else.
-                  </div>
-                  {manualError && <p className="text-sm text-red-500">{manualError}</p>}
-                  <Button type="submit" disabled={manualLoading || !ticker || !quantity || !avgCost}>
-                    {manualLoading ? "Adding..." : "Add Holding"}
-                  </Button>
-                </form>
-              </CardContent>
-            </Card>
-          </TabsContent>
-        </Tabs>
+        {/* Trading 212 tab */}
+        {tab === "broker" && (
+          <form onSubmit={handleConnect} className="space-y-4">
+            <Field id="apiKey" label="API Key">
+              <input
+                id="apiKey"
+                type="password"
+                value={apiKey}
+                onChange={(e) => setApiKey(e.target.value)}
+                required
+                className={inputCls}
+              />
+            </Field>
+            <Field id="apiSecret" label="Secret Key" note="Leave blank if Trading 212 only gave you one key.">
+              <input
+                id="apiSecret"
+                type="password"
+                value={apiSecret}
+                onChange={(e) => setApiSecret(e.target.value)}
+                className={inputCls}
+              />
+            </Field>
+            <Note>
+              Generate credentials in Trading 212 Settings → API. Don&rsquo;t set an IP restriction when generating — leave it unrestricted.
+            </Note>
+            {brokerError && <p className="font-sans text-sm text-destructive" role="alert">{brokerError}</p>}
+            <Button type="submit" loading={brokerLoading}>
+              <span className="font-mono text-[11px] uppercase tracking-[0.15em]">Connect & Sync</span>
+            </Button>
+          </form>
+        )}
       </main>
     </AuthGuard>
   );
