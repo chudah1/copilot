@@ -262,7 +262,7 @@ export function ConvictionLog({
       ) : data && data.entries.length > 0 ? (
         <div>
           {data.entries.map((entry) =>
-            entry.entry_type === "evidence_reviewed" ? (
+            entry.event_title != null ? (
               <DecisionEntry key={entry.id} entry={entry} />
             ) : (
               <SimpleEntry key={entry.id} entry={entry} />

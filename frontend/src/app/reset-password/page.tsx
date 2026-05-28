@@ -7,6 +7,8 @@ import { api } from "@/lib/api";
 import { Button } from "@/components/ui/button";
 import { getErrorMessage } from "@/lib/errors";
 
+const inputCls = "w-full border border-border bg-background px-3 py-2 font-sans text-sm text-foreground placeholder:text-muted-foreground/50 focus:outline-none focus:border-foreground/30";
+
 export default function ResetPasswordPage() {
   const router = useRouter();
   const searchParams = useSearchParams();
@@ -90,7 +92,7 @@ export default function ResetPasswordPage() {
               onChange={(e) => setPassword(e.target.value)}
               required
               autoFocus
-              className="w-full border border-border bg-background px-3 py-2 font-sans text-sm text-foreground placeholder:text-muted-foreground/50 focus:outline-none focus:border-foreground/30"
+              className={inputCls}
             />
             {password.length > 0 && (
               <p className={`font-mono text-[10px] tracking-[0.1em] transition-colors ${passwordOk ? "text-emerald-600" : "text-muted-foreground/60"}`}>

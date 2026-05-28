@@ -163,10 +163,7 @@ function dashboardStateCta(args: {
   if (topReview) {
     return {
       href: `/dashboard/positions/${topReview.ticker}`,
-      label:
-        investorProfile === "hearsay_driven"
-          ? `Open ${cleanTicker(topReview.ticker)} and review ${pulseTargetLabel(topReview)} →`
-          : `Open ${cleanTicker(topReview.ticker)} and review ${pulseTargetLabel(topReview)} →`,
+      label: `Open ${cleanTicker(topReview.ticker)} and review ${pulseTargetLabel(topReview)} →`,
     };
   }
 
@@ -174,10 +171,7 @@ function dashboardStateCta(args: {
   if (topWatch) {
     return {
       href: `/dashboard/positions/${topWatch.ticker}`,
-      label:
-        investorProfile === "hearsay_driven"
-          ? `Open ${cleanTicker(topWatch.ticker)} and see why ${pulseTargetLabel(topWatch)} is under pressure →`
-          : `Open ${cleanTicker(topWatch.ticker)} and see why ${pulseTargetLabel(topWatch)} is under pressure →`,
+      label: `Open ${cleanTicker(topWatch.ticker)} and see why ${pulseTargetLabel(topWatch)} is under pressure →`,
     };
   }
 

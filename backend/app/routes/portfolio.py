@@ -958,31 +958,33 @@ async def get_conviction_log(
     )
     entries = entries_result.scalars().all()
 
-    # Collect event IDs from evidence_reviewed entries
-    event_ids = []
+    # Collect event IDs and thesis IDs from evidence_reviewed entries only
+    parsed_event_ids: dict[str, uuid.UUID] = {}
+    evidence_thesis_ids: set[uuid.UUID] = set()
     for e in entries:
         if e.entry_type == EVIDENCE_REVIEWED and e.metadata_json:
             eid = e.metadata_json.get("event_id")
-            if eid:
+            if eid and eid not in parsed_event_ids:
                 try:
-                    event_ids.append(uuid.UUID(eid))
+                    parsed_event_ids[eid] = uuid.UUID(eid)
                 except ValueError:
                     pass
+            if e.thesis_id:
+                evidence_thesis_ids.add(e.thesis_id)
 
     # Load monitoring events in bulk
     events_by_id: dict[uuid.UUID, MonitoringEvent] = {}
-    if event_ids:
+    if parsed_event_ids:
         events_result = await db.execute(
-            select(MonitoringEvent).where(MonitoringEvent.id.in_(event_ids))
+            select(MonitoringEvent).where(MonitoringEvent.id.in_(parsed_event_ids.values()))
         )
-        events_by_id = {e.id: e for e in events_result.scalars().all()}
+        events_by_id = {ev.id: ev for ev in events_result.scalars().all()}
 
-    # Load thesis for what_would_change_my_mind + outcome per thesis
-    thesis_ids = {e.thesis_id for e in entries}
+    # Load only theses needed for evidence_reviewed enrichment
     theses_by_id: dict[uuid.UUID, Thesis] = {}
-    if thesis_ids:
+    if evidence_thesis_ids:
         theses_result = await db.execute(
-            select(Thesis).where(Thesis.id.in_(thesis_ids))
+            select(Thesis).where(Thesis.id.in_(evidence_thesis_ids))
         )
         theses_by_id = {t.id: t for t in theses_result.scalars().all()}
 
@@ -1009,35 +1011,24 @@ async def get_conviction_log(
     # Build enriched entry responses
     enriched: list[ConvictionLogEntryResponse] = []
     for e in entries:
-        entry_dict = {
-            "id": e.id,
-            "thesis_id": e.thesis_id,
-            "holding_id": e.holding_id,
-            "entry_type": e.entry_type,
-            "content": e.content,
-            "metadata_json": e.metadata_json,
-            "claim_id": e.claim_id,
-            "signal_id": e.signal_id,
-            "created_at": e.created_at,
-        }
+        extra: dict = {}
         if e.entry_type == EVIDENCE_REVIEWED and e.metadata_json:
             eid_str = e.metadata_json.get("event_id")
             if eid_str:
-                try:
-                    event = events_by_id.get(uuid.UUID(eid_str))
-                    if event:
-                        entry_dict["event_title"] = event.title
-                        entry_dict["event_severity"] = event.severity
-                except ValueError:
-                    pass
-            thesis = theses_by_id.get(e.thesis_id)
+                event_uuid = parsed_event_ids.get(eid_str)
+                event = events_by_id.get(event_uuid) if event_uuid else None
+                if event:
+                    extra["event_title"] = event.title
+                    extra["event_severity"] = event.severity
+            thesis = theses_by_id.get(e.thesis_id) if e.thesis_id else None
             if thesis:
-                entry_dict["what_would_change_my_mind"] = thesis.what_would_change_my_mind
+                extra["what_would_change_my_mind"] = thesis.what_would_change_my_mind
                 if thesis.status == "invalidated":
-                    entry_dict["outcome"] = "broke"
+                    extra["outcome"] = "broke"
                 elif thesis.status in ("active", "needs_review"):
-                    entry_dict["outcome"] = "held"
-        enriched.append(ConvictionLogEntryResponse(**entry_dict))
+                    extra["outcome"] = "held"
+        base = ConvictionLogEntryResponse.model_validate(e, from_attributes=True)
+        enriched.append(base.model_copy(update=extra) if extra else base)
 
     return ConvictionLogResponse(
         entries=enriched,
