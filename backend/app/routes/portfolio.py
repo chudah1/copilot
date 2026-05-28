@@ -939,6 +939,7 @@ async def get_conviction_log(
     db: AsyncSession = Depends(get_db),
 ):
     from app.models.conviction_log_entry import ConvictionLogEntry
+    from app.models.monitoring_event import MonitoringEvent
     from app.services.conviction_log import EVIDENCE_REVIEWED, POST_EARNINGS_REVIEW, QUARTERLY_REVIEW
 
     # Verify holding belongs to user
@@ -956,6 +957,34 @@ async def get_conviction_log(
         .order_by(ConvictionLogEntry.created_at.desc())
     )
     entries = entries_result.scalars().all()
+
+    # Collect event IDs from evidence_reviewed entries
+    event_ids = []
+    for e in entries:
+        if e.entry_type == EVIDENCE_REVIEWED and e.metadata_json:
+            eid = e.metadata_json.get("event_id")
+            if eid:
+                try:
+                    event_ids.append(uuid.UUID(eid))
+                except ValueError:
+                    pass
+
+    # Load monitoring events in bulk
+    events_by_id: dict[uuid.UUID, MonitoringEvent] = {}
+    if event_ids:
+        events_result = await db.execute(
+            select(MonitoringEvent).where(MonitoringEvent.id.in_(event_ids))
+        )
+        events_by_id = {e.id: e for e in events_result.scalars().all()}
+
+    # Load thesis for what_would_change_my_mind + outcome per thesis
+    thesis_ids = {e.thesis_id for e in entries}
+    theses_by_id: dict[uuid.UUID, Thesis] = {}
+    if thesis_ids:
+        theses_result = await db.execute(
+            select(Thesis).where(Thesis.id.in_(thesis_ids))
+        )
+        theses_by_id = {t.id: t for t in theses_result.scalars().all()}
 
     # Compute reason age: days since first reason_created entry (fall back to earliest thesis)
     reason_age_days = None
@@ -977,8 +1006,41 @@ async def get_conviction_log(
     review_types = {EVIDENCE_REVIEWED, POST_EARNINGS_REVIEW, QUARTERLY_REVIEW}
     review_count = sum(1 for e in entries if e.entry_type in review_types)
 
+    # Build enriched entry responses
+    enriched: list[ConvictionLogEntryResponse] = []
+    for e in entries:
+        entry_dict = {
+            "id": e.id,
+            "thesis_id": e.thesis_id,
+            "holding_id": e.holding_id,
+            "entry_type": e.entry_type,
+            "content": e.content,
+            "metadata_json": e.metadata_json,
+            "claim_id": e.claim_id,
+            "signal_id": e.signal_id,
+            "created_at": e.created_at,
+        }
+        if e.entry_type == EVIDENCE_REVIEWED and e.metadata_json:
+            eid_str = e.metadata_json.get("event_id")
+            if eid_str:
+                try:
+                    event = events_by_id.get(uuid.UUID(eid_str))
+                    if event:
+                        entry_dict["event_title"] = event.title
+                        entry_dict["event_severity"] = event.severity
+                except ValueError:
+                    pass
+            thesis = theses_by_id.get(e.thesis_id)
+            if thesis:
+                entry_dict["what_would_change_my_mind"] = thesis.what_would_change_my_mind
+                if thesis.status == "invalidated":
+                    entry_dict["outcome"] = "broke"
+                elif thesis.status in ("active", "needs_review"):
+                    entry_dict["outcome"] = "held"
+        enriched.append(ConvictionLogEntryResponse(**entry_dict))
+
     return ConvictionLogResponse(
-        entries=entries,
+        entries=enriched,
         reason_age_days=reason_age_days,
         review_count=review_count,
     )

@@ -1,11 +1,8 @@
 "use client";
 
 import { useState } from "react";
-import { Badge } from "@/components/ui/badge";
-import { Button } from "@/components/ui/button";
-import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
-import { Textarea } from "@/components/ui/textarea";
 import { formatDate } from "@/lib/utils";
+import { Button } from "@/components/ui/button";
 import type { ConvictionLogEntry, ConvictionLogResponse } from "@/types";
 
 interface ConvictionLogProps {
@@ -16,39 +13,155 @@ interface ConvictionLogProps {
   investorProfile?: "thesis_driven" | "hearsay_driven" | null;
 }
 
-const entryLabels: Record<string, string> = {
-  reason_created: "Reason created",
+const ENTRY_LABELS: Record<string, string> = {
+  reason_created: "Reason written",
   signals_generated: "Signals generated",
   signal_confirmed: "Signal confirmed",
   signal_removed: "Signal removed",
   evidence_received: "Evidence received",
-  evidence_reviewed: "Reviewed after evidence",
+  evidence_reviewed: "Decision made",
   reason_updated: "Reason updated",
   reason_invalidated: "Reason invalidated",
   post_earnings_review: "Post-earnings review",
   quarterly_review: "Quarterly review",
-  manual_note: "Manual note",
+  manual_note: "Note",
+};
+
+const ACTION_LABELS: Record<string, string> = {
+  reaffirmed: "Reaffirmed",
+  ignored: "Ignored",
+  not_relevant: "Not relevant",
+  lowered_confidence: "Lowered confidence",
+  invalidated: "Invalidated",
+};
+
+const ACTION_COLOR: Record<string, string> = {
+  reaffirmed: "text-emerald-700",
+  ignored: "text-muted-foreground",
+  not_relevant: "text-muted-foreground",
+  lowered_confidence: "text-amber-700",
+  invalidated: "text-red-600",
+};
+
+const SEVERITY_COLOR: Record<string, string> = {
+  critical: "text-red-600",
+  high: "text-orange-600",
+  medium: "text-amber-700",
+  low: "text-muted-foreground",
 };
 
 function entryLabel(entryType: string) {
-  return entryLabels[entryType] ?? entryType.replaceAll("_", " ");
+  return ENTRY_LABELS[entryType] ?? entryType.replaceAll("_", " ");
 }
 
-function entryTone(entryType: string) {
-  if (entryType === "reason_invalidated") return "bg-red-500/15 text-red-600";
-  if (entryType === "evidence_reviewed") return "bg-sky-500/15 text-sky-700";
-  if (entryType === "manual_note") return "bg-muted text-muted-foreground";
-  return "bg-emerald-500/15 text-emerald-700";
-}
-
-function EntryRow({ entry }: { entry: ConvictionLogEntry }) {
+function SimpleEntry({ entry }: { entry: ConvictionLogEntry }) {
+  const isDark =
+    entry.entry_type === "reason_created" || entry.entry_type === "reason_updated";
   return (
-    <div className="border-l-2 border-muted pl-4 py-3">
-      <div className="flex flex-wrap items-center gap-2">
-        <Badge className={entryTone(entry.entry_type)}>{entryLabel(entry.entry_type)}</Badge>
-        <span className="text-xs text-muted-foreground">{formatDate(entry.created_at)}</span>
+    <div className="flex items-start gap-4 py-3 border-b border-border/20 last:border-b-0">
+      <div className="shrink-0 mt-0.5">
+        <span
+          className={`h-1.5 w-1.5 rounded-full block mt-1 ${isDark ? "bg-primary/50" : "bg-border"}`}
+        />
       </div>
-      <p className="mt-2 text-sm leading-6">{entry.content}</p>
+      <div className="min-w-0 flex-1">
+        <div className="flex items-center gap-2 flex-wrap">
+          <span className="font-mono text-[10px] uppercase tracking-[0.15em] text-muted-foreground">
+            {entryLabel(entry.entry_type)}
+          </span>
+          <span className="font-mono text-[10px] text-muted-foreground/40">
+            {formatDate(entry.created_at)}
+          </span>
+        </div>
+        <p className="font-sans text-[13px] text-foreground/70 leading-relaxed mt-0.5">
+          {entry.content}
+        </p>
+      </div>
+    </div>
+  );
+}
+
+function DecisionEntry({ entry }: { entry: ConvictionLogEntry }) {
+  const meta = entry.metadata_json ?? {};
+  const action = typeof meta.action === "string" ? meta.action : null;
+  const notes = typeof meta.notes === "string" && meta.notes ? meta.notes : null;
+
+  const outcomeLabel =
+    entry.outcome === "broke"
+      ? "Thesis broke"
+      : entry.outcome === "held"
+        ? "Holding"
+        : "Open";
+  const outcomeCls =
+    entry.outcome === "broke"
+      ? "text-red-600 border-red-500/30"
+      : entry.outcome === "held"
+        ? "text-emerald-700 border-emerald-500/30"
+        : "text-muted-foreground/50 border-border/40";
+
+  return (
+    <div className="py-4 border-b border-border/20 last:border-b-0">
+      {/* Header row */}
+      <div className="flex items-start justify-between gap-3 mb-3">
+        <div className="flex items-center gap-2 flex-wrap">
+          <span className="font-mono text-[10px] uppercase tracking-[0.15em] text-muted-foreground">
+            Decision
+          </span>
+          <span className="font-mono text-[10px] text-muted-foreground/40">
+            {formatDate(entry.created_at)}
+          </span>
+          {action && (
+            <>
+              <span className="text-border/40 text-xs">·</span>
+              <span
+                className={`font-mono text-[10px] uppercase tracking-[0.12em] ${ACTION_COLOR[action] ?? "text-muted-foreground"}`}
+              >
+                {ACTION_LABELS[action] ?? action}
+              </span>
+            </>
+          )}
+        </div>
+        <span
+          className={`font-mono text-[9px] uppercase tracking-[0.15em] border px-1.5 py-0.5 shrink-0 ${outcomeCls}`}
+        >
+          {outcomeLabel}
+        </span>
+      </div>
+
+      <div className="grid md:grid-cols-2 gap-3">
+        {entry.event_title && (
+          <div className="border border-border/40 bg-muted/20 px-3 py-2.5">
+            <p className="font-mono text-[9px] uppercase tracking-[0.15em] text-muted-foreground mb-1">
+              Event
+              {entry.event_severity && (
+                <span className={`ml-2 ${SEVERITY_COLOR[entry.event_severity] ?? "text-muted-foreground"}`}>
+                  {entry.event_severity}
+                </span>
+              )}
+            </p>
+            <p className="font-sans text-[13px] text-foreground/80 leading-snug">
+              {entry.event_title}
+            </p>
+          </div>
+        )}
+
+        {entry.what_would_change_my_mind && (
+          <div className="border border-border/40 bg-muted/20 px-3 py-2.5">
+            <p className="font-mono text-[9px] uppercase tracking-[0.15em] text-muted-foreground mb-1">
+              Your exit condition
+            </p>
+            <p className="font-sans text-[13px] text-foreground/80 leading-snug italic">
+              {entry.what_would_change_my_mind}
+            </p>
+          </div>
+        )}
+      </div>
+
+      {notes && (
+        <p className="font-sans text-[13px] text-foreground/60 leading-relaxed mt-2.5 pl-1 border-l border-border/30">
+          {notes}
+        </p>
+      )}
     </div>
   );
 }
@@ -61,35 +174,29 @@ export function ConvictionLog({
   investorProfile,
 }: ConvictionLogProps) {
   const [note, setNote] = useState("");
-  const copy = investorProfile === "thesis_driven"
-    ? {
-        title: "Thesis log",
-        description: "A permanent record of what changed, what you decided, and how long the thesis has stood up.",
-        age: "Thesis age",
-        add: "Add a thesis note",
-        noteHelp: "Capture what you are noticing now so the future version of you can see how the thesis evolved.",
-        notePlaceholder: "Write a short note about what changed, which assumption moved, or how your underwriting view is evolving.",
-        empty: "No thesis history yet. Once you write a thesis, review evidence, or add notes, it will appear here.",
-      }
-    : investorProfile === "hearsay_driven"
+
+  const copy =
+    investorProfile === "thesis_driven"
       ? {
-          title: "Reason log",
-          description: "A permanent record of what changed, what you decided, and how the original story held up over time.",
-          age: "Reason age",
-          add: "Add a reason note",
-          noteHelp: "Capture what you are noticing now so the future version of you can see whether the story got stronger or weaker.",
-          notePlaceholder: "Write a short note about what changed or how your view of the story is evolving.",
-          empty: "No reason history yet. Once you write a reason, review evidence, or add notes, it will appear here.",
+          age: "Thesis age",
+          placeholder:
+            "Write a short note about what changed, which assumption moved, or how your view is evolving.",
+          empty:
+            "No history yet. Once you write a thesis, review evidence, or add notes, it will appear here.",
         }
-      : {
-          title: "Conviction log",
-          description: "A permanent record of what changed, what you decided, and how long this reason has held up.",
-          age: "Reason age",
-          add: "Add a note",
-          noteHelp: "Capture what you are noticing now so the future version of you has the context.",
-          notePlaceholder: "Write a short note about what changed or how your view is evolving.",
-          empty: "Nothing logged yet. Reviews, notes, and reason changes show up here.",
-        };
+      : investorProfile === "hearsay_driven"
+        ? {
+            age: "Reason age",
+            placeholder:
+              "Write a short note about what changed or how your view of the story is evolving.",
+            empty:
+              "No history yet. Once you write a reason, review evidence, or add notes, it will appear here.",
+          }
+        : {
+            age: "Reason age",
+            placeholder: "Write a short note about what changed or how your view is evolving.",
+            empty: "Nothing logged yet. Reviews, notes, and reason changes show up here.",
+          };
 
   const handleSubmit = async () => {
     const trimmed = note.trim();
@@ -99,60 +206,72 @@ export function ConvictionLog({
   };
 
   return (
-    <Card>
-      <CardHeader>
-        <div className="flex flex-wrap items-center justify-between gap-3">
-          <div>
-            <CardTitle className="text-base">{copy.title}</CardTitle>
-            <CardDescription>
-              {copy.description}
-            </CardDescription>
-          </div>
-          <div className="flex flex-wrap gap-2">
-            <Badge variant="outline">
-              {copy.age}: {data?.reason_age_days != null ? `${data.reason_age_days} days` : "Not started"}
-            </Badge>
-            <Badge variant="outline">
-              Reviews: {data?.review_count ?? 0}
-            </Badge>
+    <div className="space-y-5">
+      {/* Stats strip */}
+      <div className="flex items-center gap-4 border-b border-border/30 pb-4">
+        <div>
+          <p className="font-mono text-[9px] uppercase tracking-[0.15em] text-muted-foreground">
+            {copy.age}
+          </p>
+          <p className="font-mono text-[13px] text-foreground mt-0.5">
+            {data?.reason_age_days != null ? `${data.reason_age_days}d` : "—"}
+          </p>
+        </div>
+        <div className="w-px h-6 bg-border/30" />
+        <div>
+          <p className="font-mono text-[9px] uppercase tracking-[0.15em] text-muted-foreground">
+            Reviews
+          </p>
+          <p className="font-mono text-[13px] text-foreground mt-0.5">
+            {data?.review_count ?? 0}
+          </p>
+        </div>
+      </div>
+
+      {/* Add note */}
+      {onAddNote && (
+        <div className="border border-border/40 bg-muted/20 px-4 py-3 space-y-3">
+          <p className="font-mono text-[10px] uppercase tracking-[0.15em] text-muted-foreground">
+            Add a note
+          </p>
+          <textarea
+            value={note}
+            onChange={(e) => setNote(e.target.value)}
+            placeholder={copy.placeholder}
+            rows={3}
+            className="w-full bg-transparent font-sans text-sm text-foreground placeholder:text-muted-foreground/40 focus:outline-none resize-none"
+          />
+          <div className="flex justify-end">
+            <Button
+              onClick={() => void handleSubmit()}
+              disabled={saving || note.trim().length === 0}
+            >
+              <span className="font-mono text-[11px] uppercase tracking-[0.15em]">
+                {saving ? "Saving…" : "Save note"}
+              </span>
+            </Button>
           </div>
         </div>
-      </CardHeader>
-      <CardContent className="space-y-4">
-        {onAddNote && (
-          <div className="rounded-xl border bg-muted/30 p-3">
-            <p className="text-sm font-medium">{copy.add}</p>
-            <p className="mt-1 text-xs text-muted-foreground">
-              {copy.noteHelp}
-            </p>
-            <Textarea
-              value={note}
-              onChange={(e) => setNote(e.target.value)}
-              placeholder={copy.notePlaceholder}
-              className="mt-3 min-h-24"
-            />
-            <div className="mt-3 flex justify-end">
-              <Button onClick={() => void handleSubmit()} disabled={saving || note.trim().length === 0}>
-                {saving ? "Saving..." : "Add note"}
-              </Button>
-            </div>
-          </div>
-        )}
+      )}
 
-        {loading ? (
-          <p className="text-sm text-muted-foreground">Loading conviction history...</p>
-        ) : data && data.entries.length > 0 ? (
-          <div className="space-y-1">
-            {data.entries.map((entry) => (
-              <EntryRow key={entry.id} entry={entry} />
-            ))}
-          </div>
-        ) : (
-          <p className="text-sm text-muted-foreground">
-            {copy.empty}
-          </p>
-        )}
-      </CardContent>
-    </Card>
+      {/* Timeline */}
+      {loading ? (
+        <p className="font-mono text-[10px] uppercase tracking-[0.2em] text-muted-foreground/40 animate-pulse">
+          Loading…
+        </p>
+      ) : data && data.entries.length > 0 ? (
+        <div>
+          {data.entries.map((entry) =>
+            entry.entry_type === "evidence_reviewed" ? (
+              <DecisionEntry key={entry.id} entry={entry} />
+            ) : (
+              <SimpleEntry key={entry.id} entry={entry} />
+            ),
+          )}
+        </div>
+      ) : (
+        <p className="font-sans text-sm text-muted-foreground/60">{copy.empty}</p>
+      )}
+    </div>
   );
 }

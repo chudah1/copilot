@@ -164,6 +164,11 @@ class ConvictionLogEntryResponse(BaseModel):
     claim_id: uuid.UUID | None = None
     signal_id: uuid.UUID | None = None
     created_at: datetime
+    # enriched fields for evidence_reviewed entries
+    event_title: str | None = None
+    event_severity: str | None = None
+    what_would_change_my_mind: str | None = None
+    outcome: str | None = None  # "broke" | "held" | None (open)
     model_config = {"from_attributes": True}
 
 

@@ -180,6 +180,10 @@ export interface ConvictionLogEntry {
   claim_id: string | null;
   signal_id: string | null;
   created_at: string;
+  event_title: string | null;
+  event_severity: string | null;
+  what_would_change_my_mind: string | null;
+  outcome: "broke" | "held" | null;
 }
 
 export interface ConvictionLogResponse {
