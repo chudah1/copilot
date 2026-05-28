@@ -12,5 +12,6 @@ export const mk = {
   green: 'oklch(0.62 0.10 155)',
   greenSoft: '#dceadc',
   sans: 'var(--font-geist), "Geist", system-ui, sans-serif',
-  mono: 'var(--font-geist-mono), "Geist Mono", monospace',
+  mono: 'var(--font-jetbrains), "JetBrains Mono", monospace',
+  display: 'var(--font-cormorant), "Cormorant", Georgia, serif',
 } as const;
