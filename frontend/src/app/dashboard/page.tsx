@@ -427,7 +427,10 @@ export default function DashboardPage() {
     return needsAttention.filter((p) => p.pulse_status === "review").length;
   }, [needsAttention]);
 
-  const missingThesisCount = summary?.theses_missing ?? 0;
+  const missingThesisCount = useMemo(
+    () => (holdings ?? []).filter((h) => !thesesByHolding[h.id]).length,
+    [holdings, thesesByHolding],
+  );
   const nextUpcomingEarnings = useMemo(() => {
     if (!upcomingEarnings.length) return null;
     return [...upcomingEarnings].sort((a, b) => a.days_until - b.days_until)[0] ?? null;
