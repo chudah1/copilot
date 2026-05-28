@@ -256,7 +256,7 @@ function DraftCard({
       </div>
 
       <div className="px-5 py-4 space-y-4">
-        <div className="rounded-lg border bg-muted/20 px-3 py-2">
+        <div className="border bg-muted/20 px-3 py-2">
           <p className="font-mono text-[9px] uppercase tracking-[0.18em] text-muted-foreground">
             Decision
           </p>

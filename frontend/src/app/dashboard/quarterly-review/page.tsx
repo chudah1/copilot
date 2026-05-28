@@ -27,7 +27,7 @@ const RESPONSE_OPTIONS: Array<{
     label: "Yes, absolutely",
     description: "This reason still feels strong at today's price.",
     border: "border-l-emerald-600",
-    bg: "hover:bg-emerald-50",
+    bg: "hover:bg-emerald-500/8",
     text: "group-hover:text-emerald-800",
   },
   {
@@ -35,7 +35,7 @@ const RESPONSE_OPTIONS: Array<{
     label: "Probably",
     description: "Still valid, but with a little less certainty.",
     border: "border-l-teal-500",
-    bg: "hover:bg-teal-50",
+    bg: "hover:bg-teal-500/8",
     text: "group-hover:text-teal-800",
   },
   {
@@ -43,7 +43,7 @@ const RESPONSE_OPTIONS: Array<{
     label: "Not sure",
     description: "Something feels off. This reason needs another pass.",
     border: "border-l-amber-500",
-    bg: "hover:bg-amber-50",
+    bg: "hover:bg-amber-500/8",
     text: "group-hover:text-amber-900",
   },
   {
@@ -51,7 +51,7 @@ const RESPONSE_OPTIONS: Array<{
     label: "No",
     description: "You would not start this position today for the same reason.",
     border: "border-l-[#5C2018]",
-    bg: "hover:bg-red-50",
+    bg: "hover:bg-red-500/8",
     text: "group-hover:text-[#5C2018]",
   },
 ];
@@ -401,7 +401,7 @@ export default function QuarterlyReviewPage() {
               <motion.div
                 initial={{ opacity: 0, y: 6 }}
                 animate={{ opacity: 1, y: 0 }}
-                className="mt-4 border-l-2 border-amber-400 bg-amber-50 px-4 py-3"
+                className="mt-4 border-l-2 border-amber-400 bg-amber-500/8 px-4 py-3"
               >
                 <p className="font-sans text-[12px] text-amber-800 leading-relaxed">
                   This answer keeps the holding on your radar. The best next move is to
