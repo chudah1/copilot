@@ -698,7 +698,7 @@ export default function DashboardPage() {
               <p className="font-sans text-sm text-foreground/85">
                 {activationCopy.title}
               </p>
-              <p className="font-sans text-xs text-foreground/65">
+              <p className="font-sans text-xs text-foreground/80">
                 {activationCopy.body}
               </p>
             </div>
@@ -726,7 +726,7 @@ export default function DashboardPage() {
               <p className="font-sans text-sm text-foreground/85">
                 {recentReviewCopy.title}
               </p>
-              <p className="font-sans text-xs text-foreground/65">
+              <p className="font-sans text-xs text-foreground/80">
                 {recentReviewCopy.body}
               </p>
               <Link
@@ -833,7 +833,7 @@ export default function DashboardPage() {
           <p className="font-display italic text-[1.4rem] leading-tight text-foreground">
             {dashboardState.title}
           </p>
-          <p className="font-sans text-sm text-foreground/75 leading-relaxed">
+          <p className="font-sans text-sm text-foreground/85 leading-relaxed">
             {dashboardState.body}
           </p>
           {dashboardStatePrimaryCta && (

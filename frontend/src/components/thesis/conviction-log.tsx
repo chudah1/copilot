@@ -73,7 +73,7 @@ function SimpleEntry({ entry }: { entry: ConvictionLogEntry }) {
             {formatDate(entry.created_at)}
           </span>
         </div>
-        <p className="font-sans text-[13px] text-foreground/70 leading-relaxed mt-0.5">
+        <p className="font-sans text-[13px] text-foreground/85 leading-relaxed mt-0.5">
           {entry.content}
         </p>
       </div>
@@ -158,7 +158,7 @@ function DecisionEntry({ entry }: { entry: ConvictionLogEntry }) {
       </div>
 
       {notes && (
-        <p className="font-sans text-[13px] text-foreground/60 leading-relaxed mt-2.5 pl-1 border-l border-border/30">
+        <p className="font-sans text-[13px] text-foreground/80 leading-relaxed mt-2.5 pl-1 border-l border-border/30">
           {notes}
         </p>
       )}
@@ -270,7 +270,7 @@ export function ConvictionLog({
           )}
         </div>
       ) : (
-        <p className="font-sans text-sm text-muted-foreground/60">{copy.empty}</p>
+        <p className="font-sans text-sm text-muted-foreground">{copy.empty}</p>
       )}
     </div>
   );

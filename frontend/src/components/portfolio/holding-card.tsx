@@ -66,7 +66,7 @@ export function HoldingCard({ holding, thesis, pulse, earnings, onGenerateDraft,
 
             {hasThesis && thesisText ? (
               <div className="space-y-0.5">
-                <p className="font-sans text-xs text-foreground/75 leading-relaxed line-clamp-1 max-w-lg italic">
+                <p className="font-sans text-xs text-foreground/85 leading-relaxed line-clamp-1 max-w-lg italic">
                   {thesisText}
                 </p>
                 {alertReason && (

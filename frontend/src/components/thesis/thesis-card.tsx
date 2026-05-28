@@ -270,7 +270,7 @@ export function ThesisCard({ thesis, decomposition, investorProfile, onEdit, onI
               {thesis.must_remain_true}
             </p>
           ) : (
-            <p className="font-sans text-sm leading-relaxed text-muted-foreground/60 italic">
+            <p className="font-sans text-sm leading-relaxed text-muted-foreground italic">
               Not defined — write the condition that must remain true.
             </p>
           )}
@@ -286,7 +286,7 @@ export function ThesisCard({ thesis, decomposition, investorProfile, onEdit, onI
               {thesis.what_would_change_my_mind}
             </p>
           ) : (
-            <p className="font-sans text-sm leading-relaxed text-muted-foreground/60 italic">
+            <p className="font-sans text-sm leading-relaxed text-muted-foreground italic">
               Not defined — write the event that would make you rethink this.
             </p>
           )}

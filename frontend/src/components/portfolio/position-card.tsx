@@ -241,7 +241,7 @@ export function PositionCard({
 
           {/* Thesis snippet or CTA */}
           {thesis?.why_own_it ? (
-            <p className="font-sans text-[11px] italic text-foreground/75 leading-relaxed line-clamp-2">
+            <p className="font-sans text-[11px] italic text-foreground/85 leading-relaxed line-clamp-2">
               {thesis.why_own_it}
             </p>
           ) : (

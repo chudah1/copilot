@@ -152,7 +152,7 @@ export function EventTimeline({ events, onReview, onEditReason, reviewingEventId
       <Card>
         <CardHeader><CardTitle className="text-base">Monitoring Events</CardTitle></CardHeader>
         <CardContent>
-          <p className="text-foreground/70">{copy.empty}</p>
+          <p className="text-foreground/85">{copy.empty}</p>
         </CardContent>
       </Card>
     );
@@ -218,11 +218,11 @@ export function EventTimeline({ events, onReview, onEditReason, reviewingEventId
               )}
 
               {e.ai_analysis && !e.evidence_summary && (
-                <p className="mt-2 text-sm italic text-foreground/75">{e.ai_analysis}</p>
+                <p className="mt-2 text-sm italic text-foreground/85">{e.ai_analysis}</p>
               )}
 
               {e.review_notes && (
-                <p className="mt-1 text-sm text-foreground/70">Your note: {e.review_notes}</p>
+                <p className="mt-1 text-sm text-foreground/85">Your note: {e.review_notes}</p>
               )}
 
               {/* Review actions — only for unreviewed events */}

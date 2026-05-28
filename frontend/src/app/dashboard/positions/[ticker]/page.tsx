@@ -1512,7 +1512,7 @@ export default function PositionDetailPage() {
               </div>
             )}
 
-            <p className="font-sans text-xs text-foreground/65 leading-relaxed">
+            <p className="font-sans text-xs text-foreground/80 leading-relaxed">
               {onboardingMonitoringNextStep}
             </p>
           </motion.div>
@@ -1920,7 +1920,7 @@ export default function PositionDetailPage() {
                             </p>
                             {invalidatedTheses.map((t) => (
                               <div key={t.id} className="border-l-2 border-border/60 pl-4 py-3 space-y-1.5">
-                                <p className="font-sans text-sm text-foreground/70 leading-relaxed italic">&ldquo;{t.why_own_it}&rdquo;</p>
+                                <p className="font-sans text-sm text-foreground/85 leading-relaxed italic">&ldquo;{t.why_own_it}&rdquo;</p>
                                 {t.invalidation_reason && (
                                   <p className="font-sans text-xs text-muted-foreground">Closed: {t.invalidation_reason}</p>
                                 )}
@@ -2071,7 +2071,7 @@ export default function PositionDetailPage() {
                             <p className="font-sans text-sm text-muted-foreground leading-relaxed">
                               {monitoringCalmState.body}
                             </p>
-                            <p className="font-sans text-sm text-foreground/70 leading-relaxed">
+                            <p className="font-sans text-sm text-foreground/85 leading-relaxed">
                               {monitoringCalmState.nextCheck}
                             </p>
                           </div>
@@ -2132,7 +2132,7 @@ export default function PositionDetailPage() {
                               ? "Monitoring is active. Nothing has tested the reason strongly enough to force a decision yet."
                               : "Monitoring is active. Nothing meaningful has changed yet."}
                         </p>
-                        <p className="font-sans text-xs text-foreground/65">
+                        <p className="font-sans text-xs text-foreground/80">
                           {monitoringCalmState.nextCheck}
                         </p>
                       </div>
