@@ -185,7 +185,9 @@ async def test_portfolio_summary_monitoring_ready_for_yfinance_without_alpha_van
     assert response.status_code == 200
     data = response.json()
     assert data["monitoring_ready"] is True
-    assert data["monitoring_message"].startswith("Monitoring is live")
+    # yfinance needs no API key, so monitoring is ready. No thesis exists yet,
+    # so the message prompts for one rather than describing the live cadence.
+    assert data["monitoring_message"].startswith("Monitoring is on")
 
 
 @pytest.mark.asyncio
