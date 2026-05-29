@@ -22,7 +22,7 @@ from app.schemas.onboarding import (
     SynthesisRequest,
     SynthesisResponse,
 )
-from app.services.ai_thesis import synthesize_thesis_from_qa
+from app.services.ai_thesis import assess_thesis_vagueness, synthesize_thesis_from_qa
 from app.services.onboarding import coverage_pct, get_or_create_state, mark_onboarding_completed, set_investor_profile
 
 router = APIRouter(prefix="/api/onboarding", tags=["onboarding"])
@@ -401,12 +401,27 @@ async def synthesize_thesis(
 
     await db.commit()
 
+    # Assess the user's RAW answers (not the AI-cleaned output) to decide whether
+    # the thesis should enter the hype-buyer climb (ground via stress-test).
+    assessment = assess_thesis_vagueness(
+        body.answer1,
+        what_would_change_my_mind=body.answer2,
+        investor_profile=investor_profile,
+        company=holding.name or holding.ticker,
+    )
+
     return SynthesisResponse(
         thesis_id=thesis.id,
         why_own_it=thesis.why_own_it,
         must_remain_true=thesis.must_remain_true or "",
         what_would_change_my_mind=thesis.what_would_change_my_mind or "",
         ai_summary=thesis.ai_summary or "",
+        needs_grounding=assessment.is_vague,
+        # Only surface reasons when we're actually asking the user to ground the
+        # thesis; the soft "no_monitorable_driver" code is internal otherwise, so
+        # consumers can key off needs_grounding alone.
+        grounding_reasons=assessment.reasons if assessment.is_vague else [],
+        suggested_questions=assessment.suggested_questions,
     )
 
 

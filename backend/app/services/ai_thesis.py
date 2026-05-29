@@ -40,6 +40,17 @@ class ThesisAssistOutput:
     interpretation: dict
 
 
+@dataclass
+class VaguenessAssessment:
+    """Result of the thesis vagueness gate that decides whether a thesis should
+    enter the hype-buyer 'climb' (stress-test grounding + Socratic follow-ups)."""
+
+    is_vague: bool
+    reasons: list[str]            # machine codes: too_short | hearsay | vague_language | generic | no_monitorable_driver
+    detected_drivers: list[str]   # monitorable theme labels found (growth, quality, valuation, ...)
+    suggested_questions: list[str]
+
+
 VAGUE_PATTERNS = (
     r"\bfriend recommended\b",
     r"\brecommended it\b",
@@ -89,7 +100,7 @@ GENERIC_DRAFT_PATTERNS = (
 THEME_KEYWORDS = {
     "growth": ("growth", "demand", "expansion", "adoption"),
     "income": ("dividend", "income", "yield"),
-    "quality": ("margin", "margins", "cash flow", "profitability", "resilient"),
+    "quality": ("margin", "margins", "cash flow", "cashflow", "fcf", "profitability", "resilient"),
     "valuation": ("valuation", "multiple", "cheap", "expensive", "pe", "p/e"),
     "theme": ("ai", "cloud", "energy", "semiconductor", "automation", "infrastructure"),
 }
@@ -298,6 +309,121 @@ def _format_metric_pct(value: float | None) -> str:
 def _text_matches_patterns(text: str, patterns: tuple[str, ...]) -> bool:
     lowered = text.lower()
     return any(re.search(pattern, lowered) for pattern in patterns)
+
+
+# Minimum word count below which a "why I own it" reads as too thin to monitor.
+# Matches the threshold already used by the condition-inference helpers.
+MIN_SPECIFIC_WORDS = 8
+
+
+def _detect_monitorable_drivers(text: str) -> list[str]:
+    """Return the monitorable theme labels present in the text (growth, quality,
+    valuation, ...). Word-boundary matching keeps short keywords like "ai" from
+    matching inside unrelated words — important because a false positive here
+    would wrongly mark a vague thesis as having a concrete driver.
+    """
+    lowered = text.lower()
+    found: list[str] = []
+    for label, keywords in THEME_KEYWORDS.items():
+        for kw in keywords:
+            # "p/e" contains a slash; match it literally. Others get word boundaries.
+            pattern = re.escape(kw) if not kw.isalnum() else rf"\b{re.escape(kw)}\b"
+            if re.search(pattern, lowered):
+                found.append(label)
+                break
+    return found
+
+
+def _build_grounding_questions(
+    company: str,
+    *,
+    drivers: list[str],
+    reasons: list[str],
+) -> list[str]:
+    """Socratic follow-ups to turn a vague reason into a measurable one."""
+    questions: list[str] = []
+    if "too_short" in reasons or "hearsay" in reasons or "vague_language" in reasons:
+        questions.append(
+            f"In one concrete sentence, what does {company} do that makes you want to own it?"
+        )
+    if "no_monitorable_driver" in reasons:
+        questions.append(
+            f"If your reason is right, what number in {company}'s results would prove it "
+            f"(e.g. revenue growth, margins, subscriber growth)?"
+        )
+    for driver in drivers:
+        if driver == "growth":
+            questions.append("What growth rate would you expect, and below what level would you worry?")
+        elif driver == "quality":
+            questions.append("What margin or profitability level matters, and what would a real deterioration look like?")
+        elif driver == "valuation":
+            questions.append("What valuation are you paying today, and what would make it look expensive?")
+        elif driver == "income":
+            questions.append("What dividend or yield level matters, and what would a cut signal?")
+    # Dedupe preserving order, then keep at most 2 elicitation questions and
+    # ALWAYS append the sell/exit question (it must never be dropped by the cap).
+    seen: set[str] = set()
+    deduped = [q for q in questions if not (q in seen or seen.add(q))]
+    sell_question = f"What would have to happen for you to sell {company}?"
+    return deduped[:2] + [sell_question]
+
+
+def assess_thesis_vagueness(
+    why_own_it: str | None,
+    *,
+    what_would_change_my_mind: str | None = None,
+    investor_profile: str | None = None,
+    company: str | None = None,
+) -> VaguenessAssessment:
+    """Decide whether a thesis is too vague to monitor well and should enter the
+    hype-buyer 'climb'. Pure / deterministic — no IO, no API keys.
+
+    Hard vagueness signals (any one marks it vague): too short, hearsay/chatter
+    language, vague language, or generic boilerplate. A missing *monitorable*
+    driver is a SOFT signal — it shapes the follow-up questions but does not by
+    itself mark a thesis vague (qualitative reasons like "durable moat" are
+    legitimate). For the hearsay-driven profile we are stricter: an explicit
+    starting-from-chatter user with no monitorable driver is flagged to ground.
+    """
+    # Cap assessed text defensively so a pasted blob can't turn the synchronous
+    # regex sweep into a request-path hot spot.
+    why_text = (why_own_it or "").strip()[:2000]
+    change_text = (what_would_change_my_mind or "").strip()[:2000]
+    combined = f"{why_text} {change_text}".strip()
+
+    drivers = _detect_monitorable_drivers(combined)
+
+    reasons: list[str] = []
+    is_short = len(why_text.split()) < MIN_SPECIFIC_WORDS
+    if is_short:
+        reasons.append("too_short")
+    if _text_matches_patterns(combined, HEARSAY_PATTERNS):
+        reasons.append("hearsay")
+    if _text_matches_patterns(combined, VAGUE_PATTERNS):
+        reasons.append("vague_language")
+    if _text_matches_patterns(combined, GENERIC_CONDITION_PATTERNS):
+        reasons.append("generic")
+    if not drivers:
+        reasons.append("no_monitorable_driver")
+
+    # Strong signals mark a thesis vague on their own. Shortness is only a
+    # vagueness signal when there is ALSO no monitorable driver — a terse but
+    # precise thesis ("Margins above 60%, FCF growing 20%") must not be flagged.
+    strong_signals = {"hearsay", "vague_language", "generic"}.intersection(reasons)
+    short_and_undriven = is_short and not drivers
+    is_vague = bool(strong_signals) or short_and_undriven or (
+        investor_profile == "hearsay_driven" and not drivers
+    )
+
+    company_label = company or "this company"
+    suggested = _build_grounding_questions(company_label, drivers=drivers, reasons=reasons) if is_vague else []
+
+    return VaguenessAssessment(
+        is_vague=is_vague,
+        reasons=reasons,
+        detected_drivers=drivers,
+        suggested_questions=suggested,
+    )
 
 
 def _dedupe_watch_hints(watch_hints: list[dict[str, Any]]) -> list[dict[str, Any]]:

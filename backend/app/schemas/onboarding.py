@@ -69,6 +69,12 @@ class SynthesisResponse(BaseModel):
     must_remain_true: str
     what_would_change_my_mind: str
     ai_summary: str
+    # Hype-buyer climb: when the user's raw answers read as vague/hearsay, the
+    # frontend should ground them (stress-test + these follow-ups) before relying
+    # on the thesis. Defaults keep the field backward-compatible.
+    needs_grounding: bool = False
+    grounding_reasons: list[str] = []
+    suggested_questions: list[str] = []
 
 
 class HoldingContextResponse(BaseModel):
