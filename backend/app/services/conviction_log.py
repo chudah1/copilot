@@ -21,6 +21,7 @@ REASON_INVALIDATED = "reason_invalidated"
 POST_EARNINGS_REVIEW = "post_earnings_review"
 QUARTERLY_REVIEW = "quarterly_review"
 MANUAL_NOTE = "manual_note"
+FLOOR_APPLIED = "floor_applied"
 
 
 def append_log_entry(

@@ -98,7 +98,18 @@ async def _apply_signal_decay(
 
     if action in IGNORE_ACTIONS:
         signal.consecutive_ignores += 1
-        if signal.consecutive_ignores >= SIGNAL_DECAY_THRESHOLD and signal.active:
+        # Floor signals are the monitorability safety net. Never auto-deactivate
+        # them on ignores — that would silently recreate the unmonitored-thesis
+        # state the floor exists to prevent. The user can still remove a floor
+        # signal explicitly (an intentional opt-out, which we respect).
+        from app.services.decomposition import FLOOR_SIGNAL_SOURCE
+
+        is_floor_signal = (signal.raw_extraction_json or {}).get("source") == FLOOR_SIGNAL_SOURCE
+        if (
+            not is_floor_signal
+            and signal.consecutive_ignores >= SIGNAL_DECAY_THRESHOLD
+            and signal.active
+        ):
             signal.active = False
             logger.info(
                 "Signal %s auto-deactivated after %d consecutive ignores",

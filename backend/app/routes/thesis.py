@@ -249,6 +249,9 @@ async def decompose_thesis(
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Holding not found")
 
     result = await generate_decomposition_for_thesis(db=db, thesis=thesis, holding=thesis.holding)
+    # generate_decomposition_for_thesis never hard-fails: on an unusable AI
+    # result it persists a monitorable baseline floor. The pending/failed branch
+    # is retained defensively but should no longer be reachable.
     if result.status in ("pending", "failed"):
         envelope = _decomposition_envelope_from_result(result)
         return JSONResponse(
@@ -258,7 +261,11 @@ async def decompose_thesis(
     latest = await _get_latest_decomposition_record(db, thesis.id, current_user.id)
     if latest is None:
         raise HTTPException(status_code=status.HTTP_502_BAD_GATEWAY, detail="Failed to create decomposition")
-    return ThesisDecompositionEnvelopeResponse(status="draft", message=None, decomposition=latest)
+    return ThesisDecompositionEnvelopeResponse(
+        status=_display_decomposition_status(latest.status),
+        message=result.message,
+        decomposition=latest,
+    )
 
 
 @router.post("/{thesis_id}/decomposition/confirm", response_model=ThesisDecompositionEnvelopeResponse)

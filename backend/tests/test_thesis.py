@@ -534,7 +534,13 @@ async def test_get_latest_decomposition_returns_404_when_missing(client, auth_he
     assert response.status_code == 404
 
 
-async def test_decompose_descriptive_thesis_yields_no_auto_active_signals(client, auth_headers, holding):
+async def test_decompose_failure_falls_back_to_monitorable_floor(client, auth_headers, holding):
+    """Never-fail: an unusable gateway result no longer dead-ends the thesis.
+
+    Instead of returning 'failed' with no decomposition, the system persists a
+    monitorable baseline floor (an active coarse price-move signal) so the
+    thesis is still watched.
+    """
     create = await client.post(
         "/api/theses",
         json={
@@ -566,14 +572,29 @@ async def test_decompose_descriptive_thesis_yields_no_auto_active_signals(client
     with patch("app.services.decomposition.get_reasoning_gateway", return_value=MockGateway(gateway_result)):
         response = await client.post(f"/api/theses/{thesis_id}/decompose", headers=auth_headers)
 
-    assert response.status_code == 200
+    assert response.status_code == 201
     envelope = response.json()
-    assert envelope["status"] == "failed"
-    assert envelope["decomposition"] is None
+    assert envelope["status"] == "partially_confirmed"
+    assert envelope["decomposition"] is not None
+    assert "baseline monitoring" in (envelope["message"] or "")
+
+    decomp = envelope["decomposition"]
+    assert decomp["monitorability"] == "low"
+    signals = [
+        s
+        for claim in decomp["claims"]
+        for entity in claim["entities"]
+        for s in entity["signals"]
+    ]
+    assert any(s["signal_type"] == "price_move" and s["active"] for s in signals)
+
+    # The thesis is monitorable: interpretation is populated.
+    thesis_response = await client.get(f"/api/theses/{thesis_id}", headers=auth_headers)
+    assert thesis_response.json()["interpretation"] is not None
 
     decomposition_response = await client.get(f"/api/theses/{thesis_id}/decomposition", headers=auth_headers)
     assert decomposition_response.status_code == 200
-    assert decomposition_response.json()["status"] == "failed"
+    assert decomposition_response.json()["status"] == "partially_confirmed"
 
 
 async def test_decompose_auto_activates_direct_high_confidence_signal_and_syncs_interpretation(client, auth_headers, holding):

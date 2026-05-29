@@ -1,6 +1,5 @@
 import logging
 from dataclasses import dataclass
-from datetime import datetime, timedelta, timezone
 from typing import Any
 
 from sqlalchemy import func, select
@@ -14,11 +13,13 @@ from app.models.thesis_decomposition import ThesisDecomposition
 from app.models.thesis_entity import ThesisEntity
 from app.models.thesis_signal import ThesisSignal
 from app.services.conviction_log import (
+    FLOOR_APPLIED,
     SIGNAL_CONFIRMED,
     SIGNAL_REMOVED,
     SIGNALS_GENERATED,
     append_log_entry,
 )
+from app.services.monitoring import DEFAULT_PRICE_THRESHOLD_PCT
 from app.services.reasoning.gateway import ThesisReasoningGateway
 from app.services.reasoning.normalizers import normalize_decomposition_output, to_float
 from app.services.reasoning.providers import (
@@ -39,6 +40,17 @@ APPROVED_DIRECT_SIGNAL_TYPES = {
     "earnings_surprise",
     "dividend_change",
 }
+
+# Monitorability floor: the baseline that guarantees *every* thesis — however
+# vague or hard to parse — ends up with at least one active monitorable signal,
+# so monitoring always has something to fire on. We reuse the product's standard
+# price-move sensitivity (DEFAULT_PRICE_THRESHOLD_PCT) rather than a coarser
+# value: monitoring already falls back to that threshold when interpretation is
+# empty, so matching it avoids regressing sensitivity for floored theses while
+# adding a real, tracked signal + claim (which unlocks news/earnings matching).
+# Noise-filter cooldowns keep it from spamming.
+FLOOR_PRICE_MOVE_THRESHOLD = DEFAULT_PRICE_THRESHOLD_PCT
+FLOOR_SIGNAL_SOURCE = "floor"
 
 _gateway: ThesisReasoningGateway | None = None
 
@@ -245,24 +257,180 @@ async def _next_version(db: AsyncSession, thesis_id) -> int:
     return current_max + 1
 
 
-async def _persist_pending_decomposition(
+async def _load_active_signals_with_claims(
+    db: AsyncSession, decomposition_id
+) -> list[tuple[ThesisSignal, str]]:
+    """Return (signal, claim_id) for every active signal under a decomposition.
+
+    Uses an explicit join rather than walking ORM relationships — reaching
+    through lazy relationships in async SQLAlchemy can trigger implicit IO and
+    raise. Callers rely on this being safe at any point in a transaction.
+    """
+    rows = await db.execute(
+        select(ThesisSignal, ThesisClaim.id)
+        .join(ThesisEntity, ThesisSignal.entity_id == ThesisEntity.id)
+        .join(ThesisClaim, ThesisEntity.claim_id == ThesisClaim.id)
+        .where(
+            ThesisClaim.decomposition_id == decomposition_id,
+            ThesisSignal.active.is_(True),
+        )
+    )
+    return [(sig, str(claim_id)) for sig, claim_id in rows.all()]
+
+
+async def ensure_signal_floor(
     db: AsyncSession,
     thesis: Thesis,
+    holding: Holding,
+    decomposition: ThesisDecomposition,
+) -> bool:
+    """Guarantee the thesis has at least one active monitorable signal.
+
+    No-op (returns False) when the decomposition already has an active signal.
+    Otherwise injects a baseline floor — reusing the first existing claim/entity
+    or creating one (the raw reason as a claim, the held company as the entity)
+    — plus an active coarse price-move signal, then rebuilds the interpretation
+    cache so monitoring produces candidates. Returns True when a floor was added.
+
+    Idempotent: a second call sees the floor signal active and no-ops. The caller
+    is responsible for committing.
+    """
+    if await _load_active_signals_with_claims(db, decomposition.id):
+        return False
+
+    # Defensive: the floor is the never-fail path, so it must not crash on a
+    # missing/odd ticker.
+    ticker = (holding.ticker or "").upper()
+    ticker_display = holding.ticker or "this holding"
+
+    # Reuse the first existing claim, or create the floor claim.
+    claim = (
+        await db.execute(
+            select(ThesisClaim)
+            .where(ThesisClaim.decomposition_id == decomposition.id)
+            .order_by(ThesisClaim.position)
+            .limit(1)
+        )
+    ).scalar_one_or_none()
+    if claim is None:
+        claim = ThesisClaim(
+            decomposition_id=decomposition.id,
+            claim_text=(thesis.why_own_it or "").strip() or f"Reason for owning {ticker_display}",
+            claim_type="overall",
+            confidence=0.4,
+            position=1,
+        )
+        db.add(claim)
+        await db.flush()
+
+    # Reuse the claim's first NON-REJECTED entity, or create the held-company
+    # entity. We never attach an active signal under an entity the user
+    # explicitly rejected (user_confirmed is False).
+    entity = (
+        await db.execute(
+            select(ThesisEntity)
+            .where(
+                ThesisEntity.claim_id == claim.id,
+                ThesisEntity.user_confirmed.isnot(False),
+            )
+            .order_by(ThesisEntity.created_at)
+            .limit(1)
+        )
+    ).scalar_one_or_none()
+    if entity is None:
+        entity = ThesisEntity(
+            claim_id=claim.id,
+            entity_name=holding.name or ticker_display,
+            entity_ticker=ticker or None,
+            entity_type="held_company",
+            relation_type="self",
+            confidence=0.4,
+            confirmation_required=False,
+            user_confirmed=True,
+        )
+        db.add(entity)
+        await db.flush()
+
+    floor_signal = ThesisSignal(
+        entity_id=entity.id,
+        signal_type="price_move",
+        signal_label=f"Price moves more than {int(FLOOR_PRICE_MOVE_THRESHOLD)}%",
+        signal_config_json={"threshold_pct": FLOOR_PRICE_MOVE_THRESHOLD},
+        rationale=(
+            "Baseline watch so a vague or hard-to-parse thesis still gets "
+            "reviewed when the stock moves sharply."
+        ),
+        confidence=0.4,
+        confirmation_required=False,
+        user_confirmed=True,
+        active=True,
+        raw_extraction_json={"source": FLOOR_SIGNAL_SOURCE},
+    )
+    db.add(floor_signal)
+    await db.flush()
+
+    # Rebuild the interpretation cache from the now-active signals.
+    active = await _load_active_signals_with_claims(db, decomposition.id)
+    active_signals = [sig for sig, _ in active]
+    signal_claim_map = {str(sig.id): claim_id for sig, claim_id in active}
+    label_rows = await db.execute(
+        select(ThesisClaim.claim_type).where(ThesisClaim.decomposition_id == decomposition.id)
+    )
+    labels = [lt for (lt,) in label_rows.all() if lt]
+    _sync_interpretation_cache(
+        thesis,
+        reason_type=decomposition.reason_type,
+        monitorability=decomposition.monitorability or "low",
+        labels=labels,
+        active_signals=active_signals,
+        signal_claim_map=signal_claim_map,
+    )
+    return True
+
+
+async def _persist_floor_decomposition(
+    db: AsyncSession,
+    thesis: Thesis,
+    holding: Holding,
     result,
 ) -> ThesisDecomposition:
+    """Create a minimal, immediately-monitorable decomposition when the AI
+    decomposition could not be produced — so the thesis is never left
+    unmonitored. Status is ``partially_confirmed`` because the floor signal is
+    system-activated (no user review pending), which makes it usable by the
+    monitoring pipeline right away.
+    """
     decomposition = ThesisDecomposition(
         thesis_id=thesis.id,
         version=await _next_version(db, thesis.id),
-        status=result.status,
+        status="partially_confirmed",
+        reason_type=None,
+        monitorability="low",
+        decomposition_confidence=None,
         provider=result.provider,
         model=result.model,
         prompt_version=result.prompt_version,
         raw_output_json=result.raw_output,
         retry_count=0,
         last_error=result.failure_reason,
-        next_retry_at=datetime.now(timezone.utc) + timedelta(minutes=15) if result.retryable else None,
+        next_retry_at=None,
     )
     db.add(decomposition)
+    await db.flush()
+    floored = await ensure_signal_floor(db, thesis, holding, decomposition)
+    if floored:
+        append_log_entry(
+            db,
+            thesis_id=thesis.id,
+            holding_id=holding.id,
+            user_id=thesis.user_id,
+            entry_type=FLOOR_APPLIED,
+            content="Baseline monitoring applied (we couldn't fully parse this thesis yet).",
+            metadata={
+                "decomposition_id": str(decomposition.id),
+                "failure_reason": result.failure_reason,
+            },
+        )
     await db.commit()
     return decomposition
 
@@ -388,6 +556,13 @@ async def _persist_successful_decomposition(
         },
     )
 
+    # NOTE: no floor here. A successful decomposition whose signals all need
+    # user confirmation intentionally stays unmonitored (interpretation=None)
+    # until the user confirms — that is the product's review flow. The floor is
+    # applied only at finalization points: decomposition failure (see
+    # generate_decomposition_for_thesis) and confirmation that leaves zero
+    # active signals (see confirm_decomposition_for_thesis).
+
     await db.commit()
     return decomposition
 
@@ -424,20 +599,25 @@ async def generate_decomposition_for_thesis(
             decomposition = await _persist_successful_decomposition(db, thesis, holding, result)
             return PersistedDecompositionResult(status="draft", message=None, decomposition=decomposition)
 
-    decomposition = await _persist_pending_decomposition(db, thesis, result)
-    status = decomposition.status
-    if status == "pending":
-        message = "We saved your thesis and are retrying decomposition."
-    elif result.failure_reason and "confidence too low" in result.failure_reason.lower():
+    # The AI decomposition is unusable — but never leave the thesis unmonitored.
+    # Persist a baseline floor so monitoring still fires, and surface guidance to
+    # sharpen it. (There is no background retry job, so a transient failure would
+    # otherwise leave the thesis permanently dead.)
+    logger.warning(
+        "Decomposition unavailable for thesis %s (%s) — applying monitorability floor",
+        thesis.id,
+        result.failure_reason,
+    )
+    decomposition = await _persist_floor_decomposition(db, thesis, holding, result)
+    if result.failure_reason and "confidence too low" in result.failure_reason.lower():
         message = (
-            "Your thesis needs more specific language to be monitorable. "
-            "Add concrete metrics — e.g. 'Revenue growth above 15% YoY', 'Gross margin holds above 60%', "
-            "or 'Market share stays above 40%' — then retry."
+            "We saved your thesis and set up baseline monitoring. To watch it more precisely, "
+            "add concrete metrics — e.g. 'Revenue growth above 15% YoY', 'Gross margin holds above 60%', "
+            "or 'Market share stays above 40%'."
         )
     else:
-        message = "We could not decompose this thesis right now."
-    logger.warning("Decomposition unavailable for thesis %s: %s", thesis.id, result.failure_reason)
-    return PersistedDecompositionResult(status=status, message=message, decomposition=None)
+        message = "We saved your thesis and set up baseline monitoring. You can refine what we watch anytime."
+    return PersistedDecompositionResult(status="draft", message=message, decomposition=decomposition)
 
 
 async def confirm_decomposition_for_thesis(
@@ -558,6 +738,11 @@ async def confirm_decomposition_for_thesis(
                 content=f"Removed: {signal.signal_label or signal.signal_type}",
                 signal_id=signal.id,
             )
+
+    # No floor here. If a user reviews the proposed signals and deliberately
+    # rejects all of them, that is an explicit choice to stop monitoring — we
+    # respect it (interpretation clears). The floor is for *inability* to produce
+    # signals (decomposition failure), not *unwillingness* to keep them.
 
     await db.commit()
     await db.refresh(decomposition)
