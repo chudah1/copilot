@@ -37,7 +37,7 @@ def _event_title(ticker: str, candidate: dict[str, Any], claim_obj: Any | None) 
             return f"{clean} earnings {direction} by {abs(surprise):.1f}%"
         return f"{clean} reported earnings"
 
-    if event_type == "metric_threshold_breach":
+    if event_type == "metric_threshold":
         metric = evidence.get("metric", "").replace("_", " ")
         return f"{clean}: {metric} threshold breached" if metric else f"{clean} metric alert"
 

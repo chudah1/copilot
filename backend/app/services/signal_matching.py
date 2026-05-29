@@ -243,7 +243,7 @@ def determine_verdict(severity: str, candidate: dict | None = None) -> str:
             return "neutral"
 
     # Metric breaches: explicitly flagged as broken are threats
-    if event_type == "metric_threshold_breach":
+    if event_type == "metric_threshold":
         return "threatens"
 
     # Severity-based fallback
