@@ -123,15 +123,34 @@ def _normalize_ticker(ticker: str) -> str:
     return ticker
 
 
-def detect_native_currency(ticker: str) -> str:
-    """Return the ISO 4217 currency code for a T212 ticker's native exchange.
+def _normalize_currency(code: str | None) -> str | None:
+    """Normalise a provider-reported currency code to ISO 4217.
 
-    Examples:
+    yfinance reports London-listed instruments as "GBp" (pence). For currency
+    *labelling* we fold that to "GBP"; price-in-pence scaling is handled
+    elsewhere. Returns None for empty/unknown input so callers can fall back.
+    """
+    if not code:
+        return None
+    normalized = code.strip().upper()
+    return normalized or None
+
+
+def detect_native_currency(ticker: str) -> str:
+    """Best-effort ISO 4217 currency for a T212 ticker, inferred from its suffix.
+
+    This is a HEURISTIC fallback used only when the data provider's authoritative
+    currency (CompanyData.currency / Holding.currency) is unavailable. The T212
+    suffix cases are deterministic and reliable:
         NVDA_US_EQ  → "USD"
         ASMLA_EQ    → "EUR"  (Amsterdam)
         VODL_EQ     → "GBP"  (London)
         NOVOL_EQ    → "NOK"  (Oslo)
-    Falls back to "GBP" for already-clean tickers (assumed LSE or manual holdings).
+    A bare/clean ticker (e.g. "ASML" typed into research) carries NO exchange
+    information, so we cannot know its currency here — prefer the provider value
+    upstream. The final "GBP" return is a last-resort guess for manual LSE
+    holdings and will be wrong for clean US tickers; do not rely on it when a
+    provider currency is available.
     """
     upper = ticker.upper()
     if upper.endswith("_US_EQ"):
@@ -343,6 +362,7 @@ class CompanyData:
     earnings_call: TranscriptSignal | None = None
     insider_transactions: list[InsiderTransaction] = field(default_factory=list)
     country: str = "Unknown"
+    currency: str | None = None  # ISO 4217 as reported by the data provider (authoritative)
 
 
 def _to_float(value: Any) -> float | None:
@@ -393,6 +413,7 @@ def _parse_alpha_vantage_overview(payload: dict[str, Any]) -> dict[str, Any]:
         "sector": payload.get("Sector") or "",
         "industry": payload.get("Industry") or "",
         "country": payload.get("Country") or "",
+        "currency": payload.get("Currency") or "",
         "description": payload.get("Description") or "",
         "market_cap": _to_float(payload.get("MarketCapitalization")),
         "pe_ratio": _to_float(payload.get("PERatio")),
@@ -1077,6 +1098,7 @@ async def _fetch_yfinance_company_data(ticker: str, _retried: bool = False) -> C
         earnings_call=None,  # yfinance doesn't provide transcripts
         insider_transactions=[],  # yfinance doesn't provide insider data
         provider_payload={"provider": "yfinance", "info": info},
+        currency=_normalize_currency(info.get("currency")),
     )
 
 
@@ -1235,4 +1257,5 @@ def _build_company_data_from_alpha_vantage(ticker: str, provider_payload: dict[s
         earnings_call=transcript,
         insider_transactions=insider_transactions,
         provider_payload=provider_payload,
+        currency=_normalize_currency(overview["currency"]),
     )

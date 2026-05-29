@@ -20,6 +20,10 @@ async def stress_test(request: Request, body: StressTestRequest):
         company_data=company_data,
     )
 
+    # Prefer the provider's authoritative currency; fall back to the suffix
+    # heuristic only when the provider didn't report one (e.g. fetch failed).
+    currency = (company_data.currency if company_data else None) or detect_native_currency(ticker)
+
     return StressTestResponse(
         ticker=result.ticker,
         bear_case=result.bear_case,
@@ -27,6 +31,6 @@ async def stress_test(request: Request, body: StressTestRequest):
         blind_spots=result.blind_spots,
         what_to_watch=result.what_to_watch,
         current_price=result.current_price,
-        currency=detect_native_currency(ticker),
+        currency=currency,
         cached=result.cached,
     )

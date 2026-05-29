@@ -101,7 +101,10 @@ async def _build_snapshot(
     cost_basis = float(holding.average_cost_basis)  # GBP
     snapshot.cost_basis = cost_basis
     if company_data.current_price is not None and cost_basis > 0:
-        native_ccy = detect_native_currency(holding.ticker)
+        # current_price is quoted in the provider's currency, so that value is
+        # the authoritative source for the conversion. Fall back to the stored
+        # holding currency, then the ticker-suffix heuristic.
+        native_ccy = company_data.currency or holding.currency or detect_native_currency(holding.ticker)
         fx_rate = await get_fx_rate(native_ccy, "GBP")
         total_cost = float(holding.quantity) * cost_basis
         total_value = float(holding.quantity) * company_data.current_price * fx_rate
