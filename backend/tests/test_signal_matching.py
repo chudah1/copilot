@@ -304,10 +304,11 @@ def test_build_evidence_summary_tier1_claim_and_signal():
         why_own_it=None,
         severity="warning",
         verdict="review",
+        investor_profile="thesis_driven",
     )
-    assert "You said:" in summary
+    assert "Your thesis:" in summary
     assert "Customer demand remains strong" in summary
-    assert "We watched:" in summary
+    assert "We were watching:" in summary
     assert "iPhone unit sales trend" in summary
     assert "Revenue growth slowed to 1.2% YoY" in summary
     assert "directly threatens" in summary.lower() or "thesis" in summary.lower()

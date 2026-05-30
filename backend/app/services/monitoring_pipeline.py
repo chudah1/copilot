@@ -11,6 +11,10 @@ _EMBED_MODEL = "text-embedding-3-small"
 _SCORE_THRESHOLD = 0.30
 _MAX_SENTENCES = 8
 
+# Objective threshold breaches that should fire regardless of the AI classifier
+# (they test a number against the user's own threshold — no judgment needed).
+DETERMINISTIC_BREACH_EVENT_TYPES = {"price_move", "metric_threshold"}
+
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
@@ -273,11 +277,15 @@ async def classify_candidates_for_thesis(
             ticker=ticker,
             company_name=company_name,
         )
-        if classification is None or classification.severity == "skip":
+        if classification is not None and classification.severity != "skip":
+            classified.append((candidate, classification.severity, classification.analysis))
             continue
-        severity = classification.severity if classification else "warning"
-        ai_analysis = classification.analysis if classification else None
-        classified.append((candidate, severity, ai_analysis))
+
+        # Objective threshold breaches (a price move or metric breach past the
+        # user's own threshold) fire even when the AI classifier is unavailable or
+        # returns skip — numeric monitoring must not silently depend on the LLM.
+        if candidate.get("event_type") in DETERMINISTIC_BREACH_EVENT_TYPES:
+            classified.append((candidate, "warning", None))
     return classified
 
 
