@@ -1,0 +1,72 @@
+# Local development stack for penKeep.
+#
+# ── Recommended: infra only (fast iteration, backend on the host) ─────────────
+#   docker compose up -d                 # starts Postgres + Redis
+#   # then put these in backend/.env (the username matters — without it the app
+#   # silently falls back to SQLite):
+#   #   DATABASE_URL=postgresql+asyncpg://copilot:copilot@localhost:5432/copilot_investor
+#   #   REDIS_URL=redis://localhost:6379
+#   cd backend && alembic upgrade head && uvicorn app.main:app --reload --port 8000
+#
+# ── Full stack (everything in containers) ─────────────────────────────────────
+#   docker compose --profile full up --build
+#   # backend → http://localhost:8000 ; reads API keys from backend/.env,
+#   # runs migrations on start, and points at the db/redis services.
+#
+# Stop & wipe the database:  docker compose down -v
+
+name: penkeep-dev
+
+services:
+  db:
+    image: postgres:16-alpine
+    environment:
+      POSTGRES_USER: copilot
+      POSTGRES_PASSWORD: copilot
+      POSTGRES_DB: copilot_investor
+    ports:
+      - "5432:5432"
+    volumes:
+      - pgdata:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U copilot -d copilot_investor"]
+      interval: 5s
+      timeout: 5s
+      retries: 10
+
+  redis:
+    image: redis:7-alpine
+    ports:
+      - "6379:6379"
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 5s
+      timeout: 5s
+      retries: 10
+
+  # Containerised backend — only with `--profile full`. Default `up` brings up
+  # just db + redis so you can run the backend on the host for fast reloads.
+  backend:
+    profiles: ["full"]
+    build:
+      context: .
+      dockerfile: Dockerfile
+    env_file:
+      - backend/.env          # API keys, JWT_SECRET, ENCRYPTION_KEY (32 bytes)
+    environment:
+      # These override whatever is in backend/.env so the container talks to the
+      # compose services rather than localhost.
+      DATABASE_URL: postgresql+asyncpg://copilot:copilot@db:5432/copilot_investor
+      REDIS_URL: redis://redis:6379
+      PORT: "8000"
+      ENABLE_SCHEDULER: "false"   # keep background jobs off in dev
+    ports:
+      - "8000:8000"
+    depends_on:
+      db:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+
+volumes:
+  pgdata:
