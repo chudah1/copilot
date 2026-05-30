@@ -63,8 +63,13 @@ class OpenAIReasoningProvider:
                 extra["temperature"] = self.temperature
             response = await client.chat.completions.create(
                 model=self.model,
-                prompt_cache_key=settings.openai_prompt_cache_key,
-                prompt_cache_retention=settings.openai_prompt_cache_retention,
+                # Pass prompt-cache fields via extra_body so the call works across
+                # OpenAI SDK versions (older SDKs reject these as top-level kwargs;
+                # extra_body forwards them straight to the API).
+                extra_body={
+                    "prompt_cache_key": settings.openai_prompt_cache_key,
+                    "prompt_cache_retention": settings.openai_prompt_cache_retention,
+                },
                 response_format={
                     "type": "json_schema",
                     "json_schema": {
