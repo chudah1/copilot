@@ -70,6 +70,32 @@ def test_fallback_includes_monitorable_candidate_signals():
     out = _fallback_stress_test("NVDA", "some thesis")
     assert out.candidate_signals
     assert all(c.signal_type in CANDIDATE_SIGNAL_TYPES for c in out.candidate_signals)
+    # the fallback should offer at least one qualitative watch too
+    assert any(c.signal_type == "news_watch" for c in out.candidate_signals)
+
+
+# --- qualitative news_watch candidate signals ------------------------------
+
+def test_parse_news_watch_signal():
+    raw = [{"signal_type": "news_watch", "watch_for": "AMD lands a major design win",
+            "direction": "threatens", "label": "Competitor win", "rationale": "r"}]
+    out = _parse_candidate_signals(raw)
+    assert len(out) == 1
+    s = out[0]
+    assert s.signal_type == "news_watch"
+    assert s.watch_for == "AMD lands a major design win"
+    assert s.direction == "threatens"
+
+
+def test_parse_news_watch_requires_watch_for():
+    raw = [{"signal_type": "news_watch", "direction": "threatens", "label": "x"}]
+    assert _parse_candidate_signals(raw) == []
+
+
+def test_parse_news_watch_defaults_direction():
+    raw = [{"signal_type": "news_watch", "watch_for": "Something happens", "label": "x", "direction": "bogus"}]
+    out = _parse_candidate_signals(raw)
+    assert out[0].direction == "threatens"
 
 
 # --- persistence: confirmed candidates -> active monitorable signals ---------
@@ -119,6 +145,53 @@ async def test_apply_candidate_signals_persists_active_and_syncs_units(db):
     assert by_type["price_move"].signal_config_json == {"threshold_pct": 15.0}
     # interpretation rebuilt so monitoring picks these up
     assert thesis.interpretation and thesis.interpretation["watch_hints"]
+
+
+@pytest.mark.asyncio
+async def test_apply_news_watch_persists_with_qualitative_config(db):
+    _, holding, thesis = await _make_thesis(db)
+    candidates = [
+        CandidateSignal(signal_type="news_watch", label="Competitor design win",
+                        rationale="r", watch_for="AMD lands a major design win", direction="threatens"),
+    ]
+    applied = await apply_candidate_signals_to_thesis(db, thesis, holding, candidates)
+    await db.commit()
+
+    assert applied == 1
+    decomp = (
+        await db.execute(select(ThesisDecomposition).where(ThesisDecomposition.thesis_id == thesis.id))
+    ).scalars().first()
+    active = await _load_active_signals_with_claims(db, decomp.id)
+    assert len(active) == 1
+    sig = active[0][0]
+    assert sig.signal_type == "news_watch"
+    assert sig.signal_config_json == {"watch_for": "AMD lands a major design win", "direction": "threatens"}
+
+
+@pytest.mark.asyncio
+async def test_confirm_signals_endpoint_accepts_news_watch(client, auth_headers):
+    holding = await client.post(
+        "/api/portfolio/holdings",
+        json={"ticker": "NVDA", "name": "NVIDIA", "quantity": 2, "average_cost_basis": 900},
+        headers=auth_headers,
+    )
+    thesis = await client.post(
+        "/api/theses",
+        json={"holding_id": holding.json()["id"], "status": "active", "thesis_kind": "company",
+              "why_own_it": "AI demand tailwind.", "confidence": "medium",
+              "review_cadence_days": 7, "source": "user"},
+        headers=auth_headers,
+    )
+    resp = await client.post(
+        "/api/onboarding/confirm-signals",
+        json={"thesis_id": thesis.json()["id"], "signals": [
+            {"signal_type": "news_watch", "label": "Competitor win",
+             "watch_for": "AMD lands a major design win", "direction": "threatens", "rationale": "r"},
+        ]},
+        headers=auth_headers,
+    )
+    assert resp.status_code == 200
+    assert resp.json()["applied"] == 1
 
 
 @pytest.mark.asyncio

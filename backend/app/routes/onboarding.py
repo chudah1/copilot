@@ -479,6 +479,8 @@ async def ground_thesis(
                 threshold_pct=c.threshold_pct,
                 rationale=c.rationale,
                 operator=c.operator,
+                watch_for=c.watch_for,
+                direction=c.direction,
             )
             for c in payload.candidate_signals
         ],
@@ -520,6 +522,8 @@ async def confirm_signals(
             threshold_pct=s.threshold_pct,
             rationale=s.rationale,
             operator=s.operator,
+            watch_for=s.watch_for,
+            direction=s.direction,
         )
         for s in body.signals
     ]

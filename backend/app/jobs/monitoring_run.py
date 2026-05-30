@@ -21,7 +21,9 @@ from app.services.noise_filter import (
 from app.services.monitoring_pipeline import (
     build_claim_signal_lookup,
     classify_candidates_for_thesis,
+    extract_news_watches,
     load_investor_profile,
+    match_thesis_news_watches,
     persist_classified_candidates,
     signal_labels_from_claims,
 )
@@ -325,6 +327,10 @@ async def run_monitoring():
                         )
                     continue
 
+                # Qualitative news_watch matching — BEFORE noise filtering, so a
+                # matched news item is tagged (and survives minimum-relevance).
+                nw_matched = await match_thesis_news_watches(candidates, extract_news_watches(claims))
+
                 # Noise suppression: filter before classification (rules 1, 2, 4)
                 candidates = await filter_candidates(candidates, holding.id, signals_by_id, db, now=now)
 
@@ -335,6 +341,7 @@ async def run_monitoring():
                     sector=holding.sector,
                     ticker=holding.ticker,
                     company_name=holding.name,
+                    nw_matched=nw_matched,
                 )
 
                 # Rule 3: Priority suppression (post-classification)

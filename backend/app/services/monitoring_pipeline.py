@@ -21,6 +21,14 @@ from app.models.onboarding_state import OnboardingState
 from app.models.thesis import Thesis
 from app.services.ai_monitor import classify_event
 from app.services.conviction_log import EVIDENCE_RECEIVED, append_log_entry
+from app.services.news_watch import (
+    NEWS_LIKE_EVENT_TYPES,
+    NewsWatch,
+    build_embedding_similarity,
+    candidate_text,
+    judge_news_watch,
+    match_news_watches,
+)
 from app.services.noise_filter import EVIDENCE_TYPE_MAP, record_signal_fired
 from app.services.signal_matching import build_evidence_summary, determine_verdict
 
@@ -157,6 +165,51 @@ async def _thesis_aware_highlights(
         return None
 
 
+def extract_news_watches(claims: list[Any] | None) -> list[NewsWatch]:
+    """Collect active qualitative news_watch signals from a decomposition tree."""
+    watches: list[NewsWatch] = []
+    for claim in claims or []:
+        for entity in (claim.entities or []):
+            for sig in (entity.signals or []):
+                if not (sig.active and sig.signal_type == "news_watch"):
+                    continue
+                cfg = sig.signal_config_json or {}
+                watch_for = (cfg.get("watch_for") or "").strip()
+                if watch_for:
+                    watches.append(
+                        NewsWatch(
+                            signal_id=str(sig.id),
+                            claim_id=str(claim.id),
+                            watch_for=watch_for,
+                            direction=cfg.get("direction") or "threatens",
+                            label=sig.signal_label,
+                        )
+                    )
+    return watches
+
+
+async def match_thesis_news_watches(
+    candidates: list[dict[str, Any]],
+    news_watches: list[NewsWatch] | None,
+) -> dict[int, tuple[NewsWatch, str, str]]:
+    """Embed-prefilter + judge news/filing candidates against the thesis's
+    news_watch conditions, tagging matches with their signal_id. MUST run before
+    noise filtering, so a semantically-matched (but claim-unlinked) news item
+    isn't dropped by minimum-relevance before it can be tagged. Returns the
+    verdict map (id(candidate) -> (watch, severity, reason))."""
+    if not news_watches:
+        return {}
+    news_texts = [
+        candidate_text(c) for c in candidates if c.get("event_type") in NEWS_LIKE_EVENT_TYPES
+    ]
+    if not news_texts:
+        return {}
+    similarity = await build_embedding_similarity(news_texts + [w.watch_for for w in news_watches])
+    return await match_news_watches(
+        candidates, news_watches, similarity=similarity, judge=judge_news_watch
+    )
+
+
 async def classify_candidates_for_thesis(
     thesis: Thesis,
     candidates: list[dict[str, Any]],
@@ -165,7 +218,12 @@ async def classify_candidates_for_thesis(
     sector: str | None = None,
     ticker: str | None = None,
     company_name: str | None = None,
+    nw_matched: dict[int, tuple[NewsWatch, str, str]] | None = None,
 ) -> list[tuple[dict[str, Any], str, str | None]]:
+    # Qualitative news_watch matches (computed before noise filtering) use the
+    # judge's verdict directly instead of the generic classifier.
+    nw_matched = nw_matched or {}
+
     classified: list[tuple[dict[str, Any], str, str | None]] = []
     for candidate in candidates:
         # Thesis-aware transcript enrichment: replace generic keyword highlights
@@ -194,6 +252,15 @@ async def classify_candidates_for_thesis(
                             "full_transcript": None,  # drop before storage
                         },
                     }
+
+        # A confirmed news_watch match uses the judge's verdict directly.
+        nw_match = nw_matched.get(id(candidate))
+        if nw_match is not None:
+            _watch, nw_severity, nw_reason = nw_match
+            classified.append(
+                (candidate, nw_severity, nw_reason or "This matches a condition you chose to watch for.")
+            )
+            continue
 
         classification = await classify_event(
             why_own_it=thesis.why_own_it,

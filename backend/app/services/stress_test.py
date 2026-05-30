@@ -17,25 +17,30 @@ logger = logging.getLogger(__name__)
 _cache: dict[str, StressTestResult] = {}
 
 
-# The only signal types that the monitoring pipeline actually watches today
-# (each maps to a watch_hint in decomposition._watch_hint_from_signal). We
-# constrain candidate signals to these so anything we offer is genuinely
-# monitorable, not decorative.
-CANDIDATE_SIGNAL_TYPES = ("price_move", "revenue_growth", "earnings_growth")
+# Signal types the monitoring pipeline can actually watch. The numeric ones map
+# to a watch_hint checked against the market feed; "news_watch" is qualitative —
+# a natural-language condition the classifier evaluates against news/filings.
+NUMERIC_CANDIDATE_SIGNAL_TYPES = ("price_move", "revenue_growth", "earnings_growth")
+CANDIDATE_SIGNAL_TYPES = NUMERIC_CANDIDATE_SIGNAL_TYPES + ("news_watch",)
 
 
 @dataclass
 class CandidateSignal:
     """A structured, confirmable watch the stress-test proposes — the bridge from
-    a vague thesis to a monitorable signal. threshold_pct is always a human
-    percentage (e.g. 8.0 for 8%); persistence converts growth metrics to the
-    fraction the market feed uses."""
+    a vague thesis to a monitorable signal.
+
+    Numeric watches (price_move / revenue_growth / earnings_growth) use
+    threshold_pct (a human percentage, e.g. 8.0) + operator. Qualitative watches
+    (news_watch) use watch_for (a natural-language condition) + direction, and
+    are evaluated by the AI against incoming news rather than a number."""
 
     signal_type: str          # one of CANDIDATE_SIGNAL_TYPES
     label: str                # human-readable, e.g. "Revenue growth stays above 8%"
-    threshold_pct: float      # percentage
-    rationale: str
-    operator: str | None = None  # ">=" / "<=" for metric thresholds; None for price_move
+    threshold_pct: float = 0.0  # percentage (numeric watches only)
+    rationale: str = ""
+    operator: str | None = None  # ">=" / "<=" for metric thresholds; None otherwise
+    watch_for: str | None = None  # news_watch: the condition to watch for
+    direction: str | None = None  # news_watch: "threatens" | "supports"
 
 
 @dataclass

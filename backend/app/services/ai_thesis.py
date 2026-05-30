@@ -1671,7 +1671,8 @@ Output valid JSON with this exact structure:
     "blind_spots": ["blind_spot1", "blind_spot2"],
     "what_to_watch": ["signal1", "signal2", "signal3"],
     "candidate_signals": [
-        {{"signal_type": "revenue_growth", "operator": ">=", "threshold_pct": 8, "label": "Revenue growth stays above 8%", "rationale": "The bull case needs sustained top-line growth."}}
+        {{"signal_type": "revenue_growth", "operator": ">=", "threshold_pct": 8, "label": "Revenue growth stays above 8%", "rationale": "The bull case needs sustained top-line growth."}},
+        {{"signal_type": "news_watch", "watch_for": "A credible competitor lands a major design win or a customer announces an in-house alternative", "direction": "threatens", "label": "Competitor or customer defection", "rationale": "The thesis rests on a lead that competition could erode."}}
     ]
 }}
 
@@ -1680,7 +1681,10 @@ Requirements:
 - key_risks: 3-5 concrete, falsifiable risks — reference actual metrics from the context where possible
 - blind_spots: 2-3 assumptions the thesis makes or ignores (omit if no thesis provided)
 - what_to_watch: 2-4 prose signals — each must name the metric, the threshold that signals a problem, and when to check it (use actual dates where available). Example: "If revenue growth falls below 8% at next earnings (~2025-07-24), thesis is at risk."
-- candidate_signals: 1-3 STRUCTURED, monitorable versions of what_to_watch. signal_type MUST be one of "price_move", "revenue_growth", "earnings_growth". For growth metrics, operator is the condition that must STAY TRUE for the thesis to hold (usually ">=", i.e. growth must remain at/above threshold_pct; a breach fires when it drops below). For "price_move", set operator to null and threshold_pct to the percent move that warrants a review. threshold_pct is a plain percentage number (8 = 8%). Prefer revenue_growth/earnings_growth when the bear case is fundamental.
+- candidate_signals: 2-4 STRUCTURED, monitorable versions of what_to_watch. signal_type MUST be one of: "price_move", "revenue_growth", "earnings_growth" (NUMERIC), or "news_watch" (QUALITATIVE).
+    - NUMERIC: for growth metrics, operator is the condition that must STAY TRUE for the thesis to hold (usually ">=", i.e. growth must remain at/above threshold_pct; a breach fires when it drops below). For "price_move", set operator to null and threshold_pct to the percent move that warrants a review. threshold_pct is a plain percentage number (8 = 8%).
+    - QUALITATIVE ("news_watch"): for risks no number captures — competitor moves, regulation, management changes, customer loss, legal/safety events. Provide "watch_for" (a specific, recognisable event to look for in news) and "direction" ("threatens" or "supports"). Omit threshold_pct/operator.
+    - Prefer a MIX: at least one numeric watch tied to the financials AND one news_watch for the biggest qualitative risk in the bear case.
 - Output ONLY valid JSON, no markdown fences"""
 
 
@@ -1697,6 +1701,25 @@ def _parse_candidate_signals(raw: Any) -> list:
         label = str(item.get("label") or "").strip()
         if not label:
             continue
+        rationale = str(item.get("rationale") or "").strip()
+
+        if signal_type == "news_watch":
+            watch_for = str(item.get("watch_for") or "").strip()
+            if not watch_for:
+                continue
+            raw_dir = str(item.get("direction") or "threatens").strip().lower()
+            direction = raw_dir if raw_dir in ("threatens", "supports") else "threatens"
+            signals.append(
+                CandidateSignal(
+                    signal_type="news_watch",
+                    label=label,
+                    rationale=rationale,
+                    watch_for=watch_for,
+                    direction=direction,
+                )
+            )
+            continue
+
         threshold = _coalesce_float(item.get("threshold_pct"))
         if threshold is None or not math.isfinite(threshold) or not (0 <= threshold <= 1000):
             continue
@@ -1710,7 +1733,7 @@ def _parse_candidate_signals(raw: Any) -> list:
                 signal_type=signal_type,
                 label=label,
                 threshold_pct=threshold,
-                rationale=str(item.get("rationale") or "").strip(),
+                rationale=rationale,
                 operator=operator,
             )
         )
@@ -1775,6 +1798,13 @@ def _fallback_stress_test(ticker: str, draft_thesis: str | None) -> "StressTestO
                 threshold_pct=15.0,
                 rationale="A large move warrants re-checking the thesis.",
                 operator=None,
+            ),
+            CandidateSignal(
+                signal_type="news_watch",
+                label="Competitive or regulatory shock",
+                rationale="A discrete event the numbers won't show until later.",
+                watch_for="A major competitor, regulatory, or customer event that undermines the core reason for owning it",
+                direction="threatens",
             ),
         ],
     )

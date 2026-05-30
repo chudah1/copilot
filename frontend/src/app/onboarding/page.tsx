@@ -33,6 +33,7 @@ const SIGNAL_TYPE_LABEL: Record<CandidateSignal["signal_type"], string> = {
   price_move: "Price",
   revenue_growth: "Revenue",
   earnings_growth: "Earnings",
+  news_watch: "Event",
 };
 
 type InvestorProfile = "thesis_driven" | "hearsay_driven";

@@ -523,11 +523,14 @@ export interface SynthesisResponse {
 }
 
 export interface CandidateSignal {
-  signal_type: "price_move" | "revenue_growth" | "earnings_growth";
+  signal_type: "price_move" | "revenue_growth" | "earnings_growth" | "news_watch";
   label: string;
   threshold_pct: number;
   rationale: string;
   operator: ">=" | "<=" | ">" | "<" | null;
+  // news_watch (qualitative) only:
+  watch_for?: string | null;
+  direction?: "threatens" | "supports" | null;
 }
 
 export interface GroundingResponse {

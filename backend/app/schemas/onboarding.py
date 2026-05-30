@@ -86,11 +86,14 @@ class GroundingRequest(BaseModel):
 
 
 class CandidateSignalSchema(BaseModel):
-    signal_type: Literal["price_move", "revenue_growth", "earnings_growth"]
+    signal_type: Literal["price_move", "revenue_growth", "earnings_growth", "news_watch"]
     label: str
-    threshold_pct: float = Field(ge=0, le=1000, allow_inf_nan=False)
+    threshold_pct: float = Field(default=0.0, ge=0, le=1000, allow_inf_nan=False)
     rationale: str = ""
     operator: Literal[">=", "<=", ">", "<"] | None = None
+    # news_watch (qualitative) only:
+    watch_for: str | None = None
+    direction: Literal["threatens", "supports"] | None = None
 
 
 class GroundingResponse(BaseModel):

@@ -232,6 +232,13 @@ def determine_verdict(severity: str, candidate: dict | None = None) -> str:
     evidence = (candidate or {}).get("evidence", {}) if candidate else {}
     event_type = (candidate or {}).get("event_type", "") if candidate else ""
 
+    # Qualitative news_watch carries its own direction.
+    news_watch_direction = evidence.get("news_watch_direction")
+    if news_watch_direction == "supports":
+        return "supports"
+    if news_watch_direction == "threatens":
+        return "threatens"
+
     # Earnings surprise: use direction
     if event_type == "earnings_surprise":
         surprise = evidence.get("recent_earnings_surprise_pct")

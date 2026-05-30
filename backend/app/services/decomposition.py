@@ -438,13 +438,28 @@ async def _persist_floor_decomposition(
 CANDIDATE_SIGNAL_SOURCE = "stress_test"
 
 
-def _candidate_signal_config(signal_type: str, threshold_pct: float, operator: str | None) -> dict:
-    """Map a candidate's human percentage to the config the monitoring pipeline
-    expects: price moves compare in percent, growth metrics compare against the
-    market feed's fraction (revenue_growth_yoy etc. arrive as 0.13, not 13)."""
-    if signal_type == "price_move":
-        return {"threshold_pct": float(threshold_pct)}
-    return {"threshold": float(threshold_pct) / 100.0, "operator": operator or ">="}
+# Signal types a user can confirm from the climb (numeric + qualitative).
+CONFIRMABLE_CANDIDATE_SIGNAL_TYPES = {
+    "price_move",
+    "revenue_growth",
+    "earnings_growth",
+    "news_watch",
+}
+
+
+def _candidate_signal_config(candidate) -> dict:
+    """Build the signal config for a candidate. Numeric watches compare against
+    the market feed (price in percent; growth as the fraction the feed uses, e.g.
+    0.13 not 13). A news_watch stores its natural-language condition + direction;
+    it is evaluated by the AI against news, not a number."""
+    if candidate.signal_type == "news_watch":
+        return {
+            "watch_for": candidate.watch_for,
+            "direction": candidate.direction or "threatens",
+        }
+    if candidate.signal_type == "price_move":
+        return {"threshold_pct": float(candidate.threshold_pct)}
+    return {"threshold": float(candidate.threshold_pct) / 100.0, "operator": candidate.operator or ">="}
 
 
 def _signal_config_key(config: dict | None) -> tuple:
@@ -466,8 +481,7 @@ async def apply_candidate_signals_to_thesis(
     Each candidate must expose .signal_type / .label / .threshold_pct /
     .rationale / .operator. Unknown signal types are ignored. Caller commits.
     """
-    valid = [c for c in candidates if c.signal_type in APPROVED_DIRECT_SIGNAL_TYPES]
-    valid = [c for c in valid if c.signal_type in ("price_move", "revenue_growth", "earnings_growth")]
+    valid = [c for c in candidates if c.signal_type in CONFIRMABLE_CANDIDATE_SIGNAL_TYPES]
     if not valid:
         return 0
 
@@ -552,7 +566,7 @@ async def apply_candidate_signals_to_thesis(
     }
     added_signals: list[ThesisSignal] = []
     for c in valid:
-        config = _candidate_signal_config(c.signal_type, c.threshold_pct, c.operator)
+        config = _candidate_signal_config(c)
         key = (c.signal_type, _signal_config_key(config))
         if key in existing_keys:
             continue

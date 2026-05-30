@@ -340,19 +340,24 @@ def _apply_cross_source_dedup(candidates: list[dict[str, Any]]) -> list[dict[str
         else:
             existing_idx = seen[key]
             existing = kept[existing_idx]
-            if (
-                EVENT_SPECIFICITY_RANK.get(event_type, 0)
-                > EVENT_SPECIFICITY_RANK.get(existing.get("event_type", ""), 0)
-            ):
+            # Prefer a candidate already linked to a signal (e.g. a qualitative
+            # news_watch match) so dedup never strips the link/verdict in favour
+            # of an unlinked duplicate; otherwise prefer higher event specificity.
+            if _cross_source_rank(candidate) > _cross_source_rank(existing):
                 kept[existing_idx] = candidate
                 logger.debug(
-                    "Cross-source dedup: replaced %s with higher-specificity %s for '%s'",
+                    "Cross-source dedup: replaced %s with %s for '%s'",
                     existing.get("event_type"),
                     event_type,
                     prefix,
                 )
 
     return kept
+
+
+def _cross_source_rank(candidate: dict[str, Any]) -> tuple[int, int]:
+    has_signal = 1 if (candidate.get("evidence") or {}).get("signal_id") else 0
+    return (has_signal, EVENT_SPECIFICITY_RANK.get(candidate.get("event_type", ""), 0))
 
 
 async def filter_candidates(
