@@ -1,12 +1,13 @@
 import uuid
 from datetime import datetime, timedelta, timezone
 
-from fastapi import APIRouter, Depends, HTTPException, status
+from fastapi import APIRouter, Depends, HTTPException, Request, status
 from pydantic import BaseModel
 from sqlalchemy import select, func
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.database import get_db
+from app.limiter import limiter
 from app.dependencies import get_current_user
 from app.models.earnings_calendar import EarningsCalendar
 from app.models.holding import Holding
@@ -14,6 +15,8 @@ from app.models.onboarding_draft import OnboardingDraft
 from app.models.thesis import Thesis
 from app.models.user import User
 from app.schemas.onboarding import (
+    GroundingRequest,
+    GroundingResponse,
     HoldingContextResponse,
     OnboardingStateResponse,
     OnboardingStatusResponse,
@@ -23,6 +26,7 @@ from app.schemas.onboarding import (
     SynthesisResponse,
 )
 from app.services.ai_thesis import assess_thesis_vagueness, synthesize_thesis_from_qa
+from app.services.thesis_grounding import build_grounding_payload
 from app.services.onboarding import coverage_pct, get_or_create_state, mark_onboarding_completed, set_investor_profile
 
 router = APIRouter(prefix="/api/onboarding", tags=["onboarding"])
@@ -422,6 +426,47 @@ async def synthesize_thesis(
         # consumers can key off needs_grounding alone.
         grounding_reasons=assessment.reasons if assessment.is_vague else [],
         suggested_questions=assessment.suggested_questions,
+    )
+
+
+@router.post("/ground", response_model=GroundingResponse)
+@limiter.limit("20/hour")
+async def ground_thesis(
+    request: Request,
+    body: GroundingRequest,
+    current_user: User = Depends(get_current_user),
+    db: AsyncSession = Depends(get_db),
+):
+    """For the hype-buyer climb: assess a draft thesis and, if it's too vague to
+    monitor, return the stress-test grounding + Socratic follow-ups in one call.
+
+    Rate-limited because it can fan out to a paid LLM stress-test (like the
+    sibling /research/stress-test endpoint); the limit allows grounding a full
+    portfolio during onboarding while bounding abuse."""
+    result = await db.execute(
+        select(Holding).where(Holding.id == body.holding_id, Holding.user_id == current_user.id)
+    )
+    holding = result.scalar_one_or_none()
+    if holding is None:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Holding not found")
+
+    state = await get_or_create_state(db, current_user.id)
+    investor_profile = body.investor_profile or state.investor_profile
+
+    payload = await build_grounding_payload(
+        ticker=holding.ticker,
+        why_own_it=body.why_own_it,
+        what_would_change_my_mind=body.what_would_change_my_mind,
+        investor_profile=investor_profile,
+        company_name=holding.name,
+    )
+    return GroundingResponse(
+        needs_grounding=payload.needs_grounding,
+        reasons=payload.reasons,
+        suggested_questions=payload.suggested_questions,
+        bear_case=payload.bear_case,
+        key_risks=payload.key_risks,
+        what_to_watch=payload.what_to_watch,
     )
 
 

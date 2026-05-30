@@ -76,20 +76,34 @@ async def test_no_thesis_result_is_cached():
     assert result.cached is True
 
 
-# --- Behavior 5: thesis provided → not cached, LLM called each time ---
+# --- Behavior 5: thesis provided → cached per-draft (identical drafts dedupe) ---
 
 @pytest.mark.asyncio
-async def test_with_thesis_not_cached():
-    mock_result = _make_counter_output()
-    generate_mock = AsyncMock(return_value=mock_result)
+async def test_identical_thesis_is_cached_by_draft():
+    from app.services.stress_test import _cache
+    _cache.clear()
+    generate_mock = AsyncMock(return_value=_make_counter_output())
 
     with patch("app.services.stress_test._generate", generate_mock):
-        r1 = await run_stress_test("TSLA", "I believe in Tesla's energy business.")
-        r2 = await run_stress_test("TSLA", "I believe in Tesla's energy business.")
+        r1 = await run_stress_test("RIVN", "I believe in the energy business.")
+        r2 = await run_stress_test("RIVN", "I believe in the energy business.")
 
-    assert generate_mock.call_count == 2
+    assert generate_mock.call_count == 1  # second identical draft served from cache
     assert r1.cached is False
-    assert r2.cached is False
+    assert r2.cached is True
+
+
+@pytest.mark.asyncio
+async def test_different_thesis_is_not_a_cache_hit():
+    from app.services.stress_test import _cache
+    _cache.clear()
+    generate_mock = AsyncMock(return_value=_make_counter_output())
+
+    with patch("app.services.stress_test._generate", generate_mock):
+        await run_stress_test("LCID", "I believe in the energy business.")
+        await run_stress_test("LCID", "A totally different reason about robotaxis.")
+
+    assert generate_mock.call_count == 2  # distinct drafts → distinct cache keys
 
 
 # --- Behavior 6: company_data passed through to generator ---

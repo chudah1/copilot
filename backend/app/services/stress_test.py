@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import hashlib
 import logging
 from dataclasses import dataclass
 from datetime import datetime, timezone
@@ -7,7 +8,11 @@ from typing import Any
 
 logger = logging.getLogger(__name__)
 
-# In-memory cache: {ticker:YYYY-MM-DD} → StressTestResult
+# In-memory cache: {ticker:YYYY-MM-DD:draft_fingerprint} → StressTestResult.
+# Keyed by the draft thesis too, so the grounding path (which always supplies a
+# draft) dedupes its paid LLM call instead of missing every time. The output is
+# a pure function of ticker + draft, so identical input is safe to share across
+# callers; the live price is always re-applied and never served from cache.
 # Process-local — does not synchronise across uvicorn workers. Replace with Redis for multi-worker deployments.
 _cache: dict[str, StressTestResult] = {}
 
@@ -53,11 +58,11 @@ async def run_stress_test(
 ) -> StressTestResult:
     ticker = ticker.upper()
     current_price = company_data.current_price if company_data else None
-    use_cache = draft_thesis is None
-    cache_key = f"{ticker}:{datetime.now(timezone.utc).date().isoformat()}"
+    draft_fingerprint = hashlib.sha256((draft_thesis or "").encode("utf-8")).hexdigest()[:16]
+    cache_key = f"{ticker}:{datetime.now(timezone.utc).date().isoformat()}:{draft_fingerprint}"
 
-    if use_cache and cache_key in _cache:
-        cached = _cache[cache_key]
+    cached = _cache.get(cache_key)
+    if cached is not None:
         return StressTestResult(
             ticker=cached.ticker,
             bear_case=cached.bear_case,
@@ -84,7 +89,5 @@ async def run_stress_test(
         cached=False,
     )
 
-    if use_cache:
-        _cache[cache_key] = result
-
+    _cache[cache_key] = result
     return result

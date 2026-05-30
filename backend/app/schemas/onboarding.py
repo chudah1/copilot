@@ -77,6 +77,22 @@ class SynthesisResponse(BaseModel):
     suggested_questions: list[str] = []
 
 
+class GroundingRequest(BaseModel):
+    holding_id: uuid.UUID
+    investor_profile: str | None = None
+    why_own_it: str
+    what_would_change_my_mind: str | None = None
+
+
+class GroundingResponse(BaseModel):
+    needs_grounding: bool
+    reasons: list[str] = []
+    suggested_questions: list[str] = []
+    bear_case: str | None = None
+    key_risks: list[str] = []
+    what_to_watch: list[str] = []
+
+
 class HoldingContextResponse(BaseModel):
     holding_id: uuid.UUID
     ticker: str
