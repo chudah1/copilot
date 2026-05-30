@@ -1,5 +1,6 @@
 import json
 import logging
+import math
 import re
 import uuid
 from dataclasses import dataclass
@@ -1668,15 +1669,61 @@ Output valid JSON with this exact structure:
     "bear_case": "2-3 sentences — the strongest argument against buying {ticker} right now.",
     "key_risks": ["risk1", "risk2", "risk3"],
     "blind_spots": ["blind_spot1", "blind_spot2"],
-    "what_to_watch": ["signal1", "signal2", "signal3"]
+    "what_to_watch": ["signal1", "signal2", "signal3"],
+    "candidate_signals": [
+        {{"signal_type": "revenue_growth", "operator": ">=", "threshold_pct": 8, "label": "Revenue growth stays above 8%", "rationale": "The bull case needs sustained top-line growth."}}
+    ]
 }}
 
 Requirements:
 - bear_case: specific, grounded in the context provided — reference valuation, growth rates, or news where available
 - key_risks: 3-5 concrete, falsifiable risks — reference actual metrics from the context where possible
 - blind_spots: 2-3 assumptions the thesis makes or ignores (omit if no thesis provided)
-- what_to_watch: 2-4 signals — each must name the metric, the threshold that signals a problem, and when to check it (use actual dates where available). Example: "If revenue growth falls below 8% at next earnings (~2025-07-24), thesis is at risk."
+- what_to_watch: 2-4 prose signals — each must name the metric, the threshold that signals a problem, and when to check it (use actual dates where available). Example: "If revenue growth falls below 8% at next earnings (~2025-07-24), thesis is at risk."
+- candidate_signals: 1-3 STRUCTURED, monitorable versions of what_to_watch. signal_type MUST be one of "price_move", "revenue_growth", "earnings_growth". For growth metrics, operator is the condition that must STAY TRUE for the thesis to hold (usually ">=", i.e. growth must remain at/above threshold_pct; a breach fires when it drops below). For "price_move", set operator to null and threshold_pct to the percent move that warrants a review. threshold_pct is a plain percentage number (8 = 8%). Prefer revenue_growth/earnings_growth when the bear case is fundamental.
 - Output ONLY valid JSON, no markdown fences"""
+
+
+def _parse_candidate_signals(raw: Any) -> list:
+    from app.services.stress_test import CANDIDATE_SIGNAL_TYPES, CandidateSignal
+
+    signals = []
+    for item in (raw or [])[:3]:
+        if not isinstance(item, dict):
+            continue
+        signal_type = str(item.get("signal_type") or "").strip()
+        if signal_type not in CANDIDATE_SIGNAL_TYPES:
+            continue
+        label = str(item.get("label") or "").strip()
+        if not label:
+            continue
+        threshold = _coalesce_float(item.get("threshold_pct"))
+        if threshold is None or not math.isfinite(threshold) or not (0 <= threshold <= 1000):
+            continue
+        if signal_type == "price_move":
+            operator = None
+        else:
+            raw_op = str(item.get("operator") or ">=").strip()
+            operator = raw_op if raw_op in (">=", "<=", ">", "<") else ">="
+        signals.append(
+            CandidateSignal(
+                signal_type=signal_type,
+                label=label,
+                threshold_pct=threshold,
+                rationale=str(item.get("rationale") or "").strip(),
+                operator=operator,
+            )
+        )
+    return signals
+
+
+def _coalesce_float(value: Any) -> float | None:
+    if isinstance(value, bool) or value is None:
+        return None
+    try:
+        return float(value)
+    except (TypeError, ValueError):
+        return None
 
 
 def _parse_stress_test_output(data: dict) -> "StressTestOutput":
@@ -1688,11 +1735,12 @@ def _parse_stress_test_output(data: dict) -> "StressTestOutput":
         key_risks=[str(r) for r in (data.get("key_risks") or []) if str(r).strip()][:5],
         blind_spots=[str(b) for b in (data.get("blind_spots") or []) if str(b).strip()][:3],
         what_to_watch=[str(w) for w in (data.get("what_to_watch") or []) if str(w).strip()][:4],
+        candidate_signals=_parse_candidate_signals(data.get("candidate_signals")),
     )
 
 
 def _fallback_stress_test(ticker: str, draft_thesis: str | None) -> "StressTestOutput":
-    from app.services.stress_test import StressTestOutput
+    from app.services.stress_test import CandidateSignal, StressTestOutput
 
     return StressTestOutput(
         bear_case=(
@@ -1712,6 +1760,22 @@ def _fallback_stress_test(ticker: str, draft_thesis: str | None) -> "StressTestO
         what_to_watch=[
             "Next earnings revenue and margin vs consensus",
             "Analyst price target revisions over next 90 days",
+        ],
+        candidate_signals=[
+            CandidateSignal(
+                signal_type="revenue_growth",
+                label="Revenue growth stays positive",
+                threshold_pct=0.0,
+                rationale="If revenue growth turns negative, the growth case is breaking.",
+                operator=">=",
+            ),
+            CandidateSignal(
+                signal_type="price_move",
+                label="Sharp price move (15%+)",
+                threshold_pct=15.0,
+                rationale="A large move warrants re-checking the thesis.",
+                operator=None,
+            ),
         ],
     )
 

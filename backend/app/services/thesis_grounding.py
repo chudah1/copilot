@@ -12,7 +12,7 @@ from dataclasses import dataclass, field
 
 from app.services.ai_thesis import assess_thesis_vagueness
 from app.services.market_data import _normalize_ticker, fetch_company_data
-from app.services.stress_test import run_stress_test
+from app.services.stress_test import CandidateSignal, run_stress_test
 
 logger = logging.getLogger(__name__)
 
@@ -25,6 +25,7 @@ class GroundingPayload:
     bear_case: str | None = None
     key_risks: list[str] = field(default_factory=list)
     what_to_watch: list[str] = field(default_factory=list)
+    candidate_signals: list[CandidateSignal] = field(default_factory=list)
 
 
 async def build_grounding_payload(
@@ -83,4 +84,5 @@ async def build_grounding_payload(
         bear_case=stress.bear_case,
         key_risks=stress.key_risks,
         what_to_watch=stress.what_to_watch,
+        candidate_signals=stress.candidate_signals,
     )

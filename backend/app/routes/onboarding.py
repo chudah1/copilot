@@ -15,6 +15,9 @@ from app.models.onboarding_draft import OnboardingDraft
 from app.models.thesis import Thesis
 from app.models.user import User
 from app.schemas.onboarding import (
+    CandidateSignalSchema,
+    ConfirmSignalsRequest,
+    ConfirmSignalsResponse,
     GroundingRequest,
     GroundingResponse,
     HoldingContextResponse,
@@ -26,6 +29,8 @@ from app.schemas.onboarding import (
     SynthesisResponse,
 )
 from app.services.ai_thesis import assess_thesis_vagueness, synthesize_thesis_from_qa
+from app.services.decomposition import apply_candidate_signals_to_thesis
+from app.services.stress_test import CandidateSignal
 from app.services.thesis_grounding import build_grounding_payload
 from app.services.onboarding import coverage_pct, get_or_create_state, mark_onboarding_completed, set_investor_profile
 
@@ -467,7 +472,60 @@ async def ground_thesis(
         bear_case=payload.bear_case,
         key_risks=payload.key_risks,
         what_to_watch=payload.what_to_watch,
+        candidate_signals=[
+            CandidateSignalSchema(
+                signal_type=c.signal_type,
+                label=c.label,
+                threshold_pct=c.threshold_pct,
+                rationale=c.rationale,
+                operator=c.operator,
+            )
+            for c in payload.candidate_signals
+        ],
     )
+
+
+@router.post("/confirm-signals", response_model=ConfirmSignalsResponse)
+async def confirm_signals(
+    body: ConfirmSignalsRequest,
+    current_user: User = Depends(get_current_user),
+    db: AsyncSession = Depends(get_db),
+):
+    """Persist the candidate signals a user picked during the climb as active,
+    monitored watches on their thesis — closing the loop from a vague reason to
+    live monitoring."""
+    thesis = (
+        await db.execute(
+            select(Thesis).where(Thesis.id == body.thesis_id, Thesis.user_id == current_user.id)
+        )
+    ).scalar_one_or_none()
+    if thesis is None:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Thesis not found")
+
+    holding = (
+        await db.execute(
+            select(Holding).where(
+                Holding.id == thesis.holding_id,
+                Holding.user_id == current_user.id,
+            )
+        )
+    ).scalar_one_or_none()
+    if holding is None:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Holding not found")
+
+    candidates = [
+        CandidateSignal(
+            signal_type=s.signal_type,
+            label=s.label,
+            threshold_pct=s.threshold_pct,
+            rationale=s.rationale,
+            operator=s.operator,
+        )
+        for s in body.signals
+    ]
+    applied = await apply_candidate_signals_to_thesis(db, thesis, holding, candidates)
+    await db.commit()
+    return ConfirmSignalsResponse(applied=applied)
 
 
 @router.get("/context/{holding_id}", response_model=HoldingContextResponse)

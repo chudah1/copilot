@@ -1,7 +1,8 @@
 import uuid
 from datetime import datetime
+from typing import Literal
 
-from pydantic import BaseModel
+from pydantic import BaseModel, Field
 
 
 class OnboardingStepStatus(BaseModel):
@@ -84,6 +85,14 @@ class GroundingRequest(BaseModel):
     what_would_change_my_mind: str | None = None
 
 
+class CandidateSignalSchema(BaseModel):
+    signal_type: Literal["price_move", "revenue_growth", "earnings_growth"]
+    label: str
+    threshold_pct: float = Field(ge=0, le=1000, allow_inf_nan=False)
+    rationale: str = ""
+    operator: Literal[">=", "<=", ">", "<"] | None = None
+
+
 class GroundingResponse(BaseModel):
     needs_grounding: bool
     reasons: list[str] = []
@@ -91,6 +100,16 @@ class GroundingResponse(BaseModel):
     bear_case: str | None = None
     key_risks: list[str] = []
     what_to_watch: list[str] = []
+    candidate_signals: list[CandidateSignalSchema] = []
+
+
+class ConfirmSignalsRequest(BaseModel):
+    thesis_id: uuid.UUID
+    signals: list[CandidateSignalSchema]
+
+
+class ConfirmSignalsResponse(BaseModel):
+    applied: int
 
 
 class HoldingContextResponse(BaseModel):

@@ -435,6 +435,177 @@ async def _persist_floor_decomposition(
     return decomposition
 
 
+CANDIDATE_SIGNAL_SOURCE = "stress_test"
+
+
+def _candidate_signal_config(signal_type: str, threshold_pct: float, operator: str | None) -> dict:
+    """Map a candidate's human percentage to the config the monitoring pipeline
+    expects: price moves compare in percent, growth metrics compare against the
+    market feed's fraction (revenue_growth_yoy etc. arrive as 0.13, not 13)."""
+    if signal_type == "price_move":
+        return {"threshold_pct": float(threshold_pct)}
+    return {"threshold": float(threshold_pct) / 100.0, "operator": operator or ">="}
+
+
+def _signal_config_key(config: dict | None) -> tuple:
+    """Hashable identity for an active signal, used to dedupe candidate inserts."""
+    return tuple(sorted((config or {}).items()))
+
+
+async def apply_candidate_signals_to_thesis(
+    db: AsyncSession,
+    thesis: Thesis,
+    holding: Holding,
+    candidates,
+) -> int:
+    """Persist user-confirmed stress-test candidate signals as ACTIVE monitorable
+    signals on the thesis, and rebuild the interpretation cache. Returns the
+    count added. Closes the climb loop: a vague thesis -> stress-test -> chosen
+    measurable watches -> live monitoring.
+
+    Each candidate must expose .signal_type / .label / .threshold_pct /
+    .rationale / .operator. Unknown signal types are ignored. Caller commits.
+    """
+    valid = [c for c in candidates if c.signal_type in APPROVED_DIRECT_SIGNAL_TYPES]
+    valid = [c for c in valid if c.signal_type in ("price_move", "revenue_growth", "earnings_growth")]
+    if not valid:
+        return 0
+
+    # Attach only to the decomposition the monitoring pipeline already treats as
+    # live (same filter/order as load_active_decomposition). This avoids
+    # shadowing a confirmed decomposition with a higher-version draft and avoids
+    # resurrecting a rejected one. If none is active, create a fresh decomposition
+    # for the user-confirmed watches rather than mutating an existing one.
+    decomposition = (
+        await db.execute(
+            select(ThesisDecomposition)
+            .where(
+                ThesisDecomposition.thesis_id == thesis.id,
+                ThesisDecomposition.status.in_(["confirmed", "partially_confirmed"]),
+            )
+            .order_by(ThesisDecomposition.version.desc())
+            .limit(1)
+        )
+    ).scalar_one_or_none()
+    if decomposition is None:
+        decomposition = ThesisDecomposition(
+            thesis_id=thesis.id,
+            version=await _next_version(db, thesis.id),
+            status="partially_confirmed",
+            monitorability="medium",
+        )
+        db.add(decomposition)
+        await db.flush()
+
+    ticker = (holding.ticker or "").upper()
+    ticker_display = holding.ticker or "this holding"
+
+    claim = (
+        await db.execute(
+            select(ThesisClaim)
+            .where(ThesisClaim.decomposition_id == decomposition.id)
+            .order_by(ThesisClaim.position)
+            .limit(1)
+        )
+    ).scalar_one_or_none()
+    if claim is None:
+        claim = ThesisClaim(
+            decomposition_id=decomposition.id,
+            claim_text=(thesis.why_own_it or "").strip() or f"Reason for owning {ticker_display}",
+            claim_type="overall",
+            confidence=0.5,
+            position=1,
+        )
+        db.add(claim)
+        await db.flush()
+
+    entity = (
+        await db.execute(
+            select(ThesisEntity)
+            .where(
+                ThesisEntity.claim_id == claim.id,
+                ThesisEntity.user_confirmed.isnot(False),
+            )
+            .order_by(ThesisEntity.created_at)
+            .limit(1)
+        )
+    ).scalar_one_or_none()
+    if entity is None:
+        entity = ThesisEntity(
+            claim_id=claim.id,
+            entity_name=holding.name or ticker_display,
+            entity_ticker=ticker or None,
+            entity_type="held_company",
+            relation_type="self",
+            confidence=0.5,
+            confirmation_required=False,
+            user_confirmed=True,
+        )
+        db.add(entity)
+        await db.flush()
+
+    # Idempotency: don't re-add a watch the thesis already has active (a
+    # double-clicked confirm must not create duplicate signals).
+    existing = await _load_active_signals_with_claims(db, decomposition.id)
+    existing_keys = {
+        (sig.signal_type, _signal_config_key(sig.signal_config_json)) for sig, _ in existing
+    }
+    added_signals: list[ThesisSignal] = []
+    for c in valid:
+        config = _candidate_signal_config(c.signal_type, c.threshold_pct, c.operator)
+        key = (c.signal_type, _signal_config_key(config))
+        if key in existing_keys:
+            continue
+        existing_keys.add(key)
+        signal = ThesisSignal(
+            entity_id=entity.id,
+            signal_type=c.signal_type,
+            signal_label=c.label,
+            signal_config_json=config,
+            rationale=(c.rationale or None),
+            confidence=0.6,
+            confirmation_required=False,
+            user_confirmed=True,
+            active=True,
+            raw_extraction_json={"source": CANDIDATE_SIGNAL_SOURCE},
+        )
+        db.add(signal)
+        added_signals.append(signal)
+
+    if not added_signals:
+        return 0
+    await db.flush()
+
+    for signal in added_signals:
+        append_log_entry(
+            db,
+            thesis_id=thesis.id,
+            holding_id=holding.id,
+            user_id=thesis.user_id,
+            entry_type=SIGNAL_CONFIRMED,
+            content=f"Added from grounding: {signal.signal_label or signal.signal_type}",
+            signal_id=signal.id,
+            claim_id=claim.id,
+        )
+
+    active = await _load_active_signals_with_claims(db, decomposition.id)
+    active_signals = [sig for sig, _ in active]
+    signal_claim_map = {str(sig.id): claim_id for sig, claim_id in active}
+    label_rows = await db.execute(
+        select(ThesisClaim.claim_type).where(ThesisClaim.decomposition_id == decomposition.id)
+    )
+    labels = [lt for (lt,) in label_rows.all() if lt]
+    _sync_interpretation_cache(
+        thesis,
+        reason_type=decomposition.reason_type,
+        monitorability=decomposition.monitorability or "medium",
+        labels=labels,
+        active_signals=active_signals,
+        signal_claim_map=signal_claim_map,
+    )
+    return len(added_signals)
+
+
 async def _persist_successful_decomposition(
     db: AsyncSession,
     thesis: Thesis,
@@ -705,12 +876,22 @@ async def confirm_decomposition_for_thesis(
         for signal in signals_by_id.values()
         if signal.active
     ]
+    # Carry claim_ids into the rebuilt hints so event->claim linkage survives a
+    # confirm cycle (the loaded tree is eager, so walking it is safe here).
+    signal_claim_map = {
+        str(signal.id): str(claim.id)
+        for claim in decomposition.claims
+        for entity in claim.entities
+        for signal in entity.signals
+        if signal.active
+    }
     _sync_interpretation_cache(
         thesis,
         reason_type=decomposition.reason_type,
         monitorability=decomposition.monitorability,
         labels=labels,
         active_signals=active_signals,
+        signal_claim_map=signal_claim_map,
     )
 
     # Conviction log: signal confirmed / removed

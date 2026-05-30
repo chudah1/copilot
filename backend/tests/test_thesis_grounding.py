@@ -3,7 +3,7 @@ from unittest.mock import AsyncMock, patch
 
 import pytest
 
-from app.services.stress_test import StressTestResult
+from app.services.stress_test import CandidateSignal, StressTestResult
 from app.services.thesis_grounding import build_grounding_payload
 
 _GROUNDING = "app.services.thesis_grounding"
@@ -18,6 +18,9 @@ def _stress() -> StressTestResult:
         what_to_watch=["If revenue growth falls below 8% at next earnings, thesis is at risk"],
         current_price=180.0,
         cached=False,
+        candidate_signals=[
+            CandidateSignal("revenue_growth", "Revenue growth stays above 8%", 8.0, "Bull case needs growth.", ">="),
+        ],
     )
 
 
@@ -124,6 +127,8 @@ async def test_ground_endpoint_returns_payload(client, auth_headers):
     assert data["bear_case"] == "Priced for perfection."
     assert data["suggested_questions"]
     assert data["what_to_watch"]
+    assert data["candidate_signals"]
+    assert data["candidate_signals"][0]["signal_type"] == "revenue_growth"
 
 
 @pytest.mark.asyncio
