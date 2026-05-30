@@ -6,505 +6,704 @@ import { WatchThesisChange } from "./_mkt/timeline";
 import { ConvictionDemo } from "./_mkt/conviction-demo";
 import { mk } from "./_mkt/tokens";
 
-export default function LandingPage() {
-  const pad = "clamp(24px, 5vw, 72px)";
+const hPad = "clamp(24px, 4vw, 48px)";
+const vPad = "clamp(80px, 9vw, 110px)";
 
+function Kicker({ children, color = mk.accent }: { children: React.ReactNode; color?: string }) {
   return (
-    <div style={{ background: mk.paper, color: mk.ink, fontFamily: mk.sans, backgroundImage: "none" }}>
+    <div
+      style={{
+        fontFamily: mk.mono,
+        fontSize: 10.5,
+        letterSpacing: "0.16em",
+        textTransform: "uppercase",
+        color,
+        marginBottom: 22,
+      }}
+    >
+      {children}
+    </div>
+  );
+}
+
+function NVDACard() {
+  return (
+    <div
+      style={{
+        width: "100%",
+        maxWidth: 470,
+        background: mk.night,
+        color: mk.cream,
+        borderRadius: 16,
+        padding: 34,
+        boxShadow: "0 40px 80px -30px rgba(40,30,18,0.5)",
+        border: `1px solid ${mk.nightLine}`,
+        position: "relative",
+      }}
+    >
+      <div
+        style={{
+          position: "absolute",
+          top: 0,
+          left: 24,
+          right: 24,
+          height: 2,
+          background: mk.accent,
+          borderRadius: 2,
+        }}
+      />
+
+      <div
+        style={{
+          display: "flex",
+          justifyContent: "space-between",
+          alignItems: "center",
+          marginBottom: 26,
+        }}
+      >
+        <div style={{ display: "flex", alignItems: "baseline", gap: 10 }}>
+          <span
+            style={{
+              fontFamily: mk.mono,
+              fontSize: 14,
+              letterSpacing: "0.12em",
+              color: mk.cream,
+            }}
+          >
+            NVDA
+          </span>
+          <span style={{ fontFamily: mk.sans, fontSize: 14, color: mk.creamDim }}>NVIDIA</span>
+        </div>
+        <span
+          style={{
+            fontFamily: mk.mono,
+            fontSize: 9,
+            letterSpacing: "0.16em",
+            textTransform: "uppercase",
+            padding: "3px 9px",
+            background: `${mk.accent}22`,
+            border: `1px solid ${mk.accent}55`,
+            color: mk.accent,
+            borderRadius: 4,
+          }}
+        >
+          HIGH SIGNAL
+        </span>
+      </div>
+
+      <div
+        style={{
+          fontFamily: mk.mono,
+          fontSize: 9.5,
+          letterSpacing: "0.16em",
+          textTransform: "uppercase",
+          color: mk.creamDim,
+          marginBottom: 12,
+        }}
+      >
+        AUG 28 · EVIDENCE
+      </div>
+
+      <div style={{ fontFamily: mk.display, fontSize: 21, lineHeight: 1.45, color: mk.cream }}>
+        Blackwell shipments slipping into Q4. Gross margin came in at{" "}
+        <span style={{ color: mk.accent }}>74.6%</span>, below the 76.4% everyone expected.
+        Google and Amazon both stepping up their own chip programs.
+      </div>
+
+      <div style={{ height: 1, background: mk.nightLine, margin: "26px 0" }} />
+
+      <div
+        style={{
+          fontFamily: mk.mono,
+          fontSize: 9.5,
+          letterSpacing: "0.16em",
+          textTransform: "uppercase",
+          color: mk.accent,
+          marginBottom: 12,
+        }}
+      >
+        YOUR EXIT CONDITION · WRITTEN JAN 9
+      </div>
+      <div
+        style={{
+          fontFamily: mk.display,
+          fontStyle: "italic",
+          fontSize: 18,
+          lineHeight: 1.5,
+          color: mk.cream,
+        }}
+      >
+        &ldquo;If the cloud companies stop spending on AI chips, or Nvidia loses the developer ecosystem, I&apos;m out.&rdquo;
+      </div>
+
+      <div style={{ display: "flex", gap: 12, marginTop: 28 }}>
+        <span
+          style={{
+            flex: 1,
+            textAlign: "center",
+            fontFamily: mk.sans,
+            fontSize: 14,
+            fontWeight: 500,
+            color: mk.cream,
+            border: `1px solid ${mk.nightLine}`,
+            borderRadius: 10,
+            padding: "13px 0",
+            cursor: "pointer",
+          }}
+        >
+          Still believe →
+        </span>
+        <span
+          style={{
+            flex: 1,
+            textAlign: "center",
+            fontFamily: mk.sans,
+            fontSize: 14,
+            fontWeight: 500,
+            color: "#fff",
+            background: mk.accent,
+            borderRadius: 10,
+            padding: "13px 0",
+            cursor: "pointer",
+          }}
+        >
+          Story changed →
+        </span>
+      </div>
+    </div>
+  );
+}
+
+export default function LandingPage() {
+  return (
+    <div style={{ background: mk.paper, color: mk.ink, fontFamily: mk.sans }}>
       <style>{`
-        @keyframes mkPulse    { 0%,100%{opacity:.35} 50%{opacity:1} }
-        @keyframes mkFadeIn   { from{opacity:0;transform:translateY(6px)} to{opacity:1;transform:none} }
-        @keyframes mkSlideIn  { from{opacity:0;transform:translateY(10px)} to{opacity:1;transform:none} }
-        @keyframes mkFloat    { 0%,100%{transform:perspective(900px) rotateX(4deg) rotateY(-7deg) translateY(0px)} 50%{transform:perspective(900px) rotateX(4deg) rotateY(-7deg) translateY(-8px)} }
-        @keyframes mkSweep    { from{transform:scaleX(0)} to{transform:scaleX(1)} }
-        @keyframes mkGlowPulse{ 0%,100%{opacity:0.5} 50%{opacity:0.85} }
-        .mk-card-hover { transition: transform 200ms ease, box-shadow 200ms ease; }
-        .mk-card-hover:hover { transform: translateY(-2px); box-shadow: 0 20px 60px -20px rgba(0,0,0,0.18); }
+        @keyframes pkPulse {
+          0%   { box-shadow: 0 0 0 0   rgba(193,73,42,0.55); }
+          100% { box-shadow: 0 0 0 8px rgba(193,73,42,0); }
+        }
+        @keyframes mkFloat {
+          0%,100% { transform: rotate(1.4deg) translateY(0); }
+          50%     { transform: rotate(1.4deg) translateY(-10px); }
+        }
       `}</style>
 
       <MarketingNav />
 
-      {/* ─── HERO ──────────────────────────────────────────────────── */}
-      <section
-        style={{
-          padding: `clamp(48px,7vw,88px) ${pad} clamp(40px,6vw,72px)`,
-          display: "grid",
-          gridTemplateColumns: "1.1fr 1fr",
-          gap: "clamp(40px,6vw,80px)",
-          alignItems: "center",
-          minHeight: "88vh",
-          maxWidth: 1400,
-          margin: "0 auto",
-        }}
-        className="max-lg:grid-cols-1"
-      >
-        {/* Left */}
-        <div>
+      {/* ─── HERO ────────────────────────────────────────────────── */}
+      <section style={{ background: mk.paper, position: "relative", overflow: "hidden" }}>
+        <div
+          style={{
+            maxWidth: 1180,
+            margin: "0 auto",
+            padding: `0 ${hPad}`,
+          }}
+        >
           <div
             style={{
-              display: "inline-flex",
+              display: "grid",
+              gridTemplateColumns: "1.02fr 0.98fr",
+              gap: "clamp(40px, 5vw, 56px)",
               alignItems: "center",
-              gap: 8,
-              fontFamily: mk.mono,
-              fontSize: 11,
-              letterSpacing: "0.18em",
-              textTransform: "uppercase",
-              color: mk.pencil,
-              marginBottom: "clamp(24px,3.5vw,36px)",
+              minHeight: 720,
+              paddingTop: 36,
+              paddingBottom: 36,
             }}
+            className="max-lg:grid-cols-1"
           >
-            <span
-              style={{
-                width: 6,
-                height: 6,
-                borderRadius: 999,
-                background: mk.accent,
-                display: "inline-block",
-                animation: "mkPulse 2s ease-in-out infinite",
-              }}
-            />
-            Private beta · summer 2026
-          </div>
+            {/* Left */}
+            <div>
+              <div
+                style={{
+                  display: "inline-flex",
+                  alignItems: "center",
+                  gap: 10,
+                  marginBottom: 30,
+                }}
+              >
+                <span
+                  style={{
+                    width: 6,
+                    height: 6,
+                    borderRadius: 999,
+                    background: mk.accent,
+                    display: "inline-block",
+                    animation: "pkPulse 2.4s ease-out infinite",
+                  }}
+                />
+                <span
+                  style={{
+                    fontFamily: mk.mono,
+                    fontSize: 10.5,
+                    letterSpacing: "0.16em",
+                    textTransform: "uppercase",
+                    color: mk.pencil,
+                  }}
+                >
+                  Private beta · summer 2026
+                </span>
+              </div>
 
-          <h1
+              <h1
+                style={{
+                  fontFamily: mk.display,
+                  fontWeight: 500,
+                  fontSize: "clamp(72px, 9.5vw, 100px)",
+                  lineHeight: 0.98,
+                  letterSpacing: "-0.03em",
+                  margin: "0 0 clamp(20px, 3vw, 30px)",
+                  color: mk.ink,
+                }}
+              >
+                The reason
+                <br />
+                you hold it,
+                <br />
+                <span style={{ fontStyle: "italic", color: mk.accent }}>kept honest.</span>
+              </h1>
+
+              <p
+                style={{
+                  fontFamily: mk.display,
+                  fontWeight: 500,
+                  fontSize: "clamp(18px, 1.9vw, 21px)",
+                  lineHeight: 1.5,
+                  color: mk.inkSoft,
+                  maxWidth: 460,
+                  margin: "0 0 clamp(28px, 4vw, 40px)",
+                }}
+              >
+                Write the reason you bought each position. We read the earnings, filings and news
+                against it. When it starts to break,{" "}
+                <em style={{ color: mk.ink }}>we tell you.</em>
+              </p>
+
+              <div style={{ display: "flex", alignItems: "center", gap: 14, flexWrap: "wrap" }}>
+                <a
+                  href="#signup"
+                  style={{
+                    display: "inline-flex",
+                    alignItems: "center",
+                    background: mk.accent,
+                    color: "#fff",
+                    fontFamily: mk.sans,
+                    fontSize: 16,
+                    fontWeight: 500,
+                    padding: "15px 26px",
+                    borderRadius: 999,
+                    boxShadow: `0 1px 0 ${mk.accentDeep}`,
+                    textDecoration: "none",
+                    whiteSpace: "nowrap",
+                  }}
+                >
+                  Write your first reason →
+                </a>
+                <a
+                  href="#try-it"
+                  style={{
+                    display: "inline-flex",
+                    alignItems: "center",
+                    gap: 9,
+                    fontFamily: mk.sans,
+                    fontSize: 15,
+                    fontWeight: 500,
+                    color: mk.ink,
+                    textDecoration: "none",
+                  }}
+                >
+                  <span
+                    style={{
+                      width: 30,
+                      height: 30,
+                      borderRadius: 999,
+                      border: `1.4px solid ${mk.ink}`,
+                      display: "inline-flex",
+                      alignItems: "center",
+                      justifyContent: "center",
+                      fontSize: 11,
+                      flexShrink: 0,
+                    }}
+                  >
+                    ▶
+                  </span>
+                  See how it works
+                </a>
+              </div>
+            </div>
+
+            {/* Right — product card */}
+            <div
+              style={{
+                position: "relative",
+                display: "flex",
+                justifyContent: "center",
+                alignItems: "center",
+              }}
+              className="max-lg:hidden"
+            >
+              <div
+                style={{
+                  animation: "mkFloat 6s ease-in-out infinite",
+                  width: "100%",
+                  display: "flex",
+                  justifyContent: "center",
+                }}
+              >
+                <NVDACard />
+              </div>
+            </div>
+          </div>
+        </div>
+      </section>
+
+      {/* ─── THE PROBLEM ─────────────────────────────────────────── */}
+      <section
+        style={{
+          background: mk.paperHi,
+          padding: `${vPad} ${hPad}`,
+          borderTop: `1px solid ${mk.rule}`,
+        }}
+      >
+        <div style={{ maxWidth: 1180, margin: "0 auto" }}>
+          <div style={{ maxWidth: 820 }}>
+            <Kicker>The problem</Kicker>
+            <h2
+              style={{
+                fontFamily: mk.display,
+                fontSize: "clamp(36px, 5vw, 56px)",
+                fontWeight: 500,
+                letterSpacing: "-0.025em",
+                lineHeight: 1.04,
+                margin: 0,
+              }}
+            >
+              You bought it for a reason.
+              <br />
+              <span style={{ fontStyle: "italic", color: mk.accent }}>
+                Can you still remember it?
+              </span>
+            </h2>
+            <div
+              style={{
+                fontFamily: mk.display,
+                fontWeight: 500,
+                fontSize: "clamp(18px, 1.8vw, 22px)",
+                lineHeight: 1.6,
+                marginTop: 32,
+              }}
+            >
+              <p style={{ margin: "0 0 22px", color: mk.ink }}>
+                You had a reason when you bought.{" "}
+                <em>
+                  &ldquo;AI is the next decade.&rdquo; &ldquo;The market has completely mispriced
+                  this.&rdquo;
+                </em>{" "}
+                Six months later you can barely remember it, never mind whether it still holds.
+              </p>
+              <p style={{ margin: 0, color: mk.inkSoft }}>
+                So you check the price instead. Green feels like being right. Red feels like being
+                wrong. Neither one tells you whether{" "}
+                <strong style={{ color: mk.ink, fontWeight: 600 }}>the reason you bought</strong>{" "}
+                still holds. That is the thing that separates conviction from hope, and nothing out
+                there keeps an eye on it.
+              </p>
+            </div>
+          </div>
+        </div>
+      </section>
+
+      {/* ─── TRY IT ──────────────────────────────────────────────── */}
+      <section
+        id="try-it"
+        style={{
+          padding: `${vPad} ${hPad}`,
+          background: mk.paper,
+          borderTop: `1px solid ${mk.rule}`,
+        }}
+      >
+        <div style={{ maxWidth: 1180, margin: "0 auto" }}>
+          <Kicker color={mk.pencil}>Try it</Kicker>
+          <h2
             style={{
               fontFamily: mk.display,
               fontStyle: "italic",
               fontWeight: 400,
-              fontSize: "clamp(64px,8.5vw,116px)",
-              lineHeight: 0.95,
-              letterSpacing: "-0.015em",
-              margin: "0 0 clamp(20px,3vw,32px)",
-              color: mk.ink,
+              fontSize: "clamp(36px, 5vw, 72px)",
+              lineHeight: 0.97,
+              letterSpacing: "-0.01em",
+              margin: "0 0 clamp(28px, 4vw, 48px)",
+              maxWidth: 800,
             }}
           >
-            The reason
+            Write any reason.
             <br />
-            you hold it—
-            <br />
-            <span style={{ color: mk.accent }}>tracked.</span>
-          </h1>
+            <span style={{ color: mk.accent }}>See what comes back.</span>
+          </h2>
+          <ThesisDemo />
+        </div>
+      </section>
 
-          <p
+      {/* ─── HOW IT WORKS ────────────────────────────────────────── */}
+      <section
+        id="how-it-works"
+        style={{
+          padding: `${vPad} ${hPad}`,
+          background: mk.paper,
+          borderTop: `1px solid ${mk.rule}`,
+        }}
+      >
+        <div style={{ maxWidth: 1180, margin: "0 auto" }}>
+          <Kicker color={mk.pencil}>How it works</Kicker>
+          <h2
             style={{
-              fontFamily: mk.sans,
-              fontSize: "clamp(16px,1.7vw,19px)",
-              lineHeight: 1.6,
-              color: mk.pencil,
-              maxWidth: 500,
-              margin: "0 0 clamp(28px,4vw,40px)",
+              fontFamily: mk.display,
+              fontSize: "clamp(36px, 5vw, 56px)",
+              fontWeight: 500,
+              letterSpacing: "-0.025em",
+              lineHeight: 1,
+              margin: 0,
             }}
           >
-            Write the reason you bought each position. penKeep watches
-            earnings, filings, and news against it — and tells you exactly
-            when your specific reason to hold starts to break.
-          </p>
+            Three steps.{" "}
+            <span style={{ fontStyle: "italic", color: mk.accent }}>
+              That is the whole thing.
+            </span>
+          </h2>
 
-          <WaitlistForm />
-
-          <div
-            style={{
-              display: "flex",
-              gap: "clamp(24px,4vw,40px)",
-              marginTop: "clamp(28px,4vw,40px)",
-            }}
-          >
-            {[
-              { n: "47", l: "theses written" },
-              { n: "312", l: "signals fired" },
-              { n: "18", l: "decisions logged" },
-            ].map(({ n, l }) => (
-              <div key={l}>
+          <div style={{ marginTop: 56 }}>
+            {(
+              [
+                [
+                  "01",
+                  "Write the reason",
+                  "A sentence or two. Why you own it and what would make you sell. That becomes your exit condition.",
+                ],
+                [
+                  "02",
+                  "We stand watch",
+                  "PenKeep reads the earnings, filings, analyst notes and news, then ignores everything that does not touch the reason you wrote.",
+                ],
+                [
+                  "03",
+                  "You decide",
+                  "When something real tests your reason, we put your own words back in front of you. You make the call. We keep a record of it.",
+                ],
+              ] as const
+            ).map(([n, title, desc]) => (
+              <div
+                key={n}
+                style={{
+                  display: "grid",
+                  gridTemplateColumns: "100px 1fr 1.1fr",
+                  gap: "clamp(20px, 3vw, 40px)",
+                  alignItems: "baseline",
+                  padding: "40px 0",
+                  borderTop: `1px solid ${mk.rule}`,
+                }}
+                className="max-md:grid-cols-1 max-md:gap-3"
+              >
                 <div
                   style={{
-                    fontFamily: mk.mono,
-                    fontSize: "clamp(20px,2.4vw,30px)",
-                    fontWeight: 600,
-                    letterSpacing: "-0.02em",
-                    color: mk.ink,
-                    lineHeight: 1,
+                    fontFamily: mk.display,
+                    fontSize: "clamp(48px, 6vw, 72px)",
+                    fontWeight: 400,
+                    fontStyle: "italic",
+                    color: mk.accent,
+                    lineHeight: 0.9,
                   }}
                 >
                   {n}
                 </div>
                 <div
                   style={{
-                    fontFamily: mk.mono,
-                    fontSize: 10,
-                    letterSpacing: "0.14em",
-                    textTransform: "uppercase",
-                    color: mk.pencil,
-                    marginTop: 4,
+                    fontFamily: mk.display,
+                    fontSize: "clamp(22px, 2.5vw, 34px)",
+                    fontWeight: 500,
+                    letterSpacing: "-0.015em",
+                    lineHeight: 1.1,
+                    color: mk.ink,
                   }}
                 >
-                  {l}
+                  {title}
+                </div>
+                <div
+                  style={{
+                    fontFamily: mk.display,
+                    fontWeight: 500,
+                    fontSize: "clamp(16px, 1.6vw, 18px)",
+                    lineHeight: 1.55,
+                    color: mk.inkSoft,
+                  }}
+                >
+                  {desc}
                 </div>
               </div>
             ))}
           </div>
         </div>
-
-        {/* Right — floating decision-moment card */}
-        <div
-          style={{
-            position: "relative",
-            display: "flex",
-            justifyContent: "center",
-            alignItems: "center",
-          }}
-          className="max-lg:hidden"
-        >
-          {/* Glow behind */}
-          <div
-            style={{
-              position: "absolute",
-              inset: "-20%",
-              background: `radial-gradient(ellipse 70% 60% at 55% 45%, ${mk.accent}28 0%, transparent 70%)`,
-              animation: "mkGlowPulse 4s ease-in-out infinite",
-              pointerEvents: "none",
-            }}
-          />
-          {/* The card */}
-          <div
-            style={{
-              position: "relative",
-              width: "100%",
-              maxWidth: 420,
-              background: mk.ink,
-              borderRadius: 20,
-              overflow: "hidden",
-              boxShadow: `0 40px 120px -30px rgba(0,0,0,0.55), 0 0 0 1px rgba(255,255,255,0.06)`,
-              animation: "mkFloat 6s ease-in-out infinite",
-            }}
-          >
-            {/* Top stripe */}
-            <div
-              style={{
-                height: 3,
-                background: `linear-gradient(90deg, ${mk.accent} 0%, ${mk.accentDeep} 100%)`,
-              }}
-            />
-
-            {/* Card header */}
-            <div
-              style={{
-                padding: "18px 22px 14px",
-                borderBottom: "1px solid rgba(255,255,255,0.06)",
-                display: "flex",
-                alignItems: "center",
-                justifyContent: "space-between",
-              }}
-            >
-              <div style={{ display: "flex", alignItems: "center", gap: 10 }}>
-                <span
-                  style={{
-                    width: 8,
-                    height: 8,
-                    borderRadius: 999,
-                    background: mk.accent,
-                    animation: "mkPulse 1.8s ease-in-out infinite",
-                    flexShrink: 0,
-                  }}
-                />
-                <span
-                  style={{
-                    fontFamily: mk.mono,
-                    fontSize: 12,
-                    fontWeight: 600,
-                    color: "#fff",
-                    letterSpacing: "0.14em",
-                  }}
-                >
-                  TSLA
-                </span>
-                <span style={{ fontFamily: mk.sans, fontSize: 13, color: "#888" }}>
-                  Tesla
-                </span>
-              </div>
-              <span
-                style={{
-                  fontFamily: mk.mono,
-                  fontSize: 9,
-                  letterSpacing: "0.18em",
-                  textTransform: "uppercase",
-                  padding: "3px 9px",
-                  background: `${mk.accent}25`,
-                  border: `1px solid ${mk.accent}55`,
-                  color: mk.accent,
-                  borderRadius: 4,
-                }}
-              >
-                HIGH SIGNAL
-              </span>
-            </div>
-
-            {/* Event */}
-            <div style={{ padding: "16px 22px", borderBottom: "1px solid rgba(255,255,255,0.06)" }}>
-              <div
-                style={{
-                  fontFamily: mk.mono,
-                  fontSize: 9,
-                  letterSpacing: "0.16em",
-                  textTransform: "uppercase",
-                  color: "#555",
-                  marginBottom: 8,
-                }}
-              >
-                Oct 23, 2024 · Evidence
-              </div>
-              <p
-                style={{
-                  fontFamily: mk.sans,
-                  fontSize: 15,
-                  color: "#e8e4dc",
-                  lineHeight: 1.5,
-                  margin: 0,
-                }}
-              >
-                Q3 deliveries -8.4% YoY. Robotaxi event called{" "}
-                <em style={{ color: mk.accent }}>&ldquo;underwhelming&rdquo;</em> by 7 of 9
-                analysts covering the stock.
-              </p>
-            </div>
-
-            {/* Exit condition — the key UI */}
-            <div
-              style={{
-                margin: "16px 22px",
-                padding: "14px 16px",
-                background: `${mk.accent}12`,
-                border: `1px solid ${mk.accent}35`,
-                borderRadius: 10,
-              }}
-            >
-              <div
-                style={{
-                  fontFamily: mk.mono,
-                  fontSize: 9,
-                  letterSpacing: "0.16em",
-                  textTransform: "uppercase",
-                  color: mk.accent,
-                  marginBottom: 8,
-                }}
-              >
-                Your exit condition · written Mar 12
-              </div>
-              <p
-                style={{
-                  fontFamily: mk.display,
-                  fontStyle: "italic",
-                  fontSize: 17,
-                  color: "#e8c8b0",
-                  lineHeight: 1.45,
-                  margin: 0,
-                }}
-              >
-                &ldquo;If EV demand reverses or robotaxi misses a credible
-                timeline, I&apos;m out.&rdquo;
-              </p>
-            </div>
-
-            {/* Decision */}
-            <div
-              style={{
-                padding: "0 22px 20px",
-                display: "flex",
-                gap: 8,
-              }}
-            >
-              <button
-                style={{
-                  flex: 1,
-                  padding: "10px 0",
-                  background: "transparent",
-                  color: "#666",
-                  border: "1px solid rgba(255,255,255,0.1)",
-                  borderRadius: 8,
-                  fontFamily: mk.sans,
-                  fontSize: 13,
-                  cursor: "pointer",
-                }}
-              >
-                Still believe →
-              </button>
-              <button
-                style={{
-                  flex: 1,
-                  padding: "10px 0",
-                  background: mk.accent,
-                  color: "#fff",
-                  border: "none",
-                  borderRadius: 8,
-                  fontFamily: mk.sans,
-                  fontSize: 13,
-                  fontWeight: 600,
-                  cursor: "pointer",
-                }}
-              >
-                Story changed →
-              </button>
-            </div>
-          </div>
-        </div>
       </section>
 
-      {/* ─── SEPARATOR ─────────────────────────────────────────────── */}
-      <div
+      {/* ─── WHEN IT MATTERS — dark ──────────────────────────────── */}
+      <section
         style={{
-          padding: `0 ${pad}`,
+          background: mk.night,
+          color: mk.cream,
+          padding: `${vPad} ${hPad}`,
+          position: "relative",
           overflow: "hidden",
         }}
       >
-        <div style={{ height: 1, background: mk.pencilLight }} />
-      </div>
-
-      {/* ─── DEMO ──────────────────────────────────────────────────── */}
-      <section style={{ padding: `clamp(64px,9vw,110px) ${pad}` }}>
-        <div style={{ maxWidth: 1400, margin: "0 auto" }}>
-          <p
-            style={{
-              fontFamily: mk.mono,
-              fontSize: 11,
-              letterSpacing: "0.18em",
-              textTransform: "uppercase",
-              color: mk.pencil,
-              marginBottom: "clamp(14px,2vw,20px)",
-            }}
-          >
-            Try it
-          </p>
-          <h2
-            style={{
-              fontFamily: mk.display,
-              fontStyle: "italic",
-              fontWeight: 400,
-              fontSize: "clamp(48px,6vw,88px)",
-              lineHeight: 0.97,
-              letterSpacing: "-0.01em",
-              margin: "0 0 clamp(32px,5vw,52px)",
-              maxWidth: 800,
-            }}
-          >
-            Write any reason.
-            <br />
-            <span style={{ color: mk.accent }}>Watch what we extract.</span>
-          </h2>
-          <ThesisDemo />
-        </div>
-      </section>
-
-      {/* ─── THE CONVICTION LOOP ───────────────────────────────────── */}
-      <section
-        style={{
-          background: mk.ink,
-          padding: `clamp(64px,9vw,110px) ${pad}`,
-        }}
-      >
         <div
           style={{
-            maxWidth: 1400,
-            margin: "0 auto",
-            display: "grid",
-            gridTemplateColumns: "1fr 1.1fr",
-            gap: "clamp(48px,7vw,96px)",
-            alignItems: "center",
+            position: "absolute",
+            left: -120,
+            top: 80,
+            width: 420,
+            height: 420,
+            borderRadius: "50%",
+            background: "radial-gradient(circle, rgba(193,73,42,0.14), transparent 70%)",
+            pointerEvents: "none",
           }}
-          className="max-lg:grid-cols-1"
-        >
-          <div>
-            <p
-              style={{
-                fontFamily: mk.mono,
-                fontSize: 11,
-                letterSpacing: "0.18em",
-                textTransform: "uppercase",
-                color: mk.accent,
-                marginBottom: "clamp(14px,2vw,20px)",
-              }}
-            >
-              Closed-loop accountability
-            </p>
-            <h2
-              style={{
-                fontFamily: mk.display,
-                fontStyle: "italic",
-                fontWeight: 400,
-                fontSize: "clamp(44px,5.5vw,80px)",
-                lineHeight: 0.97,
-                letterSpacing: "-0.01em",
-                color: mk.paper,
-                margin: "0 0 clamp(20px,3vw,28px)",
-              }}
-            >
-              Your words.
-              <br />
-              Surfaced when
-              <br />
-              <span style={{ color: mk.accent }}>evidence fires.</span>
-            </h2>
-            <p
-              style={{
-                fontFamily: mk.sans,
-                fontSize: "clamp(15px,1.6vw,18px)",
-                lineHeight: 1.65,
-                color: "#b0a898",
-                maxWidth: 460,
-              }}
-            >
-              You wrote what would change your mind when you bought. When
-              evidence fires, we show those exact words back to you — not a
-              generic alert, not a price move. Your own exit condition,
-              beside the data that&apos;s testing it.
-            </p>
-            <p
-              style={{
-                fontFamily: mk.sans,
-                fontSize: "clamp(15px,1.6vw,18px)",
-                lineHeight: 1.65,
-                color: "#b0a898",
-                maxWidth: 460,
-                marginTop: 16,
-              }}
-            >
-              You decide. We log it. Six months later, you&apos;ll know
-              whether you called it right.
-            </p>
-          </div>
-          <div>
-            <ConvictionDemo />
+        />
+        <div style={{ maxWidth: 1180, margin: "0 auto", position: "relative" }}>
+          <div
+            style={{
+              display: "grid",
+              gridTemplateColumns: "1fr 1fr",
+              gap: "clamp(48px, 7vw, 96px)",
+              alignItems: "center",
+            }}
+            className="max-lg:grid-cols-1"
+          >
+            <div>
+              <Kicker>When it matters</Kicker>
+              <h2
+                style={{
+                  fontFamily: mk.display,
+                  fontSize: "clamp(36px, 5vw, 56px)",
+                  fontWeight: 500,
+                  letterSpacing: "-0.025em",
+                  lineHeight: 1.04,
+                  margin: 0,
+                  color: mk.cream,
+                }}
+              >
+                Your own words,
+                <br />
+                right when{" "}
+                <span style={{ fontStyle: "italic", color: mk.accent }}>evidence fires.</span>
+              </h2>
+              <p
+                style={{
+                  fontFamily: mk.display,
+                  fontWeight: 500,
+                  fontSize: "clamp(17px, 1.7vw, 20px)",
+                  lineHeight: 1.6,
+                  color: mk.creamDim,
+                  marginTop: 28,
+                  maxWidth: 460,
+                }}
+              >
+                Not a price alert. Not noise. The exit condition you wrote, put back in front of
+                you the moment something starts to test it. Think it through. Don&apos;t react.
+              </p>
+            </div>
+
+            <div>
+              {/* 4-step progress strip */}
+              <div
+                style={{
+                  display: "flex",
+                  alignItems: "center",
+                  marginBottom: 24,
+                  overflow: "hidden",
+                }}
+              >
+                {(
+                  [
+                    ["Evidence", mk.accent],
+                    ["Your reason", mk.sage],
+                    ["You decide", mk.sage],
+                    ["On record", mk.accent],
+                  ] as const
+                ).map(([label, dotColor], i) => (
+                  <div
+                    key={label}
+                    style={{
+                      display: "flex",
+                      alignItems: "center",
+                      flex: i < 3 ? "1 1 0" : "0 0 auto",
+                      minWidth: 0,
+                    }}
+                  >
+                    <span
+                      style={{
+                        display: "flex",
+                        alignItems: "center",
+                        gap: 6,
+                        flexShrink: 0,
+                      }}
+                    >
+                      <span
+                        style={{
+                          width: 7,
+                          height: 7,
+                          borderRadius: 999,
+                          background: dotColor,
+                          flexShrink: 0,
+                        }}
+                      />
+                      <span
+                        style={{
+                          fontFamily: mk.mono,
+                          fontSize: 8,
+                          letterSpacing: "0.12em",
+                          textTransform: "uppercase",
+                          color: mk.creamDim,
+                          whiteSpace: "nowrap",
+                        }}
+                      >
+                        {label}
+                      </span>
+                    </span>
+                    {i < 3 && (
+                      <span
+                        style={{
+                          flex: 1,
+                          height: 1,
+                          background: mk.nightLine,
+                          margin: "0 8px",
+                          minWidth: 8,
+                        }}
+                      />
+                    )}
+                  </div>
+                ))}
+              </div>
+              <ConvictionDemo />
+            </div>
           </div>
         </div>
       </section>
 
-      {/* ─── TIMELINE ──────────────────────────────────────────────── */}
+      {/* ─── A REAL STORY ────────────────────────────────────────── */}
       <section
         style={{
-          padding: `clamp(64px,9vw,110px) ${pad}`,
-          borderTop: `1px solid ${mk.pencilLight}`,
+          padding: `${vPad} ${hPad}`,
+          borderTop: `1px solid ${mk.rule}`,
         }}
       >
-        <div style={{ maxWidth: 1400, margin: "0 auto" }}>
-          <p
-            style={{
-              fontFamily: mk.mono,
-              fontSize: 11,
-              letterSpacing: "0.18em",
-              textTransform: "uppercase",
-              color: mk.pencil,
-              marginBottom: "clamp(14px,2vw,20px)",
-            }}
-          >
-            A real story
-          </p>
+        <div style={{ maxWidth: 1180, margin: "0 auto" }}>
+          <Kicker color={mk.pencil}>A real story</Kicker>
           <h2
             style={{
               fontFamily: mk.display,
               fontStyle: "italic",
               fontWeight: 400,
-              fontSize: "clamp(48px,6vw,88px)",
+              fontSize: "clamp(36px, 5vw, 72px)",
               lineHeight: 0.97,
               letterSpacing: "-0.01em",
-              margin: "0 0 clamp(10px,2vw,16px)",
+              margin: "0 0 clamp(10px, 2vw, 16px)",
             }}
           >
             One thesis.
@@ -514,16 +713,16 @@ export default function LandingPage() {
           <p
             style={{
               fontFamily: mk.sans,
-              fontSize: "clamp(15px,1.6vw,18px)",
+              fontSize: "clamp(15px, 1.5vw, 18px)",
               color: mk.pencil,
               lineHeight: 1.6,
               maxWidth: 580,
-              margin: "0 0 clamp(32px,5vw,48px)",
+              margin: "0 0 clamp(32px, 5vw, 48px)",
             }}
           >
-            Someone bought TSLA in March 2024 with a specific reason. Here
-            is exactly how the evidence moved — and the moment penKeep would
-            have surfaced their own exit condition back to them.
+            Someone bought TSLA in March 2024 with a specific reason. Here is exactly how the
+            evidence moved, and the moment penKeep would have surfaced their own exit condition
+            back to them.
           </p>
           <WatchThesisChange />
           <p
@@ -540,462 +739,84 @@ export default function LandingPage() {
         </div>
       </section>
 
-      {/* ─── BENTO ─────────────────────────────────────────────────── */}
+      {/* ─── WHAT WE DON'T DO ────────────────────────────────────── */}
       <section
         style={{
-          padding: `clamp(64px,9vw,110px) ${pad}`,
-          background: mk.cardSoft,
-          borderTop: `1px solid ${mk.pencilLight}`,
-          borderBottom: `1px solid ${mk.pencilLight}`,
+          background: mk.paperHi,
+          padding: `${vPad} ${hPad}`,
+          borderTop: `1px solid ${mk.rule}`,
         }}
       >
-        <div style={{ maxWidth: 1400, margin: "0 auto" }}>
-          <p
-            style={{
-              fontFamily: mk.mono,
-              fontSize: 11,
-              letterSpacing: "0.18em",
-              textTransform: "uppercase",
-              color: mk.pencil,
-              marginBottom: "clamp(14px,2vw,20px)",
-            }}
-          >
-            What&apos;s inside
-          </p>
+        <div style={{ maxWidth: 1180, margin: "0 auto" }}>
+          <Kicker>What we don&apos;t do</Kicker>
           <h2
             style={{
               fontFamily: mk.display,
-              fontStyle: "italic",
-              fontWeight: 400,
-              fontSize: "clamp(48px,6vw,88px)",
-              lineHeight: 0.97,
-              letterSpacing: "-0.01em",
-              margin: "0 0 clamp(36px,5vw,56px)",
+              fontSize: "clamp(36px, 5vw, 56px)",
+              fontWeight: 500,
+              letterSpacing: "-0.025em",
+              lineHeight: 1,
+              margin: 0,
             }}
           >
-            Built around your reason.
-            <br />
-            <span style={{ color: mk.accent }}>Not their feed.</span>
+            Built around your reason.{" "}
+            <span style={{ fontStyle: "italic", color: mk.accent }}>Not their feed.</span>
           </h2>
 
-          <div
-            style={{
-              display: "grid",
-              gridTemplateColumns: "repeat(12, 1fr)",
-              gap: 16,
-            }}
-            className="max-md:grid-cols-1"
-          >
-            {/* Big hero card */}
-            <div
-              className="max-md:col-span-1 mk-card-hover"
-              style={{
-                gridColumn: "span 7",
-                gridRow: "span 2",
-                background: mk.ink,
-                borderRadius: 20,
-                padding: "clamp(24px,3vw,36px)",
-                display: "flex",
-                flexDirection: "column",
-                gap: 20,
-                overflow: "hidden",
-                position: "relative",
-              }}
-            >
+          <div style={{ marginTop: 48 }}>
+            {(
+              [
+                [
+                  "Price alerts",
+                  "A price can fall for a hundred reasons that have nothing to do with why you bought. We wait for the real evidence. An earnings line, a filing, a lost customer. That is what reaches you.",
+                ],
+                [
+                  "A social feed",
+                  "There’s no one else in here. The only portfolio we pay attention to is the one you actually own.",
+                ],
+                [
+                  "Buy / sell signals",
+                  "Every decision stays yours. When something tests your reason, we set your own words beside it and let you make the call.",
+                ],
+                [
+                  "Daily engagement",
+                  "Most days you won’t hear from us. We stay quiet until something touches a reason you wrote, then say so plainly. Once a week, a short digest.",
+                ],
+              ] as const
+            ).map(([label, answer]) => (
               <div
-                style={{
-                  position: "absolute",
-                  top: 0,
-                  left: 0,
-                  right: 0,
-                  height: 3,
-                  background: `linear-gradient(90deg, ${mk.accent} 0%, transparent 100%)`,
-                }}
-              />
-              <div
-                style={{
-                  fontFamily: mk.mono,
-                  fontSize: 10,
-                  textTransform: "uppercase",
-                  letterSpacing: "0.16em",
-                  color: mk.accent,
-                }}
-              >
-                ! Reason changed
-              </div>
-              <div
-                style={{
-                  fontFamily: mk.display,
-                  fontStyle: "italic",
-                  fontSize: "clamp(28px,3vw,42px)",
-                  fontWeight: 400,
-                  lineHeight: 1.05,
-                  color: mk.paper,
-                  maxWidth: 520,
-                }}
-              >
-                See exactly what changed since you bought.
-              </div>
-              <div
+                key={label}
                 style={{
                   display: "grid",
-                  gridTemplateColumns: "1fr 20px 1fr",
-                  gap: "10px 8px",
-                  fontSize: 13,
+                  gridTemplateColumns: "1fr 1.7fr",
+                  gap: "clamp(20px, 3vw, 40px)",
+                  padding: "26px 0",
+                  borderTop: `1px solid ${mk.rule}`,
+                  alignItems: "baseline",
                 }}
+                className="max-md:grid-cols-1 max-md:gap-2"
               >
-                {[
-                  ["EV demand growing", "→", "EU deliveries -12% YoY"],
-                  ["Robotaxi optionality", "→", '"Underwhelming" — 7 of 9'],
-                  ["Margins protected", "→", "Auto GM dropped to 14.3%"],
-                ].map(([was, arr, now], i) => (
-                  <span key={i} style={{ display: "contents" }}>
-                    <span
-                      style={{
-                        color: "#666",
-                        textDecoration: "line-through",
-                        textDecorationColor: mk.accent,
-                        lineHeight: 1.45,
-                      }}
-                    >
-                      {was}
-                    </span>
-                    <span style={{ color: mk.accent, textAlign: "center" }}>{arr}</span>
-                    <span style={{ color: mk.paper, fontWeight: 500, lineHeight: 1.45 }}>
-                      {now}
-                    </span>
-                  </span>
-                ))}
-              </div>
-              <div
-                style={{
-                  marginTop: "auto",
-                  fontFamily: mk.sans,
-                  fontSize: 13,
-                  color: "#555",
-                  lineHeight: 1.5,
-                }}
-              >
-                The &ldquo;diff since you bought&rdquo; — your reason, mapped to what the data now shows.
-              </div>
-            </div>
-
-            {/* Conviction log */}
-            <div
-              className="max-md:col-span-1 mk-card-hover"
-              style={{
-                gridColumn: "span 5",
-                background: mk.accentSoft,
-                borderRadius: 20,
-                padding: "clamp(22px,2.5vw,32px)",
-                border: `1px solid ${mk.accent}40`,
-                display: "flex",
-                flexDirection: "column",
-                gap: 14,
-              }}
-            >
-              <div
-                style={{
-                  fontFamily: mk.mono,
-                  fontSize: 10,
-                  textTransform: "uppercase",
-                  letterSpacing: "0.16em",
-                  color: mk.accent,
-                }}
-              >
-                Conviction log
-              </div>
-              <div
-                style={{
-                  fontFamily: mk.display,
-                  fontStyle: "italic",
-                  fontWeight: 400,
-                  fontSize: "clamp(26px,2.8vw,38px)",
-                  lineHeight: 1.05,
-                  color: mk.ink,
-                }}
-              >
-                Every decision, forever.
-              </div>
-              <div style={{ fontSize: 13, color: mk.inkSoft, lineHeight: 1.55 }}>
-                Reaffirmed. Invalidated. Ignored. All logged with the evidence
-                that triggered the decision.
-              </div>
-              <div style={{ display: "flex", gap: 6, marginTop: "auto", flexWrap: "wrap" }}>
-                {["Holding", "Thesis broke", "Lowered conviction"].map((label) => (
-                  <span
-                    key={label}
-                    style={{
-                      padding: "4px 10px",
-                      border: `1px solid ${mk.accent}55`,
-                      borderRadius: 999,
-                      fontFamily: mk.mono,
-                      fontSize: 10,
-                      letterSpacing: "0.1em",
-                      textTransform: "uppercase",
-                      color: mk.accentDeep,
-                    }}
-                  >
-                    {label}
-                  </span>
-                ))}
-              </div>
-            </div>
-
-            {/* Silent */}
-            <div
-              className="max-md:col-span-1 mk-card-hover"
-              style={{
-                gridColumn: "span 5",
-                background: mk.card,
-                borderRadius: 20,
-                padding: "clamp(22px,2.5vw,32px)",
-                border: `1px solid ${mk.pencilLight}`,
-                display: "flex",
-                flexDirection: "column",
-                justifyContent: "space-between",
-                gap: 14,
-              }}
-            >
-              <div
-                style={{
-                  fontFamily: mk.mono,
-                  fontSize: 10,
-                  textTransform: "uppercase",
-                  letterSpacing: "0.16em",
-                  color: mk.pencil,
-                }}
-              >
-                Silent until it matters
-              </div>
-              <div>
                 <div
                   style={{
                     fontFamily: mk.display,
+                    fontSize: "clamp(20px, 2.2vw, 28px)",
+                    fontWeight: 500,
                     fontStyle: "italic",
-                    fontWeight: 400,
-                    fontSize: "clamp(42px,5vw,68px)",
-                    lineHeight: 0.95,
-                    letterSpacing: "-0.01em",
                     color: mk.ink,
                   }}
                 >
-                  0 daily pushes.
+                  {label}
                 </div>
-                <div style={{ fontSize: 13, color: mk.pencil, lineHeight: 1.55, marginTop: 12 }}>
-                  No streaks. No &ldquo;you&apos;re up 0.4%.&rdquo; One
-                  note, when your specific reason moves.
-                </div>
-              </div>
-            </div>
-
-            {/* Sources */}
-            <div
-              className="max-md:col-span-1 mk-card-hover"
-              style={{
-                gridColumn: "span 4",
-                background: mk.cardSoft,
-                borderRadius: 20,
-                padding: "clamp(22px,2.5vw,32px)",
-                border: `1px solid ${mk.pencilLight}`,
-                display: "flex",
-                flexDirection: "column",
-                gap: 12,
-              }}
-            >
-              <div
-                style={{
-                  fontFamily: mk.mono,
-                  fontSize: 10,
-                  textTransform: "uppercase",
-                  letterSpacing: "0.16em",
-                  color: mk.pencil,
-                }}
-              >
-                Evidence, not vibes
-              </div>
-              <div
-                style={{
-                  fontFamily: mk.display,
-                  fontStyle: "italic",
-                  fontWeight: 400,
-                  fontSize: "clamp(22px,2.4vw,32px)",
-                  lineHeight: 1.1,
-                  color: mk.ink,
-                }}
-              >
-                Every signal has sources.
-              </div>
-              <div style={{ display: "flex", flexWrap: "wrap", gap: 6, marginTop: 2 }}>
-                {["News", "SEC filings", "10-Q", "8-K", "Earnings calls", "Insider filings"].map(
-                  (s) => (
-                    <span
-                      key={s}
-                      style={{
-                        padding: "4px 10px",
-                        borderRadius: 999,
-                        border: `1px solid ${mk.pencilLight}`,
-                        background: mk.card,
-                        fontSize: 11,
-                        color: mk.ink,
-                      }}
-                    >
-                      {s}
-                    </span>
-                  ),
-                )}
-              </div>
-            </div>
-
-            {/* Versioned */}
-            <div
-              className="max-md:col-span-1 mk-card-hover"
-              style={{
-                gridColumn: "span 3",
-                background: mk.card,
-                borderRadius: 20,
-                padding: "clamp(22px,2.5vw,32px)",
-                border: `1px solid ${mk.pencilLight}`,
-                display: "flex",
-                flexDirection: "column",
-                gap: 12,
-              }}
-            >
-              <div
-                style={{
-                  fontFamily: mk.mono,
-                  fontSize: 10,
-                  textTransform: "uppercase",
-                  letterSpacing: "0.16em",
-                  color: mk.pencil,
-                }}
-              >
-                Thesis history
-              </div>
-              <div
-                style={{
-                  fontFamily: mk.display,
-                  fontStyle: "italic",
-                  fontWeight: 400,
-                  fontSize: "clamp(20px,2.2vw,28px)",
-                  lineHeight: 1.1,
-                  color: mk.ink,
-                }}
-              >
-                Versioned, diffable, yours.
-              </div>
-              <div style={{ display: "flex", flexDirection: "column", gap: 6, marginTop: 4 }}>
-                {[["v1", "Apr 24"], ["v2", "Sep 24"], ["v3 · now", "Jan 25"]].map(([n, d], i) => (
-                  <div
-                    key={n}
-                    style={{
-                      display: "flex",
-                      alignItems: "center",
-                      justifyContent: "space-between",
-                      padding: "6px 10px",
-                      background: i === 2 ? mk.ink : mk.cardSoft,
-                      borderRadius: 8,
-                      border: `1px solid ${i === 2 ? mk.ink : mk.pencilLight}`,
-                    }}
-                  >
-                    <span
-                      style={{
-                        fontFamily: mk.mono,
-                        fontSize: 11,
-                        fontWeight: 600,
-                        color: i === 2 ? mk.paper : mk.ink,
-                      }}
-                    >
-                      {n}
-                    </span>
-                    <span
-                      style={{
-                        fontFamily: mk.mono,
-                        fontSize: 10,
-                        color: i === 2 ? "#aaa" : mk.pencil,
-                      }}
-                    >
-                      {d}
-                    </span>
-                  </div>
-                ))}
-              </div>
-            </div>
-          </div>
-        </div>
-      </section>
-
-      {/* ─── QUOTES ────────────────────────────────────────────────── */}
-      <section style={{ padding: `clamp(64px,9vw,110px) ${pad}` }}>
-        <div style={{ maxWidth: 1400, margin: "0 auto" }}>
-          <p
-            style={{
-              fontFamily: mk.mono,
-              fontSize: 11,
-              letterSpacing: "0.18em",
-              textTransform: "uppercase",
-              color: mk.pencil,
-              marginBottom: "clamp(36px,5vw,56px)",
-            }}
-          >
-            From the beta
-          </p>
-          <div
-            style={{
-              display: "grid",
-              gridTemplateColumns: "repeat(3, 1fr)",
-              gap: "clamp(32px,5vw,56px)",
-            }}
-            className="max-md:grid-cols-1"
-          >
-            {[
-              {
-                q: "I finally sold TSLA at the right time — not because the chart broke, but because my own exit condition triggered. It was in penKeep since March.",
-                a: "Beta user · London",
-              },
-              {
-                q: "Every other app tells me what the market is doing. penKeep is the first one that checks whether the market is doing what I specifically thought it would.",
-                a: "Beta user · New York",
-              },
-              {
-                q: "I wrote my first real thesis in ten minutes. Six months later I can prove I made a rational decision, not an emotional one. That is worth something.",
-                a: "Beta user · Toronto",
-              },
-            ].map((q, i) => (
-              <div
-                key={i}
-                style={{
-                  display: "flex",
-                  flexDirection: "column",
-                  gap: 18,
-                  paddingTop: "clamp(20px,3vw,28px)",
-                  borderTop: `1.5px solid ${mk.pencilLight}`,
-                }}
-              >
-                <p
-                  style={{
-                    fontFamily: mk.display,
-                    fontStyle: "italic",
-                    fontWeight: 400,
-                    fontSize: "clamp(20px,2.2vw,27px)",
-                    lineHeight: 1.35,
-                    letterSpacing: "-0.005em",
-                    color: mk.ink,
-                    margin: 0,
-                  }}
-                >
-                  &ldquo;{q.q}&rdquo;
-                </p>
                 <div
                   style={{
-                    fontFamily: mk.mono,
-                    fontSize: 10,
-                    letterSpacing: "0.14em",
-                    textTransform: "uppercase",
-                    color: mk.pencil,
+                    fontFamily: mk.display,
+                    fontWeight: 500,
+                    fontSize: "clamp(16px, 1.6vw, 19px)",
+                    lineHeight: 1.5,
+                    color: mk.ink,
                   }}
                 >
-                  — {q.a}
+                  {answer}
                 </div>
               </div>
             ))}
@@ -1003,62 +824,279 @@ export default function LandingPage() {
         </div>
       </section>
 
-      {/* ─── SIGNUP ────────────────────────────────────────────────── */}
+      {/* ─── THE BLIND SPOT — light ──────────────────────────────── */}
+      <section style={{ background: mk.paperHi, padding: `${vPad} ${hPad}` }}>
+        <div style={{ maxWidth: 1180, margin: "0 auto" }}>
+          <Kicker>The part you didn&apos;t write down</Kicker>
+          <div
+            style={{
+              fontFamily: mk.display,
+              fontSize: "clamp(30px, 4.5vw, 56px)",
+              fontWeight: 500,
+              letterSpacing: "-0.025em",
+              lineHeight: 1.05,
+              maxWidth: 940,
+              color: mk.ink,
+            }}
+          >
+            The thing that sinks a stock is usually the one you&apos;d have felt{" "}
+            <span style={{ fontStyle: "italic", color: mk.accent }}>silly writing down</span>.
+          </div>
+          <div
+            style={{
+              fontFamily: mk.display,
+              fontWeight: 500,
+              fontSize: "clamp(17px, 1.7vw, 20px)",
+              lineHeight: 1.55,
+              color: mk.inkSoft,
+              maxWidth: 660,
+              marginTop: 28,
+            }}
+          >
+            You note what you believe, and we keep an eye on it. We also read for the rest.
+            A big customer quietly building their own version. A rule change three countries
+            away. A shift everyone calls obvious in hindsight. When one turns up, you hear
+            about it early, while there&apos;s still something you can do.
+          </div>
+        </div>
+      </section>
+
+      {/* ─── NO THESIS YET — light ───────────────────────────────── */}
+      <section style={{ background: mk.paper, padding: `${vPad} ${hPad}` }}>
+        <div style={{ maxWidth: 1180, margin: "0 auto" }}>
+          <Kicker>No reason yet?</Kicker>
+          <div
+            style={{
+              fontFamily: mk.display,
+              fontSize: "clamp(30px, 4.5vw, 56px)",
+              fontWeight: 500,
+              letterSpacing: "-0.025em",
+              lineHeight: 1.05,
+              maxWidth: 940,
+              color: mk.ink,
+            }}
+          >
+            Bought on a hunch?{" "}
+            <span style={{ fontStyle: "italic", color: mk.accent }}>Start anyway.</span>
+          </div>
+          <div
+            style={{
+              fontFamily: mk.display,
+              fontWeight: 500,
+              fontSize: "clamp(17px, 1.7vw, 20px)",
+              lineHeight: 1.55,
+              color: mk.inkSoft,
+              maxWidth: 660,
+              marginTop: 28,
+            }}
+          >
+            Maybe a friend wouldn&apos;t shut up about it. Maybe it was everywhere for a week
+            and you didn&apos;t want to miss it. Tell us the ticker. We&apos;ll lay out the
+            case against it, the things that could go wrong that never come up in the group
+            chat, and turn the hunch into a few plain things worth watching. Then we watch
+            them, and you&apos;ve got a real reason on paper instead of a vibe.
+          </div>
+        </div>
+      </section>
+
+      {/* ─── BIGGER PICTURE — dark ───────────────────────────────── */}
+      <section
+        style={{
+          background: mk.night,
+          color: mk.cream,
+          padding: `${vPad} ${hPad}`,
+          position: "relative",
+          overflow: "hidden",
+        }}
+      >
+        <div
+          style={{
+            position: "absolute",
+            right: -120,
+            top: -120,
+            width: 460,
+            height: 460,
+            borderRadius: "50%",
+            background: "radial-gradient(circle, rgba(193,73,42,0.16), transparent 70%)",
+            pointerEvents: "none",
+          }}
+        />
+        <div style={{ maxWidth: 1180, margin: "0 auto", position: "relative" }}>
+          <Kicker>What you&apos;re really building</Kicker>
+          <div
+            style={{
+              fontFamily: mk.display,
+              fontSize: "clamp(30px, 4.5vw, 58px)",
+              fontWeight: 500,
+              letterSpacing: "-0.025em",
+              lineHeight: 1.04,
+              maxWidth: 940,
+              color: mk.cream,
+            }}
+          >
+            Every reason you write is a record of{" "}
+            <span style={{ fontStyle: "italic", color: mk.accent }}>how you think</span>. No feed
+            will ever hand that back to you.
+          </div>
+          <div
+            style={{
+              fontFamily: mk.display,
+              fontWeight: 500,
+              fontSize: "clamp(17px, 1.7vw, 20px)",
+              lineHeight: 1.55,
+              color: mk.creamDim,
+              maxWidth: 640,
+              marginTop: 28,
+            }}
+          >
+            Give it a year and you have an honest record of your own judgment: what you believed,
+            what actually happened, and whether you got it right.
+          </div>
+        </div>
+      </section>
+
+      {/* ─── FAQ ─────────────────────────────────────────────────── */}
+      <section
+        id="faq"
+        style={{
+          background: mk.paperHi,
+          padding: `${vPad} ${hPad}`,
+          borderTop: `1px solid ${mk.rule}`,
+        }}
+      >
+        <div style={{ maxWidth: 1180, margin: "0 auto" }}>
+          <Kicker>Questions</Kicker>
+          <div
+            style={{
+              display: "grid",
+              gridTemplateColumns: "1fr 1fr",
+              gap: "40px 64px",
+              marginTop: 12,
+            }}
+            className="max-md:grid-cols-1"
+          >
+            {(
+              [
+                [
+                  "Is this financial advice?",
+                  "No. PenKeep never tells you to buy, hold or sell. It shows you what is happening to the reasons you wrote down, and every decision stays yours.",
+                ],
+                [
+                  "Do you connect to my brokerage?",
+                  "You can connect it read-only to track positions, or just add your holdings by hand. We never place trades and never touch your money.",
+                ],
+                [
+                  "What does “watching” actually mean?",
+                  "For each reason you write, we keep an eye on the things that could prove it wrong: earnings, filings, competitor moves. Everything else, we leave alone.",
+                ],
+                [
+                  "Will I get spammed with alerts?",
+                  "No. Most weeks you will hear from us once, in the Sunday digest. We only send a real-time alert when something directly tests one of your exit conditions.",
+                ],
+              ] as const
+            ).map(([q, a]) => (
+              <div key={q}>
+                <h3
+                  style={{
+                    fontFamily: mk.display,
+                    fontSize: "clamp(18px, 1.8vw, 24px)",
+                    fontWeight: 500,
+                    letterSpacing: "-0.01em",
+                    margin: "0 0 12px",
+                    color: mk.ink,
+                  }}
+                >
+                  {q}
+                </h3>
+                <p
+                  style={{
+                    fontFamily: mk.display,
+                    fontWeight: 500,
+                    fontSize: "clamp(15px, 1.5vw, 17.5px)",
+                    lineHeight: 1.55,
+                    color: mk.inkSoft,
+                    margin: 0,
+                  }}
+                >
+                  {a}
+                </p>
+              </div>
+            ))}
+          </div>
+        </div>
+      </section>
+
+      {/* ─── FINAL CTA — dark ────────────────────────────────────── */}
       <section
         id="signup"
         style={{
-          padding: `clamp(72px,10vw,130px) ${pad}`,
-          background: mk.ink,
-          display: "flex",
-          flexDirection: "column",
-          alignItems: "center",
+          background: mk.night,
+          color: mk.cream,
+          padding: `clamp(80px, 10vw, 130px) ${hPad}`,
           textAlign: "center",
-          gap: 0,
+          position: "relative",
+          overflow: "hidden",
         }}
       >
-        <p
+        <div
           style={{
-            fontFamily: mk.mono,
-            fontSize: 11,
-            letterSpacing: "0.18em",
-            textTransform: "uppercase",
-            color: mk.accent,
-            marginBottom: "clamp(20px,3vw,28px)",
+            position: "absolute",
+            left: "50%",
+            top: "40%",
+            transform: "translate(-50%,-50%)",
+            width: 620,
+            height: 620,
+            borderRadius: "50%",
+            background: "radial-gradient(circle, rgba(193,73,42,0.16), transparent 70%)",
+            pointerEvents: "none",
           }}
-        >
-          Limited seats · private beta
-        </p>
-        <h2
-          style={{
-            fontFamily: mk.display,
-            fontStyle: "italic",
-            fontWeight: 400,
-            fontSize: "clamp(56px,8vw,116px)",
-            lineHeight: 0.95,
-            letterSpacing: "-0.015em",
-            margin: "0 0 clamp(20px,3vw,28px)",
-            color: mk.paper,
-            maxWidth: 900,
-          }}
-        >
-          Write your first
-          <br />
-          <span style={{ color: mk.accent }}>real reason.</span>
-        </h2>
-        <p
-          style={{
-            fontFamily: mk.sans,
-            fontSize: "clamp(15px,1.6vw,18px)",
-            color: "#888",
-            margin: "0 0 clamp(28px,4vw,40px)",
-            maxWidth: 460,
-            lineHeight: 1.6,
-          }}
-        >
-          Free to start. Join the waitlist and we&apos;ll reach out before
-          launch — early access, and a say in what we build next.
-        </p>
-        <WaitlistForm dark />
+        />
+        <div style={{ maxWidth: 1180, margin: "0 auto", position: "relative" }}>
+          <div
+            style={{
+              fontFamily: mk.mono,
+              fontSize: 10.5,
+              letterSpacing: "0.16em",
+              textTransform: "uppercase",
+              color: mk.accent,
+              marginBottom: "clamp(20px, 3vw, 28px)",
+            }}
+          >
+            Limited seats · private beta
+          </div>
+          <h2
+            style={{
+              fontFamily: mk.display,
+              fontWeight: 500,
+              fontSize: "clamp(48px, 7vw, 80px)",
+              lineHeight: 1,
+              letterSpacing: "-0.03em",
+              margin: "0 0 clamp(20px, 3vw, 28px)",
+              color: mk.cream,
+            }}
+          >
+            Write your first
+            <br />
+            <span style={{ fontStyle: "italic", color: mk.accent }}>real reason.</span>
+          </h2>
+          <p
+            style={{
+              fontFamily: mk.display,
+              fontWeight: 500,
+              fontSize: "clamp(16px, 1.6vw, 20px)",
+              color: mk.creamDim,
+              margin: "0 auto clamp(28px, 4vw, 40px)",
+              maxWidth: 520,
+              lineHeight: 1.5,
+            }}
+          >
+            Join the waitlist. We&apos;ll reach out before launch with early access and a say in what
+            we build.
+          </p>
+          <div style={{ display: "flex", justifyContent: "center" }}>
+            <WaitlistForm dark />
+          </div>
+        </div>
       </section>
 
       <MarketingFooter />
