@@ -6,7 +6,14 @@ import { AnimatePresence, motion } from "framer-motion";
 import { AuthGuard } from "@/components/layout/auth-guard";
 import { api } from "@/lib/api";
 import { getErrorMessage } from "@/lib/errors";
-import type { DraftStatus, HoldingContext, SynthesisResponse, Thesis } from "@/types";
+import type {
+  CandidateSignal,
+  DraftStatus,
+  GroundingResponse,
+  HoldingContext,
+  SynthesisResponse,
+  Thesis,
+} from "@/types";
 
 // ---------------------------------------------------------------------------
 // Step machine
@@ -18,8 +25,15 @@ type Step =
   | "QUESTION_1"
   | "QUESTION_2"
   | "SYNTHESISING"
+  | "CLIMB"
   | "REVIEW"
   | "DONE";
+
+const SIGNAL_TYPE_LABEL: Record<CandidateSignal["signal_type"], string> = {
+  price_move: "Price",
+  revenue_growth: "Revenue",
+  earnings_growth: "Earnings",
+};
 
 type InvestorProfile = "thesis_driven" | "hearsay_driven";
 
@@ -122,6 +136,7 @@ const STEP_ORDER: Step[] = [
   "QUESTION_1",
   "QUESTION_2",
   "SYNTHESISING",
+  "CLIMB",
   "REVIEW",
   "DONE",
 ];
@@ -156,6 +171,8 @@ function WizardInner() {
   const [error, setError] = useState("");
   const [loadingHolding, setLoadingHolding] = useState(Boolean(initialWizardState.holdingId));
   const [savingThesis, setSavingThesis] = useState(false);
+  const [groundingResult, setGroundingResult] = useState<GroundingResponse | null>(null);
+  const [selectedSignalIdx, setSelectedSignalIdx] = useState<Set<number>>(new Set());
   const profile = wizardState.investorProfile;
   const profileContent = profile ? PROFILE_CONTENT[profile] : null;
 
@@ -234,12 +251,48 @@ function WizardInner() {
         answer2: wizardState.answer2,
       });
       setWizardState((prev) => ({ ...prev, synthesisResult: result }));
+
+      // Hype-buyer climb: if the reason is too vague to monitor, ground it
+      // (bear case + measurable watches to pick) before review.
+      if (result.needs_grounding) {
+        try {
+          const grounding = await api.post<GroundingResponse>("/api/onboarding/ground", {
+            holding_id: wizardState.holdingId,
+            investor_profile: activeProfile,
+            why_own_it: wizardState.answer1,
+            what_would_change_my_mind: wizardState.answer2,
+          });
+          if (grounding.candidate_signals.length > 0 || grounding.bear_case) {
+            setGroundingResult(grounding);
+            setSelectedSignalIdx(new Set(grounding.candidate_signals.map((_, i) => i)));
+            goTo("CLIMB");
+            return;
+          }
+        } catch {
+          // Grounding is best-effort — never block the thesis on it.
+        }
+      }
+
       goTo("REVIEW");
     } catch (e) {
       setError(getErrorMessage(e, "Something went wrong. Please try again."));
       goTo("QUESTION_2");
     }
   };
+
+  const toggleSignal = (i: number) => {
+    setSelectedSignalIdx((prev) => {
+      const next = new Set(prev);
+      if (next.has(i)) next.delete(i);
+      else next.add(i);
+      return next;
+    });
+  };
+
+  const selectedCandidateSignals = (): CandidateSignal[] =>
+    groundingResult
+      ? groundingResult.candidate_signals.filter((_, i) => selectedSignalIdx.has(i))
+      : [];
 
   const handleSelectProfile = async (selected: InvestorProfile) => {
     setWizardState((prev) => ({ ...prev, investorProfile: selected }));
@@ -263,10 +316,17 @@ function WizardInner() {
         review_cadence_days: 7,
         source: "ai_assisted",
       });
-      await Promise.all([
-        api.post("/api/theses/" + thesisId + "/decompose").catch(() => null),
-        api.post("/api/onboarding/complete"),
-      ]);
+      // Decompose first, THEN attach the watches the user chose in the climb, so
+      // they are the final active state — a later decompose would otherwise
+      // re-sync the interpretation and overwrite them.
+      await api.post("/api/theses/" + thesisId + "/decompose").catch(() => null);
+      const chosenSignals = selectedCandidateSignals();
+      if (chosenSignals.length > 0) {
+        await api
+          .post("/api/onboarding/confirm-signals", { thesis_id: thesisId, signals: chosenSignals })
+          .catch(() => null);
+      }
+      await api.post("/api/onboarding/complete");
       clearState();
       router.push(`/dashboard/positions/${holding.ticker}?source=onboarding`);
     } catch (e) {
@@ -545,6 +605,133 @@ function WizardInner() {
     </motion.div>
   );
 
+  const renderClimb = () => {
+    const g = groundingResult;
+    if (!g) return null;
+    const selectedCount = selectedSignalIdx.size;
+    return (
+      <motion.div
+        key="climb"
+        variants={stepVariants}
+        initial="enter"
+        animate="center"
+        exit="exit"
+        transition={{ duration: 0.4, ease: [0.22, 1, 0.36, 1] }}
+        className="space-y-8"
+      >
+        <div className="space-y-2">
+          <span className="font-mono text-[10px] uppercase tracking-[0.3em] text-primary">
+            Pressure test{holding ? ` — ${holding.ticker}` : ""}
+          </span>
+          <h2 className="font-display italic text-[2rem] leading-tight text-foreground">
+            Before you commit, the other side.
+          </h2>
+          <p className="text-muted-foreground text-sm">
+            Your reason is still more story than signal. Here&rsquo;s the bear case &mdash; and the few
+            numbers that would actually prove you right or wrong.
+          </p>
+        </div>
+
+        {g.bear_case && (
+          <div className="border-l-2 border-primary/40 pl-4 space-y-1">
+            <div className="font-mono text-[9px] uppercase tracking-[0.25em] text-muted-foreground">
+              The bear case
+            </div>
+            <p className="text-sm text-foreground/80 leading-relaxed italic">{g.bear_case}</p>
+          </div>
+        )}
+
+        {g.suggested_questions.length > 0 && (
+          <div className="space-y-2">
+            <div className="font-mono text-[9px] uppercase tracking-[0.25em] text-muted-foreground">
+              Worth asking yourself
+            </div>
+            <ul className="space-y-1.5">
+              {g.suggested_questions.map((q, i) => (
+                <li key={i} className="text-sm text-foreground/70 leading-relaxed flex gap-2">
+                  <span className="text-primary">&mdash;</span>
+                  <span>{q}</span>
+                </li>
+              ))}
+            </ul>
+          </div>
+        )}
+
+        {g.candidate_signals.length > 0 && (
+          <div className="space-y-3">
+            <div className="space-y-1">
+              <p className="text-base font-medium text-foreground">
+                Pick what you&rsquo;ll hold this position to.
+              </p>
+              <p className="text-sm text-muted-foreground">
+                We&rsquo;ll watch these and tell you the moment one breaks. Change them anytime.
+              </p>
+            </div>
+            <div className="grid gap-2">
+              {g.candidate_signals.map((sig, i) => {
+                const selected = selectedSignalIdx.has(i);
+                return (
+                  <button
+                    key={i}
+                    type="button"
+                    onClick={() => toggleSignal(i)}
+                    aria-pressed={selected}
+                    className={`text-left border p-4 transition-colors ${
+                      selected ? "border-primary bg-primary/5" : "border-border hover:border-primary/40"
+                    }`}
+                  >
+                    <div className="flex items-start justify-between gap-4">
+                      <div className="space-y-1.5">
+                        <p className="font-mono text-[10px] uppercase tracking-[0.25em] text-primary">
+                          {SIGNAL_TYPE_LABEL[sig.signal_type] ?? sig.signal_type}
+                        </p>
+                        <p className="text-sm font-medium text-foreground">{sig.label}</p>
+                        {sig.rationale && (
+                          <p className="text-sm text-muted-foreground leading-relaxed">{sig.rationale}</p>
+                        )}
+                      </div>
+                      <span
+                        className={`mt-1 flex h-4 w-4 items-center justify-center border text-[10px] leading-none ${
+                          selected
+                            ? "border-primary bg-primary text-primary-foreground"
+                            : "border-border text-transparent"
+                        }`}
+                      >
+                        ✓
+                      </span>
+                    </div>
+                  </button>
+                );
+              })}
+            </div>
+          </div>
+        )}
+
+        {error && <p className="text-sm text-red-600 font-mono">{error}</p>}
+
+        <div className="flex items-center gap-6 pt-2">
+          <button
+            onClick={() => goTo("REVIEW")}
+            className="bg-primary text-primary-foreground px-8 py-3 text-sm font-mono tracking-wide hover:bg-primary/90 transition-colors"
+          >
+            {selectedCount > 0
+              ? `Watch ${selectedCount} signal${selectedCount === 1 ? "" : "s"} →`
+              : "Continue without watches →"}
+          </button>
+          <button
+            onClick={() => {
+              setSelectedSignalIdx(new Set());
+              goTo("REVIEW");
+            }}
+            className="text-xs text-muted-foreground hover:text-foreground transition-colors font-mono underline underline-offset-4"
+          >
+            Skip for now
+          </button>
+        </div>
+      </motion.div>
+    );
+  };
+
   const renderReview = () => {
     const result = wizardState.synthesisResult;
     if (!result) return null;
@@ -582,6 +769,22 @@ function WizardInner() {
             <p className="text-sm text-foreground/70 italic font-sans leading-relaxed">
               &ldquo;{result.ai_summary}&rdquo;
             </p>
+          </div>
+        )}
+
+        {selectedCandidateSignals().length > 0 && (
+          <div className="space-y-2 border border-border p-4">
+            <div className="font-mono text-[9px] uppercase tracking-[0.25em] text-muted-foreground">
+              Watches you picked
+            </div>
+            <ul className="space-y-1">
+              {selectedCandidateSignals().map((s, i) => (
+                <li key={i} className="text-sm text-foreground/70 flex gap-2">
+                  <span className="text-primary">+</span>
+                  <span>{s.label}</span>
+                </li>
+              ))}
+            </ul>
           </div>
         )}
 
@@ -664,6 +867,7 @@ function WizardInner() {
                 "Question 02"
               )}
             {step === "SYNTHESISING" && renderSynthesising()}
+            {step === "CLIMB" && renderClimb()}
             {step === "REVIEW" && renderReview()}
           </AnimatePresence>
         </div>

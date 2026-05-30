@@ -515,6 +515,29 @@ export interface SynthesisResponse {
   must_remain_true: string;
   what_would_change_my_mind: string;
   ai_summary: string;
+  // Hype-buyer climb: present when the user's raw answers read as too vague to
+  // monitor, so the UI can ground them before relying on the thesis.
+  needs_grounding?: boolean;
+  grounding_reasons?: string[];
+  suggested_questions?: string[];
+}
+
+export interface CandidateSignal {
+  signal_type: "price_move" | "revenue_growth" | "earnings_growth";
+  label: string;
+  threshold_pct: number;
+  rationale: string;
+  operator: ">=" | "<=" | ">" | "<" | null;
+}
+
+export interface GroundingResponse {
+  needs_grounding: boolean;
+  reasons: string[];
+  suggested_questions: string[];
+  bear_case: string | null;
+  key_risks: string[];
+  what_to_watch: string[];
+  candidate_signals: CandidateSignal[];
 }
 
 export interface ClaimVerdict {
