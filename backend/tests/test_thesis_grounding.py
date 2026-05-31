@@ -60,6 +60,61 @@ async def test_vague_thesis_grounds_with_stress_test():
     m_stress.assert_awaited_once()
 
 
+def _mixed_stress(candidate_signals) -> StressTestResult:
+    return StressTestResult(
+        ticker="NVDA", bear_case="b", key_risks=[], blind_spots=[], what_to_watch=[],
+        current_price=1.0, cached=False, candidate_signals=candidate_signals,
+    )
+
+
+_NUMERIC = CandidateSignal("revenue_growth", "Revenue growth above 8%", 8.0, "r", ">=")
+_QUALITATIVE = CandidateSignal(
+    "news_watch", "Competitor win", rationale="r",
+    watch_for="A competitor lands a major design win", direction="threatens",
+)
+
+
+@pytest.mark.asyncio
+async def test_thesis_driven_grounding_keeps_only_news_watch():
+    mixed = _mixed_stress([_NUMERIC, _QUALITATIVE])
+    with patch(f"{_GROUNDING}.run_stress_test", new_callable=AsyncMock, return_value=mixed), patch(
+        f"{_GROUNDING}.fetch_company_data", new_callable=AsyncMock, return_value=None
+    ):
+        payload = await build_grounding_payload(
+            ticker="NVDA", why_own_it="Everyone was talking about it.",
+            investor_profile="thesis_driven", company_name="NVIDIA",
+        )
+    assert {c.signal_type for c in payload.candidate_signals} == {"news_watch"}
+
+
+@pytest.mark.asyncio
+async def test_hearsay_grounding_keeps_all_candidate_signals():
+    mixed = _mixed_stress([_NUMERIC, _QUALITATIVE])
+    with patch(f"{_GROUNDING}.run_stress_test", new_callable=AsyncMock, return_value=mixed), patch(
+        f"{_GROUNDING}.fetch_company_data", new_callable=AsyncMock, return_value=None
+    ):
+        payload = await build_grounding_payload(
+            ticker="NVDA", why_own_it="Everyone was talking about it.",
+            investor_profile="hearsay_driven", company_name="NVIDIA",
+        )
+    types = {c.signal_type for c in payload.candidate_signals}
+    assert "revenue_growth" in types and "news_watch" in types
+
+
+@pytest.mark.asyncio
+async def test_thesis_driven_falls_back_when_no_news_watch():
+    # If the stress-test produced no qualitative watch, don't leave them empty.
+    numeric_only = _mixed_stress([_NUMERIC])
+    with patch(f"{_GROUNDING}.run_stress_test", new_callable=AsyncMock, return_value=numeric_only), patch(
+        f"{_GROUNDING}.fetch_company_data", new_callable=AsyncMock, return_value=None
+    ):
+        payload = await build_grounding_payload(
+            ticker="NVDA", why_own_it="Everyone was talking about it.",
+            investor_profile="thesis_driven", company_name="NVIDIA",
+        )
+    assert len(payload.candidate_signals) == 1
+
+
 @pytest.mark.asyncio
 async def test_empty_thesis_skips_the_paid_stress_test():
     # Blank thesis: still flag for grounding, but don't burn a paid LLM call.

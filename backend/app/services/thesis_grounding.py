@@ -77,6 +77,17 @@ async def build_grounding_payload(
         company_data=company_data,
     )
 
+    # A thesis-driven user already reasons in metrics, and their decomposition
+    # produces the numeric watches from their own words — so the stress-test's
+    # numeric candidate signals are largely redundant for them (confirmed by the
+    # decomposition-vs-stress-test audit). Offer them only the qualitative
+    # news_watch signals: the blind-spot layer they can't derive themselves.
+    # Hype/hearsay users keep the full set — it is their whole on-ramp.
+    candidate_signals = stress.candidate_signals
+    if investor_profile == "thesis_driven":
+        news_only = [c for c in candidate_signals if c.signal_type == "news_watch"]
+        candidate_signals = news_only or candidate_signals  # never leave them empty-handed
+
     return GroundingPayload(
         needs_grounding=True,
         reasons=assessment.reasons,
@@ -84,5 +95,5 @@ async def build_grounding_payload(
         bear_case=stress.bear_case,
         key_risks=stress.key_risks,
         what_to_watch=stress.what_to_watch,
-        candidate_signals=stress.candidate_signals,
+        candidate_signals=candidate_signals,
     )
