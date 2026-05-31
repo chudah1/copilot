@@ -1,0 +1,14 @@
+# Normalise line endings: store text as LF in the repo and check out LF on all
+# platforms. Stops the LF<->CRLF churn that was rewriting whole files on commit.
+* text=auto eol=lf
+
+# Binary assets git should never touch.
+*.png binary
+*.jpg binary
+*.jpeg binary
+*.gif binary
+*.ico binary
+*.svg text
+*.woff binary
+*.woff2 binary
+*.pdf binary
