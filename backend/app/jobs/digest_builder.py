@@ -694,6 +694,178 @@ async def _load_signal_counts(db, thesis_ids: list[uuid.UUID]) -> dict[str, tupl
     return counts
 
 
+async def build_and_persist_user_digest(
+    db,
+    user: User,
+    *,
+    now: datetime,
+    period_start: datetime,
+    period_end: datetime,
+    send_email: bool = True,
+    update_streak: bool = True,
+) -> "Digest | None":
+    """Build, persist, and optionally email one user's digest.
+
+    Shared by the weekly job and the on-demand first digest after onboarding.
+    Returns the Digest (added + flushed to the session) or None if the user has
+    no holdings. The caller owns commit/rollback so failures can be isolated.
+
+    update_streak should be left True only for the weekly cadence run, which owns
+    the consecutive-quiet-weeks counter; on-demand/first builds pass False so they
+    don't inflate it.
+    """
+    user_id = user.id
+    upcoming_window = now + timedelta(days=14)
+
+    holdings = await _load_user_holdings(db, user_id)
+    if not holdings:
+        return None
+
+    holdings_by_id = {holding.id: holding for holding in holdings}
+    thesis_by_holding = await _load_latest_theses_by_holding(db, list(holdings_by_id))
+    holdings_with_theses, missing_theses, stale_theses, thesis_ids, snapshot_by_holding_id = _build_holding_snapshots(
+        holdings,
+        thesis_by_holding,
+        now=now,
+    )
+    signal_counts = await _load_signal_counts(db, thesis_ids)
+    investor_profile = await _load_investor_profile(db, user_id)
+    events, events_data, event_holding_ids = await _load_events_data(
+        db,
+        user_id=user_id,
+        holdings_by_id=holdings_by_id,
+        snapshot_by_holding_id=snapshot_by_holding_id,
+        signal_counts=signal_counts,
+        period_start=period_start,
+        period_end=period_end,
+    )
+    stable_holdings = _build_stable_holdings(
+        holdings_with_theses,
+        event_holding_ids=event_holding_ids,
+        stale_tickers=set(stale_theses),
+    )
+
+    upcoming_earnings = []
+    if not events_data:
+        upcoming_earnings = await _load_upcoming_earnings(
+            db,
+            tickers=[holding.ticker for holding in holdings],
+            now=now,
+            upcoming_window=upcoming_window,
+        )
+
+    concentration_warnings = _concentration_warning(holdings)
+
+    observations = {
+        "concentration_warnings": concentration_warnings,
+        "stale_theses": stale_theses,
+        "missing_theses": missing_theses,
+        "stable_holdings": stable_holdings,
+    }
+    headline = _digest_headline(
+        len(events_data),
+        len(stale_theses),
+        len(missing_theses),
+        len(stable_holdings),
+    )
+    _stale_nudge_item = max(
+        [item for item in holdings_with_theses if item.get("why_own_it") and item.get("reason_age_days", 0) >= 90],
+        key=lambda item: item["reason_age_days"],
+        default=None,
+    )
+    subject = _digest_subject(
+        len(events_data),
+        len(stable_holdings),
+        upcoming_earnings=upcoming_earnings or None,
+        oldest_stale_name=_stale_nudge_item["name"] if _stale_nudge_item else None,
+        oldest_stale_days=_stale_nudge_item["reason_age_days"] if _stale_nudge_item else None,
+        missing_count=len(missing_theses),
+    )
+    receipt = _monitoring_receipt(
+        len(holdings),
+        len(events_data),
+        len(stable_holdings),
+        upcoming_earnings_count=len(upcoming_earnings),
+        investor_profile=investor_profile,
+    )
+    quiet_nudge = _oldest_reason_nudge(holdings_with_theses, investor_profile=investor_profile) if not events_data else None
+    next_earnings = upcoming_earnings[0] if upcoming_earnings else None
+
+    if update_streak:
+        quiet_streak = _update_quiet_streak(user, has_events=bool(events_data))
+    else:
+        prefs = user.preferences or {}
+        quiet_streak = prefs.get("consecutive_quiet_weeks", 0)
+
+    html_content = _render_digest_html(
+        holdings_with_theses=holdings_with_theses,
+        events_data=events_data,
+        observations=observations,
+        headline=headline,
+        monitoring_receipt=receipt,
+        quiet_nudge=quiet_nudge,
+        upcoming_earnings=upcoming_earnings if not events_data else None,
+        investor_profile=investor_profile,
+    )
+
+    digest = Digest(
+        user_id=user.id,
+        period_start=period_start,
+        period_end=period_end,
+        content={
+            "html": html_content,
+            "digest_mode": "events" if events_data else "quiet_week",
+            "subject_line": subject,
+            "events_count": len(events_data),
+            "holdings_count": len(holdings),
+            "stable_holdings_count": len(stable_holdings),
+            "headline": headline,
+            "summary_points": _digest_summary_points(
+                events_data,
+                observations,
+                next_earnings,
+                investor_profile=investor_profile,
+            ),
+            "missing_theses_count": len(missing_theses),
+            "stale_theses_count": len(stale_theses),
+            "concentration_warning": concentration_warnings,
+            "monitoring_receipt": receipt,
+            "quiet_nudge": quiet_nudge,
+            "consecutive_quiet_weeks": quiet_streak,
+            "next_earnings": next_earnings,
+            "investor_profile": investor_profile,
+        },
+        status="pending",
+    )
+    db.add(digest)
+    await db.flush()
+
+    for e in events:
+        e.included_in_digest_id = digest.id
+
+    if html_content and send_email:
+        # A graceful failure returns False and we persist a "failed" digest below.
+        # A raised exception means we can't trust this user's half-built state, so we
+        # let it propagate to the outer handler, which rolls back and moves on.
+        sent = await send_digest_email(
+            to_email=user.email,
+            subject=subject,
+            html_content=html_content,
+        )
+        digest.status = "sent" if sent else "failed"
+        digest.sent_at = datetime.now(timezone.utc) if sent else None
+        if sent:
+            from app.services.onboarding import mark_digest_received
+            await mark_digest_received(db, user_id)
+    elif html_content:
+        # Persisted for in-app viewing without sending an email.
+        digest.status = "ready"
+    else:
+        digest.status = "failed"
+
+    return digest
+
+
 async def run_digest_builder():
     import time
     started = time.monotonic()
@@ -702,7 +874,6 @@ async def run_digest_builder():
     now = datetime.now(timezone.utc)
     period_end = now
     period_start = now - timedelta(days=7)
-    upcoming_window = now + timedelta(days=14)
 
     async with async_session() as db:
         users_result = await db.execute(select(User.id))
@@ -716,144 +887,16 @@ async def run_digest_builder():
                 if await _should_skip_user_digest(db, user, now=now):
                     continue
 
-                holdings = await _load_user_holdings(db, user_id)
-                if not holdings:
-                    continue
-
-                holdings_by_id = {holding.id: holding for holding in holdings}
-                thesis_by_holding = await _load_latest_theses_by_holding(db, list(holdings_by_id))
-                holdings_with_theses, missing_theses, stale_theses, thesis_ids, snapshot_by_holding_id = _build_holding_snapshots(
-                    holdings,
-                    thesis_by_holding,
-                    now=now,
-                )
-                signal_counts = await _load_signal_counts(db, thesis_ids)
-                investor_profile = await _load_investor_profile(db, user_id)
-                events, events_data, event_holding_ids = await _load_events_data(
+                digest = await build_and_persist_user_digest(
                     db,
-                    user_id=user_id,
-                    holdings_by_id=holdings_by_id,
-                    snapshot_by_holding_id=snapshot_by_holding_id,
-                    signal_counts=signal_counts,
+                    user,
+                    now=now,
                     period_start=period_start,
                     period_end=period_end,
+                    send_email=True,
                 )
-                stable_holdings = _build_stable_holdings(
-                    holdings_with_theses,
-                    event_holding_ids=event_holding_ids,
-                    stale_tickers=set(stale_theses),
-                )
-
-                upcoming_earnings = []
-                if not events_data:
-                    upcoming_earnings = await _load_upcoming_earnings(
-                        db,
-                        tickers=[holding.ticker for holding in holdings],
-                        now=now,
-                        upcoming_window=upcoming_window,
-                    )
-
-                concentration_warnings = _concentration_warning(holdings)
-
-                observations = {
-                    "concentration_warnings": concentration_warnings,
-                    "stale_theses": stale_theses,
-                    "missing_theses": missing_theses,
-                    "stable_holdings": stable_holdings,
-                }
-                headline = _digest_headline(
-                    len(events_data),
-                    len(stale_theses),
-                    len(missing_theses),
-                    len(stable_holdings),
-                )
-                _stale_nudge_item = max(
-                    [item for item in holdings_with_theses if item.get("why_own_it") and item.get("reason_age_days", 0) >= 90],
-                    key=lambda item: item["reason_age_days"],
-                    default=None,
-                )
-                subject = _digest_subject(
-                    len(events_data),
-                    len(stable_holdings),
-                    upcoming_earnings=upcoming_earnings or None,
-                    oldest_stale_name=_stale_nudge_item["name"] if _stale_nudge_item else None,
-                    oldest_stale_days=_stale_nudge_item["reason_age_days"] if _stale_nudge_item else None,
-                    missing_count=len(missing_theses),
-                )
-                receipt = _monitoring_receipt(
-                    len(holdings),
-                    len(events_data),
-                    len(stable_holdings),
-                    upcoming_earnings_count=len(upcoming_earnings),
-                    investor_profile=investor_profile,
-                )
-                quiet_nudge = _oldest_reason_nudge(holdings_with_theses, investor_profile=investor_profile) if not events_data else None
-                next_earnings = upcoming_earnings[0] if upcoming_earnings else None
-
-                quiet_streak = _update_quiet_streak(user, has_events=bool(events_data))
-
-                html_content = _render_digest_html(
-                    holdings_with_theses=holdings_with_theses,
-                    events_data=events_data,
-                    observations=observations,
-                    headline=headline,
-                    monitoring_receipt=receipt,
-                    quiet_nudge=quiet_nudge,
-                    upcoming_earnings=upcoming_earnings if not events_data else None,
-                    investor_profile=investor_profile,
-                )
-
-                digest = Digest(
-                    user_id=user.id,
-                    period_start=period_start,
-                    period_end=period_end,
-                    content={
-                        "html": html_content,
-                        "digest_mode": "events" if events_data else "quiet_week",
-                        "subject_line": subject,
-                        "events_count": len(events_data),
-                        "holdings_count": len(holdings),
-                        "stable_holdings_count": len(stable_holdings),
-                        "headline": headline,
-                        "summary_points": _digest_summary_points(
-                            events_data,
-                            observations,
-                            next_earnings,
-                            investor_profile=investor_profile,
-                        ),
-                        "missing_theses_count": len(missing_theses),
-                        "stale_theses_count": len(stale_theses),
-                        "concentration_warning": concentration_warnings,
-                        "monitoring_receipt": receipt,
-                        "quiet_nudge": quiet_nudge,
-                        "consecutive_quiet_weeks": quiet_streak,
-                        "next_earnings": next_earnings,
-                        "investor_profile": investor_profile,
-                    },
-                    status="pending",
-                )
-                db.add(digest)
-                await db.flush()
-
-                for e in events:
-                    e.included_in_digest_id = digest.id
-
-                if html_content:
-                    # A graceful failure returns False and we persist a "failed" digest below.
-                    # A raised exception means we can't trust this user's half-built state, so we
-                    # let it propagate to the outer handler, which rolls back and moves on.
-                    sent = await send_digest_email(
-                        to_email=user.email,
-                        subject=subject,
-                        html_content=html_content,
-                    )
-                    digest.status = "sent" if sent else "failed"
-                    digest.sent_at = datetime.now(timezone.utc) if sent else None
-                    if sent:
-                        from app.services.onboarding import mark_digest_received
-                        await mark_digest_received(db, user_id)
-                else:
-                    digest.status = "failed"
+                if digest is None:
+                    continue
 
                 await db.commit()
                 logger.info("Digest %s for user %s", "sent" if digest.status == "sent" else "failed", user_id)
@@ -865,3 +908,42 @@ async def run_digest_builder():
 
     elapsed = time.monotonic() - started
     logger.info("Weekly digest builder complete in %.1fs", elapsed)
+
+
+async def build_first_digest_for_user(user_id: uuid.UUID) -> None:
+    """Build a user's first digest on demand, right after onboarding, so they see
+    the curated weekly summary in their first session instead of waiting up to a
+    week for the Sunday job. This is the product's core value artifact — delaying
+    it by days is the difference between "this is useful" and a churned user.
+
+    Background-task safe: opens its own session, only fires if the user has no
+    digest yet (truly the first), and never raises. Expects to run AFTER the first
+    monitoring pulse so the week's events are already in place.
+    """
+    try:
+        async with async_session() as db:
+            user = await db.get(User, user_id)
+            if user is None:
+                return
+
+            existing = (
+                await db.execute(select(Digest.id).where(Digest.user_id == user_id).limit(1))
+            ).scalar_one_or_none()
+            if existing is not None:
+                return  # already has a digest — not the first
+
+            now = datetime.now(timezone.utc)
+            digest = await build_and_persist_user_digest(
+                db,
+                user,
+                now=now,
+                period_start=now - timedelta(days=7),
+                period_end=now,
+                send_email=True,  # their first digest: deliver it and validate email
+                update_streak=False,  # the weekly job owns the quiet-streak counter
+            )
+            if digest is not None:
+                await db.commit()
+                logger.info("First digest %s for user %s", digest.status, user_id)
+    except Exception:
+        logger.exception("First digest build failed for user %s", user_id)

@@ -319,6 +319,13 @@ async def wizard_complete(
     from app.services.check_now import run_first_pulse
     background_tasks.add_task(run_first_pulse, current_user.id)
 
+    # Then build their first digest — the product's core value artifact — so they
+    # get the curated summary in this session instead of waiting up to a week.
+    # Queued after the pulse (background tasks run in order) so it captures the
+    # events that pulse just produced. No-op if a digest already exists.
+    from app.jobs.digest_builder import build_first_digest_for_user
+    background_tasks.add_task(build_first_digest_for_user, current_user.id)
+
 
 @router.post("/drafts/{draft_id}/review", status_code=status.HTTP_204_NO_CONTENT)
 async def review_draft(

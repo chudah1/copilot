@@ -2,13 +2,16 @@
 
 import { useEffect, useState } from "react";
 import Link from "next/link";
+import { useRouter } from "next/navigation";
+import { toast } from "sonner";
 import { api } from "@/lib/api";
+import { getErrorMessage } from "@/lib/errors";
 import { AppShell } from "@/components/layout/app-shell";
 import { formatDate } from "@/lib/utils";
 import type { Digest } from "@/types";
 
 function statusDot(status: string) {
-  if (status === "sent") return "text-emerald-700";
+  if (status === "sent" || status === "ready") return "text-emerald-700";
   if (status === "draft") return "text-amber-700";
   return "text-muted-foreground";
 }
@@ -41,12 +44,28 @@ function digestArchiveCopy(investorProfile: "thesis_driven" | "hearsay_driven" |
 }
 
 export default function DigestsPage() {
+  const router = useRouter();
   const [digests, setDigests] = useState<Digest[]>([]);
   const [loading, setLoading] = useState(true);
+  const [generating, setGenerating] = useState(false);
 
   useEffect(() => {
     api.get<Digest[]>("/api/digests").then(setDigests).finally(() => setLoading(false));
   }, []);
+
+  const generateNow = async () => {
+    setGenerating(true);
+    try {
+      const digest = await api.post<Digest>("/api/digests/generate");
+      setDigests((prev) => [digest, ...prev]);
+      toast.success("Digest ready");
+      router.push(`/digests/${digest.id}`);
+    } catch (err) {
+      toast.error(getErrorMessage(err, "Couldn't generate a digest yet"));
+    } finally {
+      setGenerating(false);
+    }
+  };
 
   const investorProfile = digests[0]?.content.investor_profile ?? null;
   const copy = digestArchiveCopy(investorProfile);
@@ -56,16 +75,25 @@ export default function DigestsPage() {
       <div className="max-w-4xl mx-auto px-4 sm:px-8 py-10">
 
         {/* Page header */}
-        <div className="border-b border-border pb-6 mb-8">
-          <p className="font-mono text-[10px] uppercase tracking-[0.3em] text-muted-foreground mb-2">
-            Archive
-          </p>
-          <h1 className="font-display italic text-4xl text-foreground leading-tight">
-            {copy.title}
-          </h1>
-          <p className="font-sans text-sm text-muted-foreground mt-2 max-w-xl leading-relaxed">
-            {copy.subtitle}
-          </p>
+        <div className="border-b border-border pb-6 mb-8 flex items-end justify-between gap-4">
+          <div>
+            <p className="font-mono text-[10px] uppercase tracking-[0.3em] text-muted-foreground mb-2">
+              Archive
+            </p>
+            <h1 className="font-display italic text-4xl text-foreground leading-tight">
+              {copy.title}
+            </h1>
+            <p className="font-sans text-sm text-muted-foreground mt-2 max-w-xl leading-relaxed">
+              {copy.subtitle}
+            </p>
+          </div>
+          <button
+            onClick={generateNow}
+            disabled={generating}
+            className="shrink-0 font-mono text-[10px] uppercase tracking-[0.15em] text-primary border border-primary/30 px-4 py-2 hover:bg-primary/5 transition-colors disabled:opacity-50"
+          >
+            {generating ? "Building…" : "Generate now"}
+          </button>
         </div>
 
         {loading ? (
@@ -96,6 +124,13 @@ export default function DigestsPage() {
             <p className="font-sans text-sm text-muted-foreground max-w-sm mx-auto leading-relaxed">
               {copy.empty}
             </p>
+            <button
+              onClick={generateNow}
+              disabled={generating}
+              className="mt-5 font-mono text-[10px] uppercase tracking-[0.15em] text-primary border border-primary/30 px-4 py-2 hover:bg-primary/5 transition-colors disabled:opacity-50"
+            >
+              {generating ? "Building…" : "Generate one now"}
+            </button>
           </div>
         ) : (
           <div>
