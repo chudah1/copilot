@@ -398,15 +398,13 @@ export default function LandingPage() {
                   &ldquo;AI is the next decade.&rdquo; &ldquo;The market has completely mispriced
                   this.&rdquo;
                 </em>{" "}
-                Six months later you can barely remember it, never mind whether it still holds.
+                Later, events happen 
               </p>
               <p style={{ margin: 0, color: mk.inkSoft }}>
                 So you check the price instead. Green feels like being right. Red feels like being
                 wrong. Neither one tells you whether{" "}
                 <strong style={{ color: mk.ink, fontWeight: 600 }}>the reason you bought</strong>{" "}
-                still holds. That is the thing that separates conviction from hope, and nothing out
-                there keeps an eye on it.
-              </p>
+                still holds. Penkeep figures it out for you, and tells you when it doesn&apos;t</p>
             </div>
           </div>
         </div>
@@ -759,8 +757,8 @@ export default function LandingPage() {
               margin: 0,
             }}
           >
-            Built around your reason.{" "}
-            <span style={{ fontStyle: "italic", color: mk.accent }}>Not their feed.</span>
+            Built around{" "}
+            <span style={{ fontStyle: "italic", color: mk.accent }}>your reason</span>.
           </h2>
 
           <div style={{ marginTop: 48 }}>
