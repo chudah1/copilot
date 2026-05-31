@@ -91,6 +91,10 @@ async def test_check_now_creates_monitoring_events(client, auth_headers, db, tes
     events = (await db.execute(MonitoringEvent.__table__.select())).all()
     assert len(events) >= 1
 
+    # The check stamps last_monitored_at so the dashboard can show "checked X ago".
+    await db.refresh(holding)
+    assert holding.last_monitored_at is not None
+
 
 async def test_check_now_rate_limited_when_recent_event_exists(client, auth_headers, db, test_user):
     holding = Holding(

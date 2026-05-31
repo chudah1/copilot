@@ -67,6 +67,12 @@ def _ensure_sqlite_dev_compatibility(conn) -> None:
             conn.execute(text("ALTER TABLE users ADD COLUMN last_seen_at DATETIME"))
             logger.info("Added missing users.last_seen_at column for local SQLite compatibility")
 
+    if "holdings" in tables:
+        holding_columns = {column["name"] for column in inspector.get_columns("holdings")}
+        if "last_monitored_at" not in holding_columns:
+            conn.execute(text("ALTER TABLE holdings ADD COLUMN last_monitored_at DATETIME"))
+            logger.info("Added missing holdings.last_monitored_at column for local SQLite compatibility")
+
     if "thesis_signals" in tables:
         thesis_signal_columns = {column["name"] for column in inspector.get_columns("thesis_signals")}
         if "last_fired_at" not in thesis_signal_columns:

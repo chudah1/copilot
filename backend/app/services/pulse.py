@@ -319,7 +319,9 @@ async def compute_portfolio_pulse(user_id: uuid.UUID, db: AsyncSession) -> tuple
         # P&L percent
         pnl_pct = _compute_pnl_pct(holding)
 
-        last_checked = last_checked_map.get(holding.id)
+        # Prefer the explicit monitored-at stamp (set on every check, even quiet
+        # ones) so "checked X ago" is truthful; fall back to the last event time.
+        last_checked = _normalize_datetime(holding.last_monitored_at) or last_checked_map.get(holding.id)
         latest_event_at = _normalize_datetime(events[0].created_at) if events else None
 
         if not thesis:

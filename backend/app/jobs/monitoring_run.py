@@ -313,6 +313,10 @@ async def run_monitoring():
                     holding.current_price = company_data.current_price
                     holding.current_value = float(holding.quantity) * company_data.current_price
 
+                # We reached real market data for this holding — record the check
+                # even if it stays quiet, so "checked X ago" stays current daily.
+                holding.last_monitored_at = now
+
                 if not candidates:
                     score, new_label, prev_label = await refresh_thesis_health(
                         db, thesis, claims, decomposition, now=now

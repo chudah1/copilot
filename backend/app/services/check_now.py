@@ -222,6 +222,10 @@ async def run_check_now(
         holding.current_price = company_data.current_price
         holding.current_value = float(holding.quantity) * company_data.current_price
 
+    # Record that we actually checked, even if the pass is quiet — this is what
+    # lets the dashboard say "checked just now, all calm" truthfully.
+    holding.last_monitored_at = now
+
     # Qualitative news_watch matching — BEFORE noise filtering, so a matched
     # news item is tagged (and survives minimum-relevance) and gets cooldown.
     nw_matched = await match_thesis_news_watches(candidates, extract_news_watches(claims))

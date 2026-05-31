@@ -62,6 +62,35 @@ async def test_pulse_intact_thesis_no_events(client, auth_headers, test_user, db
 
 
 @pytest.mark.asyncio
+async def test_pulse_last_checked_reflects_monitored_at_without_events(
+    client, auth_headers, test_user, db: AsyncSession
+):
+    # A quiet first pulse creates no event but stamps last_monitored_at — the
+    # dashboard must still be able to say "checked X ago", not leave it blank.
+    checked_at = datetime.now(timezone.utc) - timedelta(hours=2)
+    holding = Holding(
+        id=uuid.uuid4(), ticker="AAPL", name="Apple Inc",
+        quantity=10, average_cost_basis=150, currency="GBP",
+        user_id=test_user.id, last_monitored_at=checked_at,
+    )
+    db.add(holding)
+    await db.commit()
+
+    thesis = Thesis(
+        id=uuid.uuid4(), holding_id=holding.id, user_id=test_user.id,
+        status="active", why_own_it="Growth play", confidence="high",
+    )
+    db.add(thesis)
+    await db.commit()
+
+    resp = await client.get("/api/portfolio/pulse", headers=auth_headers)
+    pulses = resp.json()["pulses"]
+    assert len(pulses) == 1
+    assert pulses[0]["pulse_status"] == "intact"
+    assert pulses[0]["last_checked_at"] is not None
+
+
+@pytest.mark.asyncio
 async def test_pulse_review_on_breaking_event(client, auth_headers, test_user, db: AsyncSession):
     holding = Holding(
         id=uuid.uuid4(), ticker="AAPL", name="Apple Inc",
