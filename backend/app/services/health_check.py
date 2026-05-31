@@ -73,6 +73,7 @@ async def _classify_candidates(
     for candidate in raw_candidates:
         description = candidate.get("description", "")
 
+        classification_failed = False
         try:
             result = await classify_event(
                 why_own_it=thesis.why_own_it,
@@ -88,16 +89,20 @@ async def _classify_candidates(
         except Exception:
             logger.exception("Health check classification failed for thesis %s", thesis.id)
             result = None
+            classification_failed = True
 
-        if result is None:
+        # A clean None means classify_event judged the candidate irrelevant — drop it.
+        # An exception means we couldn't reach a verdict; degrade gracefully by keeping the
+        # raw candidate (no severity / analysis) so real signal isn't silently dropped.
+        if result is None and not classification_failed:
             continue
 
         classified.append(
             ClassifiedCandidate(
                 event_type=candidate.get("event_type", "unknown"),
                 description=description,
-                severity=result.severity,
-                ai_analysis=result.analysis,
+                severity=result.severity if result is not None else None,
+                ai_analysis=result.analysis if result is not None else None,
             )
         )
     return classified
@@ -130,17 +135,9 @@ async def run_health_check(thesis: Thesis, holding: Holding) -> HealthCheckResul
     )
     watch_hints_status = check_metric_watch_hints(thesis.interpretation, _market_values(company_data))
 
-    # If candidates existed but none classified (API failure), surface that
-    # rather than silently returning all_clear
-    if raw_candidates and not classified:
-        logger.warning(
-            "All %d candidates failed classification for thesis %s — returning check_failed",
-            len(raw_candidates),
-            thesis.id,
-        )
-        assessment = "check_failed"
-    else:
-        assessment = _assess(classified)
+    # Candidates that failed classification are kept (severity=None) so _assess still
+    # surfaces them as "watch" rather than silently collapsing to all_clear.
+    assessment = _assess(classified)
 
     return HealthCheckResult(
         ticker=holding.ticker,

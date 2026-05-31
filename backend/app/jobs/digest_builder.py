@@ -839,15 +839,14 @@ async def run_digest_builder():
                     e.included_in_digest_id = digest.id
 
                 if html_content:
-                    try:
-                        sent = await send_digest_email(
-                            to_email=user.email,
-                            subject=subject,
-                            html_content=html_content,
-                        )
-                    except Exception:
-                        logger.exception("send_digest_email raised for user %s", user_id)
-                        sent = False
+                    # A graceful failure returns False and we persist a "failed" digest below.
+                    # A raised exception means we can't trust this user's half-built state, so we
+                    # let it propagate to the outer handler, which rolls back and moves on.
+                    sent = await send_digest_email(
+                        to_email=user.email,
+                        subject=subject,
+                        html_content=html_content,
+                    )
                     digest.status = "sent" if sent else "failed"
                     digest.sent_at = datetime.now(timezone.utc) if sent else None
                     if sent:

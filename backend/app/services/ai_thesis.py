@@ -444,7 +444,7 @@ def _dedupe_watch_hints(watch_hints: list[dict[str, Any]]) -> list[dict[str, Any
     return deduped
 
 
-def _infer_story_watch_hints(text: str) -> list[dict[str, Any]]:
+def _infer_story_watch_hints(text: str, *, include_story_growth: bool = False) -> list[dict[str, Any]]:
     lowered = text.lower()
     watch_hints: list[dict[str, Any]] = [
         {
@@ -453,8 +453,15 @@ def _infer_story_watch_hints(text: str) -> list[dict[str, Any]]:
             "rationale": "Prompt a review when price moves sharply.",
         }
     ]
-    # Only trigger on explicit revenue/unit language — "growth", "AI", "demand" alone are too generic
-    if any(keyword in lowered for keyword in ("revenue", "sales", "orders", "bookings", "subscribers", "users", "capex", "top line", "top-line")):
+    # Only trigger on explicit revenue/unit language — "growth", "AI", "demand" alone are too
+    # generic for a self-described thesis. For hearsay/story-driven ideas the synthesis has
+    # already committed to revenue growth as the measurable proxy (see _infer_hearsay_conditions),
+    # so include_story_growth lets those generic growth/demand cues back the matching watch hint.
+    revenue_keywords = ("revenue", "sales", "orders", "bookings", "subscribers", "users", "capex", "top line", "top-line")
+    story_growth_keywords = ("growth", "demand", "adoption", "ai")
+    if any(keyword in lowered for keyword in revenue_keywords) or (
+        include_story_growth and any(keyword in lowered for keyword in story_growth_keywords)
+    ):
         watch_hints.append(
             {
                 "kind": "metric_threshold",
@@ -679,7 +686,7 @@ def _apply_synthesis_guardrails(
     if not ai_summary:
         ai_summary = f"{ticker}: this started as a story-driven idea and only holds if the operating results validate it."
 
-    inferred_watch_hints = _infer_story_watch_hints(combined_story_text)
+    inferred_watch_hints = _infer_story_watch_hints(combined_story_text, include_story_growth=True)
     if not any(hint.get("kind") == "metric_threshold" for hint in interpretation["watch_hints"]):
         interpretation["watch_hints"] = _dedupe_watch_hints(
             [*interpretation["watch_hints"], *inferred_watch_hints]

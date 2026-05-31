@@ -179,6 +179,25 @@ async def onboarding_banner(
             suggested_holding=SuggestedHolding(id=str(top.id), ticker=top.ticker, name=top.name) if top else None,
         )
 
+    # First 24h after the first reason: confirm monitoring has started before nudging for more.
+    # (test_banner_add_more_reasons / test_banner_hidden_above_50pct push first_reason_written_at
+    # back >24h precisely to skip this window.)
+    first_reason_written_at = state.first_reason_written_at
+    if first_reason_written_at.tzinfo is None:
+        first_reason_written_at = first_reason_written_at.replace(tzinfo=timezone.utc)
+    if now - first_reason_written_at < timedelta(hours=24):
+        message = (
+            "Nice — your first reason is in. We're now monitoring it against the market, "
+            "news, and filings. We'll flag anything that challenges it."
+        )
+        return OnboardingBannerResponse(
+            show=True,
+            banner_type="first_reason_monitoring",
+            message=message,
+            holdings_count=holdings_count,
+            reasons_count=reasons_count,
+        )
+
     # >50% covered — stop drip banner
     if reasons_count / holdings_count > 0.5:
         return OnboardingBannerResponse(show=False, banner_type=None, message=None, holdings_count=holdings_count, reasons_count=reasons_count)
