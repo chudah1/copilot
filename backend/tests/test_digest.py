@@ -83,15 +83,19 @@ async def test_digest_builder_records_missing_and_stale_theses(db, job_session_f
     assert digest.content["stable_holdings_count"] == 2
     assert digest.content["headline"] == "1 thesis went stale this week."
     assert digest.content["digest_mode"] == "quiet_week"
-    assert digest.content["subject_line"] == "2 of your reasons held up this week"
+    # Quiet week leads the subject with the most open-worthy hook — here the upcoming AAPL earnings.
+    # (Exact day count depends on when the builder runs relative to row creation, so match loosely.)
+    assert digest.content["subject_line"].startswith("AAPL reports in ")
+    assert digest.content["subject_line"].endswith(" days — here's what to watch")
     assert digest.content["missing_theses_count"] == 1
     assert digest.content["stale_theses_count"] == 1
     assert any("Stale theses: MSFT" == point for point in digest.content["summary_points"])
     assert digest.content["next_earnings"]["ticker"] == "AAPL"
     assert "Upcoming:" in html
-    assert "We checked 3 holdings with current reasons." in digest.content["monitoring_receipt"]
+    # No onboarding profile recorded for this user, so the receipt uses the neutral quiet-week copy.
+    assert "Checked 3 holdings — all quiet." in digest.content["monitoring_receipt"]
     send_mock.assert_awaited_once()
-    assert send_mock.await_args.kwargs["subject"] == "2 of your reasons held up this week"
+    assert send_mock.await_args.kwargs["subject"] == digest.content["subject_line"]
 
 
 async def test_digest_happy_path_after_monitoring_event(client, auth_headers, db, test_user, job_session_factory):
@@ -275,5 +279,6 @@ async def test_digest_builder_uses_hearsay_profile_copy(db, job_session_factory)
 
     digest = (await db.execute(select(Digest).where(Digest.user_id == user.id))).scalar_one()
     assert digest.content["investor_profile"] == "hearsay_driven"
-    assert "against the reasons you've attached to them" in digest.content["monitoring_receipt"]
+    # Hearsay-profile quiet-week receipt frames the check against the reasons the user attached.
+    assert "against your reasons" in digest.content["monitoring_receipt"]
     assert "Would the same story still convince you today" in (digest.content["quiet_nudge"] or "")
