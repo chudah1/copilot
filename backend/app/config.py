@@ -15,6 +15,10 @@ class Settings(BaseSettings):
     test_database_url: str = "sqlite+aiosqlite:///./test.db"
     redis_url: str = "redis://localhost:6379"
     enable_scheduler: bool = True
+    # Run a first monitoring pass the moment a thesis becomes monitorable, so a
+    # freshly-onboarded user sees real signal in their first session instead of an
+    # empty "all calm" dashboard. Prod safety valve if it strains API budgets.
+    enable_first_pulse: bool = True
 
     jwt_secret: str = "change-me-in-production"
     jwt_algorithm: str = "HS256"

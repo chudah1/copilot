@@ -852,6 +852,43 @@ export default function PositionDetailPage() {
     return () => window.removeEventListener("scroll", onScroll);
   }, []);
 
+  // Arriving from onboarding, the backend kicks off a first monitoring pass in
+  // the background. Poll briefly so its results land live on this page instead of
+  // forcing a manual refresh — turning "we'll watch this" into "we already checked".
+  useEffect(() => {
+    if (loading || !fromOnboarding) return;
+    const match = holdings.find((h) => h.ticker === ticker);
+    if (!match) return;
+
+    let cancelled = false;
+    let attempts = 0;
+    const MAX_ATTEMPTS = 6; // ~30s at 5s spacing
+
+    const poll = async () => {
+      attempts += 1;
+      try {
+        const fresh = await api.get<MonitoringEvent[]>(`/api/monitoring/holdings/${match.id}/events`);
+        if (cancelled) return;
+        setEvents((prev) => (fresh.length > prev.length ? fresh : prev));
+        if (fresh.some((ev) => !ev.review_action)) {
+          setActiveTab("monitoring"); // surface what the first pulse found
+          return; // results are in — stop polling
+        }
+      } catch {
+        // best-effort; the page already has whatever loaded on mount
+      }
+      if (!cancelled && attempts < MAX_ATTEMPTS) {
+        timer = window.setTimeout(poll, 5000);
+      }
+    };
+
+    let timer = window.setTimeout(poll, 5000);
+    return () => {
+      cancelled = true;
+      window.clearTimeout(timer);
+    };
+  }, [loading, fromOnboarding, ticker, holdings]);
+
   const runHealthCheck = async (thesisId: string) => {
     try {
       setHealthCheckLoading(true);

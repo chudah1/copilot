@@ -1,7 +1,7 @@
 import uuid
 from datetime import datetime, timezone
 
-from fastapi import APIRouter, Depends, HTTPException, status
+from fastapi import APIRouter, BackgroundTasks, Depends, HTTPException, status
 from fastapi.responses import JSONResponse
 from sqlalchemy import select
 from sqlalchemy.orm import selectinload
@@ -112,6 +112,7 @@ async def _load_user_thesis(
 @router.post("", response_model=ThesisResponse, status_code=status.HTTP_201_CREATED)
 async def create_thesis(
     body: CreateThesisRequest,
+    background_tasks: BackgroundTasks,
     current_user: User = Depends(get_current_user),
     db: AsyncSession = Depends(get_db),
 ):
@@ -165,6 +166,13 @@ async def create_thesis(
     await mark_reason_written(db, current_user.id)
     await db.commit()
     await db.refresh(thesis)
+
+    # Give the user a real first pulse now that the position has a monitorable
+    # reason, instead of a dashboard that claims "all calm" before checking.
+    if thesis.status in ("active", "draft", "needs_review"):
+        from app.services.check_now import run_first_pulse
+        background_tasks.add_task(run_first_pulse, current_user.id, holding.id)
+
     return thesis
 
 

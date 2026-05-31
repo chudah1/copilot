@@ -8,6 +8,7 @@ from datetime import datetime, timedelta, timezone
 from sqlalchemy import select, func
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from app.config import settings
 from app.models.holding import Holding
 from app.models.monitoring_event import MonitoringEvent
 from app.models.thesis import Thesis
@@ -262,3 +263,114 @@ async def run_check_now(
         created_event_ids=created_event_ids,
         snapshot=snapshot,
     )
+
+
+MONITORABLE_THESIS_STATUSES = ("active", "draft", "needs_review")
+FIRST_PULSE_MAX_HOLDINGS = 5
+
+
+async def _holdings_needing_first_pulse(
+    db: AsyncSession,
+    *,
+    user_id: uuid.UUID,
+    holding_id: uuid.UUID | None,
+    limit: int,
+) -> list[tuple[Holding, Thesis]]:
+    """Holdings that have a monitorable thesis but have never had a real
+    monitoring pass yet (so the dashboard's 'all calm' has never actually been
+    verified). Ordered by position size so the biggest bets get checked first."""
+    event_exists = (
+        select(MonitoringEvent.id)
+        .where(
+            MonitoringEvent.holding_id == Holding.id,
+            MonitoringEvent.event_type != "monitoring_inactive",
+        )
+        .correlate(Holding)
+        .limit(1)
+    )
+    query = (
+        select(Holding)
+        .where(Holding.user_id == user_id)
+        .where(~event_exists.exists())
+        .order_by(func.coalesce(Holding.current_value, 0).desc())
+        .limit(limit)
+    )
+    if holding_id is not None:
+        query = query.where(Holding.id == holding_id)
+
+    holdings = (await db.execute(query)).scalars().all()
+
+    pairs: list[tuple[Holding, Thesis]] = []
+    for holding in holdings:
+        thesis = (
+            await db.execute(
+                select(Thesis)
+                .where(
+                    Thesis.holding_id == holding.id,
+                    Thesis.user_id == user_id,
+                    Thesis.status.in_(MONITORABLE_THESIS_STATUSES),
+                )
+                .order_by(Thesis.created_at.desc())
+                .limit(1)
+            )
+        ).scalar_one_or_none()
+        if thesis is not None:
+            pairs.append((holding, thesis))
+    return pairs
+
+
+async def _run_first_pulse_with_session(
+    db: AsyncSession,
+    *,
+    user_id: uuid.UUID,
+    holding_id: uuid.UUID | None,
+    limit: int,
+) -> int:
+    """Core of run_first_pulse, with an injected session so it's testable.
+    Returns the number of holdings checked."""
+    pairs = await _holdings_needing_first_pulse(
+        db, user_id=user_id, holding_id=holding_id, limit=limit
+    )
+    checked = 0
+    for holding, thesis in pairs:
+        try:
+            await run_check_now(holding, thesis, db)
+            checked += 1
+        except Exception:
+            # One holding failing (bad ticker, market data outage) must not stop
+            # the rest — the first pulse is best-effort.
+            logger.exception("First pulse: check failed for holding %s", holding.id)
+    return checked
+
+
+async def run_first_pulse(
+    user_id: uuid.UUID,
+    holding_id: uuid.UUID | None = None,
+    *,
+    limit: int = FIRST_PULSE_MAX_HOLDINGS,
+) -> None:
+    """Run the first monitoring pass the moment a thesis becomes monitorable.
+
+    Without this, a new user who just wrote their theses sees a dashboard that
+    reports every position as "intact — your assumptions still hold" when nothing
+    has actually been checked (monitoring events only appear after the next 6 AM
+    job). This delivers a truthful first pulse in their very first session: a live
+    snapshot plus any price/news/earnings/filing signal that already contradicts
+    the thesis.
+
+    Designed as a FastAPI BackgroundTask: opens its own DB session (like
+    generate_draft_theses_for_user), is idempotent (skips any holding that already
+    has a real monitoring event), and never raises.
+    """
+    if not settings.enable_first_pulse:
+        return
+
+    from app.database import async_session
+
+    try:
+        async with async_session() as db:
+            await _run_first_pulse_with_session(
+                db, user_id=user_id, holding_id=holding_id, limit=limit
+            )
+    except Exception:
+        logger.exception("First pulse failed for user %s", user_id)

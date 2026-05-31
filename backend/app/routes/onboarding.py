@@ -1,7 +1,7 @@
 import uuid
 from datetime import datetime, timedelta, timezone
 
-from fastapi import APIRouter, Depends, HTTPException, Request, status
+from fastapi import APIRouter, BackgroundTasks, Depends, HTTPException, Request, status
 from pydantic import BaseModel
 from sqlalchemy import select, func
 from sqlalchemy.ext.asyncio import AsyncSession
@@ -303,6 +303,7 @@ async def wizard_skip(
 
 @router.post("/complete", status_code=status.HTTP_204_NO_CONTENT)
 async def wizard_complete(
+    background_tasks: BackgroundTasks,
     current_user: User = Depends(get_current_user),
     db: AsyncSession = Depends(get_db),
 ):
@@ -312,11 +313,18 @@ async def wizard_complete(
         state.wizard_completed_at = now
     await db.commit()
 
+    # The climb just left this user with active, decomposed theses. Run their
+    # first monitoring pass now so the dashboard they land on shows real signal,
+    # not an unverified "all calm". Idempotent + best-effort across all holdings.
+    from app.services.check_now import run_first_pulse
+    background_tasks.add_task(run_first_pulse, current_user.id)
+
 
 @router.post("/drafts/{draft_id}/review", status_code=status.HTTP_204_NO_CONTENT)
 async def review_draft(
     draft_id: uuid.UUID,
     body: DraftReviewRequest,
+    background_tasks: BackgroundTasks,
     current_user: User = Depends(get_current_user),
     db: AsyncSession = Depends(get_db),
 ):
@@ -345,11 +353,13 @@ async def review_draft(
 
     now = datetime.now(timezone.utc)
 
+    kept_holding_id = None
     if body.action == "keep":
         if thesis is None:
             raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Draft thesis not found")
         thesis.status = "active"
         thesis.updated_at = now
+        kept_holding_id = thesis.holding_id
     else:
         if thesis is not None:
             thesis.status = "invalidated"
@@ -365,6 +375,12 @@ async def review_draft(
         state.drafts_reviewed_at = now
 
     await db.commit()
+
+    # A kept draft just became an active thesis — give it its first pulse so the
+    # user sees it actually being monitored, not a silent "intact".
+    if kept_holding_id is not None:
+        from app.services.check_now import run_first_pulse
+        background_tasks.add_task(run_first_pulse, current_user.id, kept_holding_id)
 
 
 @router.post("/synthesize", response_model=SynthesisResponse, status_code=status.HTTP_201_CREATED)
