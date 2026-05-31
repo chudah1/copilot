@@ -4,10 +4,12 @@ from app.config import ENV_FILES, PROJECT_ROOT, Settings
 
 
 def test_env_files_are_absolute_project_paths():
-    assert PROJECT_ROOT.name == "copilot_investor"
+    # PROJECT_ROOT is the repo root (the dir containing backend/), whatever the
+    # checkout folder is named — don't hardcode it.
+    assert (PROJECT_ROOT / "backend").is_dir()
     assert all(Path(path).is_absolute() for path in ENV_FILES)
-    assert ENV_FILES[0].endswith("/copilot_investor/.env")
-    assert ENV_FILES[1].endswith("/copilot_investor/backend/.env")
+    assert Path(ENV_FILES[0]) == PROJECT_ROOT / ".env"
+    assert Path(ENV_FILES[1]) == PROJECT_ROOT / "backend" / ".env"
 
 
 def test_settings_model_uses_absolute_env_files():
