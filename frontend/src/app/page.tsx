@@ -398,7 +398,7 @@ export default function LandingPage() {
                   &ldquo;AI is the next decade.&rdquo; &ldquo;The market has completely mispriced
                   this.&rdquo;
                 </em>{" "}
-                Later, events happen 
+                Later, events happen but you are not sure if they are relevant to your reason.
               </p>
               <p style={{ margin: 0, color: mk.inkSoft }}>
                 So you check the price instead. Green feels like being right. Red feels like being

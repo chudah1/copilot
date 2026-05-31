@@ -27,10 +27,10 @@ export function MarketingFooter() {
 
       <div style={{ display: "flex", gap: 18, flexWrap: "wrap" }}>
         {[
-          { label: "Manifesto", href: "/manifesto" },
-          { label: "Pricing", href: "/pricing" },
-          { label: "FAQ", href: "/faq" },
+          { label: "Blog", href: "/blog" },
+          { label: "FAQ", href: "/#faq" },
           { label: "Security", href: "/security" },
+          { label: "Privacy", href: "/privacy" },
         ].map(({ label, href }) => (
           <Link key={label} href={href} style={{ color: mk.pencil, textDecoration: "none" }}>
             {label}

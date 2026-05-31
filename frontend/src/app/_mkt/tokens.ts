@@ -1,16 +1,37 @@
 export const mk = {
-  paper: '#f5f3ee',
-  card: '#ffffff',
-  cardSoft: '#faf8f3',
-  ink: '#15140f',
-  inkSoft: '#3a3833',
-  pencil: '#7a7268',
-  pencilLight: '#dcd6c8',
-  accent: 'oklch(0.66 0.16 35)',
-  accentDeep: 'oklch(0.54 0.18 30)',
-  accentSoft: '#fce4d6',
-  green: 'oklch(0.62 0.10 155)',
-  greenSoft: '#dceadc',
+  // Light surfaces
+  paper: "#ECE7DB",
+  paperHi: "#F5F1E8",
+  card: "#FAF7F0",
+  cardSoft: "#F5F1E8",
+
+  // Text
+  ink: "#161510",
+  inkSoft: "#3A3833",
+  pencil: "#726C60",
+  pencilSoft: "#9B9588",
+  pencilLight: "#D2CBBB",
+  rule: "#D2CBBB",
+
+  // Accent — rust is the only one
+  accent: "#C1492A",
+  accentDeep: "#A23A1F",
+  accentSoft: "#F0D8CB",
+
+  // Status
+  sage: "#5A7A5D",
+  sageSoft: "#DDE4D6",
+  green: "#5A7A5D",
+  greenSoft: "#DDE4D6",
+
+  // Dark sections
+  night: "#17150F",
+  nightCard: "#211E16",
+  nightLine: "#332F24",
+  cream: "#ECE7DB",
+  creamDim: "#A8A293",
+
+  // Fonts
   sans: 'var(--font-geist), "Geist", system-ui, sans-serif',
   mono: 'var(--font-jetbrains), "JetBrains Mono", monospace',
   display: 'var(--font-cormorant), "Cormorant", Georgia, serif',

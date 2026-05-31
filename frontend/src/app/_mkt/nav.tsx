@@ -6,7 +6,7 @@ import { mk } from "./tokens";
 import { PenKeepMark } from "./mark";
 
 interface MarketingNavProps {
-  active?: "faq" | "manifesto" | "security" | "pricing";
+  active?: "faq" | "blog" | "security" | "pricing";
 }
 
 export function MarketingNav({ active }: MarketingNavProps) {
@@ -51,14 +51,20 @@ export function MarketingNav({ active }: MarketingNavProps) {
         </Link>
 
         <div style={{ display: "flex", gap: 26, alignItems: "center" }}>
-          <Link href="/manifesto" style={linkStyle("manifesto")} className="hidden sm:inline">
-            Manifesto
+          <Link href="/blog" style={linkStyle("blog")} className="hidden sm:inline">
+            Blog
           </Link>
-          <Link href="/faq" style={linkStyle("faq")} className="hidden sm:inline">
-            FAQ
-          </Link>
-          <Link href="/pricing" style={linkStyle("pricing")} className="hidden sm:inline">
-            Pricing
+          <Link
+            href="/#how-it-works"
+            className="hidden sm:inline"
+            style={{
+              color: mk.pencil,
+              textDecoration: "none",
+              fontSize: 14,
+              transition: "color 150ms",
+            }}
+          >
+            How it works
           </Link>
           <Link href="/security" style={linkStyle("security")} className="hidden sm:inline">
             Security
