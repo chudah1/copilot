@@ -92,6 +92,18 @@ export function cleanTicker(ticker: string) {
   return ticker.replace(/_US_EQ$/, "").replace(/_EQ$/, "");
 }
 
+function timeAgo(iso: string | null | undefined): string | null {
+  if (!iso) return null;
+  const then = new Date(iso).getTime();
+  if (Number.isNaN(then)) return null;
+  const mins = Math.floor((Date.now() - then) / 60000);
+  if (mins < 1) return "just now";
+  if (mins < 60) return `${mins}m ago`;
+  const hrs = Math.floor(mins / 60);
+  if (hrs < 24) return `${hrs}h ago`;
+  return `${Math.floor(hrs / 24)}d ago`;
+}
+
 interface PositionCardProps {
   holding: Holding;
   thesis?: Thesis;
@@ -237,6 +249,11 @@ export function PositionCard({
             <p className="font-sans text-[11px] text-muted-foreground leading-relaxed line-clamp-2">
               {statusCopy.detail}
             </p>
+            {pulseStatus === "intact" && hasThesis && timeAgo(pulse?.last_checked_at) && (
+              <p className="font-mono text-[9px] uppercase tracking-[0.12em] text-muted-foreground/50">
+                Checked {timeAgo(pulse?.last_checked_at)}
+              </p>
+            )}
           </div>
 
           {/* Thesis snippet or CTA */}
