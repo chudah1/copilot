@@ -46,15 +46,18 @@ async def test_assist_thesis_returns_structured_output():
 
 
 async def test_assist_thesis_falls_back_when_ai_fails():
+    # Disable the OpenAI fallback so we exercise the deterministic no-AI fallback,
+    # not whatever live OPENAI_API_KEY happens to be in the environment.
     with patch("app.services.ai_thesis.settings.anthropic_api_key", "test-key"):
-        with patch("app.services.ai_thesis._call_claude", new_callable=AsyncMock, side_effect=Exception("API error")):
-            result = await assist_thesis(
-                ticker="AAPL",
-                name="Apple Inc",
-                quantity=10,
-                average_cost=150.50,
-                draft_text="My friend recommended it.",
-            )
+        with patch("app.services.ai_thesis.settings.openai_api_key", ""):
+            with patch("app.services.ai_thesis._call_claude", new_callable=AsyncMock, side_effect=Exception("API error")):
+                result = await assist_thesis(
+                    ticker="AAPL",
+                    name="Apple Inc",
+                    quantity=10,
+                    average_cost=150.50,
+                    draft_text="My friend recommended it.",
+                )
 
     assert result is not None
     assert "AAPL" in result.ai_summary
