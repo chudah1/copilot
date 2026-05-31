@@ -257,7 +257,7 @@ async def compute_portfolio_pulse(user_id: uuid.UUID, db: AsyncSession) -> tuple
     holdings = list(holdings_result.scalars().all())
 
     if not holdings:
-        return [], _next_sunday_8am(), []
+        return [], _next_sunday_8am()
 
     holding_ids = [h.id for h in holdings]
 
