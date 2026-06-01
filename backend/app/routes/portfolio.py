@@ -284,10 +284,9 @@ async def sync_broker(
     for h in synced_holdings:
         await db.refresh(h)
 
-    from app.services.ai_thesis import generate_draft_theses_for_user
-    new_holding_ids = [h.id for h in synced_holdings]
-    background_tasks.add_task(generate_draft_theses_for_user, current_user.id, new_holding_ids)
-
+    # No auto-drafting a thesis on import. The product leads with the user's own
+    # words (onboarding asks them first); AI drafting is now an explicit opt-in,
+    # so we never pre-write a reason before they've had their turn.
     return synced_holdings
 
 
@@ -391,9 +390,7 @@ async def add_manual_holding(
     await db.commit()
     await db.refresh(holding)
 
-    from app.services.ai_thesis import generate_draft_theses_for_user
-    background_tasks.add_task(generate_draft_theses_for_user, current_user.id, [holding.id])
-
+    # No auto-draft on import — the user writes their own reason; AI help is opt-in.
     return holding
 
 
@@ -493,10 +490,7 @@ async def upload_csv(
     for h in created:
         await db.refresh(h)
 
-    from app.services.ai_thesis import generate_draft_theses_for_user
-    new_ids = [h.id for h in created]
-    background_tasks.add_task(generate_draft_theses_for_user, current_user.id, new_ids)
-
+    # No auto-draft on import — the user writes their own reason; AI help is opt-in.
     return created
 
 

@@ -8,8 +8,8 @@ import { api } from "@/lib/api";
 import { getErrorMessage } from "@/lib/errors";
 import type {
   CandidateSignal,
-  DraftStatus,
   GroundingResponse,
+  Holding,
   HoldingContext,
   SynthesisResponse,
   Thesis,
@@ -174,6 +174,7 @@ function WizardInner() {
   const [savingThesis, setSavingThesis] = useState(false);
   const [groundingResult, setGroundingResult] = useState<GroundingResponse | null>(null);
   const [selectedSignalIdx, setSelectedSignalIdx] = useState<Set<number>>(new Set());
+  const [draftingForMe, setDraftingForMe] = useState(false);
   const profile = wizardState.investorProfile;
   const profileContent = profile ? PROFILE_CONTENT[profile] : null;
 
@@ -185,18 +186,22 @@ function WizardInner() {
   // On mount: determine starting holding
   useEffect(() => {
     if (!initialWizardState.holdingId) {
-      // Pick the top undrafted holding from draft status
-      api
-        .get<DraftStatus>("/api/portfolio/draft-status")
-        .then((ds) => {
-          const ready = ds.drafts.find((d) => d.status === "ready");
-          const pending = ds.drafts.find((d) => d.status === "pending");
-          const chosen = ready || pending;
-          if (chosen) {
+      // Lead with the user's own words: pick their largest position that has no
+      // reason written yet (no dependency on any pre-generated AI draft).
+      Promise.all([
+        api.get<Holding[]>("/api/portfolio/holdings"),
+        api.get<Thesis[]>("/api/theses/current"),
+      ])
+        .then(([holdings, theses]) => {
+          const withThesis = new Set(theses.map((t) => t.holding_id));
+          const undrafted = holdings
+            .filter((h) => !withThesis.has(h.id))
+            .sort((a, b) => (b.current_value ?? 0) - (a.current_value ?? 0));
+          if (undrafted[0]) {
             setLoadingHolding(true);
-            setWizardState((prev) => ({ ...prev, holdingId: chosen.holding_id }));
+            setWizardState((prev) => ({ ...prev, holdingId: undrafted[0].id }));
           } else {
-            // No drafts at all — redirect to dashboard
+            // Every position already has a reason — nothing to onboard.
             router.replace("/dashboard");
           }
         })
@@ -499,6 +504,29 @@ function WizardInner() {
     </motion.div>
   );
 
+  // Opt-in AI help: only when the user asks for it, and only as a starting point
+  // they can edit — never pre-filled before they've had a chance to write their own.
+  const handleDraftForMe = async () => {
+    if (!holding) return;
+    setDraftingForMe(true);
+    setError("");
+    try {
+      const draft = await api.post<{ why_own_it: string; what_would_change_my_mind: string }>(
+        "/api/theses/draft",
+        { ticker: holding.ticker }
+      );
+      setWizardState((prev) => ({
+        ...prev,
+        answer1: prev.answer1.trim() ? prev.answer1 : draft.why_own_it,
+        answer2: prev.answer2.trim() ? prev.answer2 : (draft.what_would_change_my_mind ?? prev.answer2),
+      }));
+    } catch (e) {
+      setError(getErrorMessage(e, "Couldn't draft a starting point — try writing a line yourself."));
+    } finally {
+      setDraftingForMe(false);
+    }
+  };
+
   const renderQuestion = (
     qKey: "answer1" | "answer2",
     question: string,
@@ -561,6 +589,15 @@ function WizardInner() {
         >
           Skip for now
         </button>
+        {qKey === "answer1" && (
+          <button
+            onClick={handleDraftForMe}
+            disabled={draftingForMe || !holding}
+            className="text-xs text-muted-foreground hover:text-foreground transition-colors font-mono underline underline-offset-4 disabled:opacity-50 ml-auto"
+          >
+            {draftingForMe ? "Drafting…" : "No reason yet? Draft a starting point"}
+          </button>
+        )}
       </div>
     </motion.div>
   );
