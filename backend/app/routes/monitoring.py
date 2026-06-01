@@ -1,13 +1,15 @@
 import uuid
 from datetime import datetime, timezone
 
-from fastapi import APIRouter, Depends, HTTPException, status
+from fastapi import APIRouter, Depends, Header, HTTPException, Query, status
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.orm import selectinload
 
+from app.config import settings
 from app.database import get_db
 from app.dependencies import get_current_user
+from app.services.relevance import compute_relevance_metrics
 from app.models.conviction_log_entry import ConvictionLogEntry
 from app.models.holding import Holding
 from app.models.monitoring_event import MonitoringEvent
@@ -236,3 +238,25 @@ async def check_now(
         next_available_at=result.next_available_at,
         snapshot=snapshot_response,
     )
+
+
+@router.get("/relevance")
+async def relevance_metrics(
+    days: int = Query(14, ge=1, le=90),
+    x_metrics_token: str | None = Header(default=None),
+    db: AsyncSession = Depends(get_db),
+):
+    """Global signal-quality read: of the events users reviewed, what fraction did
+    they mark "not relevant", broken down by source. Gated by the X-Metrics-Token
+    header (matched against settings.metrics_token); disabled if no token is set.
+
+    This is an ops endpoint, not user-facing — it deliberately uses a shared token
+    rather than JWT so it can be curled while watching the first users go live.
+    """
+    if not settings.metrics_token:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Not found")
+    if x_metrics_token != settings.metrics_token:
+        raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Invalid metrics token")
+
+    metrics = await compute_relevance_metrics(db, days=days)
+    return metrics.to_dict()

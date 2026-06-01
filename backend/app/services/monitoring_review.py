@@ -224,5 +224,10 @@ async def review_monitoring_event(
         signal_id=event.signal_id,
     )
 
+    # Relevance instrumentation: record the human verdict on this fired event.
+    from app.services.relevance import log_event_reviewed
+
+    log_event_reviewed(event, action, now=review_time)
+
     await db.flush()
     return review

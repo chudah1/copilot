@@ -373,4 +373,8 @@ async def persist_classified_candidates(
 
     if events:
         await db.flush()
+        from app.services.relevance import log_event_fired
+
+        for event in events:
+            log_event_fired(event, ticker=holding.ticker)
     return [event.id for event in events]

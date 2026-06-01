@@ -19,6 +19,9 @@ class Settings(BaseSettings):
     # freshly-onboarded user sees real signal in their first session instead of an
     # empty "all calm" dashboard. Prod safety valve if it strains API budgets.
     enable_first_pulse: bool = True
+    # Shared secret that gates the global relevance-metrics endpoint
+    # (GET /api/monitoring/relevance). Empty disables the endpoint entirely.
+    metrics_token: str = ""
 
     jwt_secret: str = "change-me-in-production"
     jwt_algorithm: str = "HS256"
