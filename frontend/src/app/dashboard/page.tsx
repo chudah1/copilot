@@ -429,10 +429,17 @@ export default function DashboardPage() {
     if (!upcomingEarnings.length) return null;
     return [...upcomingEarnings].sort((a, b) => a.days_until - b.days_until)[0] ?? null;
   }, [upcomingEarnings]);
+  // Only frame earnings as "the next decision point" when they're actually near
+  // term — surfacing one 58 days out as the headline reads as noise.
+  const EARNINGS_HORIZON_DAYS = 21;
+  const nearTermEarnings =
+    nextUpcomingEarnings && nextUpcomingEarnings.days_until <= EARNINGS_HORIZON_DAYS
+      ? nextUpcomingEarnings
+      : null;
   const dashboardState = dashboardStateCopy(
     onboardingState?.investor_profile ?? null,
     { review: reviewCount, watch: needsAttention.filter((p) => p.pulse_status === "watch").length, missing: missingThesisCount },
-    nextUpcomingEarnings,
+    nearTermEarnings,
     needsAttention[0] ?? null,
     recentReviewBanner,
   );
@@ -447,7 +454,7 @@ export default function DashboardPage() {
     needsAttention,
     holdings: holdings ?? [],
     missingHolding,
-    nextUpcomingEarnings,
+    nextUpcomingEarnings: nearTermEarnings,
   });
 
   const sortedHoldings = useMemo(() => {
@@ -493,6 +500,7 @@ export default function DashboardPage() {
   useEffect(() => {
     if (showActivationBanner) {
       window.localStorage.setItem("dashboard_activation_banner_dismissed", "1");
+      // eslint-disable-next-line react-hooks/set-state-in-effect -- persist once-shown; behavior predates this change
       setActivationBannerDismissed(true);
     }
   }, [showActivationBanner]);

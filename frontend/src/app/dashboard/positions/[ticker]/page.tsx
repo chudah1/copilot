@@ -429,7 +429,7 @@ function getMonitoringCalmState(args: {
     title,
     body,
     nextCheck,
-    previewItems: monitoringPreviewItems.slice(0, 2),
+    previewItems: monitoringPreviewItems,
     fallbackHints: watchHints.slice(0, 2),
   };
 }
@@ -490,7 +490,9 @@ function getMonitoringPreviewItems(
     ) ?? [];
 
   if (signalItems.length > 0) {
-    return signalItems.slice(0, 3);
+    // Show every active signal — the surrounding copy states the count, so a
+    // shorter list reads as a mismatch ("watching 4 signals" but only 2 shown).
+    return signalItems;
   }
 
   return fallbackWatchHints
@@ -1236,6 +1238,9 @@ export default function PositionDetailPage() {
   // ── Derived state ────────────────────────────────────────────────────────
 
   const cost = holding.quantity * holding.average_cost_basis;
+  // No market price yet (manual add not synced, or data fetch failed) — don't
+  // render a misleading £0.00 / -100%; show a neutral "unavailable" instead.
+  const hasPrice = (holding.current_value ?? 0) > 0 || (holding.current_price ?? 0) > 0;
   const value = holding.current_value || 0;
   const pnl = value - cost;
   const pnlPct = cost > 0 ? ((pnl / cost) * 100).toFixed(1) : "0.0";
@@ -1251,10 +1256,12 @@ export default function PositionDetailPage() {
       (e) => ["earnings_surprise", "earnings_call_transcript"].includes(e.event_type) && !e.review_action && isRecentEvent(e.created_at, 14),
     ) ?? null;
 
-  // Show earnings review prompt if a monitoring event fired OR health check shows recent earnings
-  const showEarningsBanner =
-    Boolean(recentEarningsEvent) ||
-    (Boolean(healthCheck?.recent_earnings_surprise_pct) && Boolean(activeThesis));
+  // Show the post-earnings review prompt only off an actual recent earnings event
+  // (gated to 14 days and cleared once reviewed). The old fallback keyed off
+  // health_check.recent_earnings_surprise_pct, which is just last quarter's
+  // standing surprise with no recency bound — so the prompt never went away, even
+  // after running a check or when the next report was months out.
+  const showEarningsBanner = Boolean(recentEarningsEvent);
   const hasSignals = Boolean(decompositionEnvelope?.decomposition);
   const hasActiveSignals =
     decompositionEnvelope?.decomposition?.claims.some((claim) =>
@@ -1425,13 +1432,24 @@ export default function PositionDetailPage() {
               )}
             </div>
             <div className="text-right shrink-0 pb-0.5">
-              <p className="font-mono text-[1.6rem] tabular-nums text-foreground leading-tight">
-                {formatCurrency(value)}
-              </p>
-              <p className={`font-mono text-[13px] tabular-nums mt-0.5 ${pnl >= 0 ? "text-emerald-700" : "text-red-600"}`}>
-                {pnl >= 0 ? "+" : ""}{formatCurrency(pnl)}
-                <span className="opacity-60 ml-1.5">({pnl >= 0 ? "+" : ""}{pnlPct}%)</span>
-              </p>
+              {hasPrice ? (
+                <>
+                  <p className="font-mono text-[1.6rem] tabular-nums text-foreground leading-tight">
+                    {formatCurrency(value)}
+                  </p>
+                  <p className={`font-mono text-[13px] tabular-nums mt-0.5 ${pnl >= 0 ? "text-emerald-700" : "text-red-600"}`}>
+                    {pnl >= 0 ? "+" : ""}{formatCurrency(pnl)}
+                    <span className="opacity-60 ml-1.5">({pnl >= 0 ? "+" : ""}{pnlPct}%)</span>
+                  </p>
+                </>
+              ) : (
+                <>
+                  <p className="font-mono text-[1.6rem] tabular-nums text-muted-foreground/50 leading-tight">—</p>
+                  <p className="font-mono text-[10px] uppercase tracking-[0.14em] text-muted-foreground/60 mt-1">
+                    Price unavailable
+                  </p>
+                </>
+              )}
             </div>
           </div>
 
