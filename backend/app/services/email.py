@@ -51,6 +51,22 @@ async def send_health_band_drop_email(
     return _send_email_via_resend("penKeep <alerts@penkeep.io>", to_email, subject, html)
 
 
+async def send_thesis_break_email(to_email: str, ticker: str, summary: str) -> bool:
+    from html import escape
+
+    html = (
+        f"<h2>Your thesis on <strong>{escape(ticker)}</strong> may be breaking</h2>"
+        f"<p>A monitoring signal just contradicted a core reason you wrote for owning {escape(ticker)}:</p>"
+        f'<blockquote style="border-left:3px solid #dc2626;margin:8px 0;padding:6px 14px;color:#555;">'
+        f"{escape(summary)}</blockquote>"
+        "<p>This is the kind of change you said would matter. Decide whether your reason still holds.</p>"
+        f'<p><a href="{settings.frontend_url}/dashboard/positions/{escape(ticker)}" '
+        'style="font-size:16px;font-weight:bold">Review your reason →</a></p>'
+    )
+    subject = f"{ticker}: your thesis may be breaking"
+    return _send_email_via_resend("penKeep <alerts@penkeep.io>", to_email, subject, html)
+
+
 async def send_password_reset_email(to_email: str, reset_token: str) -> bool:
     reset_url = f"{settings.frontend_url}/reset-password?token={reset_token}"
     html = (

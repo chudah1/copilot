@@ -359,6 +359,7 @@ async def run_monitoring():
                 surviving_set = {id(c) for c, _ in suppressed}
                 classified = [(c, s, a) for c, s, a in classified if id(c) in surviving_set]
 
+                status_before = thesis.status
                 await persist_classified_candidates(
                     db,
                     thesis=thesis,
@@ -369,6 +370,20 @@ async def run_monitoring():
                     now=now,
                     investor_profile=investor_profile,
                 )
+
+                # Real-time break alert: the moment a thesis flips to needs_review on
+                # a breaking signal, email the user instead of waiting for the digest.
+                if thesis.status == "needs_review" and status_before in ("active", "draft"):
+                    breaking = next(((c, a) for c, s, a in classified if s == "thesis_breaking"), None)
+                    if breaking is not None:
+                        candidate, analysis = breaking
+                        from app.services.alerts import maybe_send_thesis_break_alert
+
+                        await maybe_send_thesis_break_alert(
+                            user=thesis.user,
+                            ticker=holding.ticker,
+                            summary=analysis or candidate.get("description"),
+                        )
 
                 score, new_label, prev_label = await refresh_thesis_health(
                     db, thesis, claims, decomposition, now=now
