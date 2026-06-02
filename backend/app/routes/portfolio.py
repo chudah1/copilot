@@ -385,6 +385,22 @@ async def add_manual_holding(
     )
     db.add(holding)
     await db.flush()
+
+    # Fetch a live price now so a manually-added position shows a real value
+    # immediately, instead of £0.00 / -100% until the next background sync. Store
+    # the native per-share price and the GBP market value (account currency), the
+    # same convention the broker sync uses.
+    try:
+        price = await fetch_live_price(holding.ticker)
+        if price is not None:
+            native_ccy = detect_native_currency(holding.ticker)
+            fx_rate = await get_fx_rate(native_ccy, "GBP")
+            holding.current_price = price
+            holding.current_value = float(holding.quantity) * price * fx_rate
+            holding.currency = native_ccy
+    except Exception:
+        logger.warning("Could not fetch initial price for %s", holding.ticker, exc_info=True)
+
     from app.services.onboarding import mark_portfolio_connected
     await mark_portfolio_connected(db, current_user.id)
     await db.commit()

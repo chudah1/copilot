@@ -1,7 +1,7 @@
 import pytest
 from datetime import datetime, timedelta, timezone
 from sqlalchemy import select
-from unittest.mock import patch
+from unittest.mock import AsyncMock, patch
 
 from app.models.conviction_log_entry import ConvictionLogEntry
 from app.models.thesis import Thesis
@@ -115,16 +115,19 @@ async def test_portfolio_summary_counts_active_and_stale_theses(client, auth_hea
 
 @pytest.mark.asyncio
 async def test_portfolio_summary_tracks_monitorability_and_conviction_mismatch(client, auth_headers, db, test_user):
-    first = await client.post(
-        "/api/portfolio/holdings",
-        json={"ticker": "NVDA", "name": "NVIDIA", "quantity": 10, "average_cost_basis": 100},
-        headers=auth_headers,
-    )
-    second = await client.post(
-        "/api/portfolio/holdings",
-        json={"ticker": "META", "name": "Meta", "quantity": 5, "average_cost_basis": 100},
-        headers=auth_headers,
-    )
+    # Pin prices off so value-weighted coverage is deterministic (manual add now
+    # fetches a live price; without this the weighting would track the live market).
+    with patch("app.routes.portfolio.fetch_live_price", new_callable=AsyncMock, return_value=None):
+        first = await client.post(
+            "/api/portfolio/holdings",
+            json={"ticker": "NVDA", "name": "NVIDIA", "quantity": 10, "average_cost_basis": 100},
+            headers=auth_headers,
+        )
+        second = await client.post(
+            "/api/portfolio/holdings",
+            json={"ticker": "META", "name": "Meta", "quantity": 5, "average_cost_basis": 100},
+            headers=auth_headers,
+        )
     first_id = first.json()["id"]
     second_id = second.json()["id"]
 
