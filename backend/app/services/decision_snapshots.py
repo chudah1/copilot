@@ -70,6 +70,54 @@ async def _next_test_at(db: AsyncSession, ticker: str, *, now: datetime) -> date
     return report if report >= now else None
 
 
+async def _persist_snapshot(
+    db: AsyncSession,
+    *,
+    thesis: Thesis,
+    holding: Holding,
+    verdict: str,
+    bucket: str,
+    decision_source: str,
+    bet_text: str | None,
+    event: MonitoringEvent | None,
+    notes: str | None,
+    now: datetime,
+) -> DecisionSnapshot:
+    """Build + add the snapshot shared by every capture site. The only differences
+    between sites are the verdict/bucket/source, the bet text, and the event-linked
+    fields (null for a whole-thesis re-underwrite)."""
+    interpretation = thesis.interpretation or {}
+    snapshot = DecisionSnapshot(
+        user_id=thesis.user_id,
+        thesis_id=thesis.id,
+        holding_id=holding.id,
+        monitoring_event_id=event.id if event else None,
+        claim_id=event.claim_id if event else None,
+        signal_id=event.signal_id if event else None,
+        verdict=verdict,
+        bucket=bucket,
+        decision_source=decision_source,
+        decided_at=now,
+        price_native=holding.current_price,
+        value_gbp=holding.current_value,
+        currency=holding.currency,
+        benchmark_ticker=_benchmark_for(holding.currency),
+        next_test_at=await _next_test_at(db, holding.ticker, now=now),
+        bet_text=bet_text,
+        condition_snapshot={
+            "watch_hints": interpretation.get("watch_hints"),
+            "monitorability": interpretation.get("monitorability"),
+            "triggering_evidence": event.raw_data if event else None,
+            "event_type": event.event_type if event else None,
+            "evidence_type": event.evidence_type if event else None,
+            "severity": event.severity if event else None,
+            "verdict_note": notes,
+        },
+    )
+    db.add(snapshot)
+    return snapshot
+
+
 async def capture_event_decision(
     db: AsyncSession,
     *,
@@ -86,44 +134,18 @@ async def capture_event_decision(
         bucket = VERDICT_BUCKET.get(action)
         if bucket is None:
             return None  # not one of the five conviction verdicts
-
         now = now or datetime.now(timezone.utc)
         holding = (
             await db.execute(select(Holding).where(Holding.id == event.holding_id))
         ).scalar_one_or_none()
         if holding is None:
             return None
-
-        interpretation = thesis.interpretation or {}
-        snapshot = DecisionSnapshot(
-            user_id=thesis.user_id,
-            thesis_id=thesis.id,
-            holding_id=holding.id,
-            monitoring_event_id=event.id,
-            claim_id=event.claim_id,
-            signal_id=event.signal_id,
-            verdict=action,
-            bucket=bucket,
+        return await _persist_snapshot(
+            db, thesis=thesis, holding=holding, verdict=action, bucket=bucket,
             decision_source="event_review",
-            decided_at=now,
-            price_native=holding.current_price,
-            value_gbp=holding.current_value,
-            currency=holding.currency,
-            benchmark_ticker=_benchmark_for(holding.currency),
-            next_test_at=await _next_test_at(db, holding.ticker, now=now),
             bet_text=(event.evidence_summary or event.summary or event.title),
-            condition_snapshot={
-                "watch_hints": interpretation.get("watch_hints"),
-                "monitorability": interpretation.get("monitorability"),
-                "triggering_evidence": event.raw_data,
-                "event_type": event.event_type,
-                "evidence_type": event.evidence_type,
-                "severity": event.severity,
-                "verdict_note": notes,
-            },
+            event=event, notes=notes, now=now,
         )
-        db.add(snapshot)
-        return snapshot
     except Exception:
         logger.exception("Failed to capture decision snapshot for event %s", getattr(event, "id", None))
         return None
@@ -145,7 +167,6 @@ async def capture_quarterly_decision(
         bucket = QUARTERLY_BUCKET.get(response_value)
         if bucket is None:
             return None
-
         now = now or datetime.now(timezone.utc)
         if holding is None:
             holding = (
@@ -153,31 +174,11 @@ async def capture_quarterly_decision(
             ).scalar_one_or_none()
         if holding is None:
             return None
-
-        interpretation = thesis.interpretation or {}
-        snapshot = DecisionSnapshot(
-            user_id=thesis.user_id,
-            thesis_id=thesis.id,
-            holding_id=holding.id,
-            verdict=response_value,
-            bucket=bucket,
-            decision_source="quarterly_review",
-            decided_at=now,
-            price_native=holding.current_price,
-            value_gbp=holding.current_value,
-            currency=holding.currency,
-            benchmark_ticker=_benchmark_for(holding.currency),
-            next_test_at=await _next_test_at(db, holding.ticker, now=now),
-            bet_text=thesis.why_own_it,
-            condition_snapshot={
-                "watch_hints": interpretation.get("watch_hints"),
-                "monitorability": interpretation.get("monitorability"),
-                "triggering_evidence": None,
-                "verdict_note": notes,
-            },
+        return await _persist_snapshot(
+            db, thesis=thesis, holding=holding, verdict=response_value, bucket=bucket,
+            decision_source="quarterly_review", bet_text=thesis.why_own_it,
+            event=None, notes=notes, now=now,
         )
-        db.add(snapshot)
-        return snapshot
     except Exception:
         logger.exception("Failed to capture quarterly decision snapshot for thesis %s", getattr(thesis, "id", None))
         return None

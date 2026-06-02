@@ -183,16 +183,20 @@ def _read_text(
     return f"You held {t} through “{bet}.” No measurable condition has updated yet" + (f"; {phrase}." if phrase else ".")
 
 
-async def resolve_snapshot(db: AsyncSession, snapshot: DecisionSnapshot, company_data, *, now: datetime) -> bool:
+async def resolve_snapshot(
+    db: AsyncSession, snapshot: DecisionSnapshot, company_data, *, now: datetime, ticker: str | None = None,
+) -> bool:
     """Compute and persist the read for one snapshot. Returns False (leaving it
-    open to retry) if market data is unavailable."""
+    open to retry) if market data is unavailable. The job passes the ticker it
+    already loaded; only standalone callers fall back to a lookup."""
     if company_data is None or company_data.current_price is None:
         return False
 
-    holding = (
-        await db.execute(select(Holding).where(Holding.id == snapshot.holding_id))
-    ).scalar_one_or_none()
-    ticker = holding.ticker if holding else "?"
+    if ticker is None:
+        holding = (
+            await db.execute(select(Holding).where(Holding.id == snapshot.holding_id))
+        ).scalar_one_or_none()
+        ticker = holding.ticker if holding else "?"
 
     conditions = _condition_reads(snapshot, company_data) if snapshot.bucket in ("held", "exited") else []
     price = _price_read(snapshot, company_data)
@@ -261,7 +265,7 @@ async def run_decision_resolution() -> None:
                 company_data = None
             for snapshot in group:
                 try:
-                    if await resolve_snapshot(db, snapshot, company_data, now=now):
+                    if await resolve_snapshot(db, snapshot, company_data, now=now, ticker=ticker):
                         resolved += 1
                 except Exception:
                     logger.exception("Decision resolution failed for snapshot %s", snapshot.id)

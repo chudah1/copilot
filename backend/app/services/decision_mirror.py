@@ -179,10 +179,13 @@ async def get_decision_patterns(
                 "instances": len(dismissed), "hits": 0,
             })
 
+    # Outcome computed once per snapshot, reused for both the count and the gate.
+    outcomes = [(s.bucket, _conditions_outcome(s.resolution_json)) for s in snaps]
+
     # Conviction (held through a warning).
-    held = [s for s in snaps if s.bucket == "held" and _conditions_outcome(s.resolution_json) is not None]
+    held = [o for b, o in outcomes if b == "held" and o is not None]
     if len(held) >= min_instances:
-        ok = sum(1 for s in held if _conditions_outcome(s.resolution_json) == "held")
+        ok = sum(1 for o in held if o == "held")
         patterns.append({
             "kind": "conviction", "tone": "neutral",
             "headline": f"When you held through a warning, the condition you were watching still held {ok} of {len(held)} times.",
@@ -191,9 +194,9 @@ async def get_decision_patterns(
         })
 
     # Exit (reasoning-not-regret: did the break hold up).
-    exited = [s for s in snaps if s.bucket == "exited" and _conditions_outcome(s.resolution_json) is not None]
+    exited = [o for b, o in outcomes if b == "exited" and o is not None]
     if len(exited) >= min_instances:
-        broke = sum(1 for s in exited if _conditions_outcome(s.resolution_json) == "broke")
+        broke = sum(1 for o in exited if o == "broke")
         patterns.append({
             "kind": "exit", "tone": "neutral",
             "headline": f"When you exited, the break you flagged held up {broke} of {len(exited)} times.",
