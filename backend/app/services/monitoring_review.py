@@ -220,5 +220,11 @@ async def review_monitoring_event(
 
     log_event_reviewed(event, action, now=review_time)
 
+    # Decision-mirror capture: snapshot the call + what was being bet on, from
+    # values already in hand. Best-effort — never blocks the user's decision.
+    from app.services.decision_snapshots import capture_event_decision
+
+    await capture_event_decision(db, thesis=thesis, event=event, action=action, notes=notes, now=review_time)
+
     await db.flush()
     return review
