@@ -562,6 +562,7 @@ def _render_digest_html(
     quiet_nudge: str | None,
     upcoming_earnings: list[dict] | None = None,
     investor_profile: InvestorProfile = None,
+    mirror: dict | None = None,
 ) -> str:
     ranked_events = sorted(events_data, key=_event_rank)[:5]
     stable_holdings = observations.get("stable_holdings", [])[:3]
@@ -656,6 +657,23 @@ def _render_digest_html(
         parts.append(
             f"<p><strong>Concentration:</strong> {escape(observations['concentration_warnings'])}</p>"
         )
+
+    # How your calls are playing out — the mirror's weekly payoff, the thing that
+    # turns "what changed" into "how your decisions are holding up".
+    if mirror:
+        reads = mirror.get("reads") or []
+        open_bets = mirror.get("open_bets") or []
+        if reads or open_bets:
+            parts.append("<h3>How your calls are playing out</h3>")
+            for r in reads:
+                parts.append(f"<p>{escape(r['read'])}</p>")
+            if open_bets:
+                items = []
+                for b in open_bets:
+                    days = b.get("days_until")
+                    when = f"next test in {days}d" if isinstance(days, int) and days >= 0 else "no test scheduled yet"
+                    items.append(f"{escape(b['ticker'])} ({escape(when)})")
+                parts.append(f"<p><strong>Open bets:</strong> {', '.join(items)}</p>")
 
     parts.append('<p><a href="/dashboard">→ Open dashboard</a></p>')
     return "".join(parts)
@@ -802,6 +820,13 @@ async def build_and_persist_user_digest(
         prefs = user.preferences or {}
         quiet_streak = prefs.get("consecutive_quiet_weeks", 0)
 
+    # Decision mirror — the week's reads + open conviction bets.
+    from app.services.decision_mirror import get_mirror_for_digest
+
+    mirror = await get_mirror_for_digest(
+        db, user_id, period_start=period_start, period_end=period_end, now=now
+    )
+
     html_content = _render_digest_html(
         holdings_with_theses=holdings_with_theses,
         events_data=events_data,
@@ -811,6 +836,7 @@ async def build_and_persist_user_digest(
         quiet_nudge=quiet_nudge,
         upcoming_earnings=upcoming_earnings if not events_data else None,
         investor_profile=investor_profile,
+        mirror=mirror,
     )
 
     digest = Digest(
@@ -839,6 +865,7 @@ async def build_and_persist_user_digest(
             "consecutive_quiet_weeks": quiet_streak,
             "next_earnings": next_earnings,
             "investor_profile": investor_profile,
+            "decision_mirror": mirror,
         },
         status="pending",
     )
