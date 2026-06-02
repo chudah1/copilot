@@ -12,6 +12,7 @@ from app.jobs.post_earnings_eval import run_post_earnings_evaluation
 from app.jobs.onboarding_drip import run_onboarding_drip
 from app.jobs.reengagement import run_reengagement
 from app.jobs.signal_label_refresh import run_signal_label_refresh
+from app.services.decision_resolution import run_decision_resolution
 
 logger = logging.getLogger(__name__)
 
@@ -72,15 +73,17 @@ def setup_scheduler():
     scheduler.add_job(run_onboarding_drip, "cron", hour=9, minute=0, id="onboarding_drip")
     scheduler.add_job(run_reengagement, "cron", hour=10, minute=0, id="reengagement")
     scheduler.add_job(run_signal_label_refresh, "cron", day_of_week="sat", hour=5, minute=0, id="signal_label_refresh")
+    # Decision-mirror resolution: read back conviction calls whose bet has been tested.
+    scheduler.add_job(run_decision_resolution, "cron", hour=11, minute=0, id="decision_resolution")
 
     scheduler.add_listener(_on_job_executed, EVENT_JOB_EXECUTED)
     scheduler.add_listener(_on_job_error, EVENT_JOB_ERROR)
     scheduler.add_listener(_on_job_missed, EVENT_JOB_MISSED)
     scheduler.start()
     logger.info(
-        "Scheduler started with 9 jobs: portfolio_sync, monitoring_run, digest_builder, "
+        "Scheduler started with 10 jobs: portfolio_sync, monitoring_run, digest_builder, "
         "quarterly_review_prep, earnings_refresh, post_earnings_eval, "
-        "onboarding_drip, reengagement, signal_label_refresh"
+        "onboarding_drip, reengagement, signal_label_refresh, decision_resolution"
     )
 
 
