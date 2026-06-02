@@ -166,6 +166,28 @@ async def test_relative_vs_market_read(db, test_user):
     assert "vs market +4%" in snap.resolution_json["read"]
 
 
+async def test_vague_thesis_gets_weak_mirror_with_nudge(db, test_user):
+    # No metric-threshold condition -> vague -> weak read that nudges for a sharper thesis.
+    snap, *_ = await _snapshot(db, test_user.id, bucket="held", watch_hints=[],
+                               next_test_at=_NOW - timedelta(days=1))
+    await resolve_snapshot(db, snap, _company(), now=_NOW)
+    read = snap.resolution_json["read"]
+    assert "wasn't specific enough to test" in read
+    assert "pin a measurable condition" in read.lower()
+
+
+async def test_measurable_thesis_unresolved_this_time_is_not_weak_mirror(db, test_user):
+    # Has a metric condition, but the metric isn't in the data yet -> transient
+    # "no update", not the vague nudge.
+    hint = [{"kind": "metric_threshold", "metric": "pe_ratio", "operator": "<=", "threshold": 30.0}]
+    snap, *_ = await _snapshot(db, test_user.id, bucket="held", watch_hints=hint,
+                               next_test_at=_NOW - timedelta(days=1))
+    await resolve_snapshot(db, snap, _company(), now=_NOW)  # pe_ratio is None
+    read = snap.resolution_json["read"]
+    assert "No measurable condition has updated yet" in read
+    assert "wasn't specific enough" not in read
+
+
 async def test_no_market_data_leaves_open_for_retry(db, test_user):
     snap, *_ = await _snapshot(db, test_user.id, next_test_at=_NOW - timedelta(days=1))
     ok = await resolve_snapshot(db, snap, None, now=_NOW)

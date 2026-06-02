@@ -133,15 +133,29 @@ def _clean(ticker: str) -> str:
     return ticker.replace("_US_EQ", "").replace("_EQ", "")
 
 
+def _is_vague(snapshot: DecisionSnapshot) -> bool:
+    """A decision is 'vague' (gets the weak mirror) when the thesis had nothing
+    measurable to test: low monitorability, or no metric-threshold condition at
+    all. These will never produce a reasoning read, so we frame the gap honestly
+    and nudge toward a sharper thesis — rather than pretend a price move is one."""
+    cond = snapshot.condition_snapshot or {}
+    if cond.get("monitorability") == "low":
+        return True
+    hints = cond.get("watch_hints") or []
+    return not any(h.get("kind") == "metric_threshold" for h in hints)
+
+
 def _read_text(
     *, bucket: str, ticker: str, bet: str | None, conditions: list[dict],
-    price: dict, claim_broke: bool | None, claim_text: str | None,
+    price: dict, claim_broke: bool | None, claim_text: str | None, vague: bool = False,
 ) -> str:
     t = _clean(ticker)
     bet = (bet or "this position").strip()
     phrase = _price_phrase(price)
     breached = [c for c in conditions if c["held"] is False]
     held_all = bool(conditions) and not breached
+    # The weak mirror's honest framing of the price gap when there's nothing to test.
+    weak_tail = (phrase or "no measurable change") + ". This reason wasn't specific enough to test — pin a measurable condition and the next read can actually grade your call."
 
     if bucket == "dismissed":
         if claim_broke:
@@ -154,6 +168,8 @@ def _read_text(
             return f"You exited {t} — “{bet}.” The break held up: {c['metric']} is {c['value_now']} vs your {c['operator']} {c['threshold']}."
         if held_all:
             return f"You exited {t} — “{bet}.” The condition you flagged has since recovered."
+        if vague:
+            return f"You exited {t} — “{bet}.” {weak_tail}"
         return f"You exited {t} — “{bet}.”" + (f" {phrase}." if phrase else "")
 
     # held
@@ -162,6 +178,8 @@ def _read_text(
         return f"You held {t} through “{bet}.” A condition you were watching has broken: {c['metric']} is {c['value_now']} vs your {c['operator']} {c['threshold']}."
     if held_all:
         return f"You held {t} through “{bet}.” The conditions you were watching still hold."
+    if vague:
+        return f"You held {t} through “{bet}.” {weak_tail}"
     return f"You held {t} through “{bet}.” No measurable condition has updated yet" + (f"; {phrase}." if phrase else ".")
 
 
@@ -199,6 +217,7 @@ async def resolve_snapshot(db: AsyncSession, snapshot: DecisionSnapshot, company
         "read": _read_text(
             bucket=snapshot.bucket, ticker=ticker, bet=snapshot.bet_text,
             conditions=conditions, price=price, claim_broke=claim_broke, claim_text=claim_text,
+            vague=_is_vague(snapshot),
         ),
     }
     return True
