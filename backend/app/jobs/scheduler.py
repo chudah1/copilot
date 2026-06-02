@@ -18,16 +18,38 @@ logger = logging.getLogger(__name__)
 scheduler = AsyncIOScheduler()
 
 
+from datetime import datetime, timezone
+
+# Last-run health per background job, surfaced via /health so a failed job is
+# visible to monitoring instead of silently leaving the dashboard stale. We keep
+# status + timestamp only here (no error strings — /health is public); the error
+# detail goes to the logs and Sentry.
+JOB_HEALTH: dict[str, dict] = {}
+
+
+def _record_job_health(job_id: str, status: str) -> None:
+    JOB_HEALTH[job_id] = {"status": status, "at": datetime.now(timezone.utc).isoformat()}
+
+
 def _on_job_executed(event):
     logger.info("Job %s completed (retval=%s)", event.job_id, event.retval)
+    _record_job_health(event.job_id, "ok")
 
 
 def _on_job_error(event):
     logger.error("Job %s raised an exception: %s", event.job_id, event.exception, exc_info=event.traceback)
+    _record_job_health(event.job_id, "error")
+    try:  # best-effort alerting if Sentry is configured; never fail the listener
+        import sentry_sdk
+
+        sentry_sdk.capture_exception(event.exception)
+    except Exception:
+        pass
 
 
 def _on_job_missed(event):
     logger.warning("Job %s missed its scheduled run time", event.job_id)
+    _record_job_health(event.job_id, "missed")
 
 
 def setup_scheduler():

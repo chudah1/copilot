@@ -176,4 +176,14 @@ app.include_router(waitlist_router)
 
 @app.get("/health")
 async def health():
-    return {"status": "ok"}
+    # Surface background-job health so a silently failing job (which would leave
+    # the dashboard stale) is visible to uptime monitoring. Always 200 so the
+    # platform health check doesn't restart-loop on a single bad job run.
+    from app.jobs.scheduler import JOB_HEALTH
+
+    failed = sorted(job_id for job_id, h in JOB_HEALTH.items() if h.get("status") in ("error", "missed"))
+    return {
+        "status": "degraded" if failed else "ok",
+        "failed_jobs": failed,
+        "jobs": JOB_HEALTH,
+    }

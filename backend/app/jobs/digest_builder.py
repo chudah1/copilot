@@ -31,10 +31,12 @@ def _age_in_days(timestamp: datetime, *, now: datetime) -> int:
     return (now - _normalize_datetime(timestamp)).days
 
 
-def _digest_headline(events_count: int, stale_count: int, missing_count: int, stable_count: int) -> str:
-    if events_count > 0:
-        verb = "needs" if events_count == 1 else "need"
-        return f"{events_count} of your reasons {verb} review this week."
+def _digest_headline(reasons_flagged: int, stale_count: int, missing_count: int, stable_count: int) -> str:
+    # reasons_flagged counts distinct holdings with events, not raw events — a
+    # single position firing two signals is still one reason to review.
+    if reasons_flagged > 0:
+        verb = "needs" if reasons_flagged == 1 else "need"
+        return f"{reasons_flagged} of your reasons {verb} review this week."
     if stale_count > 0:
         return f"{stale_count} thesis{'es' if stale_count != 1 else ''} went stale this week."
     if missing_count > 0:
@@ -45,7 +47,7 @@ def _digest_headline(events_count: int, stale_count: int, missing_count: int, st
 
 
 def _digest_subject(
-    events_count: int,
+    reasons_flagged: int,
     stable_count: int,
     *,
     upcoming_earnings: list[dict] | None = None,
@@ -53,9 +55,9 @@ def _digest_subject(
     oldest_stale_days: int | None = None,
     missing_count: int = 0,
 ) -> str:
-    if events_count > 0:
-        verb = "needs" if events_count == 1 else "need"
-        return f"{events_count} of your reasons {verb} review this week"
+    if reasons_flagged > 0:
+        verb = "needs" if reasons_flagged == 1 else "need"
+        return f"{reasons_flagged} of your reasons {verb} review this week"
     # Quiet week — lead with something worth opening for
     if upcoming_earnings:
         next_e = upcoming_earnings[0]
@@ -762,8 +764,11 @@ async def build_and_persist_user_digest(
         "missing_theses": missing_theses,
         "stable_holdings": stable_holdings,
     }
+    # Count distinct holdings with events, not raw events — so a position that
+    # fired two signals reads as one reason to review, not two.
+    reasons_flagged = len({e.get("holding_id") or e.get("ticker") for e in events_data})
     headline = _digest_headline(
-        len(events_data),
+        reasons_flagged,
         len(stale_theses),
         len(missing_theses),
         len(stable_holdings),
@@ -774,7 +779,7 @@ async def build_and_persist_user_digest(
         default=None,
     )
     subject = _digest_subject(
-        len(events_data),
+        reasons_flagged,
         len(stable_holdings),
         upcoming_earnings=upcoming_earnings or None,
         oldest_stale_name=_stale_nudge_item["name"] if _stale_nudge_item else None,
