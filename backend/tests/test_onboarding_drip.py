@@ -42,19 +42,12 @@ async def test_get_or_create_state_returns_existing(db, test_user):
 
 
 @pytest.mark.asyncio
-async def test_mark_portfolio_connected(db, test_user):
-    await mark_portfolio_connected(db, test_user.id)
-    await db.commit()
-    state = await get_or_create_state(db, test_user.id)
-    assert state.portfolio_connected_at is not None
-
-
-@pytest.mark.asyncio
-async def test_mark_portfolio_connected_idempotent(db, test_user):
+async def test_mark_portfolio_connected_sets_and_is_idempotent(db, test_user):
     await mark_portfolio_connected(db, test_user.id)
     await db.commit()
     state = await get_or_create_state(db, test_user.id)
     first_connected = state.portfolio_connected_at
+    assert first_connected is not None
 
     await mark_portfolio_connected(db, test_user.id)
     await db.commit()

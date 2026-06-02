@@ -167,9 +167,6 @@ app.include_router(onboarding_router)
 from app.routes.quarterly_review import router as quarterly_review_router
 app.include_router(quarterly_review_router)
 
-from app.routes.notifications import router as notifications_router
-app.include_router(notifications_router)
-
 from app.routes.research import router as research_router
 app.include_router(research_router)
 

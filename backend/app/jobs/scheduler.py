@@ -8,7 +8,6 @@ from app.jobs.monitoring_run import run_monitoring
 from app.jobs.digest_builder import run_digest_builder
 from app.jobs.quarterly_review_prep import run_quarterly_review_prep
 from app.jobs.earnings_refresh import run_earnings_refresh
-from app.jobs.pre_earnings_nudge import run_pre_earnings_nudge
 from app.jobs.post_earnings_eval import run_post_earnings_evaluation
 from app.jobs.onboarding_drip import run_onboarding_drip
 from app.jobs.reengagement import run_reengagement
@@ -47,7 +46,6 @@ def setup_scheduler():
     )
     # Earnings pipeline jobs
     scheduler.add_job(run_earnings_refresh, "cron", day_of_week="mon", hour=7, minute=0, id="earnings_refresh")
-    scheduler.add_job(run_pre_earnings_nudge, "cron", hour=7, minute=30, id="pre_earnings_nudge")
     scheduler.add_job(run_post_earnings_evaluation, "cron", hour=8, minute=0, id="post_earnings_eval")
     scheduler.add_job(run_onboarding_drip, "cron", hour=9, minute=0, id="onboarding_drip")
     scheduler.add_job(run_reengagement, "cron", hour=10, minute=0, id="reengagement")
@@ -58,8 +56,8 @@ def setup_scheduler():
     scheduler.add_listener(_on_job_missed, EVENT_JOB_MISSED)
     scheduler.start()
     logger.info(
-        "Scheduler started with 10 jobs: portfolio_sync, monitoring_run, digest_builder, "
-        "quarterly_review_prep, earnings_refresh, pre_earnings_nudge, post_earnings_eval, "
+        "Scheduler started with 9 jobs: portfolio_sync, monitoring_run, digest_builder, "
+        "quarterly_review_prep, earnings_refresh, post_earnings_eval, "
         "onboarding_drip, reengagement, signal_label_refresh"
     )
 

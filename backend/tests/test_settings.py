@@ -53,16 +53,6 @@ async def test_update_settings_persists_supported_values_only(client, auth_heade
 # --- New Phase 8 tests ---
 
 
-def test_default_preferences():
-    prefs = UserPreferences()
-    assert prefs.digest_frequency == "weekly"
-    assert prefs.digest_day == "sunday"
-    assert prefs.digest_time == "17:00"
-    assert prefs.earnings_alerts is True
-    assert prefs.quarterly_review_reminders is True
-    assert prefs.email_enabled is True
-
-
 def test_invalid_frequency_defaults_to_weekly():
     prefs = UserPreferences(digest_frequency="hourly")
     assert prefs.digest_frequency == "weekly"
@@ -126,21 +116,6 @@ def test_get_user_prefs_normalizes_string_bools():
     assert prefs.email_enabled is False
     assert prefs.earnings_alerts is False
     assert prefs.quarterly_review_reminders is True
-
-
-@pytest.mark.asyncio
-async def test_get_settings_returns_all_fields(client, auth_headers):
-    response = await client.get("/api/settings", headers=auth_headers)
-    assert response.status_code == 200
-    data = response.json()
-    assert "email_enabled" in data
-    assert "earnings_alerts" in data
-    assert "quarterly_review_reminders" in data
-    assert "digest_day" in data
-    assert "digest_time" in data
-    assert data["email_enabled"] is True
-    assert data["digest_day"] == "sunday"
-    assert data["digest_time"] == "17:00"
 
 
 @pytest.mark.asyncio

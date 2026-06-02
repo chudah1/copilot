@@ -12,7 +12,6 @@ from app.models.thesis_decomposition import ThesisDecomposition
 from app.models.thesis_entity import ThesisEntity
 from app.models.thesis_review import ThesisReview
 from app.models.thesis_signal import ThesisSignal
-from app.models.user_notification import UserNotification
 from app.services.conviction_log import EVIDENCE_REVIEWED, append_log_entry
 
 logger = logging.getLogger(__name__)
@@ -117,14 +116,6 @@ async def _apply_signal_decay(
                 signal.consecutive_ignores,
             )
             await _rebuild_interpretation_cache(db, thesis)
-            notification = UserNotification(
-                user_id=thesis.user_id,
-                notification_type="signal_deactivated",
-                thesis_id=thesis.id,
-                content=f"We stopped watching \"{signal.signal_label}\" — you've ignored it {signal.consecutive_ignores} times in a row.",
-                metadata_json={"signal_id": str(signal.id), "signal_label": signal.signal_label},
-            )
-            db.add(notification)
         return
 
     signal.consecutive_ignores = 0
