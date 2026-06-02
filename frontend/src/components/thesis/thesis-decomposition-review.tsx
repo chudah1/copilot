@@ -303,7 +303,7 @@ export function ThesisDecompositionReview({ envelope, loading, saving, onGenerat
                         )}
                       </div>
                       {entity.rationale && (
-                        <p className="font-sans text-xs text-muted-foreground/80 leading-relaxed">
+                        <p className="font-sans text-xs text-foreground/70 leading-relaxed">
                           {entity.rationale}
                         </p>
                       )}
@@ -352,7 +352,7 @@ export function ThesisDecompositionReview({ envelope, loading, saving, onGenerat
                                   )}
                                 </div>
                                 {signal.rationale && (
-                                  <p className="font-sans text-xs text-muted-foreground/80 leading-relaxed">
+                                  <p className="font-sans text-xs text-foreground/70 leading-relaxed">
                                     {signal.rationale}
                                   </p>
                                 )}
