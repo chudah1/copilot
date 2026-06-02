@@ -11,6 +11,7 @@ import type { PortfolioSummary } from "@/types";
 
 const NAV_LINKS = [
   { href: "/dashboard", label: "Dashboard" },
+  { href: "/research", label: "Research" },
   { href: "/digests", label: "Digests" },
   { href: "/settings", label: "Settings" },
 ];
