@@ -436,6 +436,9 @@ export default function DashboardPage() {
     nextUpcomingEarnings && nextUpcomingEarnings.days_until <= EARNINGS_HORIZON_DAYS
       ? nextUpcomingEarnings
       : null;
+  // Same horizon for the footer calendar — don't list earnings weeks out as
+  // "upcoming"; they're not actionable yet.
+  const visibleEarnings = upcomingEarnings.filter((e) => e.days_until <= EARNINGS_HORIZON_DAYS);
   const dashboardState = dashboardStateCopy(
     onboardingState?.investor_profile ?? null,
     { review: reviewCount, watch: needsAttention.filter((p) => p.pulse_status === "watch").length, missing: missingThesisCount },
@@ -923,7 +926,7 @@ export default function DashboardPage() {
       </div>
 
       {/* ── Footer strip ─────────────────────────────────────────────── */}
-      {(upcomingEarnings.length > 0) && (
+      {(visibleEarnings.length > 0) && (
         <ErrorBoundary>
           <div className="border-t border-border bg-card px-4 sm:px-8 py-3">
             <div className="flex items-center gap-6 overflow-x-auto">
@@ -931,7 +934,7 @@ export default function DashboardPage() {
                 Upcoming earnings
               </p>
               <div className="flex items-center gap-4">
-                {upcomingEarnings.slice(0, 6).map((e) => (
+                {visibleEarnings.slice(0, 6).map((e) => (
                   <Link
                     key={e.holding_id}
                     href={`/dashboard/positions/${e.ticker}`}
