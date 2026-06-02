@@ -151,7 +151,7 @@ export function ThesisDecompositionReview({ envelope, loading, saving, onGenerat
           >
             Generate signals
           </button>
-          <span className="font-mono text-[9px] text-muted-foreground/50 uppercase tracking-[0.15em]">
+          <span className="font-mono text-[9px] text-muted-foreground/80 uppercase tracking-[0.15em]">
             Takes ~30 seconds
           </span>
         </div>
@@ -225,7 +225,7 @@ export function ThesisDecompositionReview({ envelope, loading, saving, onGenerat
         )}
 
         {confPct != null && (
-          <span className="font-mono text-[9px] text-muted-foreground/60">
+          <span className="font-mono text-[9px] text-muted-foreground/80">
             {confPct}% decomp. confidence
           </span>
         )}
@@ -239,7 +239,7 @@ export function ThesisDecompositionReview({ envelope, loading, saving, onGenerat
         <span className={`ml-auto font-mono text-[9px] uppercase tracking-[0.15em] ${
           envelope.status === "confirmed" ? "text-emerald-700"
           : envelope.status === "partially_confirmed" ? "text-amber-700"
-          : "text-muted-foreground/60"
+          : "text-muted-foreground/80"
         }`}>
           {envelope.status.replaceAll("_", " ")}
         </span>
@@ -268,7 +268,7 @@ export function ThesisDecompositionReview({ envelope, loading, saving, onGenerat
                       {CLAIM_TYPE_LABELS[claim.claim_type] ?? claim.claim_type.replaceAll("_", " ")}
                     </span>
                   )}
-                  <span className="font-mono text-[9px] text-muted-foreground/50 tabular-nums">
+                  <span className="font-mono text-[9px] text-muted-foreground/80 tabular-nums">
                     {claimActiveSignals} signal{claimActiveSignals !== 1 ? "s" : ""} active
                   </span>
                 </div>
@@ -292,7 +292,7 @@ export function ThesisDecompositionReview({ envelope, loading, saving, onGenerat
                           {entity.entity_ticker ? ` (${entity.entity_ticker})` : ""}
                         </span>
                         {entity.entity_type && (
-                          <span className="font-mono text-[10px] uppercase tracking-[0.1em] text-muted-foreground/70 border border-border/50 px-1 py-px">
+                          <span className="font-mono text-[10px] uppercase tracking-[0.1em] text-muted-foreground/80 border border-border/50 px-1 py-px">
                             {entity.entity_type.replaceAll("_", " ")}
                           </span>
                         )}
@@ -303,7 +303,7 @@ export function ThesisDecompositionReview({ envelope, loading, saving, onGenerat
                         )}
                       </div>
                       {entity.rationale && (
-                        <p className="font-sans text-xs text-muted-foreground/70 leading-relaxed">
+                        <p className="font-sans text-xs text-muted-foreground/80 leading-relaxed">
                           {entity.rationale}
                         </p>
                       )}
@@ -324,7 +324,7 @@ export function ThesisDecompositionReview({ envelope, loading, saving, onGenerat
                             >
                               {/* Toggle dot */}
                               <span className={`font-mono text-[12px] mt-[1px] shrink-0 transition-colors ${
-                                selected ? "text-emerald-600" : "text-muted-foreground/30"
+                                selected ? "text-emerald-600" : "text-muted-foreground/80"
                               }`}>
                                 {selected ? "●" : "○"}
                               </span>
@@ -337,7 +337,7 @@ export function ThesisDecompositionReview({ envelope, loading, saving, onGenerat
                                   }`}>
                                     {signal.signal_label ?? signal.signal_type.replaceAll("_", " ")}
                                   </p>
-                                  <span className="font-mono text-[7px] uppercase tracking-[0.15em] text-muted-foreground/50 border border-border/40 px-1 py-px">
+                                  <span className="font-mono text-[7px] uppercase tracking-[0.15em] text-muted-foreground/80 border border-border/40 px-1 py-px">
                                     {signal.signal_type.replaceAll("_", " ")}
                                   </span>
                                   {signal.confirmation_required && !signal.active && (
@@ -346,13 +346,13 @@ export function ThesisDecompositionReview({ envelope, loading, saving, onGenerat
                                     </span>
                                   )}
                                   {signal.confidence != null && (
-                                    <span className="font-mono text-[7px] text-muted-foreground/40 tabular-nums">
+                                    <span className="font-mono text-[7px] text-muted-foreground/80 tabular-nums">
                                       {Math.round(signal.confidence * 100)}%
                                     </span>
                                   )}
                                 </div>
                                 {signal.rationale && (
-                                  <p className="font-sans text-xs text-muted-foreground/60 leading-relaxed">
+                                  <p className="font-sans text-xs text-muted-foreground/80 leading-relaxed">
                                     {signal.rationale}
                                   </p>
                                 )}
@@ -379,7 +379,7 @@ export function ThesisDecompositionReview({ envelope, loading, saving, onGenerat
       <div className="border-t border-border/40 pt-4 flex items-center justify-between gap-4 flex-wrap">
         <div className="space-y-1">
           <div className="flex items-center gap-3 flex-wrap">
-            <p className="font-mono text-[9px] text-muted-foreground/50">
+            <p className="font-mono text-[9px] text-muted-foreground/80">
               Generated {formatDate(decomposition.created_at)}
             </p>
           </div>

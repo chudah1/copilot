@@ -1404,7 +1404,7 @@ export default function PositionDetailPage() {
               ) : (
                 <button
                   onClick={() => setDeleteConfirming(true)}
-                  className="font-mono text-[10px] uppercase tracking-[0.15em] text-muted-foreground/50 hover:text-muted-foreground transition-colors"
+                  className="font-mono text-[10px] uppercase tracking-[0.15em] text-muted-foreground/70 hover:text-muted-foreground transition-colors"
                 >
                   Remove position
                 </button>
@@ -1444,7 +1444,7 @@ export default function PositionDetailPage() {
                 </>
               ) : (
                 <>
-                  <p className="font-mono text-[1.6rem] tabular-nums text-muted-foreground/50 leading-tight">—</p>
+                  <p className="font-mono text-[1.6rem] tabular-nums text-muted-foreground/70 leading-tight">—</p>
                   <p className="font-mono text-[10px] uppercase tracking-[0.14em] text-muted-foreground/60 mt-1">
                     Price unavailable
                   </p>
@@ -1492,7 +1492,7 @@ export default function PositionDetailPage() {
                 <div key={step.label} className="flex items-center gap-2">
                   {i > 0 && <span className="text-border text-[10px]">·</span>}
                   <span className={`font-mono text-[10px] uppercase tracking-[0.12em] ${
-                    step.done ? "text-emerald-600" : step.partial ? "text-amber-600" : "text-muted-foreground/40"
+                    step.done ? "text-emerald-600" : step.partial ? "text-amber-600" : "text-muted-foreground/70"
                   }`}>
                     {step.done ? "●" : step.partial ? "◐" : "○"} {step.label}
                   </span>
@@ -1863,7 +1863,7 @@ export default function PositionDetailPage() {
                         >
                           {sub.label}
                           {sub.badge !== undefined && (
-                            <span className="font-mono text-[9px] text-muted-foreground/50 tabular-nums">{sub.badge}</span>
+                            <span className="font-mono text-[9px] text-muted-foreground/70 tabular-nums">{sub.badge}</span>
                           )}
                           {thesisSubTab === sub.id && (
                             <motion.div layoutId="thesis-sub-indicator" className="absolute bottom-0 left-0 right-0 h-px bg-primary" transition={{ type: "spring", stiffness: 400, damping: 35 }} />
@@ -2103,7 +2103,7 @@ export default function PositionDetailPage() {
                                         : `${unreviewedEvents} signals need your verdict.`)}
                               </p>
                             </div>
-                            <span className="font-mono text-[10px] text-muted-foreground/50 shrink-0 self-end pb-0.5">
+                            <span className="font-mono text-[10px] text-muted-foreground/70 shrink-0 self-end pb-0.5">
                               drag to decide
                             </span>
                           </div>

@@ -217,7 +217,7 @@ function DraggableCard({ event, index, total, isTop, onSwipe, busy, investorProf
                 </span>
               )}
             </div>
-            <span className="font-mono text-[10px] text-muted-foreground/60">
+            <span className="font-mono text-[10px] text-muted-foreground/80">
               {formatDate(event.created_at)}
             </span>
           </div>
@@ -233,7 +233,7 @@ function DraggableCard({ event, index, total, isTop, onSwipe, busy, investorProf
 
           <div className="space-y-3 flex-1 overflow-hidden">
             <div>
-              <p className="font-mono text-[10px] uppercase tracking-[0.14em] text-muted-foreground/70 mb-1">
+              <p className="font-mono text-[10px] uppercase tracking-[0.14em] text-muted-foreground/80 mb-1">
                 What changed
               </p>
               <p className="font-sans text-sm text-foreground leading-relaxed line-clamp-4">
@@ -243,7 +243,7 @@ function DraggableCard({ event, index, total, isTop, onSwipe, busy, investorProf
 
             {narrative.whyItMatters && (
               <div>
-                <p className="font-mono text-[10px] uppercase tracking-[0.14em] text-muted-foreground/70 mb-1">
+                <p className="font-mono text-[10px] uppercase tracking-[0.14em] text-muted-foreground/80 mb-1">
                   Why it matters
                 </p>
                 <p className="font-sans text-sm text-foreground/80 leading-relaxed line-clamp-4">
@@ -281,9 +281,9 @@ function DraggableCard({ event, index, total, isTop, onSwipe, busy, investorProf
         {/* Swipe hint row at bottom */}
         {isTop && (
           <div className="flex items-center justify-between border-t border-border px-5 py-2.5 bg-muted/30">
-            <span className="font-mono text-[10px] uppercase tracking-[0.1em] text-muted-foreground/60">← {copy.left}</span>
-            <span className="font-mono text-[10px] uppercase tracking-[0.1em] text-muted-foreground/60">↑ {copy.up}</span>
-            <span className="font-mono text-[10px] uppercase tracking-[0.1em] text-muted-foreground/60">{copy.right} →</span>
+            <span className="font-mono text-[10px] uppercase tracking-[0.1em] text-muted-foreground/80">← {copy.left}</span>
+            <span className="font-mono text-[10px] uppercase tracking-[0.1em] text-muted-foreground/80">↑ {copy.up}</span>
+            <span className="font-mono text-[10px] uppercase tracking-[0.1em] text-muted-foreground/80">{copy.right} →</span>
           </div>
         )}
       </div>
@@ -376,7 +376,7 @@ export function EventReviewStack({ events, onReview, reviewingEventId, investorP
         <p className="font-mono text-[10px] uppercase tracking-[0.2em] text-muted-foreground">
           {pending.length} to review
         </p>
-        <p className="font-mono text-[10px] text-muted-foreground/50">
+        <p className="font-mono text-[10px] text-muted-foreground/80">
           {copy.reviewHint}
         </p>
       </div>
