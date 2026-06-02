@@ -33,6 +33,7 @@ from app.services.encryption import encrypt, decrypt
 from app.services.trading212 import Trading212Client, build_auth_header, detect_trading212_base_url
 from app.services.csv_parser import parse_csv
 from app.services.market_data import detect_native_currency, fetch_company_data, fetch_company_overview, fetch_live_price, get_fx_rate
+from app.services.valuation import apply_broker_position, refresh_holding_price, to_account_value
 
 router = APIRouter(prefix="/api/portfolio", tags=["portfolio"])
 
@@ -217,13 +218,7 @@ async def sync_broker(
         )
         holding = existing_result.scalar_one_or_none()
 
-        # Determine native currency and convert all monetary values to GBP so
-        # portfolio totals are consistent with what T212 shows the user.
-        native_currency = detect_native_currency(pos.ticker)
-        fx_rate = await get_fx_rate(native_currency, "GBP")
-        avg_cost_gbp = pos.average_price * fx_rate
-        current_value_gbp = pos.quantity * pos.current_price * fx_rate if pos.current_price else None
-
+        now = datetime.now(timezone.utc)
         if holding is None:
             # Enrich new holdings with sector/geography from market data
             h_sector = None
@@ -244,22 +239,12 @@ async def sync_broker(
                 ticker=pos.ticker.upper(),
                 name=h_name,
                 quantity=pos.quantity,
-                average_cost_basis=avg_cost_gbp,
-                current_price=pos.current_price,  # native currency per-share (informational)
-                current_value=current_value_gbp,   # account currency (GBP)
-                currency=native_currency,
+                average_cost_basis=pos.average_price,  # set to GBP by apply_broker_position below
                 sector=h_sector,
                 geography=h_geography,
-                last_updated_at=datetime.now(timezone.utc),
             )
             db.add(holding)
         else:
-            holding.quantity = pos.quantity
-            holding.average_cost_basis = avg_cost_gbp
-            holding.current_price = pos.current_price  # native currency per-share
-            holding.current_value = current_value_gbp   # GBP
-            holding.currency = native_currency
-            holding.last_updated_at = datetime.now(timezone.utc)
             # Backfill sector/geography if missing
             if not holding.sector or not holding.geography:
                 try:
@@ -274,6 +259,14 @@ async def sync_broker(
                 except Exception:
                     logger.warning("Failed to backfill sector/geography for %s", pos.ticker, exc_info=True)
 
+        # Convert the broker's native-currency price + cost into GBP (single path).
+        await apply_broker_position(
+            holding,
+            quantity=pos.quantity,
+            native_price=pos.current_price,
+            native_avg_cost=pos.average_price,
+            now=now,
+        )
         synced_holdings.append(holding)
 
     connection.last_synced_at = datetime.now(timezone.utc)
@@ -387,17 +380,9 @@ async def add_manual_holding(
     await db.flush()
 
     # Fetch a live price now so a manually-added position shows a real value
-    # immediately, instead of £0.00 / -100% until the next background sync. Store
-    # the native per-share price and the GBP market value (account currency), the
-    # same convention the broker sync uses.
+    # immediately, instead of £0.00 / -100% until the next background sync.
     try:
-        price = await fetch_live_price(holding.ticker)
-        if price is not None:
-            native_ccy = detect_native_currency(holding.ticker)
-            fx_rate = await get_fx_rate(native_ccy, "GBP")
-            holding.current_price = price
-            holding.current_value = float(holding.quantity) * price * fx_rate
-            holding.currency = native_ccy
+        await refresh_holding_price(holding)
     except Exception:
         logger.warning("Could not fetch initial price for %s", holding.ticker, exc_info=True)
 
@@ -532,13 +517,13 @@ async def live_prices(
         price = await fetch_live_price(holding.ticker)
         if price is None or price <= 0:
             return {"ticker": holding.ticker, "current_price": None, "current_value": None}
-        native_ccy = holding.currency or detect_native_currency(holding.ticker)
-        fx_rate = await get_fx_rate(native_ccy, "GBP")
-        current_value_gbp = float(holding.quantity) * price * fx_rate
+        current_value_gbp = await to_account_value(
+            holding.quantity, price, native_currency=holding.currency, ticker=holding.ticker
+        )
         return {
             "ticker": holding.ticker,
             "current_price": price,
-            "current_value": round(current_value_gbp, 2),
+            "current_value": current_value_gbp,
         }
 
     prices = await _asyncio.gather(*[_price_for(h) for h in holdings])

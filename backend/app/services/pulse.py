@@ -11,6 +11,7 @@ from app.models.holding import Holding
 from app.models.monitoring_event import MonitoringEvent
 from app.models.thesis import Thesis
 from app.models.thesis_signal import ThesisSignal
+from app.services.valuation import compute_pnl
 
 
 @dataclass
@@ -60,18 +61,13 @@ def _days_since_update(updated_at: datetime | None, *, now: datetime) -> int | N
 
 
 def _compute_pnl_pct(holding: Holding) -> float | None:
-    quantity = _to_float(holding.quantity)
-    average_cost_basis = _to_float(holding.average_cost_basis)
-    if quantity is None or average_cost_basis is None:
-        return None
-
-    cost = quantity * average_cost_basis
-    if cost <= 0:
-        return None
-
-    current_value = _to_float(holding.current_value)
-    value = current_value if current_value is not None else cost
-    return round((value - cost) / cost * 100, 2)
+    # Single valuation path. When there's no market value yet, fall back to cost
+    # (0% P&L) rather than inventing a number.
+    value = _to_float(holding.current_value)
+    if value is None:
+        return 0.0 if _to_float(holding.average_cost_basis) else None
+    _, pnl_pct = compute_pnl(value, holding.quantity, holding.average_cost_basis)
+    return pnl_pct
 
 
 def _monitorability(thesis: Thesis) -> str | None:

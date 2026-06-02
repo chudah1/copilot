@@ -117,7 +117,7 @@ async def test_portfolio_summary_counts_active_and_stale_theses(client, auth_hea
 async def test_portfolio_summary_tracks_monitorability_and_conviction_mismatch(client, auth_headers, db, test_user):
     # Pin prices off so value-weighted coverage is deterministic (manual add now
     # fetches a live price; without this the weighting would track the live market).
-    with patch("app.routes.portfolio.fetch_live_price", new_callable=AsyncMock, return_value=None):
+    with patch("app.routes.portfolio.refresh_holding_price", new_callable=AsyncMock, return_value=False):
         first = await client.post(
             "/api/portfolio/holdings",
             json={"ticker": "NVDA", "name": "NVIDIA", "quantity": 10, "average_cost_basis": 100},

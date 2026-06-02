@@ -14,6 +14,7 @@ from app.models.monitoring_event import MonitoringEvent
 from app.services.monitoring import check_metric_watch_hints, generate_monitoring_candidates
 from app.services.thesis_health import maybe_notify_band_drop, refresh_thesis_health
 from app.services.market_data import CompanyData, fetch_company_data, shortlist_qualitative_candidates
+from app.services.valuation import apply_market_price
 from app.services.noise_filter import (
     apply_priority_suppression,
     filter_candidates,
@@ -308,10 +309,15 @@ async def run_monitoring():
                 claims_by_id, signals_by_id = build_claim_signal_lookup(claims)
                 investor_profile = await load_investor_profile(db, thesis.user_id)
 
-                # Update holding price from direct ticker data
+                # Update holding price from direct ticker data — via the single
+                # valuation path so current_value lands in GBP, not raw native.
                 if company_data and company_data.current_price is not None:
-                    holding.current_price = company_data.current_price
-                    holding.current_value = float(holding.quantity) * company_data.current_price
+                    await apply_market_price(
+                        holding,
+                        native_price=company_data.current_price,
+                        native_currency=getattr(company_data, "currency", None),
+                        now=now,
+                    )
 
                 # We reached real market data for this holding — record the check
                 # even if it stays quiet, so "checked X ago" stays current daily.
