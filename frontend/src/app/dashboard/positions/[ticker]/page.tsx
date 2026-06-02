@@ -2,7 +2,6 @@
 
 import { startTransition, useEffect, useState } from "react";
 import { useParams, useRouter, useSearchParams } from "next/navigation";
-import Link from "next/link";
 import { motion, AnimatePresence } from "framer-motion";
 import { api } from "@/lib/api";
 import { getErrorMessage } from "@/lib/errors";
@@ -15,9 +14,9 @@ import { ThesisDecompositionReview } from "@/components/thesis/thesis-decomposit
 import { ThesisEditor } from "@/components/thesis/thesis-editor";
 import { InvalidateDialog } from "./invalidate-dialog";
 import { MonitoringTab } from "./monitoring-tab";
+import { PositionHeader } from "./position-header";
 import { ThesisHealthCheck } from "@/components/thesis/thesis-health-check";
 import { CounterThesisCard } from "@/components/thesis/counter-thesis-card";
-import { CheckNowButton } from "@/components/monitoring/check-now-button";
 import { EarningsReviewModal } from "@/components/thesis/earnings-review-modal";
 import type {
   CheckNowResponse,
@@ -61,8 +60,6 @@ import {
   buildCheckNowNotice,
   isRecentEvent,
   getEventAssumptionLabel,
-  HEALTH_CHIP,
-  STATUS_DOT,
 } from "./position-helpers";
 
 export default function PositionDetailPage() {
@@ -722,166 +719,28 @@ export default function PositionDetailPage() {
     <div className="min-h-[calc(100vh-53px)]">
 
       {/* ── Sticky header ────────────────────────────────────────────────── */}
-      <div className="sticky top-[52px] z-20 bg-background border-b border-border/60">
-        <div className="max-w-5xl mx-auto px-6 lg:px-10">
-
-          {/* Nav row */}
-          <div className="flex items-center justify-between pt-4 pb-2">
-            <Link
-              href="/dashboard"
-              className="font-mono text-[10px] uppercase tracking-[0.2em] text-muted-foreground hover:text-primary transition-colors"
-            >
-              ← Portfolio
-            </Link>
-            <div className="flex items-center gap-3">
-              {deleteConfirming ? (
-                <div className="flex items-center gap-2">
-                  <span className="font-mono text-[10px] text-muted-foreground">Remove all data?</span>
-                  <button
-                    onClick={handleDelete}
-                    disabled={deleteLoading}
-                    className="font-mono text-[10px] uppercase tracking-[0.15em] text-red-600 hover:text-red-700 transition-colors disabled:opacity-40"
-                  >
-                    {deleteLoading ? "Removing…" : "Confirm"}
-                  </button>
-                  <button
-                    onClick={() => setDeleteConfirming(false)}
-                    className="font-mono text-[10px] uppercase tracking-[0.15em] text-muted-foreground hover:text-foreground transition-colors"
-                  >
-                    Cancel
-                  </button>
-                </div>
-              ) : (
-                <button
-                  onClick={() => setDeleteConfirming(true)}
-                  className="font-mono text-[10px] uppercase tracking-[0.15em] text-muted-foreground/70 hover:text-muted-foreground transition-colors"
-                >
-                  Remove position
-                </button>
-              )}
-              <CheckNowButton
-                holdingId={holding.id}
-                ticker={holding.ticker}
-                currency={holding.currency}
-                investorProfile={onboardingState?.investor_profile ?? null}
-                onComplete={handleCheckNowComplete}
-              />
-            </div>
-          </div>
-
-          {/* Identity + value row */}
-          <div className={`flex items-end justify-between gap-6 pb-3 overflow-hidden transition-all duration-200 ${headerCollapsed ? "max-h-0 pb-0 opacity-0 sm:max-h-40 sm:pb-3 sm:opacity-100" : "max-h-40"}`}>
-            <div>
-              <h1 className="font-display italic text-[3.5rem] leading-none text-primary tracking-tight">
-                {cleanTicker(holding.ticker)}
-              </h1>
-              {holding.name && holding.name !== holding.ticker && (
-                <p className="font-sans text-[13px] text-muted-foreground mt-1 leading-none">
-                  {holding.name}
-                </p>
-              )}
-            </div>
-            <div className="text-right shrink-0 pb-0.5">
-              {hasPrice ? (
-                <>
-                  <p className="font-mono text-[1.6rem] tabular-nums text-foreground leading-tight">
-                    {formatCurrency(value)}
-                  </p>
-                  <p className={`font-mono text-[13px] tabular-nums mt-0.5 ${pnl >= 0 ? "text-emerald-700" : "text-red-600"}`}>
-                    {pnl >= 0 ? "+" : ""}{formatCurrency(pnl)}
-                    <span className="opacity-60 ml-1.5">({pnl >= 0 ? "+" : ""}{pnlPct}%)</span>
-                  </p>
-                </>
-              ) : (
-                <>
-                  <p className="font-mono text-[1.6rem] tabular-nums text-muted-foreground/70 leading-tight">—</p>
-                  <p className="font-mono text-[10px] uppercase tracking-[0.14em] text-muted-foreground/60 mt-1">
-                    Price unavailable
-                  </p>
-                </>
-              )}
-            </div>
-          </div>
-
-          {/* Status ribbon */}
-          <div className={`flex items-center gap-4 pb-3 overflow-hidden transition-all duration-200 ${headerCollapsed ? "max-h-0 pb-0 opacity-0 sm:max-h-20 sm:pb-3 sm:opacity-100" : "max-h-20"}`}>
-            {/* Pulse dot + label */}
-            <div className="flex items-center gap-2">
-              <span className={`h-1.5 w-1.5 rounded-full ${STATUS_DOT[activeThesis?.status ?? "no_thesis"] ?? "bg-border"}`} />
-              <span className="font-mono text-[10px] uppercase tracking-[0.2em] text-muted-foreground">
-                {thesisInsights.qualityLabel}
-              </span>
-            </div>
-            {activeThesis?.health_label && (
-              <>
-                <span className="text-border text-[10px]">·</span>
-                <span className={`font-mono text-[10px] uppercase tracking-[0.12em] px-1.5 py-0.5 ${HEALTH_CHIP[activeThesis.health_label] ?? ""}`}>
-                  {activeThesis.health_score != null ? `${activeThesis.health_score} · ` : ""}{activeThesis.health_label}
-                </span>
-              </>
-            )}
-            {activeThesis && (
-              <>
-              <span className="text-border text-[10px]">·</span>
-              <span className="font-mono text-[10px] text-muted-foreground/60">
-                reason {ageInDays(activeThesis.updated_at)}d old
-              </span>
-              {stalePressure && (
-                <>
-                  <span className="text-border text-[10px]">·</span>
-                  <span className="font-mono text-[10px] text-amber-700/80">
-                    cadence {stalePressure.cadenceDays}d
-                  </span>
-                </>
-              )}
-            </>
-          )}
-            {/* Progress indicators */}
-            <div className="flex items-center gap-3 ml-auto">
-              {steps.map((step, i) => (
-                <div key={step.label} className="flex items-center gap-2">
-                  {i > 0 && <span className="text-border text-[10px]">·</span>}
-                  <span className={`font-mono text-[10px] uppercase tracking-[0.12em] ${
-                    step.done ? "text-emerald-600" : step.partial ? "text-amber-600" : "text-muted-foreground/70"
-                  }`}>
-                    {step.done ? "●" : step.partial ? "◐" : "○"} {step.label}
-                  </span>
-                </div>
-              ))}
-            </div>
-          </div>
-
-          {/* Tab strip */}
-          <div className="flex gap-1 -mx-1">
-            {tabs.map((tab) => (
-              <button
-                key={tab.id}
-                onClick={() => { setActiveTab(tab.id); if (tab.id === "thesis") setThesisSubTab("thesis"); }}
-                className="relative pb-3 px-3 font-mono text-[10px] uppercase tracking-[0.2em] transition-colors flex items-center gap-2"
-                style={{ color: activeTab === tab.id ? "var(--primary)" : "var(--muted-foreground)" }}
-              >
-                {tab.label}
-                {tab.badge !== undefined && (
-                  <span className={`inline-flex items-center justify-center h-4 min-w-4 px-1 rounded-sm font-mono text-[10px] tabular-nums ${
-                    tab.id === "monitoring" && unreviewedEvents > 0
-                      ? "bg-primary/10 text-primary"
-                      : "text-muted-foreground/60"
-                  }`}>
-                    {tab.badge}
-                  </span>
-                )}
-                {activeTab === tab.id && (
-                  <motion.div
-                    layoutId="tab-indicator"
-                    className="absolute bottom-0 left-0 right-0 h-px bg-primary"
-                    transition={{ type: "spring", stiffness: 400, damping: 35 }}
-                  />
-                )}
-              </button>
-            ))}
-          </div>
-        </div>
-      </div>
+      <PositionHeader
+        holding={holding}
+        activeThesis={activeThesis}
+        investorProfile={onboardingState?.investor_profile ?? null}
+        headerCollapsed={headerCollapsed}
+        hasPrice={hasPrice}
+        value={value}
+        pnl={pnl}
+        pnlPct={pnlPct}
+        thesisInsights={thesisInsights}
+        stalePressure={stalePressure}
+        steps={steps}
+        tabs={tabs}
+        activeTab={activeTab}
+        unreviewedEvents={unreviewedEvents}
+        deleteConfirming={deleteConfirming}
+        deleteLoading={deleteLoading}
+        onDelete={handleDelete}
+        onSetDeleteConfirming={setDeleteConfirming}
+        onCheckNowComplete={handleCheckNowComplete}
+        onSelectTab={(id) => { setActiveTab(id); if (id === "thesis") setThesisSubTab("thesis"); }}
+      />
 
       {/* ── Contextual banners ───────────────────────────────────────────── */}
       <div className="max-w-5xl mx-auto px-6 lg:px-10">
