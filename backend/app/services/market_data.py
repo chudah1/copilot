@@ -178,6 +178,42 @@ def _yfinance_fast_price_sync(ticker: str) -> float | None:
         return None
 
 
+def _yfinance_close_on_sync(ticker: str, when: datetime) -> float | None:
+    """Blocking call — the closing price on/nearest-before `when` via history."""
+    import yfinance as yf
+
+    try:
+        hist = yf.Ticker(ticker).history(
+            start=(when - timedelta(days=7)).date(),
+            end=(when + timedelta(days=1)).date(),
+        )
+        if hist is None or hist.empty:
+            return None
+        closes = hist["Close"].dropna()
+        return float(closes.iloc[-1]) if not closes.empty else None
+    except Exception:
+        return None
+
+
+async def fetch_price_on(ticker: str, when: datetime) -> float | None:
+    """The closing price for a ticker on (or just before) a past date. Used to
+    reconstruct a benchmark's level at decision time for the 'vs market' read.
+    Cached long — a historical close doesn't change."""
+    normalized = _normalize_ticker(ticker)
+    cache_key = f"hist_price_{normalized}_{when.date().isoformat()}"
+    cached = _cache.get(cache_key)
+    if cached is not None:
+        return cached
+    try:
+        price = await asyncio.to_thread(_yfinance_close_on_sync, normalized, when)
+    except Exception:
+        logger.warning("historical price fetch failed for %s @ %s", normalized, when.date(), exc_info=True)
+        return None
+    if price and price > 0:
+        _cache.set(cache_key, price, _CACHE_TTL_LONG)
+    return price
+
+
 async def fetch_live_price(ticker: str) -> float | None:
     """Return the latest market price for a ticker, cached for 60 seconds.
 

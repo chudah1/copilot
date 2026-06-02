@@ -3,6 +3,7 @@ from datetime import datetime, timedelta, timezone
 from types import SimpleNamespace
 from unittest.mock import AsyncMock, patch
 
+import pytest
 from sqlalchemy import select
 
 from app.models.decision_snapshot import DecisionSnapshot
@@ -17,6 +18,16 @@ from app.services.decision_resolution import (
 
 _RES = "app.services.decision_resolution"
 _NOW = datetime(2026, 6, 2, tzinfo=timezone.utc)
+
+
+@pytest.fixture(autouse=True)
+def _no_benchmark_network():
+    """Resolution now fetches a benchmark price for the vs-market read; stub it off
+    by default so tests don't hit the network. The relative-read test overrides."""
+    with patch(f"{_RES}.fetch_price_on", new_callable=AsyncMock, return_value=None), patch(
+        f"{_RES}.fetch_live_price", new_callable=AsyncMock, return_value=None
+    ):
+        yield
 
 
 def _company(price=510.0, rev=31.0):
@@ -139,6 +150,20 @@ async def test_dismissed_no_followthrough_is_neutral(db, test_user):
     rj = snap.resolution_json
     assert rj["claim_followthrough"]["broke_after"] is False
     assert "Nothing has followed through" in rj["read"]
+
+
+async def test_relative_vs_market_read(db, test_user):
+    # stock 400 -> 510 = +27.5%; benchmark 100 -> 104 = +4%.
+    snap, *_ = await _snapshot(db, test_user.id, bucket="held", watch_hints=[],
+                               next_test_at=_NOW - timedelta(days=1), price_native=400.0)
+    with patch(f"{_RES}.fetch_price_on", new_callable=AsyncMock, return_value=100.0), patch(
+        f"{_RES}.fetch_live_price", new_callable=AsyncMock, return_value=104.0
+    ):
+        await resolve_snapshot(db, snap, _company(price=510.0), now=_NOW)
+    price = snap.resolution_json["price"]
+    assert price["benchmark_pct"] == 4.0
+    assert price["relative_pct"] == 23.5
+    assert "vs market +4%" in snap.resolution_json["read"]
 
 
 async def test_no_market_data_leaves_open_for_retry(db, test_user):

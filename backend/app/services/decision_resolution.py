@@ -21,7 +21,7 @@ from app.models.decision_snapshot import DecisionSnapshot
 from app.models.holding import Holding
 from app.models.monitoring_event import MonitoringEvent
 from app.models.thesis_claim import ThesisClaim
-from app.services.market_data import fetch_company_data
+from app.services.market_data import fetch_company_data, fetch_live_price, fetch_price_on
 from app.services.monitoring import check_metric_watch_hints
 
 logger = logging.getLogger(__name__)
@@ -77,6 +77,29 @@ def _price_read(snapshot: DecisionSnapshot, company_data) -> dict:
     return {"then": then, "now": now, "pct": pct, "currency": snapshot.currency}
 
 
+async def _benchmark_move_pct(snapshot: DecisionSnapshot) -> float | None:
+    """The benchmark's % move over the same window (decision -> now). Both moves
+    are unitless %, so they're comparable across currencies without FX."""
+    if not snapshot.benchmark_ticker or snapshot.decided_at is None:
+        return None
+    then = await fetch_price_on(snapshot.benchmark_ticker, _norm(snapshot.decided_at))
+    now = await fetch_live_price(snapshot.benchmark_ticker)
+    if then and now and then > 0:
+        return round((now - then) / then * 100, 1)
+    return None
+
+
+def _price_phrase(price: dict) -> str | None:
+    """Muted price context — relative to the market when we have the benchmark."""
+    pct = price.get("pct")
+    if pct is None:
+        return None
+    bpct = price.get("benchmark_pct")
+    if bpct is not None:
+        return f"{pct:+.0f}% vs market {bpct:+.0f}%"
+    return f"{pct:+.0f}% since"
+
+
 async def _claim_broke_after(db: AsyncSession, snapshot: DecisionSnapshot) -> bool | None:
     """For a dismissed signal: did the *same claim* it was tied to subsequently
     break (a thesis-breaking event on that claim after the dismissal)? This is the
@@ -116,7 +139,7 @@ def _read_text(
 ) -> str:
     t = _clean(ticker)
     bet = (bet or "this position").strip()
-    pct = price.get("pct")
+    phrase = _price_phrase(price)
     breached = [c for c in conditions if c["held"] is False]
     held_all = bool(conditions) and not breached
 
@@ -131,7 +154,7 @@ def _read_text(
             return f"You exited {t} — “{bet}.” The break held up: {c['metric']} is {c['value_now']} vs your {c['operator']} {c['threshold']}."
         if held_all:
             return f"You exited {t} — “{bet}.” The condition you flagged has since recovered."
-        return f"You exited {t} — “{bet}.”" + (f" {pct:+.0f}% since." if pct is not None else "")
+        return f"You exited {t} — “{bet}.”" + (f" {phrase}." if phrase else "")
 
     # held
     if breached:
@@ -139,7 +162,7 @@ def _read_text(
         return f"You held {t} through “{bet}.” A condition you were watching has broken: {c['metric']} is {c['value_now']} vs your {c['operator']} {c['threshold']}."
     if held_all:
         return f"You held {t} through “{bet}.” The conditions you were watching still hold."
-    return f"You held {t} through “{bet}.” No measurable condition has updated yet" + (f"; {pct:+.0f}% since." if pct is not None else ".")
+    return f"You held {t} through “{bet}.” No measurable condition has updated yet" + (f"; {phrase}." if phrase else ".")
 
 
 async def resolve_snapshot(db: AsyncSession, snapshot: DecisionSnapshot, company_data, *, now: datetime) -> bool:
@@ -155,6 +178,12 @@ async def resolve_snapshot(db: AsyncSession, snapshot: DecisionSnapshot, company
 
     conditions = _condition_reads(snapshot, company_data) if snapshot.bucket in ("held", "exited") else []
     price = _price_read(snapshot, company_data)
+    if price.get("pct") is not None:
+        bench_pct = await _benchmark_move_pct(snapshot)
+        if bench_pct is not None:
+            price["benchmark_ticker"] = snapshot.benchmark_ticker
+            price["benchmark_pct"] = bench_pct
+            price["relative_pct"] = round(price["pct"] - bench_pct, 1)
     claim_broke = await _claim_broke_after(db, snapshot) if snapshot.bucket == "dismissed" else None
     claim_text = await _claim_text(db, snapshot.claim_id) if claim_broke else None
 
