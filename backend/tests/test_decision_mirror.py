@@ -5,7 +5,7 @@ from app.jobs.digest_builder import _render_digest_html
 from app.models.decision_snapshot import DecisionSnapshot
 from app.models.holding import Holding
 from app.models.thesis import Thesis
-from app.services.decision_mirror import get_mirror_for_digest
+from app.services.decision_mirror import get_decisions_for_holding, get_mirror_for_digest
 
 _NOW = datetime(2026, 6, 2, tzinfo=timezone.utc)
 
@@ -91,3 +91,38 @@ def test_render_omits_mirror_when_empty():
         mirror={"reads": [], "open_bets": []},
     )
     assert "How your calls are playing out" not in html
+
+
+# ── per-holding decisions (position page) ────────────────────────────────────
+
+async def test_get_decisions_for_holding_newest_first_with_read_and_countdown(db, test_user):
+    h, t = await _holding_thesis(db, test_user.id)
+    db.add(_snap(test_user.id, h, t, decided_at=_NOW - timedelta(days=50),
+                 resolved_at=_NOW - timedelta(days=2),
+                 resolution_json={"read": "You held; conditions still hold."}))
+    db.add(_snap(test_user.id, h, t, decided_at=_NOW - timedelta(days=1),
+                 resolved_at=None, next_test_at=_NOW + timedelta(days=12)))
+    await db.commit()
+
+    rows = await get_decisions_for_holding(db, test_user.id, h.id, now=_NOW)
+    assert len(rows) == 2
+    assert rows[0]["resolved"] is False and rows[0]["next_test_days"] == 12  # newest first
+    assert rows[1]["resolved"] is True and "still hold" in rows[1]["read"]
+
+
+async def test_decisions_endpoint_returns_calls(client, auth_headers, db, test_user):
+    h, t = await _holding_thesis(db, test_user.id)
+    db.add(_snap(test_user.id, h, t, resolved_at=None, next_test_at=_NOW + timedelta(days=5)))
+    await db.commit()
+
+    resp = await client.get(f"/api/monitoring/holdings/{h.id}/decisions", headers=auth_headers)
+    assert resp.status_code == 200
+    data = resp.json()
+    assert len(data) == 1
+    assert data[0]["bucket"] == "held"
+
+
+async def test_decisions_endpoint_404_for_unknown_holding(client, auth_headers):
+    import uuid
+    resp = await client.get(f"/api/monitoring/holdings/{uuid.uuid4()}/decisions", headers=auth_headers)
+    assert resp.status_code == 404

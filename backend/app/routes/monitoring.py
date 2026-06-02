@@ -240,6 +240,25 @@ async def check_now(
     )
 
 
+@router.get("/holdings/{holding_id}/decisions")
+async def get_decisions_for_holding_endpoint(
+    holding_id: uuid.UUID,
+    user: User = Depends(get_current_user),
+    db: AsyncSession = Depends(get_db),
+):
+    """The decision-mirror calls for one position — each with its read (if the bet
+    has been tested) or its next-test countdown (if still open)."""
+    holding = (
+        await db.execute(select(Holding).where(Holding.id == holding_id, Holding.user_id == user.id))
+    ).scalar_one_or_none()
+    if holding is None:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Holding not found")
+
+    from app.services.decision_mirror import get_decisions_for_holding
+
+    return await get_decisions_for_holding(db, user.id, holding_id, now=datetime.now(timezone.utc))
+
+
 @router.get("/relevance")
 async def relevance_metrics(
     days: int = Query(14, ge=1, le=90),

@@ -84,3 +84,46 @@ async def get_mirror_for_digest(
     open_bets = open_bets[:limit]
 
     return {"reads": reads, "open_bets": open_bets}
+
+
+async def get_decisions_for_holding(
+    db: AsyncSession,
+    user_id: uuid.UUID,
+    holding_id: uuid.UUID,
+    *,
+    now: datetime,
+    limit: int = 20,
+) -> list[dict]:
+    """Every conviction call on one position, newest first — with its read if
+    resolved, or its next-test countdown if still open. The per-name context for
+    the position page."""
+    rows = (
+        await db.execute(
+            select(DecisionSnapshot)
+            .where(
+                DecisionSnapshot.user_id == user_id,
+                DecisionSnapshot.holding_id == holding_id,
+            )
+            .order_by(DecisionSnapshot.decided_at.desc())
+            .limit(limit)
+        )
+    ).scalars().all()
+
+    out = []
+    for snap in rows:
+        resolved = snap.resolved_at is not None
+        nt = _norm(snap.next_test_at)
+        out.append(
+            {
+                "id": str(snap.id),
+                "bucket": snap.bucket,
+                "verdict": snap.verdict,
+                "decision_source": snap.decision_source,
+                "decided_at": _norm(snap.decided_at).isoformat() if snap.decided_at else None,
+                "bet_text": snap.bet_text,
+                "resolved": resolved,
+                "read": (snap.resolution_json or {}).get("read") if resolved else None,
+                "next_test_days": (nt - now).days if (not resolved and nt) else None,
+            }
+        )
+    return out

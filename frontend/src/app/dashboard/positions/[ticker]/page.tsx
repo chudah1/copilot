@@ -14,6 +14,7 @@ import { ThesisDecompositionReview } from "@/components/thesis/thesis-decomposit
 import { ThesisEditor } from "@/components/thesis/thesis-editor";
 import { InvalidateDialog } from "./invalidate-dialog";
 import { MonitoringTab } from "./monitoring-tab";
+import { PositionDecisions } from "./position-decisions";
 import { PositionHeader } from "./position-header";
 import { ThesisHealthCheck } from "@/components/thesis/thesis-health-check";
 import { CounterThesisCard } from "@/components/thesis/counter-thesis-card";
@@ -1235,21 +1236,26 @@ export default function PositionDetailPage() {
 
             {/* ─── MONITORING TAB ──────────────────────────────────────── */}
             {activeTab === "monitoring" && (
-              <MonitoringTab
-                hasThesis={Boolean(activeThesis)}
-                investorProfile={onboardingState?.investor_profile ?? null}
-                events={events}
-                unreviewedEvents={unreviewedEvents}
-                firstPendingEvent={firstPendingEvent}
-                firstPendingAssumptionLabel={firstPendingAssumptionLabel}
-                isFirstLiveEvidenceMoment={isFirstLiveEvidenceMoment}
-                calmState={monitoringCalmState}
-                reviewingEventId={reviewingEventId}
-                decompositionLoading={decompositionLoading}
-                emptyCopy={{ title: copy.monitoringEmptyTitle, body: copy.monitoringEmptyBody, cta: copy.monitoringEmptyCta }}
-                onReview={handleReviewEvent}
-                onWriteThesis={() => { setEditing(true); setActiveTab("thesis"); }}
-              />
+              <div className="space-y-10">
+                <MonitoringTab
+                  hasThesis={Boolean(activeThesis)}
+                  investorProfile={onboardingState?.investor_profile ?? null}
+                  events={events}
+                  unreviewedEvents={unreviewedEvents}
+                  firstPendingEvent={firstPendingEvent}
+                  firstPendingAssumptionLabel={firstPendingAssumptionLabel}
+                  isFirstLiveEvidenceMoment={isFirstLiveEvidenceMoment}
+                  calmState={monitoringCalmState}
+                  reviewingEventId={reviewingEventId}
+                  decompositionLoading={decompositionLoading}
+                  emptyCopy={{ title: copy.monitoringEmptyTitle, body: copy.monitoringEmptyBody, cta: copy.monitoringEmptyCta }}
+                  onReview={handleReviewEvent}
+                  onWriteThesis={() => { setEditing(true); setActiveTab("thesis"); }}
+                />
+                {holding && (
+                  <PositionDecisions holdingId={holding.id} reloadKey={reviewedEventsCount} />
+                )}
+              </div>
             )}
 
           </motion.div>
