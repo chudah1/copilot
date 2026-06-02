@@ -1,3 +1,4 @@
+import Link from "next/link";
 import { MarketingNav } from "./_mkt/nav";
 import { MarketingFooter } from "./_mkt/footer";
 import { WaitlistForm } from "./_mkt/waitlist-form";
@@ -275,7 +276,7 @@ export default function LandingPage() {
               >
                 Write the reason you bought each position. We read the earnings, filings and news
                 against it. When it starts to break,{" "}
-                <em style={{ color: mk.ink }}>we tell you.</em>
+                <em style={{ color: mk.ink }}>we tell you that day.</em>
               </p>
 
               <div style={{ display: "flex", alignItems: "center", gap: 14, flexWrap: "wrap" }}>
@@ -329,6 +330,28 @@ export default function LandingPage() {
                   See how it works
                 </a>
               </div>
+
+              <p
+                style={{
+                  fontFamily: mk.sans,
+                  fontSize: 14.5,
+                  color: mk.inkSoft,
+                  marginTop: 18,
+                }}
+              >
+                Not ready to write one? {" "}
+                <Link
+                  href="/research"
+                  style={{
+                    color: mk.accent,
+                    fontWeight: 500,
+                    textDecoration: "none",
+                    borderBottom: `1px solid ${mk.accent}`,
+                  }}
+                >
+                  Stress-test any stock first, free →
+                </Link>
+              </p>
             </div>
 
             {/* Right — product card */}
@@ -949,6 +972,21 @@ export default function LandingPage() {
           >
             Give it a year and you have an honest record of your own judgment: what you believed,
             what actually happened, and whether you got it right.
+          </div>
+          <div
+            style={{
+              fontFamily: mk.mono,
+              fontSize: "clamp(13px, 1.3vw, 15px)",
+              lineHeight: 1.7,
+              color: mk.creamDim,
+              maxWidth: 640,
+              marginTop: 22,
+            }}
+          >
+            Every call you make gets read back when the bet is actually tested. Reaffirm, trim or
+            walk away, and a quarter or two later we tell you how it played out: held, exited,
+            dismissed. The patterns surface on their own. Where your conviction tends to hold, and
+            where you wave off the warnings that turn out to matter.
           </div>
         </div>
       </section>
