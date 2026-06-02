@@ -8,7 +8,7 @@ from app.models.earnings_calendar import EarningsCalendar
 from app.models.holding import Holding
 from app.models.monitoring_event import MonitoringEvent
 from app.models.thesis import Thesis
-from app.services.decision_snapshots import capture_event_decision
+from app.services.decision_snapshots import capture_event_decision, capture_quarterly_decision
 
 
 async def _setup(db, user_id, *, currency="USD"):
@@ -134,3 +134,33 @@ async def test_review_endpoint_writes_a_snapshot(client, auth_headers, db, test_
     assert len(snaps) == 1
     assert snaps[0].bucket == "held"
     assert snaps[0].condition_snapshot["verdict_note"] == "Still believe Azure re-accelerates."
+
+
+# ── Quarterly re-underwrite capture ──────────────────────────────────────────
+
+async def test_quarterly_capture_held_and_exited_buckets(db, test_user):
+    holding, thesis = await _setup(db, test_user.id)
+    cases = {"yes_absolutely": "held", "probably": "held", "not_sure": "held", "no": "exited"}
+    for response, bucket in cases.items():
+        snap = await capture_quarterly_decision(db, thesis=thesis, holding=holding, response_value=response)
+        assert snap is not None
+        assert snap.bucket == bucket
+        assert snap.decision_source == "quarterly_review"
+        assert snap.monitoring_event_id is None  # no triggering event
+        assert snap.bet_text == thesis.why_own_it  # the bet is the thesis itself
+    await db.commit()
+
+
+async def test_quarterly_invalid_response_not_captured(db, test_user):
+    holding, thesis = await _setup(db, test_user.id)
+    snap = await capture_quarterly_decision(db, thesis=thesis, holding=holding, response_value="maybe")
+    assert snap is None
+
+
+async def test_quarterly_capture_loads_holding_when_omitted(db, test_user):
+    holding, thesis = await _setup(db, test_user.id)
+    snap = await capture_quarterly_decision(db, thesis=thesis, response_value="yes_absolutely")
+    await db.commit()
+    assert snap is not None
+    assert snap.holding_id == holding.id
+    assert float(snap.price_native) == 460.0

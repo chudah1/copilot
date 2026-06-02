@@ -299,6 +299,13 @@ async def submit_quarterly_review_response(
         },
     )
 
+    # Decision-mirror capture: a quarterly re-underwrite is a conviction call too.
+    from app.services.decision_snapshots import capture_quarterly_decision
+
+    await capture_quarterly_decision(
+        db, thesis=thesis, holding=holding, response_value=response_value, notes=notes
+    )
+
     pending_count = max(_pending_count(items) - (1 if item.response is None else 0), 0)
     review.status = "completed" if pending_count == 0 else "pending"
     await db.flush()

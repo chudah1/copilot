@@ -31,6 +31,15 @@ VERDICT_BUCKET = {
     "not_relevant": "dismissed",
 }
 
+# Quarterly re-underwrite answers ("do you still believe this?") -> buckets. A
+# whole-thesis re-underwrite has no signal to dismiss, so only held / exited.
+QUARTERLY_BUCKET = {
+    "yes_absolutely": "held",
+    "probably": "held",
+    "not_sure": "held",   # wavering hold (thesis moves to needs_review)
+    "no": "exited",
+}
+
 # Coarse benchmark per account/native currency for the eventual "vs market" read.
 # Ticker only — the price is reconstructed historically at resolution time.
 _BENCHMARK_BY_CCY = {
@@ -117,4 +126,58 @@ async def capture_event_decision(
         return snapshot
     except Exception:
         logger.exception("Failed to capture decision snapshot for event %s", getattr(event, "id", None))
+        return None
+
+
+async def capture_quarterly_decision(
+    db: AsyncSession,
+    *,
+    thesis: Thesis,
+    holding: Holding | None = None,
+    response_value: str,
+    notes: str | None = None,
+    now: datetime | None = None,
+) -> DecisionSnapshot | None:
+    """Snapshot a quarterly re-underwrite ("do you still believe this?"). Same
+    best-effort contract as capture_event_decision. No event/claim/signal — the
+    bet is the thesis itself, so there's no triggering evidence to record."""
+    try:
+        bucket = QUARTERLY_BUCKET.get(response_value)
+        if bucket is None:
+            return None
+
+        now = now or datetime.now(timezone.utc)
+        if holding is None:
+            holding = (
+                await db.execute(select(Holding).where(Holding.id == thesis.holding_id))
+            ).scalar_one_or_none()
+        if holding is None:
+            return None
+
+        interpretation = thesis.interpretation or {}
+        snapshot = DecisionSnapshot(
+            user_id=thesis.user_id,
+            thesis_id=thesis.id,
+            holding_id=holding.id,
+            verdict=response_value,
+            bucket=bucket,
+            decision_source="quarterly_review",
+            decided_at=now,
+            price_native=holding.current_price,
+            value_gbp=holding.current_value,
+            currency=holding.currency,
+            benchmark_ticker=_benchmark_for(holding.currency),
+            next_test_at=await _next_test_at(db, holding.ticker, now=now),
+            bet_text=thesis.why_own_it,
+            condition_snapshot={
+                "watch_hints": interpretation.get("watch_hints"),
+                "monitorability": interpretation.get("monitorability"),
+                "triggering_evidence": None,
+                "verdict_note": notes,
+            },
+        )
+        db.add(snapshot)
+        return snapshot
+    except Exception:
+        logger.exception("Failed to capture quarterly decision snapshot for thesis %s", getattr(thesis, "id", None))
         return None
