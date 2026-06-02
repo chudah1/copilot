@@ -911,11 +911,11 @@ export default function LandingPage() {
               marginTop: 28,
             }}
           >
-            Maybe a friend wouldn&apos;t shut up about it. Maybe it was everywhere for a week
-            and you didn&apos;t want to miss it. Tell us the ticker. We&apos;ll lay out the
-            case against it, the things that could go wrong that never come up in the group
-            chat, and turn the hunch into a few plain things worth watching. Then we watch
-            them, and you&apos;ve got a real reason on paper instead of a vibe.
+            Maybe a friend keeps bringing it up. Maybe it was all over your feed and you
+            didn&apos;t want to be the one who missed it. Tell us the ticker. We&apos;ll build
+            the case against it, the ways it could go wrong that never come up in the group
+            chat, and a short list of things worth watching. Then we keep an eye on them for
+            you, so the hunch turns into a reason you can actually point to.
           </div>
         </div>
       </section>
@@ -956,8 +956,7 @@ export default function LandingPage() {
             }}
           >
             Every reason you write is a record of{" "}
-            <span style={{ fontStyle: "italic", color: mk.accent }}>how you think</span>. No feed
-            will ever hand that back to you.
+            <span style={{ fontStyle: "italic", color: mk.accent }}>how you think</span>. 
           </div>
           <div
             style={{
