@@ -127,3 +127,78 @@ async def get_decisions_for_holding(
             }
         )
     return out
+
+
+def _conditions_outcome(resolution_json: dict | None) -> str | None:
+    """'held' if every measured condition still holds, 'broke' if any broke, None
+    if the decision had no measurable condition (a vague thesis)."""
+    states = [c.get("held") for c in ((resolution_json or {}).get("conditions") or []) if c.get("held") in (True, False)]
+    if not states:
+        return None
+    return "broke" if any(s is False for s in states) else "held"
+
+
+async def get_decision_patterns(
+    db: AsyncSession,
+    user_id: uuid.UUID,
+    *,
+    min_instances: int = 3,
+) -> dict:
+    """Aggregate behavioural tendencies across a user's *resolved* calls — the
+    quarterly reckoning. A mirror, not a scorekeeper: neutral "N of M" instance
+    counts, gated on min_instances so a tendency never gets called from one data
+    point. The attention pattern is the rare-but-bulletproof claim-linked one.
+    """
+    snaps = (
+        await db.execute(
+            select(DecisionSnapshot).where(
+                DecisionSnapshot.user_id == user_id,
+                DecisionSnapshot.resolved_at.is_not(None),
+            )
+        )
+    ).scalars().all()
+
+    patterns: list[dict] = []
+
+    # Attention (claim-linked dismissals) — lead with this when it fires.
+    dismissed = [s for s in snaps if s.bucket == "dismissed" and (s.resolution_json or {}).get("claim_followthrough")]
+    hits = [s for s in dismissed if (s.resolution_json["claim_followthrough"] or {}).get("broke_after")]
+    if len(dismissed) >= min_instances:
+        if hits:
+            patterns.append({
+                "kind": "attention", "tone": "warning",
+                "headline": f"Of {len(dismissed)} early warnings you dismissed, {len(hits)} were tied to a reason that later broke.",
+                "detail": "You may be under-reacting to fundamental signals — worth a second look before you wave off the next one.",
+                "instances": len(dismissed), "hits": len(hits),
+            })
+        else:
+            patterns.append({
+                "kind": "attention", "tone": "calm",
+                "headline": f"Your {len(dismissed)} dismissed warnings have held up — none of those reasons later broke.",
+                "detail": "Your read on what's noise has been sound so far.",
+                "instances": len(dismissed), "hits": 0,
+            })
+
+    # Conviction (held through a warning).
+    held = [s for s in snaps if s.bucket == "held" and _conditions_outcome(s.resolution_json) is not None]
+    if len(held) >= min_instances:
+        ok = sum(1 for s in held if _conditions_outcome(s.resolution_json) == "held")
+        patterns.append({
+            "kind": "conviction", "tone": "neutral",
+            "headline": f"When you held through a warning, the condition you were watching still held {ok} of {len(held)} times.",
+            "detail": "How your hold calls have tracked against the reasons you wrote.",
+            "instances": len(held), "hits": ok,
+        })
+
+    # Exit (reasoning-not-regret: did the break hold up).
+    exited = [s for s in snaps if s.bucket == "exited" and _conditions_outcome(s.resolution_json) is not None]
+    if len(exited) >= min_instances:
+        broke = sum(1 for s in exited if _conditions_outcome(s.resolution_json) == "broke")
+        patterns.append({
+            "kind": "exit", "tone": "neutral",
+            "headline": f"When you exited, the break you flagged held up {broke} of {len(exited)} times.",
+            "detail": "Whether the reasons you exited on kept playing out.",
+            "instances": len(exited), "hits": broke,
+        })
+
+    return {"patterns": patterns, "resolved_count": len(snaps)}

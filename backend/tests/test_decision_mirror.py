@@ -5,7 +5,11 @@ from app.jobs.digest_builder import _render_digest_html
 from app.models.decision_snapshot import DecisionSnapshot
 from app.models.holding import Holding
 from app.models.thesis import Thesis
-from app.services.decision_mirror import get_decisions_for_holding, get_mirror_for_digest
+from app.services.decision_mirror import (
+    get_decision_patterns,
+    get_decisions_for_holding,
+    get_mirror_for_digest,
+)
 
 _NOW = datetime(2026, 6, 2, tzinfo=timezone.utc)
 
@@ -126,3 +130,75 @@ async def test_decisions_endpoint_404_for_unknown_holding(client, auth_headers):
     import uuid
     resp = await client.get(f"/api/monitoring/holdings/{uuid.uuid4()}/decisions", headers=auth_headers)
     assert resp.status_code == 404
+
+
+# ── quarterly pattern layer ──────────────────────────────────────────────────
+
+def _resolved(user_id, h, t, *, bucket, resolution_json):
+    return _snap(user_id, h, t, bucket=bucket, resolved_at=_NOW - timedelta(days=3),
+                 resolution_json=resolution_json)
+
+
+async def test_no_patterns_below_min_instances(db, test_user):
+    h, t = await _holding_thesis(db, test_user.id)
+    # only 2 dismissals — below the gate of 3
+    for _ in range(2):
+        db.add(_resolved(test_user.id, h, t, bucket="dismissed",
+                         resolution_json={"claim_followthrough": {"broke_after": True}}))
+    await db.commit()
+    result = await get_decision_patterns(db, test_user.id)
+    assert result["patterns"] == []
+    assert result["resolved_count"] == 2
+
+
+async def test_attention_warning_when_dismissals_broke(db, test_user):
+    h, t = await _holding_thesis(db, test_user.id)
+    for broke in (True, True, False):  # 3 claim-linked dismissals, 2 broke
+        db.add(_resolved(test_user.id, h, t, bucket="dismissed",
+                         resolution_json={"claim_followthrough": {"broke_after": broke}}))
+    await db.commit()
+    pats = (await get_decision_patterns(db, test_user.id))["patterns"]
+    attn = next(p for p in pats if p["kind"] == "attention")
+    assert attn["tone"] == "warning"
+    assert attn["instances"] == 3 and attn["hits"] == 2
+    assert "under-reacting" in attn["detail"]
+
+
+async def test_attention_calm_when_dismissals_held_up(db, test_user):
+    h, t = await _holding_thesis(db, test_user.id)
+    for _ in range(3):
+        db.add(_resolved(test_user.id, h, t, bucket="dismissed",
+                         resolution_json={"claim_followthrough": {"broke_after": False}}))
+    await db.commit()
+    pats = (await get_decision_patterns(db, test_user.id))["patterns"]
+    attn = next(p for p in pats if p["kind"] == "attention")
+    assert attn["tone"] == "calm" and attn["hits"] == 0
+
+
+async def test_conviction_and_exit_patterns(db, test_user):
+    h, t = await _holding_thesis(db, test_user.id)
+    # held: 2 held, 1 broke
+    for held in (True, True, False):
+        db.add(_resolved(test_user.id, h, t, bucket="held",
+                         resolution_json={"conditions": [{"metric": "m", "held": held}]}))
+    # exited: 2 breaks held up, 1 reversed
+    for held in (False, False, True):
+        db.add(_resolved(test_user.id, h, t, bucket="exited",
+                         resolution_json={"conditions": [{"metric": "m", "held": held}]}))
+    await db.commit()
+    pats = {p["kind"]: p for p in (await get_decision_patterns(db, test_user.id))["patterns"]}
+    assert pats["conviction"]["hits"] == 2 and pats["conviction"]["instances"] == 3
+    assert pats["exit"]["hits"] == 2 and pats["exit"]["instances"] == 3
+
+
+async def test_patterns_endpoint(client, auth_headers, db, test_user):
+    h, t = await _holding_thesis(db, test_user.id)
+    for broke in (True, True, True):
+        db.add(_resolved(test_user.id, h, t, bucket="dismissed",
+                         resolution_json={"claim_followthrough": {"broke_after": broke}}))
+    await db.commit()
+    resp = await client.get("/api/quarterly-review/patterns", headers=auth_headers)
+    assert resp.status_code == 200
+    data = resp.json()
+    assert data["resolved_count"] == 3
+    assert any(p["kind"] == "attention" for p in data["patterns"])

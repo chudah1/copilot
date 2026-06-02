@@ -18,6 +18,18 @@ from app.services.quarterly_review import (
 router = APIRouter(prefix="/api/quarterly-review", tags=["quarterly-review"])
 
 
+@router.get("/patterns")
+async def get_decision_patterns_endpoint(
+    user: User = Depends(get_current_user),
+    db: AsyncSession = Depends(get_db),
+):
+    """Aggregate behavioural patterns across the user's resolved conviction calls
+    — the quarterly reckoning surface of the decision mirror."""
+    from app.services.decision_mirror import get_decision_patterns
+
+    return await get_decision_patterns(db, user.id)
+
+
 @router.get("/current", response_model=QuarterlyReviewCurrentResponse)
 async def get_current_review(
     user: User = Depends(get_current_user),

@@ -5,6 +5,7 @@ import { useEffect, useMemo, useState } from "react";
 import { motion, AnimatePresence } from "framer-motion";
 
 import { api } from "@/lib/api";
+import { DecisionPatterns } from "./decision-patterns";
 import { getErrorMessage } from "@/lib/errors";
 import { formatCurrency } from "@/lib/utils";
 import type { QuarterlyReviewCurrent, QuarterlyReviewHolding, QuarterlyReviewSubmission } from "@/types";
@@ -124,6 +125,9 @@ function CompletionState({ review }: { review: QuarterlyReviewCurrent }) {
           </p>
         </div>
 
+        {/* What your calls reveal — the reckoning across resolved decisions */}
+        <DecisionPatterns />
+
         {/* Ledger */}
         <div className="border border-border/60 divide-y divide-border/40">
           {/* Ledger header */}
@@ -152,7 +156,7 @@ function CompletionState({ review }: { review: QuarterlyReviewCurrent }) {
                   </div>
                   {h.response_notes && (
                     <p className="font-sans text-[11px] text-foreground/60 mt-1 leading-relaxed line-clamp-2 italic">
-                      "{h.response_notes}"
+                      &ldquo;{h.response_notes}&rdquo;
                     </p>
                   )}
                 </div>
