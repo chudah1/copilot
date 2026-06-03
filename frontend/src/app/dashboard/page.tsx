@@ -683,6 +683,11 @@ export default function DashboardPage() {
                 Simulate
               </button>
             </Link>
+            <Link href="/connect?return=dashboard">
+              <button className="font-mono text-[10px] uppercase tracking-[0.14em] text-muted-foreground hover:text-foreground transition-colors border border-border px-3 py-1.5 hover:border-foreground/30">
+                Import
+              </button>
+            </Link>
             <button
               onClick={() => setShowAddForm((v) => !v)}
               className={`font-mono text-[10px] uppercase tracking-[0.14em] transition-colors border px-3 py-1.5 ${

@@ -453,6 +453,7 @@ async def upload_csv(
     if not parsed:
         raise HTTPException(status_code=400, detail="No holdings found in CSV. Check the format.")
 
+    now = datetime.now(timezone.utc)
     created = []
     for p in parsed:
         # Upsert: update if ticker already exists for this user
@@ -465,23 +466,32 @@ async def upload_csv(
         holding = existing_result.scalar_one_or_none()
 
         if holding:
-            holding.quantity = p.quantity
-            holding.average_cost_basis = p.average_cost_basis
-            holding.currency = p.currency
             holding.name = p.name
-            holding.last_updated_at = datetime.now(timezone.utc)
         else:
             holding = Holding(
                 user_id=current_user.id,
                 ticker=p.ticker.upper(),
                 name=p.name,
-                quantity=p.quantity,
-                average_cost_basis=p.average_cost_basis,
-                currency=p.currency,
-                current_value=p.quantity * p.average_cost_basis,
-                last_updated_at=datetime.now(timezone.utc),
             )
             db.add(holding)
+
+        # Normalise valuation to the account currency (GBP), like broker sync.
+        # The CSV's price/cost are in the instrument's NATIVE currency; writing
+        # them straight into the GBP value/cost fields was the same FX bug
+        # portfolio_sync used to have. apply_broker_position converts the cost
+        # basis; refresh_holding_price fetches a live price for current_value.
+        await apply_broker_position(
+            holding,
+            quantity=p.quantity,
+            native_price=None,
+            native_avg_cost=p.average_cost_basis,
+            native_currency=p.currency,
+            now=now,
+        )
+        try:
+            await refresh_holding_price(holding, now=now)
+        except Exception:
+            logger.warning("Could not fetch initial price for %s", holding.ticker, exc_info=True)
 
         created.append(holding)
 

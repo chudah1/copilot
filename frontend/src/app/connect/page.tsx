@@ -1,6 +1,6 @@
 "use client";
 
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
 import { api } from "@/lib/api";
 import { AuthGuard } from "@/components/layout/auth-guard";
@@ -54,6 +54,22 @@ export default function ConnectPage() {
   const router = useRouter();
   const [tab, setTab] = useState<TabId>("csv");
 
+  // When reached from the dashboard/settings ("add another source") rather than
+  // first-run onboarding, return the user where they came from instead of
+  // dropping them back into the onboarding flow.
+  const [returnTo, setReturnTo] = useState<string | null>(null);
+  useEffect(() => {
+    // Read once after mount (render null first) to avoid a hydration mismatch
+    // on the URL param.
+    // eslint-disable-next-line react-hooks/set-state-in-effect
+    setReturnTo(new URLSearchParams(window.location.search).get("return"));
+  }, []);
+  const addingMore = returnTo === "dashboard" || returnTo === "settings";
+  const afterImport = () =>
+    returnTo === "dashboard" ? "/dashboard"
+      : returnTo === "settings" ? "/settings"
+        : "/onboarding?source=import";
+
   const [apiKey, setApiKey] = useState("");
   const [apiSecret, setApiSecret] = useState("");
   const [brokerError, setBrokerError] = useState("");
@@ -82,7 +98,7 @@ export default function ConnectPage() {
         api_secret: apiSecret.trim() || undefined,
       });
       await api.post(`/api/portfolio/sync/${conn.id}`);
-      router.push("/onboarding?source=import");
+      router.push(afterImport());
     } catch (error: unknown) {
       setBrokerError(getErrorMessage(error, "Failed to connect"));
     } finally {
@@ -105,7 +121,7 @@ export default function ConnectPage() {
       setName("");
       setQuantity("");
       setAvgCost("");
-      router.push("/onboarding?source=import");
+      router.push(afterImport());
     } catch (error: unknown) {
       setManualError(getErrorMessage(error, "Failed to add holding"));
     } finally {
@@ -134,7 +150,7 @@ export default function ConnectPage() {
       }
       const holdings: Holding[] = await res.json();
       setCsvResult(`Imported ${holdings.length} holding${holdings.length !== 1 ? "s" : ""} successfully.`);
-      setTimeout(() => router.push("/onboarding?source=import"), 1500);
+      setTimeout(() => router.push(afterImport()), 1500);
     } catch (error: unknown) {
       setCsvError(getErrorMessage(error, "CSV upload failed"));
     } finally {
@@ -150,29 +166,33 @@ export default function ConnectPage() {
         {/* Header */}
         <div className="border-b border-border pb-7 mb-8">
           <p className="font-mono text-[10px] uppercase tracking-[0.3em] text-muted-foreground mb-2">
-            Getting started
+            {addingMore ? "Add a source" : "Getting started"}
           </p>
           <h1 className="font-display italic text-[2.5rem] leading-tight text-foreground mb-3">
-            Connect your portfolio.
+            {addingMore ? "Add more holdings." : "Connect your portfolio."}
           </h1>
           <p className="font-sans text-sm text-muted-foreground leading-relaxed max-w-lg">
-            Import what you own. Then write why each position exists — what must stay true, and what would make you reconsider.
+            {addingMore
+              ? "Connect another broker, upload a CSV, or add a position by hand. New holdings are added to what you already have — nothing is overwritten."
+              : "Import what you own. Then write why each position exists — what must stay true, and what would make you reconsider."}
           </p>
 
-          {/* Steps */}
-          <div className="grid grid-cols-3 gap-px mt-6 border border-border">
-            {[
-              { n: "01", title: "Import holdings", body: "CSV, manual entry, or Trading 212." },
-              { n: "02", title: "Write top theses", body: "Start with your biggest positions." },
-              { n: "03", title: "Get monitored", body: "We watch for changes that matter to your reasoning." },
-            ].map(({ n, title, body }) => (
-              <div key={n} className="bg-muted/30 px-4 py-4">
-                <p className="font-mono text-[10px] tracking-[0.2em] text-primary mb-1.5">{n}</p>
-                <p className="font-sans text-sm font-medium text-foreground">{title}</p>
-                <p className="font-sans text-xs text-muted-foreground mt-1 leading-relaxed">{body}</p>
-              </div>
-            ))}
-          </div>
+          {/* Steps — only relevant on first-run onboarding */}
+          {!addingMore && (
+            <div className="grid grid-cols-3 gap-px mt-6 border border-border">
+              {[
+                { n: "01", title: "Import holdings", body: "CSV, manual entry, or Trading 212." },
+                { n: "02", title: "Write top theses", body: "Start with your biggest positions." },
+                { n: "03", title: "Get monitored", body: "We watch for changes that matter to your reasoning." },
+              ].map(({ n, title, body }) => (
+                <div key={n} className="bg-muted/30 px-4 py-4">
+                  <p className="font-mono text-[10px] tracking-[0.2em] text-primary mb-1.5">{n}</p>
+                  <p className="font-sans text-sm font-medium text-foreground">{title}</p>
+                  <p className="font-sans text-xs text-muted-foreground mt-1 leading-relaxed">{body}</p>
+                </div>
+              ))}
+            </div>
+          )}
         </div>
 
         {/* Tab strip */}

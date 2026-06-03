@@ -1,6 +1,18 @@
 import io
+from unittest.mock import AsyncMock, patch
+
+import pytest
 
 from app.services.csv_parser import parse_csv, parse_trading212_csv, parse_generic_csv
+
+
+@pytest.fixture(autouse=True)
+def _stub_price_fetch():
+    """The upload endpoint now revalues each imported holding via a live price
+    fetch (yfinance) like broker sync. Stub it so these tests don't hit the
+    network; the FX cost-basis normalisation (apply_broker_position) still runs."""
+    with patch("app.routes.portfolio.refresh_holding_price", new_callable=AsyncMock, return_value=False):
+        yield
 
 
 def test_parse_generic_csv():

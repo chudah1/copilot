@@ -1,6 +1,7 @@
 "use client";
 
 import { useEffect, useState } from "react";
+import Link from "next/link";
 import { api } from "@/lib/api";
 import { AppShell } from "@/components/layout/app-shell";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
@@ -114,6 +115,25 @@ export default function SettingsPage() {
             </div>
           )}
         </div>
+
+        {/* Portfolio sources */}
+        <Section label="Portfolio">
+          <div className="flex items-start justify-between gap-6">
+            <div className="flex-1">
+              <p className="font-sans text-sm text-foreground">
+                {summary ? `${summary.holdings_count} position${summary.holdings_count === 1 ? "" : "s"} tracked` : "Your holdings"}
+              </p>
+              <p className="font-sans text-xs text-muted-foreground mt-1 leading-relaxed">
+                Add another source any time — connect a broker, upload a CSV, or add a position by hand. New holdings are added to what you already have.
+              </p>
+            </div>
+            <Link href="/connect?return=settings" className="shrink-0">
+              <button className="font-mono text-[11px] uppercase tracking-[0.15em] px-4 py-2 border border-primary/40 text-primary hover:border-primary hover:bg-primary/8 transition-colors">
+                Add holdings
+              </button>
+            </Link>
+          </div>
+        </Section>
 
         {/* Email master switch */}
         <Section label="Email">
