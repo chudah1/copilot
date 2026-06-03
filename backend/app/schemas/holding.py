@@ -10,6 +10,7 @@ class HoldingResponse(BaseModel):
     exchange: str | None
     quantity: float
     average_cost_basis: float
+    average_cost_native: float | None = None
     currency: str
     current_price: float | None
     current_value: float | None

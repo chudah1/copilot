@@ -346,37 +346,49 @@ async def add_manual_holding(
             detail=f"{body.ticker.upper()} is already in your portfolio.",
         )
 
-    # Try to enrich with market data if sector/geography not provided
+    # Enrich name/sector/geography and resolve the instrument's NATIVE currency from
+    # the provider. The manual form has no currency field (it always defaults to GBP),
+    # so a US stock added by ticker would otherwise be mislabelled GBP and its value
+    # left unconverted. The provider is the authority on currency.
     enriched_sector = body.sector
     enriched_geography = body.geography
     enriched_name = body.name
-    if not enriched_sector or not enriched_geography:
-        try:
-            overview = await fetch_company_overview(body.ticker)
-            if overview:
-                if not enriched_sector and overview["sector"] != "Unknown":
-                    enriched_sector = overview["sector"]
-                if not enriched_geography and overview["country"] != "Unknown":
-                    enriched_geography = overview["country"]
-                if enriched_name == body.ticker and overview["name"] != body.ticker:
-                    enriched_name = overview["name"]
-        except Exception:
-            pass
+    native_currency = body.currency
+    try:
+        overview = await fetch_company_overview(body.ticker)
+        if overview:
+            if not enriched_sector and overview["sector"] != "Unknown":
+                enriched_sector = overview["sector"]
+            if not enriched_geography and overview["country"] != "Unknown":
+                enriched_geography = overview["country"]
+            if enriched_name == body.ticker and overview["name"] != body.ticker:
+                enriched_name = overview["name"]
+            if overview.get("currency"):
+                native_currency = overview["currency"]
+    except Exception:
+        pass
 
     holding = Holding(
         user_id=current_user.id,
         ticker=body.ticker.upper(),
         name=enriched_name,
         exchange=body.exchange,
-        quantity=body.quantity,
-        average_cost_basis=body.average_cost_basis,
-        currency=body.currency,
         sector=enriched_sector,
         geography=enriched_geography,
         asset_class=body.asset_class,
-        last_updated_at=datetime.now(timezone.utc),
     )
     db.add(holding)
+
+    # The entered average cost is in the instrument's native currency; convert it to
+    # the account currency (GBP) and keep the native figure for display. Mirrors the
+    # broker-sync and CSV paths so valuation is consistent everywhere.
+    await apply_broker_position(
+        holding,
+        quantity=body.quantity,
+        native_price=None,
+        native_avg_cost=body.average_cost_basis,
+        native_currency=native_currency,
+    )
     await db.flush()
 
     # Fetch a live price now so a manually-added position shows a real value
@@ -400,14 +412,15 @@ async def enrich_holdings(
     current_user: User = Depends(get_current_user),
     db: AsyncSession = Depends(get_db),
 ):
-    """Backfill sector/geography for holdings missing this data."""
-    from sqlalchemy import or_
+    """Backfill sector/geography and fix mislabelled currency for all holdings.
 
+    Also repairs holdings created before currency was provider-resolved: a US stock
+    added by bare ticker was tagged GBP with its native price/cost written straight
+    into the GBP fields (no FX). When the provider reports a different currency, we
+    treat the stored figures as native and renormalise to the account currency.
+    """
     result = await db.execute(
-        select(Holding).where(
-            Holding.user_id == current_user.id,
-            or_(Holding.sector.is_(None), Holding.geography.is_(None)),
-        )
+        select(Holding).where(Holding.user_id == current_user.id)
     )
     holdings = result.scalars().all()
     updated = []
@@ -417,13 +430,37 @@ async def enrich_holdings(
             overview = await fetch_company_overview(h.ticker)
             if not overview:
                 continue
+            changed = False
             if not h.sector and overview["sector"] != "Unknown":
                 h.sector = overview["sector"]
+                changed = True
             if not h.geography and overview["country"] != "Unknown":
                 h.geography = overview["country"]
+                changed = True
             if h.name == h.ticker and overview["name"] != h.ticker:
                 h.name = overview["name"]
-            updated.append(h)
+                changed = True
+
+            provider_ccy = overview.get("currency")
+            if provider_ccy and provider_ccy != h.currency:
+                # Currency was mislabelled. The stored avg/value were never FX-converted,
+                # so treat the stored cost as the native figure and renormalise.
+                native_avg = float(h.average_cost_native if h.average_cost_native is not None else h.average_cost_basis)
+                await apply_broker_position(
+                    h,
+                    quantity=h.quantity,
+                    native_price=None,
+                    native_avg_cost=native_avg,
+                    native_currency=provider_ccy,
+                )
+                try:
+                    await refresh_holding_price(h)
+                except Exception:
+                    logger.warning("Could not refresh price for %s during enrich", h.ticker, exc_info=True)
+                changed = True
+
+            if changed:
+                updated.append(h)
         except Exception:
             continue
 

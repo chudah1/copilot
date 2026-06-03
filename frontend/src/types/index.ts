@@ -10,10 +10,11 @@ export interface Holding {
   name: string;
   exchange: string | null;
   quantity: number;
-  average_cost_basis: number;
-  currency: string;
-  current_price: number | null;
-  current_value: number | null;
+  average_cost_basis: number;        // per-share cost in account currency (GBP)
+  average_cost_native: number | null; // per-share cost in the instrument's native currency
+  currency: string;                   // instrument's native currency (e.g. USD)
+  current_price: number | null;       // latest price per share, native currency
+  current_value: number | null;       // market value in account currency (GBP)
   sector: string | null;
   geography: string | null;
   asset_class: string | null;

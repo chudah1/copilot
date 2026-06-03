@@ -87,6 +87,7 @@ async def apply_broker_position(
     the system (the bug portfolio_sync used to have)."""
     fx, ccy = await account_fx_rate(native_currency, holding.ticker)
     holding.quantity = quantity
+    holding.average_cost_native = round(float(native_avg_cost), 4)
     holding.average_cost_basis = round(float(native_avg_cost) * fx, 4)
     holding.currency = ccy
     if native_price is not None:

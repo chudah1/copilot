@@ -1112,10 +1112,16 @@ export default function PositionDetailPage() {
                             {showPositionDetails ? "▲" : "▼"} Position details
                           </button>
                           {showPositionDetails && (
-                            <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} className="grid grid-cols-2 md:grid-cols-4 gap-3 mt-4">
+                            <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} className="grid grid-cols-2 md:grid-cols-5 gap-3 mt-4">
                               {[
+                                // Price & avg cost in the instrument's native currency (USD for a US
+                                // stock); value, P&L and the portfolio total stay in the account
+                                // currency (GBP) — the standard multi-currency broker split.
                                 { label: "Shares", value: String(holding.quantity) },
-                                { label: "Avg cost", value: formatCurrency(holding.average_cost_basis) },
+                                { label: "Price", value: holding.current_price != null ? formatCurrency(holding.current_price, holding.currency || "GBP") : "—" },
+                                { label: "Avg cost", value: holding.average_cost_native != null
+                                    ? formatCurrency(holding.average_cost_native, holding.currency || "GBP")
+                                    : formatCurrency(holding.average_cost_basis) },
                                 { label: "Current value", value: formatCurrency(value) },
                                 { label: "P&L", value: `${pnl >= 0 ? "+" : ""}${formatCurrency(pnl)}`, colored: true },
                               ].map(({ label, value: v, colored }) => (

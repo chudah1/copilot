@@ -20,7 +20,12 @@ class Holding(Base):
     name: Mapped[str] = mapped_column(String(255), nullable=False)
     exchange: Mapped[str | None] = mapped_column(String(50), nullable=True)
     quantity: Mapped[float] = mapped_column(Numeric(precision=18, scale=8), nullable=False)
+    # Per-share cost in the ACCOUNT currency (GBP) — used for P&L math.
     average_cost_basis: Mapped[float] = mapped_column(Numeric(precision=18, scale=4), nullable=False)
+    # Per-share cost in the instrument's NATIVE currency (USD for a US stock) — shown
+    # on the position page the way a broker does, alongside the native price. Nullable
+    # for holdings created before this was tracked (backfilled on price refresh).
+    average_cost_native: Mapped[float | None] = mapped_column(Numeric(precision=18, scale=4), nullable=True)
     currency: Mapped[str] = mapped_column(String(3), default="GBP")
     current_price: Mapped[float | None] = mapped_column(Numeric(precision=18, scale=4), nullable=True)
     current_value: Mapped[float | None] = mapped_column(Numeric(precision=18, scale=4), nullable=True)

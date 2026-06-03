@@ -1030,7 +1030,8 @@ async def _fetch_yfinance_overview(ticker: str) -> dict[str, str] | None:
     name = info.get("shortName") or info.get("longName") or ticker
     sector = info.get("sector") or "Unknown"
     country = info.get("country") or "Unknown"
-    return {"name": name, "sector": sector, "country": country}
+    currency = _normalize_currency(info.get("currency")) or ""
+    return {"name": name, "sector": sector, "country": country, "currency": currency}
 
 
 def _parse_yfinance_news(raw_news: list[dict[str, Any]], ticker: str) -> list[NewsItem]:
@@ -1159,6 +1160,7 @@ async def fetch_company_overview(ticker: str) -> dict[str, str] | None:
             "name": overview["name"] or ticker,
             "sector": overview["sector"] or "Unknown",
             "country": overview.get("country") or payload.get("Country") or "Unknown",
+            "currency": _normalize_currency(overview.get("currency")) or "",
         }
     except Exception:
         return None

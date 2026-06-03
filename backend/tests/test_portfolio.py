@@ -8,6 +8,19 @@ from app.models.thesis import Thesis
 from app.services.market_data import CompanyData
 
 
+@pytest.fixture(autouse=True)
+def _stub_market_calls():
+    """Keep holding-creation deterministic and off the network. Empty provider
+    currency falls back to the request's currency (preserving prior behaviour) and
+    FX=1.0 keeps cost figures identity, so value/cost assertions are unaffected; the
+    new provider-currency + native-avg-cost code paths still execute."""
+    with patch("app.routes.portfolio.fetch_company_overview", new_callable=AsyncMock,
+               return_value={"name": "", "sector": "Unknown", "country": "Unknown", "currency": ""}), \
+         patch("app.routes.portfolio.refresh_holding_price", new_callable=AsyncMock, return_value=False), \
+         patch("app.services.valuation.get_fx_rate", new_callable=AsyncMock, return_value=1.0):
+        yield
+
+
 @pytest.mark.asyncio
 async def test_add_manual_holding(client, auth_headers):
     response = await client.post(
