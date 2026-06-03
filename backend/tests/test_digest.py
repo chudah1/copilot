@@ -170,7 +170,7 @@ async def test_digest_happy_path_after_monitoring_event(client, auth_headers, db
 
     digest = (await db.execute(select(Digest).where(Digest.user_id == test_user.id))).scalar_one()
     assert digest.status == "sent"
-    assert "Your reason:" in digest.content["html"]
+    assert "Your reason" in digest.content["html"]  # mono section label on the event card
     assert "I own it for resilient ecosystem demand." in digest.content["html"]
     assert digest.content["events_count"] == 1
     assert digest.content["stable_holdings_count"] == 0

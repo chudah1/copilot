@@ -18,9 +18,75 @@ from app.models.thesis_entity import ThesisEntity
 from app.models.thesis_signal import ThesisSignal
 from app.models.user import User
 from app.services.email import send_digest_email
+from app.config import settings
 
 logger = logging.getLogger(__name__)
 InvestorProfile = str | None
+
+# --- Digest visual language (email-safe hex; matches the app's parchment theme) ---
+_DZ = {
+    "paper": "#f4efe4",   # outer page
+    "card": "#fffdf8",    # the digest sheet
+    "ink": "#211e19",     # primary text
+    "muted": "#6f6a60",   # secondary text
+    "faint": "#9a9488",   # labels / footer
+    "line": "#e7e1d5",    # hairline
+    "quote": "#efe9dc",   # quote rule + soft fill
+    "accent": "#c1492a",  # rust
+    "accent_deep": "#9c3a21",
+}
+_SERIF = "Georgia, 'Times New Roman', serif"
+_SANS = "-apple-system, BlinkMacSystemFont, 'Segoe UI', Helvetica, Arial, sans-serif"
+_MONO = "'SFMono-Regular', Consolas, 'Liberation Mono', Menlo, monospace"
+
+# Verdict → (text colour, soft background, label)
+_VERDICT_STYLE = {
+    "threatens": ("#a83a23", "#f6e7e1", "Threatens this reason"),
+    "supports": ("#4f7a3f", "#e9efe3", "Supports this reason"),
+    "review": ("#9c6a1e", "#f4ecda", "Worth reviewing"),
+    "neutral": ("#6f6a60", "#efe9dc", "Neutral"),
+}
+
+
+def _section_label(text: str) -> str:
+    """A small uppercase mono section header — the editorial label used throughout."""
+    return (
+        f'<div style="font-family:{_MONO};font-size:10px;letter-spacing:0.18em;'
+        f'text-transform:uppercase;color:{_DZ["accent"]};margin:26px 0 10px;">{escape(text)}</div>'
+    )
+
+
+def _wrap_email_shell(body_html: str, *, headline: str, preheader: str = "") -> str:
+    """Wrap the digest body in a centred, branded email frame. Applied only on the
+    email send path so the in-app embed keeps using the bare body fragment."""
+    pre = escape((preheader or headline) or "")[:140]
+    return (
+        '<!DOCTYPE html><html lang="en"><head><meta charset="utf-8">'
+        '<meta name="viewport" content="width=device-width,initial-scale=1">'
+        '<meta name="color-scheme" content="light only">'
+        f'</head><body style="margin:0;padding:0;background:{_DZ["paper"]};">'
+        f'<div style="display:none;max-height:0;overflow:hidden;opacity:0;">{pre}</div>'
+        '<table role="presentation" width="100%" cellpadding="0" cellspacing="0" border="0" '
+        f'style="background:{_DZ["paper"]};padding:30px 12px;"><tr><td align="center">'
+        '<table role="presentation" width="600" cellpadding="0" cellspacing="0" border="0" '
+        f'style="max-width:600px;width:100%;background:{_DZ["card"]};border:1px solid {_DZ["line"]};">'
+        # Masthead
+        f'<tr><td style="padding:28px 34px 18px;border-bottom:1px solid {_DZ["line"]};">'
+        f'<div style="font-family:{_MONO};font-size:10px;letter-spacing:0.24em;'
+        f'text-transform:uppercase;color:{_DZ["accent"]};">Weekly digest</div>'
+        f'<div style="font-family:{_SERIF};font-style:italic;font-size:27px;'
+        f'color:{_DZ["ink"]};margin-top:6px;">penKeep</div></td></tr>'
+        # Body
+        f'<tr><td style="padding:8px 34px 4px;font-family:{_SANS};font-size:15px;'
+        f'line-height:1.62;color:{_DZ["ink"]};">{body_html}</td></tr>'
+        # Footer
+        f'<tr><td style="padding:22px 34px 30px;border-top:1px solid {_DZ["line"]};'
+        f'font-family:{_MONO};font-size:11px;line-height:1.7;color:{_DZ["faint"]};">'
+        'You are getting this because you keep your reasons on penKeep.<br>'
+        f'<a href="{settings.frontend_url}/settings" style="color:{_DZ["muted"]};'
+        'text-decoration:underline;">Change your digest schedule</a></td></tr>'
+        '</table></td></tr></table></body></html>'
+    )
 
 
 def _normalize_datetime(timestamp: datetime) -> datetime:
@@ -215,17 +281,17 @@ def _render_evidence_html(event: dict) -> str:
     what_happened = parts.get("What changed") or parts.get("What happened") or parts.get("_body_0")
 
     if you_said:
-        html_parts.append(f'<blockquote style="border-left:3px solid #ccc;margin:8px 0;padding:4px 12px;color:#555;">&ldquo;{escape(you_said)}&rdquo;</blockquote>')
+        html_parts.append(f'<div style="border-left:2px solid {_DZ["quote"]};margin:8px 0;padding:1px 0 1px 12px;color:{_DZ["muted"]};font-style:italic;">&ldquo;{escape(you_said)}&rdquo;</div>')
     if we_watched:
-        html_parts.append(f'<p style="font-size:12px;color:#888;margin:4px 0;">Signal: {escape(we_watched)}</p>')
+        html_parts.append(f'<p style="font-size:12px;color:{_DZ["faint"]};margin:4px 0;">Signal: {escape(we_watched)}</p>')
     if what_happened:
         html_parts.append(f'<p style="margin:8px 0;">{escape(what_happened)}</p>')
     elif not html_parts:
         # No structured parts — fall back to raw summary
-        html_parts.append(f"<p>{escape(event.get('summary', ''))}</p>")
+        html_parts.append(f'<p style="margin:8px 0;">{escape(event.get("summary", ""))}</p>')
 
     if event.get("ai_analysis"):
-        html_parts.append(f'<p style="font-style:italic;color:#666;margin:4px 0;">{escape(event["ai_analysis"])}</p>')
+        html_parts.append(f'<p style="color:{_DZ["muted"]};margin:6px 0;">{escape(event["ai_analysis"])}</p>')
 
     return "".join(html_parts)
 
@@ -568,20 +634,21 @@ def _render_digest_html(
     stable_holdings = observations.get("stable_holdings", [])[:3]
 
     parts = [
-        f"<h2>{escape(headline)}</h2>",
+        f'<h2 style="font-family:{_SERIF};font-style:italic;font-weight:400;font-size:24px;'
+        f'line-height:1.25;color:{_DZ["ink"]};margin:18px 0 2px;">{escape(headline)}</h2>',
     ]
     intro_line = _digest_intro_line(bool(ranked_events), investor_profile=investor_profile)
     if intro_line:
-        parts.append(f"<p>{intro_line}</p>")
+        parts.append(f'<p style="color:{_DZ["muted"]};margin:8px 0 4px;">{intro_line}</p>')
 
     if ranked_events:
         # TLDR section
         tldr_lines = _tldr_lines(ranked_events)
         if tldr_lines:
-            parts.append("<h3>TLDR</h3>")
+            parts.append(_section_label("TLDR"))
             for line in tldr_lines:
-                parts.append(f"<p>{escape(line)}</p>")
-            parts.append("<hr>")
+                parts.append(f'<p style="margin:6px 0;">{escape(line)}</p>')
+            parts.append(f'<hr style="border:none;border-top:1px solid {_DZ["line"]};margin:22px 0;">')
 
         # Per-holding event cards
         for event in ranked_events:
@@ -592,33 +659,56 @@ def _render_digest_html(
             is_negative = verdict in ("threatens", "review")
             signal_text = event.get("signal_status_text") or ""
 
-            verdict_color = {"threatens": "#b91c1c", "supports": "#15803d", "review": "#b45309"}.get(verdict or "", "#555")
-            verdict_label = {"threatens": "Threatens this reason", "supports": "Supports this reason", "review": "Worth reviewing", "neutral": "Neutral"}.get(verdict or "", "")
+            v_color, v_bg, v_label = _VERDICT_STYLE.get(verdict or "", ("", "", ""))
 
-            parts.append(f'<div style="border:1px solid #e5e7eb;border-radius:6px;padding:16px;margin:12px 0;">')
-            parts.append(f'<p style="margin:0 0 8px;font-weight:600;">{escape(clean_ticker)} — {escape(event.get("name") or clean_ticker)}</p>')
-            parts.append(f'<p style="font-size:12px;color:#888;margin:0 0 8px;">Your reason:</p>')
-            parts.append(f'<blockquote style="border-left:3px solid #d1d5db;margin:0 0 12px;padding:4px 12px;color:#374151;">&ldquo;{escape(reason_text)}&rdquo;</blockquote>')
+            parts.append(
+                '<table role="presentation" width="100%" cellpadding="0" cellspacing="0" border="0" '
+                f'style="margin:14px 0;background:{_DZ["card"]};border:1px solid {_DZ["line"]};'
+                f'border-left:3px solid {_DZ["accent"] if is_negative else _DZ["line"]};">'
+                '<tr><td style="padding:16px 18px;">'
+            )
+            parts.append(
+                f'<div style="font-family:{_SERIF};font-size:17px;color:{_DZ["ink"]};margin:0 0 12px;">'
+                f'{escape(clean_ticker)} <span style="color:{_DZ["faint"]};font-size:14px;">'
+                f'{escape(event.get("name") or clean_ticker)}</span></div>'
+            )
+            parts.append(
+                f'<div style="font-family:{_MONO};font-size:9px;letter-spacing:0.16em;'
+                f'text-transform:uppercase;color:{_DZ["faint"]};margin:0 0 4px;">Your reason</div>'
+            )
+            parts.append(
+                f'<div style="border-left:2px solid {_DZ["quote"]};padding:1px 0 1px 12px;'
+                f'color:{_DZ["muted"]};font-style:italic;margin:0 0 12px;">&ldquo;{escape(reason_text)}&rdquo;</div>'
+            )
             parts.append(_render_evidence_html(event))
             if signal_text:
-                parts.append(f'<p style="font-size:12px;color:#888;margin:8px 0;">Signals: {escape(signal_text)}</p>')
-            if verdict_label:
-                parts.append(f'<p style="color:{verdict_color};font-weight:500;margin:8px 0;">{escape(verdict_label)}</p>')
+                parts.append(f'<p style="font-size:12px;color:{_DZ["faint"]};margin:8px 0;">Signals: {escape(signal_text)}</p>')
+            if v_label:
+                parts.append(
+                    f'<div style="margin:10px 0 2px;"><span style="display:inline-block;font-family:{_MONO};'
+                    f'font-size:10px;letter-spacing:0.08em;text-transform:uppercase;color:{v_color};'
+                    f'background:{v_bg};padding:4px 9px;">{escape(v_label)}</span></div>'
+                )
             action_label = _event_action_label(is_negative=is_negative, investor_profile=investor_profile)
-            parts.append(f'<p style="margin:12px 0 0;"><a href="/dashboard/positions/{escape(ticker)}" style="color:#1d4ed8;">→ {action_label}</a></p>')
-            parts.append("</div>")
+            parts.append(
+                f'<p style="margin:13px 0 0;"><a href="{settings.frontend_url}/dashboard/positions/{escape(ticker)}" '
+                f'style="color:{_DZ["accent"]};text-decoration:none;font-weight:600;">{escape(action_label)} &rarr;</a></p>'
+            )
+            parts.append('</td></tr></table>')
 
         if stable_holdings:
-            parts.append("<hr>")
-            parts.append(f"<h3>{escape(_stable_section_title(investor_profile=investor_profile))}</h3>")
+            parts.append(f'<hr style="border:none;border-top:1px solid {_DZ["line"]};margin:22px 0;">')
+            parts.append(_section_label(_stable_section_title(investor_profile=investor_profile)))
             for stable in stable_holdings:
                 parts.append(
-                    f"<p><strong>{escape(stable['ticker'])}</strong>: {escape(stable['why_own_it'])}</p>"
+                    f'<p style="margin:6px 0;"><strong style="color:{_DZ["ink"]};">{escape(stable["ticker"])}</strong>'
+                    f'<span style="color:{_DZ["muted"]};">: {escape(stable["why_own_it"])}</span></p>'
                 )
     else:
-        parts.append("<p>Your holdings were quiet this week. Nothing landed that touched what you&apos;re watching.</p>")
+        parts.append(f'<p style="color:{_DZ["muted"]};margin:14px 0;">Your holdings were quiet this week. '
+                     'Nothing landed that touched what you&apos;re watching.</p>')
         if stable_holdings:
-            parts.append(f"<h3>{escape(_stable_section_title(investor_profile=investor_profile))}</h3>")
+            parts.append(_section_label(_stable_section_title(investor_profile=investor_profile)))
             for stable in stable_holdings:
                 stale_suffix = " This reason is getting stale." if stable.get("stale") else ""
                 parts.append(
@@ -639,23 +729,26 @@ def _render_digest_html(
             parts.append(f"<p>Upcoming: {escape(', '.join(earnings_parts))}.</p>")
 
         if quiet_nudge:
-            parts.append("<h3>Quick thought</h3>")
-            parts.append(f"<p>{escape(quiet_nudge)}</p>")
+            parts.append(_section_label("Quick thought"))
+            parts.append(f'<p style="margin:6px 0;">{escape(quiet_nudge)}</p>')
 
-    parts.append("<h3>Monitoring receipt</h3>")
-    parts.append(f"<p>{escape(monitoring_receipt)}</p>")
+    parts.append(_section_label("Monitoring receipt"))
+    parts.append(f'<p style="color:{_DZ["muted"]};margin:6px 0;">{escape(monitoring_receipt)}</p>')
 
     if observations.get("missing_theses"):
         parts.append(
-            f"<p><strong>Missing reasons:</strong> {escape(', '.join(observations['missing_theses']))}</p>"
+            f'<p style="margin:6px 0;"><strong style="color:{_DZ["ink"]};">Missing reasons:</strong> '
+            f'<span style="color:{_DZ["muted"]};">{escape(", ".join(observations["missing_theses"]))}</span></p>'
         )
     if observations.get("stale_theses"):
         parts.append(
-            f"<p><strong>Stale reasons:</strong> {escape(', '.join(observations['stale_theses']))}</p>"
+            f'<p style="margin:6px 0;"><strong style="color:{_DZ["ink"]};">Stale reasons:</strong> '
+            f'<span style="color:{_DZ["muted"]};">{escape(", ".join(observations["stale_theses"]))}</span></p>'
         )
     if observations.get("concentration_warnings"):
         parts.append(
-            f"<p><strong>Concentration:</strong> {escape(observations['concentration_warnings'])}</p>"
+            f'<p style="margin:6px 0;"><strong style="color:{_DZ["ink"]};">Concentration:</strong> '
+            f'<span style="color:{_DZ["muted"]};">{escape(observations["concentration_warnings"])}</span></p>'
         )
 
     # How your calls are playing out — the mirror's weekly payoff, the thing that
@@ -664,18 +757,24 @@ def _render_digest_html(
         reads = mirror.get("reads") or []
         open_bets = mirror.get("open_bets") or []
         if reads or open_bets:
-            parts.append("<h3>How your calls are playing out</h3>")
+            parts.append(_section_label("How your calls are playing out"))
             for r in reads:
-                parts.append(f"<p>{escape(r['read'])}</p>")
+                parts.append(f'<p style="margin:6px 0;">{escape(r["read"])}</p>')
             if open_bets:
                 items = []
                 for b in open_bets:
                     days = b.get("days_until")
                     when = f"next test in {days}d" if isinstance(days, int) and days >= 0 else "no test scheduled yet"
                     items.append(f"{escape(b['ticker'])} ({escape(when)})")
-                parts.append(f"<p><strong>Open bets:</strong> {', '.join(items)}</p>")
+                parts.append(
+                    f'<p style="margin:6px 0;"><strong style="color:{_DZ["ink"]};">Open bets:</strong> '
+                    f'<span style="color:{_DZ["muted"]};">{", ".join(items)}</span></p>'
+                )
 
-    parts.append('<p><a href="/dashboard">→ Open dashboard</a></p>')
+    parts.append(
+        f'<p style="margin:24px 0 4px;"><a href="{settings.frontend_url}/dashboard" '
+        f'style="color:{_DZ["accent"]};text-decoration:none;font-weight:600;">Open dashboard &rarr;</a></p>'
+    )
     return "".join(parts)
 
 
@@ -882,7 +981,7 @@ async def build_and_persist_user_digest(
         sent = await send_digest_email(
             to_email=user.email,
             subject=subject,
-            html_content=html_content,
+            html_content=_wrap_email_shell(html_content, headline=headline, preheader=subject),
         )
         digest.status = "sent" if sent else "failed"
         digest.sent_at = datetime.now(timezone.utc) if sent else None

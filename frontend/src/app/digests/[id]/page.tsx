@@ -216,7 +216,7 @@ export default function DigestDetailPage() {
         <div className="border-t border-border/60 pt-8">
           {digest.content.html ? (
             <div
-              className="prose prose-invert prose-sm max-w-none prose-headings:font-display prose-headings:italic prose-headings:font-normal prose-a:text-primary prose-strong:text-foreground/90"
+              className="prose prose-sm max-w-none prose-headings:font-display prose-headings:italic prose-headings:font-normal prose-p:text-foreground/80 prose-a:text-primary prose-strong:text-foreground/90"
               dangerouslySetInnerHTML={{ __html: digest.content.html }}
             />
           ) : (
