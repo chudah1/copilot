@@ -16,7 +16,7 @@ type TabId = "csv" | "manual" | "broker";
 const TABS: { id: TabId; label: string }[] = [
   { id: "csv", label: "CSV Upload" },
   { id: "manual", label: "Manual Entry" },
-  { id: "broker", label: "Trading 212 API" },
+  { id: "broker", label: "Trading 212" },
 ];
 
 const TAB_DETAILS: Record<
@@ -34,29 +34,29 @@ const TAB_DETAILS: Record<
   csv: {
     eyebrow: "Fastest path",
     title: "Import the full ledger in one move.",
-    body: "Best when you already have a broker export and want the portfolio in quickly.",
+    body: "Best when the export is already in hand.",
     note: "Accepted shape: Trading 212 export or columns for ticker, name, quantity, and average cost basis.",
     formTitle: "Upload a broker file",
-    formBody: "Bring in the portfolio first, then move straight to writing the thesis on the name that matters most.",
-    after: "After import, go to your largest position and write the first thesis there.",
+    formBody: "Import first. Write the first thesis on the holding that matters most.",
+    after: "Next: open the largest position and write the first thesis.",
   },
   manual: {
     eyebrow: "Best for first use",
     title: "Start with just a few names.",
-    body: "Add one to three positions and pressure-test the thesis workflow before doing a larger import.",
+    body: "Add one to three positions before a larger import.",
     note: "This is the easiest path if you want to feel the product before committing to a full setup.",
     formTitle: "Add the first position",
-    formBody: "Use one real holding to feel the workflow before you commit to importing the rest of the portfolio.",
-    after: "After adding the holding, go write the reason you own it while the case is still fresh.",
+    formBody: "Use one real holding to feel the workflow first.",
+    after: "Next: write why you own it while the case is still fresh.",
   },
   broker: {
     eyebrow: "Connected source",
     title: "Sync holdings straight from Trading 212.",
-    body: "Best when you want portfolio state to come in directly instead of maintaining files.",
+    body: "Best when you want holdings to come in directly.",
     note: "New holdings are added to what is already here. Existing positions are not overwritten.",
     formTitle: "Connect the live source",
-    formBody: "Use this when you want holdings to come in directly from Trading 212 instead of managing exports.",
-    after: "After sync, the next useful move is still writing the thesis on the position that matters most.",
+    formBody: "Connect once, then sync the holdings in.",
+    after: "Next: write the thesis on the position that matters most.",
   },
 };
 
@@ -218,7 +218,7 @@ export default function ConnectPage() {
                   <p className="max-w-xl font-sans text-sm leading-relaxed text-muted-foreground">
                     {addingMore
                       ? "Connect another broker, upload a CSV, or add a position by hand. New holdings are added to what you already have."
-                      : "Import what you own, write why each position exists, and let the product watch the case instead of the tape."}
+                      : "Import what you own, then write the thesis on the position that matters most."}
                   </p>
                 </div>
 
@@ -228,35 +228,19 @@ export default function ConnectPage() {
                       Outcome
                     </p>
                     <p className="mt-2 font-sans text-sm leading-relaxed text-foreground/80">
-                      Holdings in, thesis work next, monitoring after that.
+                      Holdings in first. Thesis work next.
                     </p>
                   </div>
                   <div className="border border-border/60 bg-background/70 p-4">
                     <p className="font-mono text-[10px] uppercase tracking-[0.16em] text-muted-foreground">
-                      Best move
+                      Fastest route
                     </p>
                     <p className="mt-2 font-sans text-sm leading-relaxed text-foreground/80">
-                      Start with the path that gets you to one written position fastest.
+                      Pick the path that gets you to one written position fastest.
                     </p>
                   </div>
                 </div>
               </div>
-
-              {!addingMore && (
-                <div className="mt-6 grid gap-3 sm:grid-cols-3">
-                  {[
-                    { n: "01", title: "Import", body: "CSV, manual entry, or Trading 212." },
-                    { n: "02", title: "Write", body: "Start with the names that matter most." },
-                    { n: "03", title: "Review", body: "Watch the thesis, not just the price." },
-                  ].map(({ n, title, body }) => (
-                    <div key={n} className="border border-border/60 bg-background/60 p-4">
-                      <p className="font-mono text-[10px] tracking-[0.2em] text-primary mb-1.5">{n}</p>
-                      <p className="font-sans text-sm font-medium text-foreground">{title}</p>
-                      <p className="mt-1 font-sans text-xs leading-relaxed text-muted-foreground">{body}</p>
-                    </div>
-                  ))}
-                </div>
-              )}
             </div>
 
             <div className="product-panel p-2">
@@ -298,7 +282,7 @@ export default function ConnectPage() {
                       className={inputCls}
                     />
                   </Field>
-                  <Note>Best when you already have the file ready and want the portfolio in quickly.</Note>
+                  <Note>Use this when the file is already ready.</Note>
                   {csvError && <p className="font-sans text-sm text-destructive" role="alert">{csvError}</p>}
                   {csvResult && <p className="font-sans text-sm text-emerald-600">{csvResult}</p>}
                   <Button type="submit" loading={csvLoading} disabled={!csvFile}>
@@ -356,7 +340,7 @@ export default function ConnectPage() {
                       />
                     </Field>
                   </div>
-                  <Note>One to three positions is enough to feel the product before doing a larger import.</Note>
+                  <Note>One to three positions is enough to start.</Note>
                   {manualError && <p className="font-sans text-sm text-destructive" role="alert">{manualError}</p>}
                   <Button type="submit" loading={manualLoading} disabled={!ticker || !quantity || !avgCost}>
                     <span className="font-mono text-[11px] uppercase tracking-[0.15em]">Add Holding</span>
@@ -419,7 +403,7 @@ export default function ConnectPage() {
             </div>
             <div className="product-panel p-5">
               <p className="font-mono text-[10px] uppercase tracking-[0.16em] text-muted-foreground">
-                Practical note
+                Note
               </p>
               <p className="mt-2 font-sans text-sm leading-relaxed text-foreground/80">
                 {activeTab.note}
@@ -427,7 +411,7 @@ export default function ConnectPage() {
             </div>
             <div className="product-panel p-5">
               <p className="font-mono text-[10px] uppercase tracking-[0.16em] text-muted-foreground">
-                What happens next
+                Next
               </p>
               <p className="mt-2 font-sans text-sm leading-relaxed text-foreground/80">
                 {activeTab.after}
