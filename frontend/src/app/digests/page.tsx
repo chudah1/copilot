@@ -20,7 +20,7 @@ function digestArchiveCopy(investorProfile: "thesis_driven" | "hearsay_driven" |
   if (investorProfile === "thesis_driven") {
     return {
       title: "Digest archive",
-      subtitle: "Weekly thesis reviews: what moved, what held, and which assumptions need another look.",
+      subtitle: "Weekly thesis review, in one place.",
       empty: "Your first digest lands once at least one position is written and monitoring is running.",
       fallbackHeadline: "Weekly thesis review",
     };
@@ -29,7 +29,7 @@ function digestArchiveCopy(investorProfile: "thesis_driven" | "hearsay_driven" |
   if (investorProfile === "hearsay_driven") {
     return {
       title: "Digest archive",
-      subtitle: "Weekly reason reviews: what moved, what held, and where the story you wrote may need a decision.",
+      subtitle: "Weekly reason review, in one place.",
       empty: "Your first digest lands once at least one position has a written reason and monitoring is running.",
       fallbackHeadline: "Weekly reason review",
     };
@@ -37,7 +37,7 @@ function digestArchiveCopy(investorProfile: "thesis_driven" | "hearsay_driven" |
 
   return {
     title: "Digest archive",
-    subtitle: "Weekly reviews: what moved, what stayed quiet, and where your thesis needs a decision.",
+    subtitle: "Weekly review, in one place.",
     empty: "Your first digest lands once at least one holding has an active thesis and monitoring is running.",
     fallbackHeadline: "Weekly thesis review",
   };
@@ -68,6 +68,43 @@ function normalizeDigestText(
   );
 }
 
+function digestPreview(
+  digest: Digest,
+  investorProfile: "thesis_driven" | "hearsay_driven" | null,
+) {
+  const normalized = normalizeDigestText(digest.content.summary_points?.[0], investorProfile);
+  if (!normalized) return "";
+
+  const firstSentence = normalized.split(/(?<=[.!?])\s+/)[0]?.trim() ?? normalized;
+  return firstSentence.length <= 150 ? firstSentence : `${firstSentence.slice(0, 147).trimEnd()}...`;
+}
+
+function dedupeDigests(digests: Digest[]) {
+  const seen = new Set<string>();
+  return digests.filter((digest) => {
+    const investorProfile = digest.content.investor_profile ?? null;
+    const headline = normalizeDigestText(digest.content.headline || "", investorProfile);
+    const preview = digestPreview(digest, investorProfile);
+    const stats = [
+      `${digest.content.events_count ?? 0} events`,
+      `${digest.content.holdings_count ?? 0} holdings`,
+      `${digest.content.stale_theses_count ?? 0} stale`,
+      `${digest.content.missing_theses_count ?? 0} missing`,
+    ].join("|");
+    const key = [
+      formatDate(digest.period_start),
+      formatDate(digest.period_end),
+      headline,
+      preview,
+      stats,
+      digest.status.toLowerCase(),
+    ].join("|");
+    if (seen.has(key)) return false;
+    seen.add(key);
+    return true;
+  });
+}
+
 export default function DigestsPage() {
   const router = useRouter();
   const [digests, setDigests] = useState<Digest[]>([]);
@@ -94,9 +131,10 @@ export default function DigestsPage() {
 
   const investorProfile = digests[0]?.content.investor_profile ?? null;
   const copy = digestArchiveCopy(investorProfile);
-  const latestDigest = digests[0] ?? null;
-  const totalEvents = digests.reduce((sum, digest) => sum + (digest.content.events_count || 0), 0);
-  const hasDigests = digests.length > 0;
+  const visibleDigests = dedupeDigests(digests);
+  const latestDigest = visibleDigests[0] ?? null;
+  const totalEvents = visibleDigests.reduce((sum, digest) => sum + (digest.content.events_count || 0), 0);
+  const hasDigests = visibleDigests.length > 0;
 
   return (
     <AppShell>
@@ -120,18 +158,18 @@ export default function DigestsPage() {
               disabled={generating}
               className="shrink-0 font-mono text-[10px] uppercase tracking-[0.15em] text-primary border border-primary/30 px-4 py-2 hover:bg-primary/5 transition-colors disabled:opacity-50"
             >
-              {generating ? "Building…" : "Generate now"}
+              {generating ? "Building…" : "Generate"}
             </button>
           </div>
 
           <div className="mt-6 grid gap-3 sm:grid-cols-3">
             <div className="border border-border/60 bg-background/70 p-4">
-              <p className="font-mono text-[10px] uppercase tracking-[0.16em] text-muted-foreground">
-                {hasDigests ? "In archive" : "First run"}
-              </p>
+                  <p className="font-mono text-[10px] uppercase tracking-[0.16em] text-muted-foreground">
+                    {hasDigests ? "In archive" : "First run"}
+                  </p>
               {hasDigests ? (
                 <p className="mt-2 font-display text-[1.5rem] italic leading-none text-foreground">
-                  {digests.length}
+                  {visibleDigests.length}
                 </p>
               ) : (
                 <p className="mt-2 font-sans text-sm leading-relaxed text-foreground">
@@ -254,14 +292,14 @@ export default function DigestsPage() {
                   disabled={generating}
                   className="mt-5 font-mono text-[10px] uppercase tracking-[0.15em] text-primary border border-primary/30 px-4 py-2 hover:bg-primary/5 transition-colors disabled:opacity-50"
                 >
-                  {generating ? "Building…" : "Generate one now"}
+                  {generating ? "Building…" : "Generate"}
                 </button>
               </aside>
             </div>
           </div>
         ) : (
           <div className="space-y-3">
-            {digests.map((d) => (
+            {visibleDigests.map((d) => (
               <Link
                 key={d.id}
                 href={`/digests/${d.id}`}
@@ -286,9 +324,9 @@ export default function DigestsPage() {
                   </p>
 
                   {/* Summary points */}
-                  {d.content.summary_points && d.content.summary_points.length > 0 && (
+                  {digestPreview(d, d.content.investor_profile ?? null) && (
                     <p className="whitespace-pre-line font-sans italic text-sm text-muted-foreground leading-relaxed line-clamp-3">
-                      {normalizeDigestText(d.content.summary_points[0], d.content.investor_profile ?? null)}
+                      {digestPreview(d, d.content.investor_profile ?? null)}
                     </p>
                   )}
 
