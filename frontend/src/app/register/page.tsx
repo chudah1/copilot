@@ -38,20 +38,20 @@ export default function RegisterPage() {
   return (
     <AuthShell
       eyebrow="Create Account"
-      title="Keep your thinking honest."
-      description="Bring in a few positions, write the reason down, and let the product watch the thesis instead of the tape."
-      asideHeading="What happens next"
-      asideBody="You do not need a full portfolio import to feel the product. Start small and get to the decision loop fast."
+      title="Create your account."
+      description="Start with a few positions and write down why you own them."
+      asideHeading="Start"
+      asideBody="One to three names is enough."
       asideItems={[
         {
-          eyebrow: "Start Small",
-          title: "Add one to three names first.",
-          body: "That is enough to pressure-test the thesis workflow before you bother importing everything else.",
+          eyebrow: "First step",
+          title: "Add a few names.",
+          body: "You do not need a full import to feel the product.",
         },
         {
           eyebrow: "Outcome",
-          title: "Turn opinions into a monitorable record.",
-          body: "Write what must stay true, what would break the case, and what evidence should matter next.",
+          title: "Make the case explicit.",
+          body: "Write what must stay true and what would break it.",
         },
       ]}
       footer={(

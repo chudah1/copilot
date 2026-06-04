@@ -33,19 +33,19 @@ export default function LoginPage() {
     <AuthShell
       eyebrow="Sign In"
       title="Welcome back."
-      description="Pick up your positions, review queue, and thesis changes where you left them."
-      asideHeading="Inside your account"
-      asideBody="The product opens on what needs thought first, not on a generic watchlist."
+      description="Pick up where you left off."
+      asideHeading="Inside"
+      asideBody="What needs attention shows up first."
       asideItems={[
         {
           eyebrow: "Review",
-          title: "See what needs judgment first.",
-          body: "Weak theses, stale names, and live pressure surface before the quiet holdings do.",
+          title: "Judgment first.",
+          body: "Review items surface before quiet holdings.",
         },
         {
           eyebrow: "History",
-          title: "Keep the decision record intact.",
-          body: "Every thesis, review, and conviction note stays attached to the position it belongs to.",
+          title: "Record intact.",
+          body: "Theses, reviews, and notes stay with the position.",
         },
       ]}
       footer={(
