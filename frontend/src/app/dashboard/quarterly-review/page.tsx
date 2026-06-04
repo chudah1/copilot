@@ -38,7 +38,7 @@ const RESPONSE_OPTIONS: Array<{
   {
     value: "yes_absolutely",
     label: "Yes, absolutely",
-    description: "This reason still feels strong at today's price.",
+    description: "This still feels strong at today's price.",
     border: "border-l-emerald-600",
     bg: "hover:bg-emerald-500/8",
     text: "group-hover:text-emerald-800",
@@ -54,7 +54,7 @@ const RESPONSE_OPTIONS: Array<{
   {
     value: "not_sure",
     label: "Not sure",
-    description: "Something feels off. This reason needs another pass.",
+    description: "Something feels off. This needs another pass.",
     border: "border-l-amber-500",
     bg: "hover:bg-amber-500/8",
     text: "group-hover:text-amber-900",
@@ -62,7 +62,7 @@ const RESPONSE_OPTIONS: Array<{
   {
     value: "no",
     label: "No",
-    description: "You would not start this position today for the same reason.",
+    description: "You would not start this position today.",
     border: "border-l-[#5C2018]",
     bg: "hover:bg-red-500/8",
     text: "group-hover:text-[#5C2018]",
@@ -104,8 +104,7 @@ function EmptyState() {
             Nothing to review yet.
           </h2>
           <p className="font-sans text-sm text-muted-foreground leading-relaxed">
-            Add a holding with a written reason and this flow will appear once
-            a quarter has passed since you wrote your reason down.
+            Add a holding with a written case. This review shows up after one quarter.
           </p>
         </div>
         <Link
@@ -133,8 +132,7 @@ function CompletionState({ review }: { review: QuarterlyReviewCurrent }) {
             Review complete.
           </h1>
           <p className="font-sans text-sm text-muted-foreground leading-relaxed max-w-md">
-            Every current reason has been revisited. The conviction log now
-            carries your latest answers.
+            Every current case has been revisited. Your latest answers are on record.
           </p>
         </div>
 
@@ -307,7 +305,7 @@ export default function QuarterlyReviewPage() {
                 Would you buy this today?
               </h1>
               <p className="max-w-xl font-sans text-sm text-muted-foreground leading-relaxed">
-                Keep this honest. The goal is not to predict the market. It is to test whether your written reason still deserves fresh capital.
+                Treat it like fresh capital. Does the written case still earn a buy today?
               </p>
             </div>
             <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-1">
@@ -368,7 +366,7 @@ export default function QuarterlyReviewPage() {
               <div className="space-y-5">
                 <div className="border border-border/70 bg-background/55 p-5">
                   <p className="font-mono text-[10px] uppercase tracking-[0.15em] text-foreground/40 mb-3">
-                    Your reason for owning it
+                    Your case
                   </p>
                   <blockquote className="font-display italic text-[1.2rem] leading-[1.65] text-foreground/90 border-l-2 border-[#5C2018]/30 pl-5">
                     {currentHolding.why_own_it}
@@ -427,15 +425,15 @@ export default function QuarterlyReviewPage() {
                     className="border border-amber-400/40 bg-amber-500/8 px-4 py-3"
                   >
                     <p className="font-sans text-[12px] text-amber-800 leading-relaxed">
-                      This answer keeps the holding on your radar. The best next move is to
-                      tighten or rewrite the reason from the holding page.
+                      This keeps the holding on your radar. The best next move is to
+                      tighten or rewrite the case from the holding page.
                     </p>
                   </motion.div>
                 )}
 
                 {pendingHoldings.length > 1 && (
                   <p className="font-mono text-[10px] uppercase tracking-[0.15em] text-foreground/30 text-center">
-                    {pendingHoldings.length - 1} left this quarter
+                    {pendingHoldings.length - 1} left
                   </p>
                 )}
               </div>
