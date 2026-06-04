@@ -15,46 +15,70 @@ export default function ResearchLandingPage() {
   const router = useRouter();
 
   return (
-    <div className="min-h-[calc(100vh-54px)] flex items-center justify-center px-4 py-12">
+    <div className="min-h-[calc(100vh-54px)] px-4 py-12 sm:px-8">
       <motion.div
         initial={{ opacity: 0, y: 10 }}
         animate={{ opacity: 1, y: 0 }}
         transition={{ duration: 0.3 }}
-        className="w-full max-w-sm space-y-6"
+        className="mx-auto w-full max-w-4xl space-y-6"
       >
-        <div className="space-y-2">
-          <p className="font-mono text-[10px] uppercase tracking-[0.18em] text-muted-foreground">
-            Pre-Buy Stress Test
-          </p>
-          <h1 className="font-display italic text-[2.2rem] leading-tight text-foreground">
-            Which stock are you considering?
-          </h1>
-          <p className="font-sans text-sm text-muted-foreground leading-relaxed">
-            Stress-test the bull case before you commit capital.
-          </p>
+        <div className="product-panel product-panel-muted overflow-hidden p-6 sm:p-8">
+          <div className="grid gap-6 lg:grid-cols-[minmax(0,1.3fr)_minmax(18rem,22rem)]">
+            <div className="space-y-4">
+              <div className="space-y-2">
+                <p className="font-mono text-[10px] uppercase tracking-[0.18em] text-muted-foreground">
+                  Pre-Buy Stress Test
+                </p>
+                <h1 className="font-display italic text-[2.5rem] leading-tight text-foreground sm:text-[3rem]">
+                  Which stock are you considering?
+                </h1>
+                <p className="max-w-xl font-sans text-sm leading-relaxed text-muted-foreground">
+                  Stress-test the case before you commit capital. We pull out the bear case, the real risks, the blind spots, and what to watch next.
+                </p>
+              </div>
+
+              <TickerSearch
+                value=""
+                onSelect={(ticker) => router.push(`/research/${ticker}`)}
+              />
+            </div>
+
+            <aside className="grid gap-3">
+              <div className="border border-border/60 bg-background/70 p-4">
+                <p className="font-mono text-[10px] uppercase tracking-[0.16em] text-muted-foreground">
+                  Output
+                </p>
+                <p className="mt-2 font-display text-[1.4rem] italic leading-tight text-foreground">
+                  A decision memo, not a stock blurb.
+                </p>
+              </div>
+              <div className="border border-border/60 bg-background/70 p-4">
+                <p className="font-mono text-[10px] uppercase tracking-[0.16em] text-muted-foreground">
+                  Best used for
+                </p>
+                <p className="mt-2 font-sans text-sm leading-relaxed text-foreground/80">
+                  Pre-buy underwriting, sizing a new position, or forcing yourself to look at the other side first.
+                </p>
+              </div>
+            </aside>
+          </div>
         </div>
 
-        <TickerSearch
-          value=""
-          onSelect={(ticker) => router.push(`/research/${ticker}`)}
-        />
-
-        <div className="border-t border-border/40 pt-5 space-y-2">
-          <p className="font-mono text-[9px] uppercase tracking-[0.2em] text-muted-foreground/50 mb-3">
-            You&apos;ll get
-          </p>
-          {BULLETS.map((b, i) => (
+        <div className="grid gap-3 sm:grid-cols-2">
+          {BULLETS.map((bullet, i) => (
             <motion.div
               key={i}
               initial={{ opacity: 0, x: -4 }}
               animate={{ opacity: 1, x: 0 }}
               transition={{ delay: 0.15 + i * 0.06 }}
-              className="flex gap-2.5 items-start"
+              className="product-panel p-4"
             >
-              <span className="font-mono text-[9px] text-muted-foreground/40 mt-0.5 shrink-0 tabular-nums">
-                {String(i + 1).padStart(2, "0")}
-              </span>
-              <span className="font-sans text-[13px] text-muted-foreground leading-snug">{b}</span>
+              <div className="flex gap-3 items-start">
+                <span className="font-mono text-[10px] text-muted-foreground/40 mt-0.5 shrink-0 tabular-nums">
+                  {String(i + 1).padStart(2, "0")}
+                </span>
+                <span className="font-sans text-sm leading-relaxed text-foreground/80">{bullet}</span>
+              </div>
             </motion.div>
           ))}
         </div>

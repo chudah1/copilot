@@ -29,67 +29,85 @@ export function Navbar() {
   const alertCount = summary?.attention_queue?.filter(
     (item) => item.priority === "critical" || item.priority === "high"
   ).length ?? 0;
+  const alertsHref = alertCount > 0 ? "/dashboard#live-pressure" : "/dashboard#positions";
 
   return (
-    <nav className="border-b border-border bg-card relative z-40">
-      <div className="flex items-center justify-between px-4 sm:px-8 h-[54px]">
-        {/* Wordmark */}
-        <Link href="/dashboard" className="flex items-baseline gap-2 group">
-          <span className="font-display text-[1.25rem] font-semibold italic text-primary tracking-tight leading-none">
-            penKeep
-          </span>
-        </Link>
+    <nav className="sticky top-0 z-40 border-b border-border/80 bg-background/88 backdrop-blur-xl">
+      <div className="px-4 py-3 sm:px-8">
+        <div className="product-panel product-panel-muted flex items-center justify-between gap-4 px-4 py-3 sm:px-5">
+          <div className="flex items-center gap-3">
+            <Link href="/dashboard" className="group">
+              <div className="flex flex-col">
+                <span className="font-display text-[1.3rem] font-semibold italic leading-none tracking-tight text-primary transition-colors group-hover:text-primary/80">
+                  penKeep
+                </span>
+              </div>
+            </Link>
+            {isAuthenticated && (
+              <div className="hidden lg:flex items-center gap-2 border border-emerald-500/20 bg-emerald-500/8 px-2.5 py-1">
+                <span className="inline-block h-1.5 w-1.5 rounded-full bg-emerald-500 animate-pulse" />
+                <span className="font-mono text-[10px] uppercase tracking-[0.14em] text-emerald-700">
+                  Monitoring live
+                </span>
+              </div>
+            )}
+          </div>
 
-        {/* Desktop nav */}
-        <div className="hidden sm:flex items-center gap-1">
+          <div className="hidden sm:flex items-center gap-3">
+            <div className="flex items-center gap-1 border border-border/80 bg-background/70 px-1 py-1">
           {NAV_LINKS.map(({ href, label }) => {
             const active = pathname === href || (href !== "/dashboard" && pathname.startsWith(href));
             return (
               <Link
                 key={href}
                 href={href}
-                className={`relative px-4 py-1 font-mono text-[10px] uppercase tracking-[0.2em] transition-colors ${
-                  active ? "text-foreground" : "text-muted-foreground hover:text-foreground/80"
+                    className={`relative px-3 py-2 font-mono text-[10px] uppercase tracking-[0.18em] transition-colors ${
+                  active
+                    ? "bg-primary text-primary-foreground"
+                    : "text-muted-foreground hover:bg-card hover:text-foreground/80"
                 }`}
               >
                 {label}
-                {active && <span className="absolute inset-x-4 bottom-0 h-[2px] bg-primary" />}
               </Link>
             );
           })}
-          <div className="w-px h-4 bg-border mx-2" />
-          <Link
-            href="/dashboard"
-            className="relative p-2 text-muted-foreground hover:text-foreground transition-colors"
-            aria-label={alertCount > 0 ? `${alertCount} alerts` : "No alerts"}
-          >
-            <Bell className="w-4 h-4" />
-            {alertCount > 0 && (
-              <span className="absolute top-1 right-1 w-1.5 h-1.5 rounded-full bg-destructive" />
-            )}
-          </Link>
+            </div>
+            <Link
+              href={alertsHref}
+              className="relative flex items-center gap-2 border border-border/80 bg-background/70 px-3 py-2 text-muted-foreground transition-colors hover:text-foreground"
+              aria-label={alertCount > 0 ? `${alertCount} alerts` : "No alerts"}
+            >
+              <Bell className="w-4 h-4" />
+              <span className="font-mono text-[10px] uppercase tracking-[0.14em]">
+                Alerts
+              </span>
+              {alertCount > 0 && (
+                <span className="inline-flex min-w-5 items-center justify-center bg-destructive px-1.5 py-0.5 font-mono text-[10px] text-white">
+                  {alertCount}
+                </span>
+              )}
+            </Link>
+            <button
+              onClick={logout}
+              className="border border-border/80 px-3 py-2 font-mono text-[10px] uppercase tracking-[0.18em] text-muted-foreground transition-colors hover:border-foreground/20 hover:text-foreground/80"
+            >
+              Sign out
+            </button>
+          </div>
+
           <button
-            onClick={logout}
-            className="px-4 py-1 font-mono text-[10px] uppercase tracking-[0.2em] text-muted-foreground hover:text-foreground/80 transition-colors"
+            onClick={() => setOpen((v) => !v)}
+            className="sm:hidden border border-border/80 bg-background/80 p-2 text-muted-foreground transition-colors hover:text-foreground"
+            aria-label={open ? "Close menu" : "Open menu"}
           >
-            Sign out
+            {open ? <X className="w-5 h-5" /> : <Menu className="w-5 h-5" />}
           </button>
         </div>
-
-        {/* Mobile hamburger */}
-        <button
-          onClick={() => setOpen((v) => !v)}
-          className="sm:hidden p-2 text-muted-foreground hover:text-foreground transition-colors"
-          aria-label={open ? "Close menu" : "Open menu"}
-        >
-          {open ? <X className="w-5 h-5" /> : <Menu className="w-5 h-5" />}
-        </button>
       </div>
 
-      {/* Mobile drawer */}
       {open && (
-        <div className="sm:hidden absolute top-[54px] inset-x-0 border-b border-border bg-card shadow-md">
-          <div className="flex flex-col py-2">
+        <div className="px-4 pb-3 sm:hidden sm:px-8">
+          <div className="product-panel product-panel-muted flex flex-col py-2 shadow-[0_18px_50px_rgba(52,40,24,0.12)]">
             {NAV_LINKS.map(({ href, label }) => {
               const active = pathname === href || (href !== "/dashboard" && pathname.startsWith(href));
               return (
@@ -97,33 +115,35 @@ export function Navbar() {
                   key={href}
                   href={href}
                   onClick={() => setOpen(false)}
-                  className={`px-6 py-3 font-mono text-[10px] uppercase tracking-[0.2em] transition-colors border-l-2 ${
+                  className={`mx-2 px-4 py-3 font-mono text-[10px] uppercase tracking-[0.18em] transition-colors ${
                     active
-                      ? "text-foreground border-primary"
-                      : "text-muted-foreground hover:text-foreground border-transparent"
+                      ? "bg-primary text-primary-foreground"
+                      : "text-muted-foreground hover:bg-background hover:text-foreground"
                   }`}
                 >
                   {label}
                 </Link>
               );
             })}
-            <div className="h-px bg-border mx-6 my-1" />
+            <div className="mx-4 my-2 h-px bg-border" />
             <Link
-              href="/dashboard"
+              href={alertsHref}
               onClick={() => setOpen(false)}
-              className="flex items-center gap-3 px-6 py-3 font-mono text-[10px] uppercase tracking-[0.2em] text-muted-foreground hover:text-foreground transition-colors border-l-2 border-transparent"
+              className="mx-2 flex items-center justify-between px-4 py-3 font-mono text-[10px] uppercase tracking-[0.18em] text-muted-foreground transition-colors hover:bg-background hover:text-foreground"
             >
-              <span className="relative">
+              <span className="flex items-center gap-3">
                 <Bell className="w-3.5 h-3.5" />
-                {alertCount > 0 && (
-                  <span className="absolute -top-0.5 -right-0.5 w-1.5 h-1.5 rounded-full bg-destructive" />
-                )}
+                Alerts
               </span>
-              Alerts{alertCount > 0 && ` (${alertCount})`}
+              {alertCount > 0 && (
+                <span className="inline-flex min-w-5 items-center justify-center bg-destructive px-1.5 py-0.5 text-[10px] text-white">
+                  {alertCount}
+                </span>
+              )}
             </Link>
             <button
               onClick={() => { setOpen(false); logout(); }}
-              className="px-6 py-3 text-left font-mono text-[10px] uppercase tracking-[0.2em] text-muted-foreground hover:text-foreground transition-colors"
+              className="mx-2 px-4 py-3 text-left font-mono text-[10px] uppercase tracking-[0.18em] text-muted-foreground transition-colors hover:bg-background hover:text-foreground"
             >
               Sign out
             </button>

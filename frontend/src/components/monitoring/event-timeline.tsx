@@ -3,7 +3,6 @@
 import { useState } from "react";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
-import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Textarea } from "@/components/ui/textarea";
 import { formatDate } from "@/lib/utils";
 import type { MonitoringEvent } from "@/types";
@@ -60,7 +59,7 @@ function reviewLanguage(investorProfile?: "thesis_driven" | "hearsay_driven" | n
     return {
       empty: "Nothing new yet. We're still watching this position against your thesis.",
       title: "What does this do to your thesis?",
-      description: "Log what you decided — it keeps your assumptions and alerts honest.",
+      description: "Log what you decided so the record stays clean.",
       hold: "Thesis still holds",
       edit: "Update thesis",
       lower: "Assumption weaker",
@@ -73,7 +72,7 @@ function reviewLanguage(investorProfile?: "thesis_driven" | "hearsay_driven" | n
     return {
       empty: "Nothing new yet. We're still checking whether the reason you wrote still holds.",
       title: "What does this do to your reason?",
-      description: "Log whether this changes the story, or whether you need to sharpen what you wrote.",
+      description: "Log whether this changes the story or just sharpens it.",
       hold: "Reason still holds",
       edit: "Rewrite the reason",
       lower: "Less sure now",
@@ -85,7 +84,7 @@ function reviewLanguage(investorProfile?: "thesis_driven" | "hearsay_driven" | n
   return {
     empty: "Nothing new yet. We're still watching this position against what you wrote.",
     title: "What do you want to do?",
-    description: "Log what you decided — it keeps alerts from crying wolf.",
+    description: "Log what you decided so future alerts stay useful.",
     hold: "Reason still holds",
     edit: "Update my reason",
     lower: "Lower confidence",
@@ -146,22 +145,52 @@ function EvidenceNarrative({ text }: { text: string }) {
 export function EventTimeline({ events, onReview, onEditReason, reviewingEventId, investorProfile }: Props) {
   const [notesByEvent, setNotesByEvent] = useState<Record<string, string>>({});
   const copy = reviewLanguage(investorProfile);
+  const reviewedCount = events.filter((event) => Boolean(event.review_action)).length;
 
   if (events.length === 0) {
     return (
-      <Card>
-        <CardHeader><CardTitle className="text-base">Monitoring Events</CardTitle></CardHeader>
-        <CardContent>
+      <div className="product-panel p-5 sm:p-6">
+        <div className="space-y-2">
+          <p className="font-mono text-[10px] uppercase tracking-[0.2em] text-muted-foreground">
+            History
+          </p>
+          <p className="font-display italic text-[1.35rem] leading-tight text-foreground">
+            No reviewed evidence on file yet.
+          </p>
           <p className="text-foreground/85">{copy.empty}</p>
-        </CardContent>
-      </Card>
+        </div>
+      </div>
     );
   }
 
   return (
-    <Card>
-      <CardHeader><CardTitle className="text-base">Monitoring Events</CardTitle></CardHeader>
-      <CardContent className="space-y-4">
+    <div className="product-panel overflow-hidden">
+      <div className="grid gap-0 border-b border-border/50 lg:grid-cols-[minmax(0,1.2fr)_minmax(16rem,20rem)]">
+        <div className="p-5 sm:p-6">
+          <p className="font-mono text-[10px] uppercase tracking-[0.2em] text-muted-foreground">
+            History
+          </p>
+          <p className="mt-2 font-display italic text-[1.55rem] leading-tight text-foreground">
+            Evidence and verdicts on file.
+          </p>
+          <p className="mt-2 max-w-2xl font-sans text-sm leading-relaxed text-foreground/80">
+            See what was tested, how you ruled, and what changed.
+          </p>
+        </div>
+        <aside className="border-t border-border/50 bg-muted/15 p-5 sm:p-6 lg:border-l lg:border-t-0">
+          <p className="font-mono text-[10px] uppercase tracking-[0.2em] text-muted-foreground">
+            On file
+          </p>
+          <p className="mt-2 font-display text-[1.7rem] italic leading-none text-foreground">
+            {reviewedCount}
+          </p>
+          <p className="mt-2 font-sans text-xs leading-relaxed text-muted-foreground">
+            Reviewed event{reviewedCount === 1 ? "" : "s"} logged for this position.
+          </p>
+        </aside>
+      </div>
+
+      <div className="space-y-4 p-5 sm:p-6">
         {events.map((e) => {
           const verdict = e.verdict ? verdictConfig[e.verdict] : null;
           const narrative = eventNarrativeFields(e);
@@ -169,7 +198,7 @@ export function EventTimeline({ events, onReview, onEditReason, reviewingEventId
           const weWatched = narrative.weWatched;
 
           return (
-            <div key={e.id} className="rounded-xl border p-4">
+            <div key={e.id} className="border border-border/70 bg-background/75 p-4 sm:p-5">
               {/* Header row */}
               <div className="flex items-center gap-2 flex-wrap">
                 <Badge className={severityColors[e.severity]}>{e.severity.replace("_", " ")}</Badge>
@@ -177,53 +206,83 @@ export function EventTimeline({ events, onReview, onEditReason, reviewingEventId
                 <span className="text-xs text-muted-foreground ml-auto">{formatDate(e.created_at)}</span>
               </div>
 
-              {/* Signal affected — shown prominently when available */}
-              {(e.signal_label || weWatched) && (
-                <p className="mt-2 text-sm font-medium text-muted-foreground">
-                  Assumption being tested:{" "}
-                  <span className="text-foreground">{e.signal_label ?? weWatched}</span>
-                </p>
-              )}
+              <div className="mt-4 grid gap-4 lg:grid-cols-[minmax(0,1.2fr)_minmax(15rem,18rem)]">
+                <div className="space-y-4">
+                  {(e.signal_label || weWatched) && (
+                    <div className="space-y-1">
+                      <p className="font-mono text-[10px] uppercase tracking-[0.16em] text-muted-foreground">
+                        Assumption under test
+                      </p>
+                      <p className="font-sans text-sm leading-relaxed text-foreground">
+                        {e.signal_label ?? weWatched}
+                      </p>
+                    </div>
+                  )}
 
-              {/* Your reason mentioned */}
-              {youSaid && (
-                <blockquote className="mt-2 border-l-2 border-muted pl-3 text-sm italic text-muted-foreground">
-                  &quot;{youSaid}&quot;
-                </blockquote>
-              )}
+                  {youSaid && (
+                    <blockquote className="border-l-2 border-primary/20 pl-3">
+                      <p className="font-mono text-[10px] uppercase tracking-[0.16em] text-muted-foreground">
+                        What you wrote
+                      </p>
+                      <p className="mt-2 text-sm italic text-foreground/75">
+                        &quot;{youSaid}&quot;
+                      </p>
+                    </blockquote>
+                  )}
 
-              {/* Evidence details */}
-              {e.evidence_summary ? (
-                <EvidenceNarrative text={e.evidence_summary} />
-              ) : (
-                <div className="mt-2 space-y-1 text-sm">
-                  <p>
-                    <span className="font-medium text-muted-foreground">What happened:</span>{" "}
-                    <span className="text-foreground/90">{narrative.whatChanged}</span>
-                  </p>
-                  {narrative.whyItMatters && (
-                    <p>
-                      <span className="font-medium text-muted-foreground">Why it matters:</span>{" "}
-                      <span className="text-foreground/90">{narrative.whyItMatters}</span>
+                  <div className="space-y-2">
+                    <p className="font-mono text-[10px] uppercase tracking-[0.16em] text-muted-foreground">
+                      Evidence read
                     </p>
+                    {e.evidence_summary ? (
+                      <EvidenceNarrative text={e.evidence_summary} />
+                    ) : (
+                      <div className="space-y-1 text-sm">
+                        <p>
+                          <span className="font-medium text-muted-foreground">What happened:</span>{" "}
+                          <span className="text-foreground/90">{narrative.whatChanged}</span>
+                        </p>
+                        {narrative.whyItMatters && (
+                          <p>
+                            <span className="font-medium text-muted-foreground">Why it matters:</span>{" "}
+                            <span className="text-foreground/90">{narrative.whyItMatters}</span>
+                          </p>
+                        )}
+                      </div>
+                    )}
+                  </div>
+
+                  {e.ai_analysis && !e.evidence_summary && (
+                    <p className="text-sm italic text-foreground/85">{e.ai_analysis}</p>
                   )}
                 </div>
-              )}
 
-              {/* Verdict as a sentence */}
-              {verdict && (
-                <p className={`mt-2 rounded-md px-2 py-1 text-sm font-medium inline-block ${verdict.className}`}>
-                  {verdict.sentence}
-                </p>
-              )}
+                <aside className="space-y-3 border-t border-border/50 pt-4 lg:border-l lg:border-t-0 lg:pl-4 lg:pt-0">
+                  <div className="space-y-1">
+                    <p className="font-mono text-[10px] uppercase tracking-[0.16em] text-muted-foreground">
+                      Verdict
+                    </p>
+                    {verdict ? (
+                      <p className={`inline-block rounded-md px-2 py-1 text-sm font-medium ${verdict.className}`}>
+                        {verdict.sentence}
+                      </p>
+                    ) : (
+                      <p className="text-sm text-muted-foreground">No model verdict on file.</p>
+                    )}
+                  </div>
 
-              {e.ai_analysis && !e.evidence_summary && (
-                <p className="mt-2 text-sm italic text-foreground/85">{e.ai_analysis}</p>
-              )}
-
-              {e.review_notes && (
-                <p className="mt-1 text-sm text-foreground/85">Your note: {e.review_notes}</p>
-              )}
+                  {e.review_notes && (
+                    <div className="space-y-1">
+                      <p className="font-mono text-[10px] uppercase tracking-[0.16em] text-muted-foreground">
+                        Your ruling
+                      </p>
+                      <p className="text-sm leading-relaxed text-foreground/85">
+                        {e.review_notes}
+                      </p>
+                    </div>
+                  )}
+                </aside>
+              </div>
 
               {/* Review actions — only for unreviewed events */}
               {onReview && !e.review_action && (
@@ -292,15 +351,15 @@ export function EventTimeline({ events, onReview, onEditReason, reviewingEventId
                   href={e.source_url}
                   target="_blank"
                   rel="noreferrer"
-                  className="mt-2 inline-block text-sm text-primary underline-offset-4 hover:underline"
+                  className="mt-4 inline-block text-sm text-primary underline-offset-4 hover:underline"
                 >
-                  Open source
+                  Source
                 </a>
               )}
             </div>
           );
         })}
-      </CardContent>
-    </Card>
+      </div>
+    </div>
   );
 }

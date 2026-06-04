@@ -120,10 +120,12 @@ export function ThesisDecompositionReview({ envelope, loading, saving, onGenerat
 
   if (loading) {
     return (
-      <div className="py-5 flex items-center gap-3">
-        <span className="font-mono text-[10px] uppercase tracking-[0.25em] text-muted-foreground animate-pulse">
-          Mapping thesis to signals…
-        </span>
+      <div className="product-panel p-5 sm:p-6">
+        <div className="flex items-center gap-3">
+          <span className="font-mono text-[10px] uppercase tracking-[0.25em] text-muted-foreground animate-pulse">
+            Mapping thesis to signals…
+          </span>
+        </div>
       </div>
     );
   }
@@ -132,17 +134,17 @@ export function ThesisDecompositionReview({ envelope, loading, saving, onGenerat
 
   if (!envelope) {
     return (
-      <div className="border border-border/60 bg-card px-5 py-6 space-y-4">
-        <div>
-          <p className="font-mono text-[9px] uppercase tracking-[0.25em] text-muted-foreground mb-2">
-            Not yet mapped
+      <div className="product-panel p-5 sm:p-6 space-y-4">
+        <div className="space-y-1">
+          <p className="font-mono text-[10px] uppercase tracking-[0.18em] text-muted-foreground">
+            Signal setup
           </p>
-          <p className="font-display italic text-xl text-foreground leading-tight">
+          <p className="font-display italic text-xl leading-tight text-foreground">
             Turn this thesis into observable signals.
           </p>
         </div>
         <p className="font-sans text-sm text-muted-foreground leading-relaxed max-w-lg">
-          We read your thesis, pull out what has to stay true, and suggest concrete things to watch — earnings, revenue trends, management commentary, and similar.
+          We pull out what has to stay true and suggest concrete things to watch: earnings, revenue trends, margins, and management commentary.
         </p>
         <div className="flex items-center gap-4 pt-1">
           <button
@@ -163,21 +165,21 @@ export function ThesisDecompositionReview({ envelope, loading, saving, onGenerat
 
   if ((isPending || isFailed) && !isReviewable) {
     return (
-      <div className="border border-red-200/60 bg-red-500/5 px-5 py-5 space-y-3">
-        <p className="font-mono text-[9px] uppercase tracking-[0.25em] text-red-600">
-          ● Decomposition failed
+      <div className="product-panel p-5 sm:p-6 space-y-3 border-red-200/60 bg-red-500/5">
+        <p className="font-mono text-[10px] uppercase tracking-[0.18em] text-red-600">
+          Signal setup failed
         </p>
         {envelope.message && (
           <p className="font-sans text-sm text-foreground/80 leading-relaxed">{envelope.message}</p>
         )}
         <p className="font-sans text-sm text-muted-foreground leading-relaxed">
-          Edit the thesis to include specific, observable conditions — growth rates, margins, named events — then retry.
+          Tighten the thesis with more specific, observable conditions, then retry.
         </p>
         <button
           onClick={onGenerate}
           className="font-mono text-[10px] uppercase tracking-[0.15em] border border-border text-foreground/70 hover:text-foreground px-4 py-2 transition-colors"
         >
-          Retry decomposition
+          Retry
         </button>
       </div>
     );
@@ -209,40 +211,64 @@ export function ThesisDecompositionReview({ envelope, loading, saving, onGenerat
     <div className="space-y-6">
 
       {/* Status strip */}
-      <div className="flex items-center gap-4 flex-wrap border-b border-border/40 pb-4">
-        <span className="font-mono text-[10px] text-foreground tabular-nums">
-          <span className="text-emerald-700 font-medium">{activeCount}</span>
-          <span className="text-muted-foreground"> / {totalSignals} signals active</span>
-        </span>
-
-        {mon && (
-          <div className="flex items-center gap-1.5">
-            <span className={`h-1.5 w-1.5 rounded-full ${MONITORABILITY_DOT[mon] ?? "bg-border"}`} />
-            <span className={`font-mono text-[9px] uppercase tracking-[0.15em] ${MONITORABILITY_TEXT[mon] ?? "text-muted-foreground"}`}>
-              {mon} monitorability
-            </span>
+      <div className="product-panel p-5 sm:p-6">
+        <div className="flex items-start justify-between gap-4">
+          <div className="space-y-1">
+            <p className="font-mono text-[10px] uppercase tracking-[0.18em] text-muted-foreground">
+              Signal setup
+            </p>
+            <p className="font-sans text-sm leading-relaxed text-foreground/80">
+              Keep the signals that best reflect the written case.
+            </p>
           </div>
-        )}
-
-        {confPct != null && (
-          <span className="font-mono text-[9px] text-muted-foreground/80">
-            {confPct}% decomp. confidence
+          <span className={`shrink-0 font-mono text-[9px] uppercase tracking-[0.15em] ${
+            envelope.status === "confirmed" ? "text-emerald-700"
+            : envelope.status === "partially_confirmed" ? "text-amber-700"
+            : "text-muted-foreground/80"
+          }`}>
+            {envelope.status.replaceAll("_", " ")}
           </span>
-        )}
+        </div>
+
+        <div className="mt-4 grid gap-3 sm:grid-cols-3">
+          <div className="border border-border/60 bg-background/70 p-3">
+            <p className="font-mono text-[10px] uppercase tracking-[0.16em] text-muted-foreground">
+              Active
+            </p>
+            <p className="mt-2 font-display text-[1.15rem] italic leading-none text-foreground">
+              {activeCount}/{totalSignals}
+            </p>
+          </div>
+          {mon && (
+            <div className="border border-border/60 bg-background/70 p-3">
+              <p className="font-mono text-[10px] uppercase tracking-[0.16em] text-muted-foreground">
+                Monitorability
+              </p>
+              <div className="mt-2 flex items-center gap-2">
+                <span className={`h-1.5 w-1.5 rounded-full ${MONITORABILITY_DOT[mon] ?? "bg-border"}`} />
+                <p className={`font-display text-[1.15rem] italic leading-none ${MONITORABILITY_TEXT[mon] ?? "text-muted-foreground"}`}>
+                  {mon}
+                </p>
+              </div>
+            </div>
+          )}
+          {confPct != null && (
+            <div className="border border-border/60 bg-background/70 p-3">
+              <p className="font-mono text-[10px] uppercase tracking-[0.16em] text-muted-foreground">
+                Confidence
+              </p>
+              <p className="mt-2 font-display text-[1.15rem] italic leading-none text-foreground">
+                {confPct}%
+              </p>
+            </div>
+          )}
+        </div>
 
         {!dirty && envelope.status === "draft" && activeCount > 0 && (
-          <span className="font-mono text-[9px] uppercase tracking-[0.12em] text-primary/80 border border-primary/20 px-2 py-1">
+          <p className="mt-4 font-mono text-[9px] uppercase tracking-[0.12em] text-primary/80 border border-primary/20 px-2 py-1 inline-block">
             Recommended setup preselected
-          </span>
+          </p>
         )}
-
-        <span className={`ml-auto font-mono text-[9px] uppercase tracking-[0.15em] ${
-          envelope.status === "confirmed" ? "text-emerald-700"
-          : envelope.status === "partially_confirmed" ? "text-amber-700"
-          : "text-muted-foreground/80"
-        }`}>
-          {envelope.status.replaceAll("_", " ")}
-        </span>
       </div>
 
       {/* Claims */}
@@ -386,7 +412,7 @@ export function ThesisDecompositionReview({ envelope, loading, saving, onGenerat
           {needsExplicitConfirmation && (
             <p className="font-sans text-xs text-muted-foreground leading-relaxed">
               {activeCount > 0
-                ? "We pre-picked the setup that best matches your thesis. Keep it or tweak signal by signal."
+                ? "We pre-picked the setup that best matches the thesis. Keep it or tweak it signal by signal."
                 : "Pick at least one signal to watch, then confirm the setup."}
             </p>
           )}

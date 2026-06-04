@@ -484,6 +484,7 @@ export default function PositionDetailPage() {
     } catch (error) {
       console.error(error);
       toast.error("Failed to save review");
+      throw error;
     } finally {
       setReviewingEventId(null);
     }
@@ -635,18 +636,18 @@ export default function PositionDetailPage() {
     investorProfile: onboardingState?.investor_profile ?? null,
   });
   const onboardingMonitoringMessage = decompositionLoading
-    ? "We’re turning your first reason into watchable signals now."
+    ? "Turning your first reason into watchable signals."
     : decompositionEnvelope?.decomposition
-        ? "Your first reason is live and we've started turning it into something monitorable."
-        : "Your first reason is live. The next step is to confirm what to actually watch.";
+        ? "Your first reason is live and watchable."
+        : "Your first reason is live. Next, confirm what to watch.";
   const onboardingMonitoringNextStep = decompositionLoading
-    ? "Next step: give us a moment to finish turning your reason into signal candidates."
+    ? "Next: give us a moment to finish the signal candidates."
     : decompositionEnvelope?.decomposition
-      ? "Next step: confirm these signals so monitoring becomes clear enough to trust."
-      : "Next step: review the first monitoring rules below and tighten anything that feels vague.";
+      ? "Next: confirm these signals."
+      : "Next: review the first monitoring rules and tighten anything vague.";
 
   const tabs: { id: TabId; label: string; badge?: number | string }[] = [
-    { id: "thesis", label: "Your reason" },
+    { id: "thesis", label: onboardingState?.investor_profile === "thesis_driven" ? "Thesis" : "Reason" },
     { id: "monitoring", label: "Monitoring", badge: unreviewedEvents > 0 ? unreviewedEvents : undefined },
   ];
 
@@ -695,6 +696,56 @@ export default function PositionDetailPage() {
       : activeThesis && thesisInsights.qualityLabel === "Weak signals"
         ? "tighten"
         : "write";
+  const firstWriteGuide = latestInvalidatedThesis
+    ? {
+        eyebrow: onboardingState?.investor_profile === "thesis_driven" ? "Rewrite from the last thesis" : "Rewrite from the last reason",
+        title:
+          onboardingState?.investor_profile === "thesis_driven"
+            ? "Keep the part of the case you still believe. Replace the part that already broke."
+            : "Keep the part of the story you still believe. Replace the part that already broke.",
+        body:
+          onboardingState?.investor_profile === "thesis_driven"
+            ? "Start from the previous thesis, remove the failed assumption, and write the version you would still buy today."
+            : "Start from the previous reason, remove the broken story, and write the version you would still buy today.",
+        cta: onboardingState?.investor_profile === "thesis_driven" ? "Rewrite the thesis" : "Rewrite the reason",
+      }
+    : {
+        eyebrow: onboardingState?.investor_profile === "hearsay_driven" ? "Turn the story into a system" : "Turn the position into a system",
+        title:
+          onboardingState?.investor_profile === "hearsay_driven"
+            ? "Write the case that tells penKeep what to watch."
+            : "Write the thesis that tells penKeep what to watch.",
+        body:
+          onboardingState?.investor_profile === "hearsay_driven"
+            ? "Once the reason is explicit, this page becomes a real review surface."
+            : "Once the thesis is explicit, this page becomes a real review surface.",
+        cta: copy.noReasonCta,
+      };
+  const firstWriteChecklist =
+    onboardingState?.investor_profile === "hearsay_driven"
+      ? [
+          { label: "Why this is in the portfolio", detail: "Name the business driver, not just the ticker story." },
+          { label: "What must stay true", detail: "List the condition that would keep your confidence intact." },
+          { label: "What would break it", detail: "Define the evidence that should force a rethink." },
+        ]
+      : [
+          { label: "Why you own it", detail: "Write the core belief that makes this position worth holding." },
+          { label: "What must remain true", detail: "Spell out the assumption that should stay intact." },
+          { label: "What would change your mind", detail: "Define the evidence that should trigger a real decision." },
+        ];
+  const firstWriteUnlocks =
+    onboardingState?.investor_profile === "hearsay_driven"
+      ? [
+          "Signals get matched to the written story instead of generic price noise.",
+          "Review prompts land when the business case moves, not just when price does.",
+          "The next digest explains what matters for this position in plain language.",
+        ]
+      : [
+          "Signals get tied to explicit assumptions instead of generic headlines.",
+          "Review prompts show up when evidence hits the thesis, not just when price moves.",
+          "The next digest reads like a portfolio memo, not a watchlist alert.",
+        ];
+  const suppressSecondaryThesisPrompts = Boolean(decisionPrompt || showEarningsBanner);
 
   const handleNextStepAction = () => {
     if (!nextStepNotice?.action) return;
@@ -744,7 +795,7 @@ export default function PositionDetailPage() {
       />
 
       {/* ── Contextual banners ───────────────────────────────────────────── */}
-      <div className="max-w-5xl mx-auto px-6 lg:px-10">
+      <div className="max-w-5xl mx-auto px-4 sm:px-6 lg:px-10">
 
         {fromOnboarding && activeThesis && (
           <motion.div
@@ -847,7 +898,7 @@ export default function PositionDetailPage() {
           </motion.div>
         )}
 
-        {decisionPrompt && !(fromBlindSpot && !activeThesis && !editing) && (
+        {decisionPrompt && activeThesis && !(fromBlindSpot && !activeThesis && !editing) && (
           <motion.div
             initial={{ opacity: 0, y: -4 }}
             animate={{ opacity: 1, y: 0 }}
@@ -967,7 +1018,7 @@ export default function PositionDetailPage() {
       )}
 
       {/* ── Tab content ─────────────────────────────────────────────────── */}
-      <div className="max-w-5xl mx-auto px-6 lg:px-10">
+      <div className="max-w-5xl mx-auto px-4 sm:px-6 lg:px-10">
         <AnimatePresence mode="wait">
           <motion.div
             key={activeTab}
@@ -982,20 +1033,12 @@ export default function PositionDetailPage() {
             {activeTab === "thesis" && (
               <>
                 {/* Action prompt */}
-                {(thesisInsights.canReaffirm || !activeThesis) && !editing && (
+                {thesisInsights.canReaffirm && !editing && !suppressSecondaryThesisPrompts && (
                   <div className="border-l-2 border-primary/30 pl-4 py-1 flex items-start justify-between gap-4">
                     <p className="font-sans text-sm text-foreground/80 leading-relaxed max-w-xl">
                       {thesisInsights.nextStep}
                     </p>
                     <div className="flex gap-2 shrink-0">
-                      {!activeThesis && (
-                        <button
-                          onClick={() => setEditing(true)}
-                          className="font-mono text-[10px] uppercase tracking-[0.15em] bg-primary text-primary-foreground px-4 py-2 hover:bg-primary/90 transition-colors"
-                        >
-                          Write your reason
-                        </button>
-                      )}
                       {activeThesis && thesisInsights.canReaffirm && (
                         <button
                           onClick={handleReaffirm}
@@ -1017,7 +1060,7 @@ export default function PositionDetailPage() {
                   </div>
                 )}
 
-                {thesisHandoffPrompt && !editing && (
+                {thesisHandoffPrompt && !editing && !suppressSecondaryThesisPrompts && (
                   <div className="border-l-2 border-sky-500/30 pl-4 py-1 flex items-start justify-between gap-4">
                     <div className="space-y-1">
                       <p className="font-sans text-sm text-foreground/90 leading-relaxed max-w-xl">
@@ -1062,7 +1105,7 @@ export default function PositionDetailPage() {
                         [
                           { id: "thesis" as ThesisSubTab, label: "Thesis" },
                           { id: "signals" as ThesisSubTab, label: "Signals", badge: hasActiveSignals ? activeSignalCount : undefined },
-                          { id: "log" as ThesisSubTab, label: "Log", badge: (convictionLog?.entries.length ?? 0) > 0 ? convictionLog!.entries.length : undefined },
+                          { id: "log" as ThesisSubTab, label: "History", badge: (convictionLog?.entries.length ?? 0) > 0 ? convictionLog!.entries.length : undefined },
                         ]
                       ).map((sub) => (
                         <button
@@ -1093,23 +1136,33 @@ export default function PositionDetailPage() {
                           onInvalidate={() => setInvalidateOpen(true)}
                         />
                         {(healthCheck || healthCheckLoading || showCounterThesis) && (
-                          <div className="space-y-4 border-t border-border/40 pt-6">
-                            <button onClick={() => setShowAnalysis((s) => !s)} className="font-mono text-[10px] uppercase tracking-[0.2em] text-muted-foreground hover:text-foreground transition-colors">
-                              {showAnalysis ? "▲" : "▼"} Analysis
-                            </button>
+                          <div className="product-panel p-5 sm:p-6">
+                            <div className="flex items-center justify-between gap-4">
+                              <div className="space-y-1">
+                                <p className="font-mono text-[10px] uppercase tracking-[0.18em] text-muted-foreground">
+                                  Review tools
+                                </p>
+                                <p className="font-sans text-sm leading-relaxed text-foreground/80">
+                                  Pressure-test the case against live data and the opposite view.
+                                </p>
+                              </div>
+                              <button onClick={() => setShowAnalysis((s) => !s)} className="font-mono text-[10px] uppercase tracking-[0.2em] text-muted-foreground hover:text-foreground transition-colors shrink-0">
+                                {showAnalysis ? "Hide" : "Show"}
+                              </button>
+                            </div>
                             {showAnalysis && (
-                              <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} className="space-y-4">
+                              <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} className="mt-4 grid gap-4 lg:grid-cols-2">
                                 {(healthCheck || healthCheckLoading) && (
                                   <ThesisHealthCheck result={healthCheck} loading={healthCheckLoading} investorProfile={onboardingState?.investor_profile ?? null} />
                                 )}
-                                {showCounterThesis && <CounterThesisCard thesisId={activeThesis.id} />}
+                                {showCounterThesis && <CounterThesisCard thesisId={activeThesis.id} investorProfile={onboardingState?.investor_profile ?? null} />}
                               </motion.div>
                             )}
                           </div>
                         )}
                         <div className="border-t border-border/40 pt-5">
                           <button onClick={() => setShowPositionDetails((s) => !s)} className="font-mono text-[10px] uppercase tracking-[0.2em] text-muted-foreground hover:text-foreground transition-colors">
-                            {showPositionDetails ? "▲" : "▼"} Position details
+                            {showPositionDetails ? "▲" : "▼"} Details
                           </button>
                           {showPositionDetails && (
                             <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} className="grid grid-cols-2 md:grid-cols-5 gap-3 mt-4">
@@ -1150,7 +1203,7 @@ export default function PositionDetailPage() {
                             <div className="py-10 text-center space-y-3">
                               <p className="font-display italic text-xl text-foreground/50">No signals defined yet.</p>
                               <p className="font-sans text-sm text-muted-foreground max-w-xs mx-auto leading-relaxed">
-                                Generate a watchlist from your thesis and confirm which signals should count as evidence.
+                                Generate signals from the thesis and confirm what should count as evidence.
                               </p>
                               <button onClick={handleGenerateDecomposition} className="font-mono text-[10px] uppercase tracking-[0.15em] border border-primary/40 text-primary px-5 py-2.5 hover:border-primary transition-colors">
                                 Generate signals
@@ -1207,33 +1260,66 @@ export default function PositionDetailPage() {
 
                 {/* No thesis empty state */}
                 {!activeThesis && !editing && (
-                  <div className="py-16 text-center space-y-4">
-                    <p className="font-display italic text-2xl text-foreground/50">
-                      {latestInvalidatedThesis
-                        ? (onboardingState?.investor_profile === "thesis_driven"
-                            ? "Your last thesis broke."
-                            : onboardingState?.investor_profile === "hearsay_driven"
-                              ? "Your last reason broke."
-                              : "Your last reason broke.")
-                        : copy.noReasonTitle}
-                    </p>
-                    <p className="font-sans text-sm text-muted-foreground max-w-sm mx-auto leading-relaxed">
-                      {latestInvalidatedThesis
-                        ? (onboardingState?.investor_profile === "thesis_driven"
-                            ? "Start from the last thesis, cut what failed, and write the version you'd still own today."
-                            : onboardingState?.investor_profile === "hearsay_driven"
-                              ? "Start from the last written reason, remove the part of the story that broke, and write the version you would still believe today."
-                              : "Start from the last written reason, remove what failed, and write the version you would still believe today.")
-                        : copy.noReasonBody}
-                    </p>
-                    <button
-                      onClick={() => setEditing(true)}
-                      className="font-mono text-[10px] uppercase tracking-[0.2em] border border-primary/40 text-primary px-5 py-2.5 hover:border-primary transition-colors"
-                    >
-                      {latestInvalidatedThesis
-                        ? (onboardingState?.investor_profile === "thesis_driven" ? "Rewrite the thesis" : "Rewrite the reason")
-                        : copy.noReasonCta}
-                    </button>
+                  <div className="grid gap-5 lg:grid-cols-[minmax(0,1.2fr)_minmax(16rem,20rem)]">
+                    <section className="product-panel product-panel-muted overflow-hidden p-5 sm:p-6">
+                      <div className="space-y-5">
+                        <div className="space-y-2">
+                          <p className="font-mono text-[10px] uppercase tracking-[0.2em] text-primary">
+                            {firstWriteGuide.eyebrow}
+                          </p>
+                          <div className="space-y-2">
+                            <p className="font-display italic text-[1.6rem] leading-tight text-foreground sm:text-[1.85rem]">
+                              {firstWriteGuide.title}
+                            </p>
+                            <p className="font-sans text-sm text-foreground/80 leading-relaxed max-w-2xl">
+                              {firstWriteGuide.body}
+                            </p>
+                          </div>
+                        </div>
+
+                        <div className="grid gap-3 sm:grid-cols-3">
+                          {firstWriteChecklist.map((item) => (
+                            <div key={item.label} className="border border-border/70 bg-background/75 p-4">
+                              <p className="font-mono text-[10px] uppercase tracking-[0.16em] text-muted-foreground">
+                                {item.label}
+                              </p>
+                              <p className="mt-2 font-sans text-sm leading-relaxed text-foreground/85">
+                                {item.detail}
+                              </p>
+                            </div>
+                          ))}
+                        </div>
+
+                        <div className="flex flex-wrap items-center gap-3">
+                          <button
+                            onClick={() => setEditing(true)}
+                            className="bg-primary px-5 py-2.5 font-mono text-[10px] uppercase tracking-[0.18em] text-primary-foreground transition-colors hover:bg-primary/90"
+                          >
+                            {firstWriteGuide.cta}
+                          </button>
+                          <p className="font-sans text-xs leading-relaxed text-muted-foreground">
+                            {latestInvalidatedThesis
+                              ? "We will preload the last version so you can rewrite from something real."
+                              : "You only need a short, specific draft to unlock monitoring."}
+                          </p>
+                        </div>
+                      </div>
+                    </section>
+
+                    <aside className="product-panel p-5 sm:p-6">
+                      <p className="font-mono text-[10px] uppercase tracking-[0.2em] text-muted-foreground">
+                        What this unlocks
+                      </p>
+                      <div className="mt-4 space-y-3">
+                        {firstWriteUnlocks.map((item) => (
+                          <div key={item} className="border-l-2 border-primary/20 pl-3">
+                            <p className="font-sans text-sm leading-relaxed text-foreground/80">
+                              {item}
+                            </p>
+                          </div>
+                        ))}
+                      </div>
+                    </aside>
                   </div>
                 )}
 
@@ -1248,6 +1334,8 @@ export default function PositionDetailPage() {
                   investorProfile={onboardingState?.investor_profile ?? null}
                   events={events}
                   unreviewedEvents={unreviewedEvents}
+                  activeSignalCount={activeSignalCount}
+                  hasSignals={hasSignals}
                   firstPendingEvent={firstPendingEvent}
                   firstPendingAssumptionLabel={firstPendingAssumptionLabel}
                   isFirstLiveEvidenceMoment={isFirstLiveEvidenceMoment}

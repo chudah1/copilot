@@ -4,6 +4,7 @@ import { useEffect, useState } from "react";
 import Link from "next/link";
 import { api } from "@/lib/api";
 import { AppShell } from "@/components/layout/app-shell";
+import { Button } from "@/components/ui/button";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import type { PortfolioSummary, UserPreferences } from "@/types";
 
@@ -49,7 +50,7 @@ function Toggle({
 
 function Section({ label, children, disabled }: { label: string; children: React.ReactNode; disabled?: boolean }) {
   return (
-    <section className={`border-b border-border/60 pb-8 ${disabled ? "opacity-50 pointer-events-none" : ""}`}>
+    <section className={`product-panel p-5 sm:p-6 ${disabled ? "opacity-50 pointer-events-none" : ""}`}>
       <p className="font-mono text-[10px] uppercase tracking-[0.3em] text-muted-foreground mb-5">{label}</p>
       {children}
     </section>
@@ -92,26 +93,43 @@ export default function SettingsPage() {
 
   return (
     <AppShell>
-      <div className="max-w-2xl mx-auto px-4 sm:px-8 py-10 space-y-8">
+      <div className="max-w-4xl mx-auto px-4 sm:px-8 py-10 space-y-6">
 
-        {/* Page header */}
-        <div className="border-b border-border pb-6">
+        <div className="product-panel product-panel-muted overflow-hidden p-5 sm:p-6">
           <p className="font-mono text-[10px] uppercase tracking-[0.3em] text-muted-foreground mb-2">
             Account
           </p>
           <h1 className="font-display italic text-4xl text-foreground leading-tight">
-            Preferences
+            Settings
           </h1>
           <p className="font-sans text-sm text-muted-foreground mt-2">
-            Control when and how penKeep contacts you.
+            Email cadence, alerts, and monitoring noise.
           </p>
           {summary && (
-            <div className={`mt-4 border px-4 py-3 text-sm font-sans leading-relaxed ${
-              summary.monitoring_ready
-                ? "border-emerald-500/20 bg-emerald-500/10 text-emerald-700/90"
-                : "border-amber-500/20 bg-amber-500/10 text-amber-700/90"
-            }`}>
-              {summary.monitoring_message}
+            <div className="mt-6 grid gap-3 sm:grid-cols-3">
+              <div className="border border-border/60 bg-background/70 p-4">
+                <p className="font-mono text-[10px] uppercase tracking-[0.16em] text-muted-foreground">
+                  Positions
+                </p>
+                <p className="mt-2 font-display text-[1.5rem] italic leading-none text-foreground">
+                  {summary.holdings_count}
+                </p>
+              </div>
+              <div className="border border-border/60 bg-background/70 p-4">
+                <p className="font-mono text-[10px] uppercase tracking-[0.16em] text-muted-foreground">
+                  Written
+                </p>
+                <p className="mt-2 font-display text-[1.5rem] italic leading-none text-foreground">
+                  {summary.theses_active}
+                </p>
+              </div>
+              <div className={`border p-4 text-sm font-sans leading-relaxed ${
+                summary.monitoring_ready
+                  ? "border-emerald-500/20 bg-emerald-500/10 text-emerald-700/90"
+                  : "border-amber-500/20 bg-amber-500/10 text-amber-700/90"
+              }`}>
+                {summary.monitoring_message}
+              </div>
             </div>
           )}
         </div>
@@ -124,13 +142,13 @@ export default function SettingsPage() {
                 {summary ? `${summary.holdings_count} position${summary.holdings_count === 1 ? "" : "s"} tracked` : "Your holdings"}
               </p>
               <p className="font-sans text-xs text-muted-foreground mt-1 leading-relaxed">
-                Add another source any time — connect a broker, upload a CSV, or add a position by hand. New holdings are added to what you already have.
+                Add another source any time. Existing holdings stay in place.
               </p>
             </div>
             <Link href="/connect?return=settings" className="shrink-0">
-              <button className="font-mono text-[11px] uppercase tracking-[0.15em] px-4 py-2 border border-primary/40 text-primary hover:border-primary hover:bg-primary/8 transition-colors">
+              <Button type="button" variant="outline" size="sm">
                 Add holdings
-              </button>
+              </Button>
             </Link>
           </div>
         </Section>
@@ -138,20 +156,20 @@ export default function SettingsPage() {
         {/* Email master switch */}
         <Section label="Email">
           <p className="font-sans text-xs text-muted-foreground mb-4 leading-relaxed">
-            Turning email off pauses all outbound messages — digests, earnings alerts, and onboarding.
+            Pause every outbound email from penKeep.
           </p>
           <Toggle
             checked={prefs.email_enabled}
             onChange={(v) => set("email_enabled", v)}
-            label="Email enabled"
-            description="When off, no emails are sent regardless of other settings."
+            label="Email updates"
+            description="Digests, earnings alerts, and onboarding mail."
           />
         </Section>
 
         {/* Digest schedule */}
         <Section label="Weekly digest" disabled={!prefs.email_enabled}>
           <p className="font-sans text-xs text-muted-foreground mb-5 leading-relaxed">
-            Your portfolio summary sent on a schedule. Weekly works best for thesis review.
+            A recurring portfolio review memo.
           </p>
           <div className="space-y-4">
             <div className="space-y-2">
@@ -214,20 +232,20 @@ export default function SettingsPage() {
             checked={prefs.earnings_alerts}
             onChange={(v) => set("earnings_alerts", v)}
             label="Earnings alerts"
-            description="In-app notification when a holding reports within 2 days. We also evaluate your reasons the morning after."
+            description="Heads-up before results, plus a next-morning thesis check."
           />
           <Toggle
             checked={prefs.quarterly_review_reminders}
             onChange={(v) => set("quarterly_review_reminders", v)}
             label="Quarterly review reminders"
-            description="Email at the start of each quarter prompting you to revisit every reason."
+            description="Quarter-open reminder to revisit each position."
           />
         </Section>
 
         {/* Monitoring sensitivity */}
         <Section label="Monitoring sensitivity">
           <p className="font-sans text-xs text-muted-foreground mb-4 leading-relaxed">
-            Controls which monitoring events appear in your event timeline.
+            Choose how much monitoring signal reaches the timeline.
           </p>
           <div className="space-y-2">
             <Select
@@ -243,13 +261,13 @@ export default function SettingsPage() {
               </SelectContent>
             </Select>
             <p className="font-sans text-xs text-muted-foreground leading-relaxed">
-              Use &ldquo;Thesis-breaking only&rdquo; if you only want the sharpest signal.
+              Use &ldquo;Thesis-breaking only&rdquo; for the tightest feed.
             </p>
           </div>
         </Section>
 
         {/* Save */}
-        <div className="flex justify-end pt-2">
+        <div className="product-panel p-4 sm:p-5 flex justify-end">
           <button
             onClick={handleSave}
             disabled={saving}

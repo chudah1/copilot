@@ -18,6 +18,43 @@ interface OnboardingBannerData {
   } | null;
 }
 
+function onboardingBannerCopy(args: {
+  bannerType: string | null;
+  holdingsCount: number;
+  reasonsCount: number;
+  ticker: string | null;
+  investorProfile: "thesis_driven" | "hearsay_driven" | null;
+}) {
+  const { bannerType, holdingsCount, reasonsCount, ticker, investorProfile } = args;
+  const writeWord = investorProfile === "hearsay_driven" ? "reason" : "thesis";
+
+  if (bannerType === "start_first_reason") {
+    return {
+      body: `Start with ${ticker ?? "your largest position"} so monitoring has one clear ${writeWord} to track.`,
+    };
+  }
+
+  if (bannerType === "first_reason_monitoring") {
+    return {
+      body:
+        investorProfile === "hearsay_driven"
+          ? "Your first reason is live. We'll stay quiet unless the story shifts."
+          : "Your first thesis is live. We'll stay quiet unless the evidence shifts.",
+    };
+  }
+
+  if (bannerType === "add_more_reasons") {
+    const remaining = Math.max(holdingsCount - reasonsCount, 0);
+    return {
+      body: `${remaining} ${remaining === 1 ? "position still needs" : "positions still need"} a written ${writeWord}. Next up: ${ticker ?? "your next holding"}.`,
+    };
+  }
+
+  return {
+    body: null,
+  };
+}
+
 export function OnboardingBanner({ onVisibilityChange }: { onVisibilityChange?: (visible: boolean) => void }) {
   const [banner, setBanner] = useState<OnboardingBannerData | null>(null);
   const [dismissed, setDismissed] = useState(false);
@@ -45,21 +82,28 @@ export function OnboardingBanner({ onVisibilityChange }: { onVisibilityChange?: 
       : "/dashboard";
 
   const investorProfile = onboardingState?.investor_profile ?? null;
+  const bannerCopy = onboardingBannerCopy({
+    bannerType: banner_type,
+    holdingsCount: banner.holdings_count,
+    reasonsCount: banner.reasons_count,
+    ticker: suggested_holding?.ticker ?? null,
+    investorProfile,
+  });
 
   const actionLabel =
     banner_type === "start_first_reason"
       ? investorProfile === "hearsay_driven"
-        ? `Turn the story on ${suggested_holding?.ticker ?? "your largest position"} into a reason →`
+        ? `Start with ${suggested_holding?.ticker ?? "your largest position"} →`
         : `Start with ${suggested_holding?.ticker ?? "your largest position"} →`
       : banner_type === "add_more_reasons"
       ? investorProfile === "hearsay_driven"
-        ? `Write the real reason for ${suggested_holding?.ticker ?? "your next position"} →`
-        : `Write down why you hold ${suggested_holding?.ticker ?? "your next position"} →`
+        ? `Write ${suggested_holding?.ticker ?? "the next reason"} →`
+        : `Write ${suggested_holding?.ticker ?? "the next thesis"} →`
       : null;
 
   return (
     <div className="flex items-center justify-between gap-4 border border-amber-400/30 bg-amber-50 px-5 py-3">
-      <p className="font-sans text-sm leading-snug text-amber-900">{message}</p>
+      <p className="font-sans text-sm leading-snug text-amber-900">{bannerCopy.body ?? message}</p>
       <div className="flex items-center gap-4 shrink-0">
         {actionLabel && (
           <Link

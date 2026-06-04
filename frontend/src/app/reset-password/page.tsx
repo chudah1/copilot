@@ -4,6 +4,7 @@ import { Suspense, useState } from "react";
 import { useRouter, useSearchParams } from "next/navigation";
 import Link from "next/link";
 import { api } from "@/lib/api";
+import { AuthShell } from "@/components/auth/auth-shell";
 import { Button } from "@/components/ui/button";
 import { getErrorMessage } from "@/lib/errors";
 
@@ -44,42 +45,57 @@ function ResetPasswordInner() {
 
   if (!token) {
     return (
-      <div className="flex min-h-screen items-center justify-center px-4">
-        <div className="w-full max-w-sm border border-border/60 bg-card p-8 space-y-4">
-          <div>
-            <p className="font-mono text-[10px] uppercase tracking-[0.2em] text-muted-foreground mb-2">
-              penKeep
-            </p>
-            <h1 className="font-display italic text-[2rem] leading-tight text-foreground">
-              Invalid link.
-            </h1>
-          </div>
-          <p className="font-sans text-sm text-muted-foreground leading-relaxed">
-            This reset link is missing or malformed.
+      <AuthShell
+        eyebrow="Password Reset"
+        title="Invalid link."
+        description="This reset link is missing or malformed."
+        asideHeading="Next step"
+        asideBody="Request a fresh reset email and use the newest link that arrives."
+        asideItems={[
+          {
+            eyebrow: "Retry",
+            title: "Generate a new reset link.",
+            body: "If you opened an older email, a newer reset request may already have replaced it.",
+          },
+        ]}
+        footer={(
+          <p className="font-mono text-[10px] text-muted-foreground/70 text-center">
+            <Link href="/forgot-password" className="underline underline-offset-2 hover:text-foreground transition-colors">
+              Request a new reset link
+            </Link>
           </p>
-          <Link
-            href="/forgot-password"
-            className="font-mono text-[10px] uppercase tracking-[0.15em] text-primary hover:text-primary/70 transition-colors block"
-          >
-            Request a new reset link →
-          </Link>
+        )}
+      >
+        <div className="max-w-sm space-y-4">
+          <p className="font-sans text-sm text-muted-foreground leading-relaxed">
+            Request another reset email and open the newest link instead.
+          </p>
         </div>
-      </div>
+      </AuthShell>
     );
   }
 
   return (
-    <div className="flex min-h-screen items-center justify-center px-4">
-      <div className="w-full max-w-sm border border-border/60 bg-card p-8 space-y-6">
-        <div>
-          <p className="font-mono text-[10px] uppercase tracking-[0.2em] text-muted-foreground mb-2">
-            penKeep
-          </p>
-          <h1 className="font-display italic text-[2rem] leading-tight text-foreground">
-            New password.
-          </h1>
-        </div>
-
+    <AuthShell
+      eyebrow="Password Reset"
+      title="Set a new password."
+      description="Use a new password you have not used for this account before."
+      asideHeading="After reset"
+      asideBody="Once this succeeds, you will head back to sign in with the updated password."
+      asideItems={[
+        {
+          eyebrow: "Security",
+          title: "Keep it simple but strong.",
+          body: "The goal is a password you can reliably use, not a recovery ritual every week.",
+        },
+        {
+          eyebrow: "Access",
+          title: "You will sign in again right after.",
+          body: "That makes it easy to confirm the reset worked before you move on.",
+        },
+      ]}
+    >
+      <div className="max-w-sm">
         <form onSubmit={handleSubmit} className="space-y-4">
           <div className="space-y-1.5">
             <label htmlFor="password" className="font-mono text-[10px] uppercase tracking-[0.15em] text-muted-foreground block">
@@ -110,7 +126,7 @@ function ResetPasswordInner() {
           </Button>
         </form>
       </div>
-    </div>
+    </AuthShell>
   );
 }
 

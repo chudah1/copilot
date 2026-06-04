@@ -3,9 +3,9 @@
 import { createContext, useContext, useEffect, useState, ReactNode, startTransition } from "react";
 import { useRouter } from "next/navigation";
 import { api } from "./api";
+import { getApiBaseUrl } from "./api-base";
+import { clearStoredTokens, getStoredAccessToken, getStoredRefreshToken, storeTokens } from "./auth-tokens";
 import type { TokenResponse } from "@/types";
-
-const API_URL = process.env.NEXT_PUBLIC_API_URL || "http://localhost:8000";
 
 interface AuthContextType {
   isAuthenticated: boolean;
@@ -24,18 +24,31 @@ export function AuthProvider({ children }: { children: ReactNode }) {
 
   useEffect(() => {
     async function checkAuth() {
+      const apiUrl = getApiBaseUrl();
+      const accessToken = getStoredAccessToken();
       try {
         // Try access token cookie first
-        let r = await fetch(`${API_URL}/api/auth/me`, { credentials: "include" });
+        const r = await fetch(`${apiUrl}/api/auth/me`, {
+          credentials: "include",
+          headers: accessToken ? { Authorization: `Bearer ${accessToken}` } : undefined,
+        });
         if (r.ok) {
           startTransition(() => { setIsAuthenticated(true); setIsLoading(false); });
           return;
         }
         // Access token expired — try refreshing
-        const refreshed = await fetch(`${API_URL}/api/auth/refresh`, {
+        const refreshed = await fetch(`${apiUrl}/api/auth/refresh`, {
           method: "POST",
           credentials: "include",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ refresh_token: getStoredRefreshToken() }),
         });
+        if (refreshed.ok) {
+          const tokens = await refreshed.json() as TokenResponse;
+          storeTokens(tokens);
+        } else {
+          clearStoredTokens();
+        }
         startTransition(() => {
           setIsAuthenticated(refreshed.ok);
           setIsLoading(false);
@@ -48,21 +61,25 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   }, []);
 
   const login = async (email: string, password: string) => {
-    await api.post<TokenResponse>("/api/auth/login", { email, password });
+    const tokens = await api.post<TokenResponse>("/api/auth/login", { email, password });
+    storeTokens(tokens);
     setIsAuthenticated(true);
     router.push("/dashboard");
   };
 
   const register = async (email: string, password: string) => {
-    await api.post<TokenResponse>("/api/auth/register", { email, password });
+    const tokens = await api.post<TokenResponse>("/api/auth/register", { email, password });
+    storeTokens(tokens);
     setIsAuthenticated(true);
     router.push("/connect");
   };
 
   const logout = async () => {
+    const apiUrl = getApiBaseUrl();
     try {
-      await fetch(`${API_URL}/api/auth/logout`, { method: "POST", credentials: "include" });
+      await fetch(`${apiUrl}/api/auth/logout`, { method: "POST", credentials: "include" });
     } catch { /* ignore — clear local state regardless */ }
+    clearStoredTokens();
     setIsAuthenticated(false);
     router.push("/login");
   };

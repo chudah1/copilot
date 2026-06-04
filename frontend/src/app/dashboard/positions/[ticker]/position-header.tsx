@@ -38,19 +38,19 @@ export function PositionHeader({
 }: PositionHeaderProps) {
   return (
       <div className="sticky top-[52px] z-20 bg-background border-b border-border/60">
-        <div className="max-w-5xl mx-auto px-6 lg:px-10">
+        <div className="max-w-5xl mx-auto px-4 sm:px-6 lg:px-10">
 
           {/* Nav row */}
-          <div className="flex items-center justify-between pt-4 pb-2">
+          <div className="flex flex-col gap-3 pt-4 pb-2 sm:flex-row sm:items-center sm:justify-between">
             <Link
               href="/dashboard"
               className="font-mono text-[10px] uppercase tracking-[0.2em] text-muted-foreground hover:text-primary transition-colors"
             >
               ← Portfolio
             </Link>
-            <div className="flex items-center gap-3">
+            <div className="flex flex-wrap items-center gap-2 sm:justify-end">
               {deleteConfirming ? (
-                <div className="flex items-center gap-2">
+                <div className="flex flex-wrap items-center gap-2 sm:justify-end">
                   <span className="font-mono text-[10px] text-muted-foreground">Remove all data?</span>
                   <button
                     onClick={onDelete}
@@ -85,9 +85,9 @@ export function PositionHeader({
           </div>
 
           {/* Identity + value row */}
-          <div className={`flex items-end justify-between gap-6 pb-3 overflow-hidden transition-all duration-200 ${headerCollapsed ? "max-h-0 pb-0 opacity-0 sm:max-h-40 sm:pb-3 sm:opacity-100" : "max-h-40"}`}>
+          <div className={`flex flex-col gap-4 pb-3 overflow-hidden transition-all duration-200 sm:flex-row sm:items-end sm:justify-between sm:gap-6 ${headerCollapsed ? "max-h-0 pb-0 opacity-0 sm:max-h-40 sm:pb-3 sm:opacity-100" : "max-h-60 sm:max-h-40"}`}>
             <div>
-              <h1 className="font-display italic text-[3.5rem] leading-none text-primary tracking-tight">
+              <h1 className="font-display italic text-[2.9rem] leading-none text-primary tracking-tight sm:text-[3.5rem]">
                 {cleanTicker(holding.ticker)}
               </h1>
               {holding.name && holding.name !== holding.ticker && (
@@ -96,7 +96,7 @@ export function PositionHeader({
                 </p>
               )}
             </div>
-            <div className="text-right shrink-0 pb-0.5">
+            <div className="shrink-0 pb-0.5 sm:text-right">
               {hasPrice ? (
                 <>
                   <p className="font-mono text-[1.6rem] tabular-nums text-foreground leading-tight">
@@ -119,9 +119,9 @@ export function PositionHeader({
           </div>
 
           {/* Status ribbon */}
-          <div className={`flex items-center gap-4 pb-3 overflow-hidden transition-all duration-200 ${headerCollapsed ? "max-h-0 pb-0 opacity-0 sm:max-h-20 sm:pb-3 sm:opacity-100" : "max-h-20"}`}>
+          <div className={`flex flex-col items-start gap-3 pb-3 overflow-hidden transition-all duration-200 sm:flex-row sm:items-center sm:gap-4 ${headerCollapsed ? "max-h-0 pb-0 opacity-0 sm:max-h-20 sm:pb-3 sm:opacity-100" : "max-h-48 sm:max-h-20"}`}>
             {/* Pulse dot + label */}
-            <div className="flex items-center gap-2">
+            <div className="flex flex-wrap items-center gap-2">
               <span className={`h-1.5 w-1.5 rounded-full ${STATUS_DOT[activeThesis?.status ?? "no_thesis"] ?? "bg-border"}`} />
               <span className="font-mono text-[10px] uppercase tracking-[0.2em] text-muted-foreground">
                 {thesisInsights.qualityLabel}
@@ -136,23 +136,23 @@ export function PositionHeader({
               </>
             )}
             {activeThesis && (
-              <>
-              <span className="text-border text-[10px]">·</span>
-              <span className="font-mono text-[10px] text-muted-foreground/60">
-                reason {ageInDays(activeThesis.updated_at)}d old
-              </span>
-              {stalePressure && (
                 <>
                   <span className="text-border text-[10px]">·</span>
-                  <span className="font-mono text-[10px] text-amber-700/80">
-                    cadence {stalePressure.cadenceDays}d
+                  <span className="font-mono text-[10px] text-muted-foreground/60">
+                    updated {ageInDays(activeThesis.updated_at)}d ago
                   </span>
+                  {stalePressure && (
+                    <>
+                      <span className="text-border text-[10px]">·</span>
+                      <span className="font-mono text-[10px] text-amber-700/80">
+                        {stalePressure.cadenceDays}d cadence
+                      </span>
+                    </>
+                  )}
                 </>
               )}
-            </>
-          )}
             {/* Progress indicators */}
-            <div className="flex items-center gap-3 ml-auto">
+            <div className="flex flex-wrap items-center gap-3 sm:ml-auto sm:justify-end">
               {steps.map((step, i) => (
                 <div key={step.label} className="flex items-center gap-2">
                   {i > 0 && <span className="text-border text-[10px]">·</span>}
@@ -167,12 +167,12 @@ export function PositionHeader({
           </div>
 
           {/* Tab strip */}
-          <div className="flex gap-1 -mx-1">
+          <div className="flex gap-1 -mx-1 overflow-x-auto pb-0.5">
             {tabs.map((tab) => (
               <button
                 key={tab.id}
                 onClick={() => onSelectTab(tab.id)}
-                className="relative pb-3 px-3 font-mono text-[10px] uppercase tracking-[0.2em] transition-colors flex items-center gap-2"
+                className="relative pb-3 px-3 font-mono text-[10px] uppercase tracking-[0.2em] transition-colors flex items-center gap-2 whitespace-nowrap"
                 style={{ color: activeTab === tab.id ? "var(--primary)" : "var(--muted-foreground)" }}
               >
                 {tab.label}

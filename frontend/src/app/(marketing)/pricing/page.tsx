@@ -19,6 +19,24 @@ const PREMIUM_FEATURES = [
   "Everything in Free",
 ];
 
+const SHARED_PROMISES = [
+  {
+    eyebrow: "Same product logic",
+    title: "No tier gives buy or sell calls.",
+    body: "Free and premium both stay grounded in your written reason, not in stock-picking prompts dressed up as certainty.",
+  },
+  {
+    eyebrow: "Same discipline",
+    title: "The workflow stays thesis-first.",
+    body: "The upgrade is more coverage, more history, and more tooling around the same core decision loop.",
+  },
+  {
+    eyebrow: "Same ownership",
+    title: "Your notes stay yours.",
+    body: "The product still acts like a decision record, not a social feed or recommendation engine.",
+  },
+];
+
 function Check({ premium }: { premium?: boolean }) {
   return (
     <span
@@ -67,6 +85,40 @@ export default function PricingPage() {
           The free tier is free at launch and stays free. Premium pricing will be announced
           closer to launch. No credit card required to join.
         </p>
+
+        <div
+          style={{
+            display: "grid",
+            gridTemplateColumns: "repeat(3, minmax(0, 1fr))",
+            gap: 12,
+            marginTop: "clamp(24px,3vw,32px)",
+            maxWidth: 860,
+          }}
+          className="max-md:grid-cols-1"
+        >
+          {[
+            ["Launch access", "Free tier open at launch"],
+            ["Commitment", "No card to join the waitlist"],
+            ["Upgrade path", "Premium only when you need more depth"],
+          ].map(([label, value]) => (
+            <div
+              key={label}
+              style={{
+                border: `1px solid ${mk.pencilLight}`,
+                borderRadius: 16,
+                background: mk.card,
+                padding: "16px 18px",
+              }}
+            >
+              <div style={{ fontFamily: mk.mono, fontSize: 10, letterSpacing: "0.14em", textTransform: "uppercase", color: mk.pencil }}>
+                {label}
+              </div>
+              <div style={{ fontFamily: mk.sans, fontSize: 15, lineHeight: 1.45, color: mk.inkSoft, marginTop: 8 }}>
+                {value}
+              </div>
+            </div>
+          ))}
+        </div>
       </section>
 
       {/* Tier cards */}
@@ -101,6 +153,22 @@ export default function PricingPage() {
               </div>
               <div style={{ fontFamily: mk.sans, fontSize: 14, color: mk.pencil, marginTop: 6 }}>
                 Free at launch. No catch.
+              </div>
+            </div>
+
+            <div
+              style={{
+                background: mk.cardSoft,
+                border: `1px solid ${mk.pencilLight}`,
+                borderRadius: 14,
+                padding: "14px 16px",
+              }}
+            >
+              <div style={{ fontFamily: mk.mono, fontSize: 10, letterSpacing: "0.14em", textTransform: "uppercase", color: mk.pencil }}>
+                Best for
+              </div>
+              <div style={{ fontFamily: mk.sans, fontSize: 15, lineHeight: 1.45, color: mk.inkSoft, marginTop: 8 }}>
+                Writing your first positions down properly and seeing whether the product changes how you review them.
               </div>
             </div>
 
@@ -161,6 +229,22 @@ export default function PricingPage() {
               </div>
             </div>
 
+            <div
+              style={{
+                background: "rgba(255,255,255,0.04)",
+                border: "1px solid rgba(255,255,255,0.1)",
+                borderRadius: 14,
+                padding: "14px 16px",
+              }}
+            >
+              <div style={{ fontFamily: mk.mono, fontSize: 10, letterSpacing: "0.14em", textTransform: "uppercase", color: "#999" }}>
+                Best for
+              </div>
+              <div style={{ fontFamily: mk.sans, fontSize: 15, lineHeight: 1.45, color: "#d3cdc6", marginTop: 8 }}>
+                People who already rely on the workflow and want deeper coverage, more history, and less setup friction.
+              </div>
+            </div>
+
             <div style={{ height: 1, background: "rgba(255,255,255,0.12)" }} />
 
             <ul style={{ listStyle: "none", padding: 0, margin: 0, display: "flex", flexDirection: "column", gap: 12 }}>
@@ -179,6 +263,69 @@ export default function PricingPage() {
               <WaitlistForm dark />
             </div>
           </div>
+        </div>
+      </section>
+
+      <section style={{ padding: `0 ${pad} clamp(60px,8vw,100px)` }}>
+        <div style={{ marginBottom: 22 }}>
+          <div style={{ fontFamily: mk.mono, fontSize: 11, letterSpacing: "0.14em", textTransform: "uppercase", color: mk.pencil, marginBottom: 10 }}>
+            Shared promise
+          </div>
+          <h2
+            style={{
+              fontFamily: mk.sans,
+              fontSize: "clamp(28px,3.5vw,42px)",
+              fontWeight: 600,
+              lineHeight: 1.05,
+              letterSpacing: "-0.025em",
+              margin: 0,
+              color: mk.ink,
+            }}
+          >
+            The upgrade is more depth, not a different philosophy.
+          </h2>
+        </div>
+
+        <div
+          style={{
+            display: "grid",
+            gridTemplateColumns: "repeat(3, minmax(0, 1fr))",
+            gap: 14,
+            maxWidth: 980,
+          }}
+          className="max-md:grid-cols-1"
+        >
+          {SHARED_PROMISES.map((item) => (
+            <div
+              key={item.title}
+              style={{
+                background: mk.card,
+                border: `1px solid ${mk.pencilLight}`,
+                borderRadius: 18,
+                padding: "20px 20px 22px",
+              }}
+            >
+              <div style={{ fontFamily: mk.mono, fontSize: 10, letterSpacing: "0.14em", textTransform: "uppercase", color: mk.accent }}>
+                {item.eyebrow}
+              </div>
+              <div
+                style={{
+                  fontFamily: mk.sans,
+                  fontSize: 22,
+                  fontWeight: 600,
+                  lineHeight: 1.15,
+                  letterSpacing: "-0.02em",
+                  color: mk.ink,
+                  marginTop: 10,
+                }}
+              >
+                {item.title}
+              </div>
+              <div style={{ fontFamily: mk.sans, fontSize: 15, lineHeight: 1.55, color: mk.pencil, marginTop: 10 }}>
+                {item.body}
+              </div>
+            </div>
+          ))}
         </div>
       </section>
 

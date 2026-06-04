@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useEffect } from "react";
+import { useState, useSyncExternalStore } from "react";
 import { useParams, useRouter } from "next/navigation";
 import { motion, AnimatePresence } from "framer-motion";
 import { AlertTriangle, Eye, Shield, TrendingDown, ArrowRight, CheckCircle } from "lucide-react";
@@ -12,30 +12,51 @@ import { toast } from "sonner";
 import type { StressTestResult } from "@/types";
 
 const SESSION_KEY = "stress_test_used";
+const SESSION_EVENT = "penkeep:stress-test-session";
+
+function subscribeToSessionUsage(onStoreChange: () => void) {
+  if (typeof window === "undefined") {
+    return () => {};
+  }
+
+  const handleChange = () => onStoreChange();
+  window.addEventListener("storage", handleChange);
+  window.addEventListener(SESSION_EVENT, handleChange);
+
+  return () => {
+    window.removeEventListener("storage", handleChange);
+    window.removeEventListener(SESSION_EVENT, handleChange);
+  };
+}
+
+function getSessionUsageSnapshot() {
+  if (typeof window === "undefined") {
+    return false;
+  }
+  return sessionStorage.getItem(SESSION_KEY) === "1";
+}
 
 export default function ResearchPage() {
   const params = useParams();
   const router = useRouter();
   const { isAuthenticated, isLoading: authLoading } = useAuth();
   const ticker = (params.ticker as string).toUpperCase();
+  const hasUsedSessionTest = useSyncExternalStore(
+    subscribeToSessionUsage,
+    getSessionUsageSnapshot,
+    () => false,
+  );
 
   const [draftThesis, setDraftThesis] = useState("");
   const [result, setResult] = useState<StressTestResult | null>(null);
   const [loading, setLoading] = useState(false);
-  const [showGate, setShowGate] = useState(false);
+  const hasDraftContext = draftThesis.trim().length > 0;
 
-  useEffect(() => {
-    if (!authLoading && !isAuthenticated) {
-      const used = sessionStorage.getItem(SESSION_KEY);
-      if (used) setShowGate(true);
-    }
-  }, [authLoading, isAuthenticated]);
+  const showGate = !authLoading && !isAuthenticated && hasUsedSessionTest;
 
   async function runStressTest() {
     if (!isAuthenticated) {
-      const used = sessionStorage.getItem(SESSION_KEY);
-      if (used) {
-        setShowGate(true);
+      if (hasUsedSessionTest) {
         return;
       }
     }
@@ -49,6 +70,7 @@ export default function ResearchPage() {
       setResult(data);
       if (!isAuthenticated) {
         sessionStorage.setItem(SESSION_KEY, "1");
+        window.dispatchEvent(new Event(SESSION_EVENT));
       }
     } catch (err) {
       const msg = err instanceof Error ? err.message : "Something went wrong";
@@ -67,20 +89,45 @@ export default function ResearchPage() {
   }
 
   return (
-    <div className="min-h-[calc(100vh-54px)] px-4 sm:px-8 py-10 max-w-2xl mx-auto">
+    <div className="min-h-[calc(100vh-54px)] px-4 py-10 sm:px-8">
+      <div className="mx-auto max-w-4xl space-y-5">
 
-      {/* Header */}
-      <motion.div initial={{ opacity: 0, y: 8 }} animate={{ opacity: 1, y: 0 }} transition={{ duration: 0.3 }}>
-        <p className="font-mono text-[10px] uppercase tracking-[0.18em] text-muted-foreground mb-2">
-          Pre-Buy Stress Test
-        </p>
-        <h1 className="font-display italic text-[2.8rem] leading-none text-foreground mb-2">
-          {ticker}
-        </h1>
-        <p className="font-sans text-sm text-muted-foreground mb-8">
-          Before you buy — stress-test the case against it.
-        </p>
-      </motion.div>
+        <motion.div initial={{ opacity: 0, y: 8 }} animate={{ opacity: 1, y: 0 }} transition={{ duration: 0.3 }}>
+          <div className="product-panel product-panel-muted overflow-hidden p-5 sm:p-6">
+            <div className="grid gap-4 lg:grid-cols-[minmax(0,1fr)_minmax(16rem,20rem)]">
+              <div className="space-y-2">
+                <p className="font-mono text-[10px] uppercase tracking-[0.18em] text-muted-foreground">
+                  Pre-Buy Stress Test
+                </p>
+                <h1 className="font-display italic text-[2.8rem] leading-none text-foreground">
+                  {ticker}
+                </h1>
+                <p className="font-sans text-sm text-muted-foreground">
+                  Before you buy, pressure-test the case against it.
+                </p>
+              </div>
+
+              <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-1">
+                <div className="border border-border/60 bg-background/70 p-4">
+                  <p className="font-mono text-[10px] uppercase tracking-[0.16em] text-muted-foreground">
+                    Output
+                  </p>
+                  <p className="mt-2 font-sans text-sm leading-relaxed text-foreground/80">
+                    Bear case, key risks, blind spots, and what to watch.
+                  </p>
+                </div>
+                <div className="border border-border/60 bg-background/70 p-4">
+                  <p className="font-mono text-[10px] uppercase tracking-[0.16em] text-muted-foreground">
+                    Best used before
+                  </p>
+                  <p className="mt-2 font-sans text-sm leading-relaxed text-foreground/80">
+                    Buying, sizing up, or convincing yourself the other side is weak.
+                  </p>
+                </div>
+              </div>
+            </div>
+          </div>
+        </motion.div>
 
       {/* Input form */}
       <AnimatePresence mode="wait">
@@ -91,37 +138,77 @@ export default function ResearchPage() {
             animate={{ opacity: 1, y: 0 }}
             exit={{ opacity: 0, y: -8 }}
             transition={{ duration: 0.25, delay: 0.1 }}
-            className="space-y-4"
+            className="product-panel p-5 sm:p-6"
           >
-            <div>
-              <label className="font-mono text-[10px] uppercase tracking-[0.18em] text-muted-foreground block mb-2">
-                Your draft thesis{" "}
-                <span className="normal-case tracking-normal opacity-60">(optional — sharpens the analysis)</span>
-              </label>
-              <textarea
-                className="w-full min-h-[120px] border border-border bg-card px-3 py-2.5 font-sans text-sm text-foreground placeholder:text-muted-foreground/50 focus:outline-none focus:border-foreground/30 resize-none"
-                placeholder={`Why are you considering ${ticker}? E.g. "Their AI chip dominance gives them pricing power for the next 3 years..."`}
-                value={draftThesis}
-                onChange={(e) => setDraftThesis(e.target.value)}
-              />
+            <div className="grid gap-5 lg:grid-cols-[minmax(0,1fr)_17rem]">
+              <div className="space-y-4">
+                <div>
+                  <label className="font-mono text-[10px] uppercase tracking-[0.18em] text-muted-foreground block mb-2">
+                    Your current case{" "}
+                    <span className="normal-case tracking-normal opacity-60">(optional)</span>
+                  </label>
+                  <textarea
+                    className="w-full min-h-[140px] border border-border bg-card px-3 py-2.5 font-sans text-sm text-foreground placeholder:text-muted-foreground/50 focus:outline-none focus:border-foreground/30 resize-none"
+                    placeholder={`Why are you considering ${ticker}? E.g. "Their AI chip dominance gives them pricing power for the next 3 years..."`}
+                    value={draftThesis}
+                    onChange={(e) => setDraftThesis(e.target.value)}
+                  />
+                </div>
+
+                <div className="flex flex-wrap items-center gap-3">
+                  <Button onClick={runStressTest} loading={loading}>
+                    <span className="font-mono text-[11px] uppercase tracking-[0.15em]">Run Stress Test</span>
+                  </Button>
+                  <p className="font-sans text-xs leading-relaxed text-muted-foreground">
+                    No draft yet? Leave it blank and we&apos;ll still build the bear case.
+                  </p>
+                </div>
+
+                {!isAuthenticated && (
+                  <p className="font-mono text-[10px] text-muted-foreground/60">
+                    1 free test per session ·{" "}
+                    <button
+                      onClick={() => router.push("/login")}
+                      className="underline underline-offset-2 hover:text-foreground transition-colors"
+                    >
+                      Sign in
+                    </button>{" "}
+                    for unlimited
+                  </p>
+                )}
+              </div>
+
+              <aside className="space-y-3">
+                <div className="border border-border/60 bg-background/70 p-4">
+                  <p className="font-mono text-[10px] uppercase tracking-[0.16em] text-muted-foreground">
+                    Stronger with
+                  </p>
+                  <ul className="mt-3 space-y-2">
+                    {[
+                      "What has to go right",
+                      "Where you think the market is wrong",
+                      "What would change your mind",
+                    ].map((item, i) => (
+                      <li key={item} className="flex gap-2 font-sans text-sm leading-relaxed text-foreground/80">
+                        <span className="font-mono text-[10px] text-muted-foreground/50 mt-0.5">
+                          {String(i + 1).padStart(2, "0")}
+                        </span>
+                        <span>{item}</span>
+                      </li>
+                    ))}
+                  </ul>
+                </div>
+
+                <div className="border border-border/60 bg-background/70 p-4">
+                  <p className="font-mono text-[10px] uppercase tracking-[0.16em] text-muted-foreground">
+                    You&apos;ll get
+                  </p>
+                  <p className="mt-2 font-sans text-sm leading-relaxed text-foreground/80">
+                    A fast bear-case memo you can use before buying, sizing up, or walking away.
+                  </p>
+                </div>
+              </aside>
             </div>
-
-            <Button onClick={runStressTest} loading={loading} className="w-full">
-              <span className="font-mono text-[11px] uppercase tracking-[0.15em]">Run Stress Test</span>
-            </Button>
-
-            {!isAuthenticated && (
-              <p className="font-mono text-[10px] text-muted-foreground/60 text-center">
-                1 free test per session ·{" "}
-                <button
-                  onClick={() => router.push("/login")}
-                  className="underline underline-offset-2 hover:text-foreground transition-colors"
-                >
-                  Sign in
-                </button>{" "}
-                for unlimited
-              </p>
-            )}
           </motion.div>
         )}
       </AnimatePresence>
@@ -134,14 +221,14 @@ export default function ResearchPage() {
             initial={{ opacity: 0 }}
             animate={{ opacity: 1 }}
             exit={{ opacity: 0 }}
-            className="space-y-4"
+            className="space-y-3"
           >
             <div className="font-mono text-[10px] uppercase tracking-[0.18em] text-muted-foreground/60 mb-6 flex items-center gap-2">
               <span className="inline-block w-1.5 h-1.5 rounded-full bg-primary animate-pulse" />
               Analysing {ticker}…
             </div>
             {[{ w: "w-full", h: "h-28" }, { w: "w-full", h: "h-36" }, { w: "w-3/4", h: "h-20" }].map((s, i) => (
-              <div key={i} className={`border border-border/40 bg-card p-5 ${s.h} animate-pulse`}>
+              <div key={i} className={`product-panel p-5 ${s.h} animate-pulse`}>
                 <div className="h-2 w-20 bg-muted rounded mb-3" />
                 <div className={`${s.w} h-3 bg-muted/60 rounded`} />
               </div>
@@ -162,16 +249,45 @@ export default function ResearchPage() {
           >
             {/* Price line */}
             {result.current_price && (
-              <p className="font-mono text-[11px] text-muted-foreground/70">
+              <p className="font-mono text-[11px] text-muted-foreground/70 flex flex-wrap items-center gap-x-2 gap-y-1">
                 {ticker} ·{" "}
                 <span className="text-foreground tabular-nums">{formatCurrency(result.current_price, result.currency)}</span>
-                {result.cached && <span className="ml-2 opacity-50">(cached)</span>}
+                {result.cached && <span className="opacity-50">(cached)</span>}
               </p>
             )}
 
+            <motion.div initial={{ opacity: 0, y: 6 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: 0.02 }}>
+              <div className="grid gap-3 sm:grid-cols-3">
+                <div className="product-panel p-4">
+                  <p className="font-mono text-[9px] uppercase tracking-[0.18em] text-muted-foreground/60">
+                    Risks flagged
+                  </p>
+                  <p className="mt-2 font-display text-[1.5rem] italic leading-none text-foreground">
+                    {result.key_risks.length}
+                  </p>
+                </div>
+                <div className="product-panel p-4">
+                  <p className="font-mono text-[9px] uppercase tracking-[0.18em] text-muted-foreground/60">
+                    Blind spots
+                  </p>
+                  <p className="mt-2 font-display text-[1.5rem] italic leading-none text-foreground">
+                    {result.blind_spots.length > 0 ? result.blind_spots.length : "None flagged"}
+                  </p>
+                </div>
+                <div className="product-panel p-4">
+                  <p className="font-mono text-[9px] uppercase tracking-[0.18em] text-muted-foreground/60">
+                    Read it as
+                  </p>
+                  <p className="mt-2 font-sans text-sm leading-relaxed text-foreground/80">
+                    {hasDraftContext ? "A counter-case against your current thesis." : "A fast bear-case memo before first buy."}
+                  </p>
+                </div>
+              </div>
+            </motion.div>
+
             {/* Bear case — lead section, visually prominent */}
             <motion.div initial={{ opacity: 0, y: 6 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: 0.05 }}>
-              <div className="border border-border/80 bg-card p-5">
+              <div className="product-panel p-5">
                 <p className="font-mono text-[9px] uppercase tracking-[0.25em] text-muted-foreground/60 mb-3 flex items-center gap-2">
                   <TrendingDown className="w-3 h-3" />
                   Bear Case
@@ -184,7 +300,7 @@ export default function ResearchPage() {
 
             {/* Key risks */}
             <motion.div initial={{ opacity: 0, y: 6 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: 0.12 }}>
-              <div className="border border-border/60 bg-card p-5">
+              <div className="product-panel p-5">
                 <p className="font-mono text-[9px] uppercase tracking-[0.25em] text-muted-foreground/60 mb-3 flex items-center gap-2">
                   <AlertTriangle className="w-3 h-3" />
                   Key Risks
@@ -203,13 +319,13 @@ export default function ResearchPage() {
             </motion.div>
 
             {/* Blind spots */}
-            {result.blind_spots.length > 0 && (
-              <motion.div initial={{ opacity: 0, y: 6 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: 0.19 }}>
-                <div className="border border-amber-500/25 bg-amber-500/5 p-5">
-                  <p className="font-mono text-[9px] uppercase tracking-[0.25em] text-amber-700/70 mb-3 flex items-center gap-2">
-                    <Eye className="w-3 h-3" />
-                    Blind Spots
-                  </p>
+            <motion.div initial={{ opacity: 0, y: 6 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: 0.19 }}>
+              <div className="product-panel p-5 border-amber-500/25 bg-amber-500/5">
+                <p className="font-mono text-[9px] uppercase tracking-[0.25em] text-amber-700/70 mb-3 flex items-center gap-2">
+                  <Eye className="w-3 h-3" />
+                  Blind Spots
+                </p>
+                {result.blind_spots.length > 0 ? (
                   <ul className="space-y-3">
                     {result.blind_spots.map((spot, i) => (
                       <li key={i} className="flex gap-3">
@@ -218,13 +334,17 @@ export default function ResearchPage() {
                       </li>
                     ))}
                   </ul>
-                </div>
-              </motion.div>
-            )}
+                ) : (
+                  <p className="font-sans text-sm text-foreground/80 leading-relaxed">
+                    No clear blind spot was flagged from this input. Add your own draft thesis next time if you want a sharper check on what your case may be missing.
+                  </p>
+                )}
+              </div>
+            </motion.div>
 
             {/* What to watch */}
             <motion.div initial={{ opacity: 0, y: 6 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: 0.26 }}>
-              <div className="border border-border/60 bg-card p-5">
+              <div className="product-panel p-5">
                 <p className="font-mono text-[9px] uppercase tracking-[0.25em] text-muted-foreground/60 mb-3 flex items-center gap-2">
                   <Shield className="w-3 h-3" />
                   What to Watch
@@ -245,7 +365,7 @@ export default function ResearchPage() {
               initial={{ opacity: 0, y: 6 }}
               animate={{ opacity: 1, y: 0 }}
               transition={{ delay: 0.33 }}
-              className="border border-primary/25 bg-primary/5 p-5 space-y-3"
+              className="product-panel p-5 space-y-3 border-primary/25 bg-primary/5"
             >
               <div>
                 <p className="font-mono text-[9px] uppercase tracking-[0.2em] text-primary/70 mb-1">
@@ -279,6 +399,7 @@ export default function ResearchPage() {
           </motion.div>
         )}
       </AnimatePresence>
+      </div>
     </div>
   );
 }
@@ -297,7 +418,7 @@ function GatePage({
       <motion.div
         initial={{ opacity: 0, y: 12 }}
         animate={{ opacity: 1, y: 0 }}
-        className="max-w-sm w-full border border-border/60 bg-card p-7 space-y-4"
+        className="product-panel max-w-sm w-full p-7 space-y-4"
       >
         <div>
           <p className="font-mono text-[10px] uppercase tracking-[0.18em] text-muted-foreground mb-2">

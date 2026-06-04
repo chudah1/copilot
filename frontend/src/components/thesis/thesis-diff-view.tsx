@@ -9,8 +9,6 @@ import type {
   ThesisHealthSnapshot,
 } from "@/types";
 
-// ── Types ─────────────────────────────────────────────────────────────────────
-
 type EffectiveVerdict = "supports" | "threatens" | "neutral" | "ignored";
 
 interface SignalWithEvents {
@@ -21,7 +19,34 @@ interface SignalWithEvents {
 
 type ClaimHealth = "Supporting" | "Mixed" | "Threatened" | "Watching";
 
-// ── Verdict helpers ───────────────────────────────────────────────────────────
+const CLAIM_TYPE_LABELS: Record<string, string> = {
+  must_remain_true: "Must hold",
+  what_would_change_my_mind: "Exit trigger",
+  why_own_it: "Bull case",
+  thesis: "Core belief",
+};
+
+const VERDICT_DOT_CLASS: Record<EffectiveVerdict, string> = {
+  supports: "bg-emerald-600",
+  threatens: "bg-red-600",
+  neutral: "bg-muted-foreground/50",
+  ignored: "bg-border",
+};
+
+const REVIEW_TEXT_CLASS: Record<string, string> = {
+  reaffirmed: "text-emerald-700",
+  ignored: "text-muted-foreground",
+  not_relevant: "text-muted-foreground",
+  lowered_confidence: "text-amber-700",
+  invalidated: "text-red-600",
+};
+
+const CLAIM_HEALTH_CLASS: Record<ClaimHealth, string> = {
+  Supporting: "border-emerald-500/20 bg-emerald-500/10 text-emerald-700",
+  Mixed: "border-amber-500/20 bg-amber-500/10 text-amber-700",
+  Threatened: "border-red-500/20 bg-red-500/10 text-red-600",
+  Watching: "border-border bg-muted/40 text-muted-foreground",
+};
 
 function effectiveVerdict(event: MonitoringEvent): EffectiveVerdict {
   if (event.review_action === "not_relevant" || event.review_action === "ignored") return "ignored";
@@ -32,155 +57,148 @@ function effectiveVerdict(event: MonitoringEvent): EffectiveVerdict {
 
 function claimHealth(signals: SignalWithEvents[]): ClaimHealth {
   const verdicts = signals
-    .flatMap((s) => s.events)
+    .flatMap((signal) => signal.events)
     .map(effectiveVerdict)
-    .filter((v) => v !== "ignored");
+    .filter((verdict) => verdict !== "ignored");
 
   if (verdicts.length === 0) return "Watching";
-  const threats = verdicts.filter((v) => v === "threatens").length;
-  const supports = verdicts.filter((v) => v === "supports").length;
+  const threats = verdicts.filter((verdict) => verdict === "threatens").length;
+  const supports = verdicts.filter((verdict) => verdict === "supports").length;
   if (threats > 0 && threats >= supports) return "Threatened";
   if (supports > 0 && threats === 0) return "Supporting";
   return "Mixed";
 }
 
-// ── Verdict dot ───────────────────────────────────────────────────────────────
+function HealthSparkline({ snapshots }: { snapshots: ThesisHealthSnapshot[] }) {
+  if (snapshots.length < 2) return null;
 
-function VerdictDot({ verdict }: { verdict: EffectiveVerdict }) {
-  const map: Record<EffectiveVerdict, { color: string; label: string }> = {
-    supports:  { color: "#16a34a", label: "supports" },
-    threatens: { color: "#dc2626", label: "threatens" },
-    neutral:   { color: "#9ca3af", label: "neutral" },
-    ignored:   { color: "#d1d5db", label: "ignored" },
-  };
-  const { color, label } = map[verdict];
+  const width = 220;
+  const height = 44;
+  const scores = snapshots.map((snapshot) => snapshot.score);
+  const minScore = Math.min(...scores);
+  const maxScore = Math.max(...scores);
+  const range = maxScore - minScore || 1;
+  const latest = snapshots[snapshots.length - 1];
+  const toneClass =
+    latest.label === "Healthy"
+      ? "text-emerald-700"
+      : latest.label === "At Risk"
+        ? "text-amber-700"
+        : "text-red-600";
+  const stroke =
+    latest.label === "Healthy"
+      ? "#15803d"
+      : latest.label === "At Risk"
+        ? "#b45309"
+        : "#dc2626";
+
+  const points = scores.map((score, index) => {
+    const x = (index / (scores.length - 1)) * width;
+    const y = height - ((score - minScore) / range) * (height - 8) - 4;
+    return `${x},${y}`;
+  });
+
+  const latestX = width;
+  const latestY = height - ((scores[scores.length - 1] - minScore) / range) * (height - 8) - 4;
+
   return (
-    <span
-      title={label}
-      style={{
-        display: "inline-block",
-        width: 8,
-        height: 8,
-        borderRadius: "50%",
-        background: color,
-        flexShrink: 0,
-        marginTop: 5,
-      }}
-    />
+    <div className="product-panel p-5 sm:p-6">
+      <div className="grid gap-4 lg:grid-cols-[minmax(0,12rem)_minmax(0,1fr)_auto] lg:items-center">
+        <div>
+          <p className="font-mono text-[10px] uppercase tracking-[0.18em] text-muted-foreground">
+            Thesis health
+          </p>
+          <div className="mt-2 flex items-baseline gap-2">
+            <span className={`font-display text-[2rem] italic leading-none ${toneClass}`}>
+              {latest.score}
+            </span>
+            <span className={`font-mono text-[10px] uppercase tracking-[0.14em] ${toneClass}`}>
+              {latest.label}
+            </span>
+          </div>
+        </div>
+
+        <svg width={width} height={height} className="w-full max-w-[220px] lg:max-w-none">
+          <polyline
+            points={points.join(" ")}
+            fill="none"
+            stroke={stroke}
+            strokeWidth="1.5"
+            strokeLinecap="round"
+            strokeLinejoin="round"
+            opacity="0.75"
+          />
+          <circle cx={latestX} cy={latestY} r="3" fill={stroke} />
+        </svg>
+
+        <div className="font-mono text-[10px] uppercase tracking-[0.14em] text-muted-foreground">
+          {snapshots.length} checks
+        </div>
+      </div>
+    </div>
   );
 }
 
-// ── Health badge ──────────────────────────────────────────────────────────────
-
-function ClaimHealthBadge({ health }: { health: ClaimHealth }) {
-  const styles: Record<ClaimHealth, { bg: string; text: string }> = {
-    Supporting: { bg: "#dcfce7", text: "#15803d" },
-    Mixed:      { bg: "#fef9c3", text: "#854d0e" },
-    Threatened: { bg: "#fee2e2", text: "#b91c1c" },
-    Watching:   { bg: "#f3f4f6", text: "#6b7280" },
-  };
-  const { bg, text } = styles[health];
-  return (
-    <span
-      style={{
-        padding: "2px 8px",
-        borderRadius: 999,
-        background: bg,
-        color: text,
-        fontSize: 10,
-        fontWeight: 600,
-        letterSpacing: "0.08em",
-        textTransform: "uppercase",
-        fontFamily: "var(--font-geist-mono), monospace",
-        flexShrink: 0,
-      }}
-    >
-      {health}
-    </span>
-  );
-}
-
-// ── Signal row ────────────────────────────────────────────────────────────────
-
-function SignalRow({ sw }: { sw: SignalWithEvents }) {
-  const { signal, events } = sw;
-  const latest = events[0] ?? null;
+function SignalRow({ signalWithEvents }: { signalWithEvents: SignalWithEvents }) {
+  const { signal, entityName, events } = signalWithEvents;
+  const latestEvent = events[0] ?? null;
+  const verdict = latestEvent ? effectiveVerdict(latestEvent) : "neutral";
   const label = signal.signal_label ?? signal.signal_type.replaceAll("_", " ");
-  const verdict = latest ? effectiveVerdict(latest) : "neutral";
 
   return (
-    <div
-      style={{
-        display: "flex",
-        alignItems: "flex-start",
-        gap: 10,
-        padding: "10px 0",
-        borderBottom: "1px solid #f0ede6",
-      }}
-    >
-      <VerdictDot verdict={latest ? verdict : "neutral"} />
-      <div style={{ flex: 1, minWidth: 0 }}>
-        <div style={{ display: "flex", alignItems: "baseline", gap: 8, flexWrap: "wrap" }}>
-          <span style={{ fontSize: 13, fontWeight: 500, color: "#15140f" }}>{label}</span>
-          {sw.entityName && (
-            <span style={{ fontSize: 11, color: "#9ca3af", fontFamily: "var(--font-geist-mono), monospace" }}>
-              {sw.entityName}
+    <div className="flex items-start gap-3 border-b border-border/30 py-3 last:border-b-0">
+      <span
+        title={verdict}
+        className={`mt-1.5 h-2 w-2 shrink-0 rounded-full ${VERDICT_DOT_CLASS[latestEvent ? verdict : "neutral"]}`}
+      />
+
+      <div className="min-w-0 flex-1 space-y-1">
+        <div className="flex items-center gap-2 flex-wrap">
+          <p className="font-sans text-sm leading-tight text-foreground">
+            {label}
+          </p>
+          {entityName && (
+            <span className="font-mono text-[10px] uppercase tracking-[0.12em] text-muted-foreground/70">
+              {entityName}
             </span>
           )}
         </div>
 
-        {latest ? (
-          <div style={{ marginTop: 4 }}>
-            <p style={{ fontSize: 12, color: "#3a3833", lineHeight: 1.5, margin: 0 }}>
-              {latest.title}
+        {latestEvent ? (
+          <>
+            <p className="font-sans text-xs leading-relaxed text-foreground/80">
+              {latestEvent.title}
             </p>
-            <div style={{ display: "flex", alignItems: "center", gap: 8, marginTop: 3, flexWrap: "wrap" }}>
-              <span style={{ fontSize: 11, color: "#9ca3af", fontFamily: "var(--font-geist-mono), monospace" }}>
-                {formatDate(latest.created_at)}
+            <div className="flex items-center gap-2 flex-wrap">
+              <span className="font-mono text-[10px] text-muted-foreground/70">
+                {formatDate(latestEvent.created_at)}
               </span>
-              {latest.review_action && (
+              {latestEvent.review_action && (
                 <span
-                  style={{
-                    fontSize: 10,
-                    fontWeight: 600,
-                    letterSpacing: "0.06em",
-                    textTransform: "uppercase",
-                    color: latest.review_action === "reaffirmed" ? "#15803d"
-                      : latest.review_action === "not_relevant" || latest.review_action === "ignored" ? "#9ca3af"
-                      : "#b91c1c",
-                    fontFamily: "var(--font-geist-mono), monospace",
-                  }}
+                  className={`font-mono text-[10px] uppercase tracking-[0.12em] ${
+                    REVIEW_TEXT_CLASS[latestEvent.review_action] ?? "text-muted-foreground"
+                  }`}
                 >
-                  you said: {latest.review_action.replace("_", " ")}
+                  {latestEvent.review_action.replaceAll("_", " ")}
                 </span>
               )}
             </div>
-          </div>
+          </>
         ) : (
-          <p style={{ fontSize: 12, color: "#9ca3af", margin: "4px 0 0", fontStyle: "italic" }}>
-            No events yet
+          <p className="font-sans text-xs italic leading-relaxed text-muted-foreground">
+            No evidence yet.
           </p>
         )}
       </div>
 
       {events.length > 1 && (
-        <span
-          style={{
-            fontSize: 11,
-            color: "#9ca3af",
-            fontFamily: "var(--font-geist-mono), monospace",
-            flexShrink: 0,
-            paddingTop: 2,
-          }}
-        >
+        <span className="shrink-0 pt-1 font-mono text-[10px] text-muted-foreground/70">
           +{events.length - 1}
         </span>
       )}
     </div>
   );
 }
-
-// ── Claim card ────────────────────────────────────────────────────────────────
 
 function ClaimCard({
   claim,
@@ -191,159 +209,45 @@ function ClaimCard({
 }) {
   const health = claimHealth(signals);
   const activeSignals = signals.filter(
-    (s) => s.signal.active || s.signal.user_confirmed === true
+    (signal) => signal.signal.active || signal.signal.user_confirmed === true,
   );
 
   return (
-    <div
-      style={{
-        background: "#fff",
-        border: "1px solid #dcd6c8",
-        borderRadius: 14,
-        overflow: "hidden",
-      }}
-    >
-      {/* Header */}
-      <div
-        style={{
-          padding: "14px 18px",
-          borderBottom: "1px solid #f0ede6",
-          display: "flex",
-          alignItems: "flex-start",
-          gap: 12,
-        }}
-      >
-        <ClaimHealthBadge health={health} />
-        <p
-          style={{
-            fontSize: 14,
-            fontWeight: 500,
-            lineHeight: 1.45,
-            color: "#15140f",
-            margin: 0,
-            flex: 1,
-          }}
-        >
-          {claim.claim_text}
-        </p>
+    <div className="product-panel overflow-hidden">
+      <div className="border-b border-border/40 px-5 py-4 sm:px-6">
+        <div className="flex items-start gap-3">
+          <span
+            className={`inline-flex shrink-0 items-center border px-2 py-0.5 font-mono text-[10px] uppercase tracking-[0.12em] ${CLAIM_HEALTH_CLASS[health]}`}
+          >
+            {health}
+          </span>
+          <div className="min-w-0 flex-1 space-y-2">
+            {claim.claim_type && (
+              <p className="font-mono text-[10px] uppercase tracking-[0.16em] text-muted-foreground">
+                {CLAIM_TYPE_LABELS[claim.claim_type] ?? claim.claim_type.replaceAll("_", " ")}
+              </p>
+            )}
+            <p className="font-display text-[1.15rem] italic leading-relaxed text-foreground">
+              {claim.claim_text}
+            </p>
+          </div>
+        </div>
       </div>
 
-      {/* Signals */}
-      <div style={{ padding: "0 18px" }}>
+      <div className="px-5 py-4 sm:px-6">
         {activeSignals.length === 0 ? (
-          <p style={{ fontSize: 12, color: "#9ca3af", padding: "12px 0", margin: 0, fontStyle: "italic" }}>
+          <p className="font-sans text-sm italic leading-relaxed text-muted-foreground">
             No active signals for this claim.
           </p>
         ) : (
-          activeSignals.map((sw) => (
-            <SignalRow key={sw.signal.id} sw={sw} />
+          activeSignals.map((signalWithEvents) => (
+            <SignalRow key={signalWithEvents.signal.id} signalWithEvents={signalWithEvents} />
           ))
         )}
       </div>
     </div>
   );
 }
-
-// ── Health sparkline ──────────────────────────────────────────────────────────
-
-function HealthSparkline({ snapshots }: { snapshots: ThesisHealthSnapshot[] }) {
-  if (snapshots.length < 2) return null;
-
-  const W = 200;
-  const H = 40;
-  const scores = snapshots.map((s) => s.score);
-  const minS = Math.min(...scores);
-  const maxS = Math.max(...scores);
-  const range = maxS - minS || 1;
-
-  const pts = scores.map((s, i) => {
-    const x = (i / (scores.length - 1)) * W;
-    const y = H - ((s - minS) / range) * (H - 6) - 3;
-    return `${x},${y}`;
-  });
-
-  const latest = snapshots[snapshots.length - 1];
-  const labelColor = latest.label === "Healthy" ? "#16a34a" : latest.label === "At Risk" ? "#d97706" : "#dc2626";
-
-  return (
-    <div
-      style={{
-        display: "flex",
-        alignItems: "center",
-        gap: 16,
-        padding: "12px 18px",
-        background: "#faf8f3",
-        border: "1px solid #dcd6c8",
-        borderRadius: 12,
-        marginBottom: 20,
-      }}
-    >
-      <div>
-        <div
-          style={{
-            fontFamily: "var(--font-geist-mono), monospace",
-            fontSize: 10,
-            letterSpacing: "0.12em",
-            textTransform: "uppercase",
-            color: "#7a7268",
-            marginBottom: 2,
-          }}
-        >
-          Thesis health
-        </div>
-        <div style={{ display: "flex", alignItems: "baseline", gap: 6 }}>
-          <span style={{ fontSize: 28, fontWeight: 600, letterSpacing: "-0.02em", color: labelColor }}>
-            {latest.score}
-          </span>
-          <span
-            style={{
-              fontFamily: "var(--font-geist-mono), monospace",
-              fontSize: 11,
-              fontWeight: 600,
-              color: labelColor,
-              textTransform: "uppercase",
-              letterSpacing: "0.06em",
-            }}
-          >
-            {latest.label}
-          </span>
-        </div>
-      </div>
-
-      <svg width={W} height={H} style={{ flex: 1, maxWidth: W }}>
-        <polyline
-          points={pts.join(" ")}
-          fill="none"
-          stroke={labelColor}
-          strokeWidth={1.5}
-          strokeLinecap="round"
-          strokeLinejoin="round"
-          opacity={0.7}
-        />
-        {/* Latest dot */}
-        <circle
-          cx={(scores.length - 1) / (scores.length - 1) * W}
-          cy={H - ((scores[scores.length - 1] - minS) / range) * (H - 6) - 3}
-          r={3}
-          fill={labelColor}
-        />
-      </svg>
-
-      <div
-        style={{
-          fontFamily: "var(--font-geist-mono), monospace",
-          fontSize: 10,
-          color: "#9ca3af",
-          whiteSpace: "nowrap",
-        }}
-      >
-        {snapshots.length} checks
-      </div>
-    </div>
-  );
-}
-
-// ── Main component ────────────────────────────────────────────────────────────
 
 interface ThesisDiffViewProps {
   decomposition: ThesisDecomposition | null;
@@ -358,34 +262,28 @@ export function ThesisDiffView({
 }: ThesisDiffViewProps) {
   if (!decomposition || decomposition.claims.length === 0) {
     return (
-      <p style={{ fontSize: 13, color: "#9ca3af", fontStyle: "italic", padding: "20px 0" }}>
-        No decomposition yet. Generate signals first.
-      </p>
+      <div className="product-panel p-5 sm:p-6">
+        <p className="font-sans text-sm italic leading-relaxed text-muted-foreground">
+          No signal map yet. Generate signals first.
+        </p>
+      </div>
     );
   }
 
   const eventsBySignal = new Map<string, MonitoringEvent[]>();
-  const eventsByClaim = new Map<string, MonitoringEvent[]>();
-  for (const ev of monitoringEvents) {
-    if (ev.signal_id) {
-      const arr = eventsBySignal.get(ev.signal_id) ?? [];
-      arr.push(ev);
-      eventsBySignal.set(ev.signal_id, arr);
-    }
-    if (ev.claim_id) {
-      const arr = eventsByClaim.get(ev.claim_id) ?? [];
-      arr.push(ev);
-      eventsByClaim.set(ev.claim_id, arr);
-    }
+  for (const event of monitoringEvents) {
+    if (!event.signal_id) continue;
+    const entries = eventsBySignal.get(event.signal_id) ?? [];
+    entries.push(event);
+    eventsBySignal.set(event.signal_id, entries);
   }
 
-  // Sort events newest-first per signal
-  for (const [, arr] of eventsBySignal) {
-    arr.sort((a, b) => new Date(b.created_at).getTime() - new Date(a.created_at).getTime());
+  for (const [, entries] of eventsBySignal) {
+    entries.sort((a, b) => new Date(b.created_at).getTime() - new Date(a.created_at).getTime());
   }
 
   return (
-    <div style={{ display: "flex", flexDirection: "column", gap: 14 }}>
+    <div className="space-y-4">
       <HealthSparkline snapshots={healthSnapshots} />
 
       {decomposition.claims
@@ -397,11 +295,10 @@ export function ThesisDiffView({
               signal,
               entityName: entity.entity_name,
               events: eventsBySignal.get(signal.id) ?? [],
-            }))
+            })),
           );
-          return (
-            <ClaimCard key={claim.id} claim={claim} signals={signals} />
-          );
+
+          return <ClaimCard key={claim.id} claim={claim} signals={signals} />;
         })}
     </div>
   );

@@ -82,15 +82,15 @@ export function getThesisInsights(
     return {
       nextStep:
         investorProfile === "hearsay_driven"
-          ? "Start by turning the original story into a real business reason this app can monitor."
-          : "Write your thesis for this position so monitoring has something concrete to watch.",
+          ? "Turn the original story into a written reason this app can track."
+          : "Write the thesis so monitoring has something concrete to track.",
       qualityLabel: "No reason yet",
       qualityTone: "bg-red-500/15 text-red-600",
       statusDot: "text-red-500",
       watchStatus:
         investorProfile === "hearsay_driven"
-          ? "Right now this position has no written reason attached to it, so we can't tell what matters from headline noise."
-          : "This position is not being monitored against any written belief yet.",
+          ? "No written reason yet, so this position is still noise-sensitive."
+          : "No written thesis yet, so this position is not being monitored.",
       canReaffirm: false,
     };
   }
@@ -103,11 +103,11 @@ export function getThesisInsights(
 
   if (thesis.status === "needs_review") {
     return {
-      nextStep: latestEvent?.ai_analysis || "Review what changed and decide whether your reason still holds.",
+      nextStep: latestEvent?.ai_analysis || "Review what changed and decide whether the case still holds.",
       qualityLabel: "Needs review",
       qualityTone: "bg-orange-500/15 text-orange-600",
       statusDot: "text-orange-500",
-      watchStatus: "Monitoring found something that hits your reason — worth a look.",
+      watchStatus: "Monitoring found something that needs a call.",
       canReaffirm: true,
     };
   }
@@ -116,15 +116,15 @@ export function getThesisInsights(
     return {
       nextStep:
         stalePressure.level === "review"
-          ? "This reason is way past due for a re-read. Update or drop it before you treat it as live conviction."
-          : "This reason is overdue for review. Re-read it and either confirm it or tighten the language.",
+          ? "This case is far past due. Refresh it or stop treating it as live conviction."
+          : "This case is overdue. Re-read it and tighten it.",
       qualityLabel: stalePressure.level === "review" ? "Needs refresh" : "Stale",
       qualityTone: "bg-amber-500/15 text-amber-700",
       statusDot: "text-amber-500",
       watchStatus:
         stalePressure.level === "review"
-          ? `Nothing necessarily broke, but this reasoning is ${stalePressure.daysOld} days old and far past its ${stalePressure.cadenceDays}-day review cadence.`
-          : `Nothing necessarily broke, but this reasoning is ${stalePressure.daysOld} days old and overdue for its ${stalePressure.cadenceDays}-day review cadence.`,
+          ? `${stalePressure.daysOld} days old and far past its ${stalePressure.cadenceDays}-day cadence.`
+          : `${stalePressure.daysOld} days old and overdue for its ${stalePressure.cadenceDays}-day cadence.`,
       canReaffirm: true,
     };
   }
@@ -134,25 +134,25 @@ export function getThesisInsights(
       nextStep:
         ambiguity ||
         (investorProfile === "hearsay_driven"
-          ? "Tighten this story into a clearer business reason and a sharper break condition."
-          : "Tighten the thesis so we can monitor something more precise."),
+          ? "Tighten this into a clearer business reason and a sharper break condition."
+          : "Tighten the thesis so it can be monitored more precisely."),
       qualityLabel: "Weak signals",
       qualityTone: "bg-muted text-muted-foreground",
       statusDot: "text-muted-foreground",
       watchStatus:
         investorProfile === "hearsay_driven"
-          ? "The current reason still reads more like a narrative than a thesis."
-          : "The current reason is too vague for reliable monitoring.",
+          ? "The current reason still reads more like a story than a case."
+          : "The current thesis is too vague for reliable monitoring.",
       canReaffirm: false,
     };
   }
 
   return {
-    nextStep: latestEvent ? latestEvent.ai_analysis || "Monitoring is active. Review the latest event if it still matters." : "Your reason looks healthy. No action needed.",
+    nextStep: latestEvent ? latestEvent.ai_analysis || "Monitoring is active. Review the latest event if it still matters." : "The case looks clean. No action needed.",
     qualityLabel: "Intact",
     qualityTone: "bg-emerald-500/15 text-emerald-700",
     statusDot: "text-emerald-500",
-    watchStatus: latestEvent ? "Monitoring has context to evaluate new changes against your reason." : "Monitoring is active, nothing meaningful flagged yet.",
+    watchStatus: latestEvent ? "Monitoring has context for new evidence." : "Monitoring is active. Nothing meaningful flagged yet.",
     canReaffirm: false,
   };
 }
@@ -160,13 +160,13 @@ export function getThesisInsights(
 export function positionCopy(investorProfile: "thesis_driven" | "hearsay_driven" | null) {
   if (investorProfile === "thesis_driven") {
     return {
-      earningsEmpty: "Tighten your thesis so we know which assumption should matter the morning after.",
-      postEarningsReview: "Review which assumption still holds after the quarter landed.",
+      earningsEmpty: "Tighten the thesis so the morning-after review knows what matters.",
+      postEarningsReview: "Check which assumption still holds after the quarter.",
       noReasonTitle: "No thesis written yet.",
-      noReasonBody: "Write the core reason, the assumption that must stay true, and the condition that would break the thesis.",
+      noReasonBody: "Write the core case, what must stay true, and what would break it.",
       noReasonCta: "Write your thesis",
       monitoringEmptyTitle: "Nothing to monitor yet.",
-      monitoringEmptyBody: "Write your thesis first — monitoring needs an specific assumption set to test against.",
+      monitoringEmptyBody: "Write the thesis first. Monitoring needs a specific assumption set to test.",
       monitoringEmptyCta: "Go to your thesis →",
       afterEarningsCta: "After earnings?",
     };
@@ -174,26 +174,26 @@ export function positionCopy(investorProfile: "thesis_driven" | "hearsay_driven"
 
   if (investorProfile === "hearsay_driven") {
     return {
-      earningsEmpty: "Turn the original story into a reason first, so we know what evidence should matter the morning after.",
-      postEarningsReview: "Review whether the original story still holds now that the quarter is out.",
+      earningsEmpty: "Turn the original story into a reason first so the morning-after review knows what matters.",
+      postEarningsReview: "Check whether the original story still holds after the quarter.",
       noReasonTitle: "No reason written yet.",
-      noReasonBody: "Start with the story behind the position, then turn it into a concrete reason, what has to stay true, and what would break it.",
+      noReasonBody: "Start with the story behind the position, then make it concrete: what must stay true and what would break it.",
       noReasonCta: "Write your reason",
       monitoringEmptyTitle: "Nothing to check yet.",
-      monitoringEmptyBody: "Write the real reason first — without that, we can't tell what matters from noise.",
+      monitoringEmptyBody: "Write the real reason first. Without that, we cannot tell what matters from noise.",
       monitoringEmptyCta: "Go to your reason →",
       afterEarningsCta: "After earnings?",
     };
   }
 
   return {
-    earningsEmpty: "Tighten your reason so we know what evidence should matter the morning after.",
+    earningsEmpty: "Tighten the reason so the morning-after review knows what matters.",
     postEarningsReview: "Review whether your reason still holds.",
     noReasonTitle: "No reason written yet.",
-    noReasonBody: "Start with the reason this position exists, what has to stay true, and what would make you rethink it.",
+    noReasonBody: "Start with why this position exists, what must stay true, and what would change your mind.",
     noReasonCta: "Write your reason",
     monitoringEmptyTitle: "Nothing to watch yet.",
-    monitoringEmptyBody: "Write your reason first — monitoring needs an written belief to test against.",
+    monitoringEmptyBody: "Write the reason first. Monitoring needs something written to test.",
     monitoringEmptyCta: "Go to your reason →",
     afterEarningsCta: "After earnings?",
   };
@@ -213,8 +213,8 @@ export function getDecisionPrompt(
           : "Do not add to a position before the thesis is explicit.",
       body:
         investorProfile === "hearsay_driven"
-          ? "Turn the original story into a real reason first, or it becomes too easy to size up a hope trade."
-          : "Write the thesis, what must remain true, and what would break it before treating this like conviction.",
+          ? "Turn the original story into a real reason first, or it stays too easy to size up a hope trade."
+          : "Write the thesis, what must stay true, and what would break it before treating this like conviction.",
       ctaLabel: investorProfile === "thesis_driven" ? "Write the thesis now →" : "Write the reason now →",
       action: "edit" as const,
       tone: "border-amber-500/25 bg-amber-500/8",
@@ -278,9 +278,9 @@ export function getDecisionPrompt(
           : "Would you still buy this today for the same thesis?",
       body:
         investorProfile === "hearsay_driven"
-          ? `This reason is ${stalePressure.daysOld} days old and behind its ${stalePressure.cadenceDays}-day review cadence. Re-read it before treating this as active conviction.`
-          : `This thesis is ${stalePressure.daysOld} days old and past its ${stalePressure.cadenceDays}-day check-in. Re-read it before you treat it as live conviction.`,
-      ctaLabel: "Re-read and refresh it →",
+          ? `This reason is ${stalePressure.daysOld} days old and behind its ${stalePressure.cadenceDays}-day cadence. Re-read it before treating it as active conviction.`
+          : `This thesis is ${stalePressure.daysOld} days old and past its ${stalePressure.cadenceDays}-day cadence. Re-read it before treating it as live conviction.`,
+      ctaLabel: "Refresh it →",
       action: "edit" as const,
       tone: "border-amber-500/25 bg-amber-500/8",
     };
@@ -307,8 +307,8 @@ export function getThesisHandoffPrompt(args: {
           : "The thesis is written. Next, define what would really test it.",
       body:
         investorProfile === "hearsay_driven"
-          ? "Build the first watchlist so we know which evidence should count against this reason and which noise to ignore."
-          : "Build the first watchlist so we know which evidence should count against this thesis and which noise to ignore.",
+          ? "Build the first watchlist so real evidence counts and noise does not."
+          : "Build the first watchlist so real evidence counts and noise does not.",
       ctaLabel: "Define the first watchlist →",
       action: "generate" as const,
     };
@@ -322,8 +322,8 @@ export function getThesisHandoffPrompt(args: {
           : "The watchlist is ready. Now confirm what should count.",
       body:
         investorProfile === "hearsay_driven"
-          ? "We already suggested a monitoring setup. Review it once so future alerts reflect the reason you actually mean."
-          : "We already suggested a monitoring setup. Review it once so future alerts reflect the thesis you actually mean.",
+          ? "We already suggested a monitoring setup. Review it once so future alerts reflect the reason you meant."
+          : "We already suggested a monitoring setup. Review it once so future alerts reflect the thesis you meant.",
       ctaLabel: "Review signals →",
       action: "monitoring" as const,
     };
@@ -337,7 +337,7 @@ export function getBlindSpotArrivalCopy(investorProfile: "thesis_driven" | "hear
     return {
       eyebrow: "Blind spot",
       title: "This position still has no written reason.",
-      body: "Until you turn the original story into a real reason, we can't tell signal from panic here.",
+      body: "Until you turn the original story into a real reason, we cannot tell signal from panic here.",
       cta: "Write the real reason now →",
     };
   }
@@ -346,7 +346,7 @@ export function getBlindSpotArrivalCopy(investorProfile: "thesis_driven" | "hear
     return {
       eyebrow: "Blind spot",
       title: "This position still has no written thesis.",
-      body: "Until you've written the thesis, we can't tell whether new evidence is noise or a real assumption break.",
+      body: "Until you've written the thesis, we cannot tell whether new evidence is noise or a real assumption break.",
       cta: "Write the thesis now →",
     };
   }
@@ -354,7 +354,7 @@ export function getBlindSpotArrivalCopy(investorProfile: "thesis_driven" | "hear
   return {
     eyebrow: "Blind spot",
     title: "This position still has no written reason.",
-    body: "Until you've written the reason, we can't tell whether new evidence should change your mind.",
+    body: "Until you've written the reason, we cannot tell whether new evidence should change your mind.",
     cta: "Write the reason now →",
   };
 }
@@ -386,8 +386,8 @@ export function getMonitoringCalmState(args: {
   const body = hasReviewedEvents
     ? `All reviewed evidence is on file${lastReviewedEventAgeDays != null ? ` and the last decision was ${lastReviewedEventAgeDays} day${lastReviewedEventAgeDays === 1 ? "" : "s"} ago` : ""}.`
     : investorProfile === "hearsay_driven"
-      ? `Monitoring is live and now watching ${activeSignalCount > 0 ? `${activeSignalCount} watchpoint${activeSignalCount === 1 ? "" : "s"}` : "your first watchlist"} so the next interruption is tied to the reason you wrote down.`
-      : `Monitoring is live and now watching ${activeSignalCount > 0 ? `${activeSignalCount} watchpoint${activeSignalCount === 1 ? "" : "s"}` : "your first watchlist"} so the next interruption is tied to the thesis you wrote down.`;
+      ? `Monitoring is live and now watching ${activeSignalCount > 0 ? `${activeSignalCount} watchpoint${activeSignalCount === 1 ? "" : "s"}` : "your first watchlist"} against the written reason.`
+      : `Monitoring is live and now watching ${activeSignalCount > 0 ? `${activeSignalCount} watchpoint${activeSignalCount === 1 ? "" : "s"}` : "your first watchlist"} against the written thesis.`;
 
   const nextCheck =
     upcomingEarnings && upcomingEarnings.days_until >= 0 && upcomingEarnings.days_until <= 30
@@ -497,8 +497,8 @@ export function buildPostSaveNotice(args: {
           : "Now choose what should actually test this thesis.",
       body:
         investorProfile === "hearsay_driven"
-          ? "The position now has a real written reason. Generate the first watchlist so the next alert is tied to the story you actually mean."
-          : "The position now has a real written thesis. Generate the first watchlist so the next alert is tied to the assumption you actually mean.",
+          ? "The position now has a real written reason. Generate the first watchlist so the next alert is tied to the story you mean."
+          : "The position now has a real written thesis. Generate the first watchlist so the next alert is tied to the assumption you mean.",
       ctaLabel: "Generate the first watchlist →",
       action: "generate_signals",
     };
@@ -510,10 +510,10 @@ export function buildPostSaveNotice(args: {
       investorProfile === "hearsay_driven"
         ? "Next, choose what parts of the story to watch."
         : "Next, turn the thesis into watchable signals.",
-    body:
-      investorProfile === "hearsay_driven"
-        ? "Your reason is written down. Generate signal candidates now so we can separate real evidence from headline churn."
-        : "Your thesis is saved. Generate signal candidates now so monitoring knows which assumptions should matter.",
+      body:
+        investorProfile === "hearsay_driven"
+        ? "Your reason is written down. Generate signal candidates now so real evidence stands apart from headline churn."
+        : "Your thesis is saved. Generate signal candidates now so monitoring knows which assumptions matter.",
     ctaLabel: "Generate signals now →",
     action: "generate_signals",
   };
@@ -556,16 +556,16 @@ export function buildPostConfirmationNotice(args: {
   const signalText =
     activeSignalCount > 0
       ? `${activeSignalCount} watchpoint${activeSignalCount === 1 ? "" : "s"}`
-      : "an watchlist";
+      : "a watchlist";
 
   return {
     eyebrow: "Monitoring setup confirmed",
-    title:
-      investorProfile === "hearsay_driven"
-        ? "Alerts now only fire when something hits your reason."
-        : "Alerts now only fire when something hits your thesis.",
-    body:
-      investorProfile === "hearsay_driven"
+      title:
+        investorProfile === "hearsay_driven"
+          ? "Alerts now only fire when something hits your reason."
+          : "Alerts now only fire when something hits your thesis.",
+      body:
+        investorProfile === "hearsay_driven"
         ? `It is now watching ${signalText}, and it will only pull you back when a real change tests the story you wrote down.`
         : `It is now watching ${signalText}, and it will only pull you back when a real change tests the thesis you wrote down.`,
     ctaLabel: "See what is now being watched →",
@@ -578,14 +578,14 @@ export function buildPostReviewClearNotice(
 ): NextStepNotice {
   return {
     eyebrow: "Decision logged",
-    title:
-      investorProfile === "hearsay_driven"
-        ? "The reason is back in a monitored, quiet state."
-        : "The thesis is back in a monitored, quiet state.",
-    body:
-      investorProfile === "hearsay_driven"
-        ? "There is nothing else to decide right now. The next meaningful change will appear here when it tests your reason again."
-        : "There is nothing else to decide right now. The next meaningful change will appear here when it tests your thesis again.",
+      title:
+        investorProfile === "hearsay_driven"
+        ? "The reason is back to quiet."
+        : "The thesis is back to quiet.",
+      body:
+        investorProfile === "hearsay_driven"
+        ? "Nothing else needs a call right now. The next meaningful change will show up here."
+        : "Nothing else needs a call right now. The next meaningful change will show up here.",
     ctaLabel: "Stay on monitoring →",
     action: "monitoring",
   };
@@ -596,14 +596,14 @@ export function buildPostInvalidationNotice(
 ): NextStepNotice {
   return {
     eyebrow: "Reason broken",
-    title:
-      investorProfile === "hearsay_driven"
-        ? "This position now needs a new reason or a sell decision."
-        : "This position now needs a new thesis or a sell decision.",
-    body:
-      investorProfile === "hearsay_driven"
-        ? "You logged that the original story no longer holds. Rework the reason on the thesis tab if you still want to own it."
-        : "You logged that the thesis no longer holds. Rework the thesis on the thesis tab if you still want to own it.",
+      title:
+        investorProfile === "hearsay_driven"
+        ? "This position now needs a new reason or a sell call."
+        : "This position now needs a new thesis or a sell call.",
+      body:
+        investorProfile === "hearsay_driven"
+        ? "You logged that the original story no longer holds. Rewrite the reason if you still want to own it."
+        : "You logged that the thesis no longer holds. Rewrite it if you still want to own it.",
     ctaLabel: investorProfile === "thesis_driven" ? "Rewrite the thesis →" : "Rewrite the reason →",
     action: "edit",
   };
@@ -623,8 +623,8 @@ export function buildCheckNowNotice(args: {
           : `${result.events_created} change${result.events_created !== 1 ? "s" : ""} may test your thesis.`,
       body:
         investorProfile === "hearsay_driven"
-          ? "Something new landed that may change the story. Review it below while it's still fresh."
-          : "Something new landed that may change the thesis. Review it below while it's still fresh.",
+        ? "Something new landed that may change the story. Review it while it is still fresh."
+        : "Something new landed that may change the thesis. Review it while it is still fresh.",
       ctaLabel: "Review the new evidence →",
       action: "monitoring",
     };
@@ -636,10 +636,10 @@ export function buildCheckNowNotice(args: {
       investorProfile === "hearsay_driven"
         ? "Nothing meaningful changed for this reason."
         : "Nothing meaningful changed for this thesis.",
-    body:
-      investorProfile === "hearsay_driven"
-        ? "We checked what's available — nothing yet that forces a call on your reason."
-        : "We checked what's available — nothing yet that forces a call on your thesis.",
+      body:
+        investorProfile === "hearsay_driven"
+        ? "We checked what is available. Nothing yet forces a call on your reason."
+        : "We checked what is available. Nothing yet forces a call on your thesis.",
     ctaLabel: "Stay on monitoring →",
     action: "monitoring",
   };

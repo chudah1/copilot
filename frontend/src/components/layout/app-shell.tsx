@@ -4,8 +4,11 @@ import { Navbar } from "@/components/layout/navbar";
 export function AppShell({ children }: { children: React.ReactNode }) {
   return (
     <AuthGuard>
-      <Navbar />
-      <main>{children}</main>
+      <div className="product-shell">
+        <div aria-hidden className="product-shell-glow" />
+        <Navbar />
+        <main className="product-main">{children}</main>
+      </div>
     </AuthGuard>
   );
 }

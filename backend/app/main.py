@@ -89,6 +89,15 @@ def _ensure_sqlite_dev_compatibility(conn) -> None:
             conn.execute(text("ALTER TABLE thesis_signals ADD COLUMN label_refreshed_at DATETIME"))
             logger.info("Added missing thesis_signals.label_refreshed_at column for local SQLite compatibility")
 
+    if "theses" in tables:
+        thesis_columns = {column["name"] for column in inspector.get_columns("theses")}
+        if "health_score" not in thesis_columns:
+            conn.execute(text("ALTER TABLE theses ADD COLUMN health_score INTEGER"))
+            logger.info("Added missing theses.health_score column for local SQLite compatibility")
+        if "health_label" not in thesis_columns:
+            conn.execute(text("ALTER TABLE theses ADD COLUMN health_label VARCHAR(10)"))
+            logger.info("Added missing theses.health_label column for local SQLite compatibility")
+
     if "thesis_health_snapshots" not in tables:
         conn.execute(text(
             "CREATE TABLE IF NOT EXISTS thesis_health_snapshots ("

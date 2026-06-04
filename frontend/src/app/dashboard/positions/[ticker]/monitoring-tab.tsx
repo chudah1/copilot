@@ -12,6 +12,8 @@ interface MonitoringTabProps {
   investorProfile: "thesis_driven" | "hearsay_driven" | null;
   events: MonitoringEvent[];
   unreviewedEvents: number;
+  activeSignalCount: number;
+  hasSignals: boolean;
   firstPendingEvent: MonitoringEvent | null;
   firstPendingAssumptionLabel: string | null;
   isFirstLiveEvidenceMoment: boolean;
@@ -24,179 +26,357 @@ interface MonitoringTabProps {
 }
 
 export function MonitoringTab({
-  hasThesis, investorProfile, events, unreviewedEvents, firstPendingEvent,
+  hasThesis, investorProfile, events, unreviewedEvents, activeSignalCount, hasSignals, firstPendingEvent,
   firstPendingAssumptionLabel, isFirstLiveEvidenceMoment, calmState, reviewingEventId,
   decompositionLoading, emptyCopy, onReview, onWriteThesis,
 }: MonitoringTabProps) {
+  const reviewedEventsCount = events.filter((event) => Boolean(event.review_action)).length;
+  const monitoringCopy = investorProfile === "hearsay_driven"
+    ? {
+        title: "Write the reason first.",
+        body:
+          "Monitoring turns on once this position has a written reason on file.",
+        unlocks: [
+          "Tie signals to the story you wrote.",
+          "Queue evidence until you rule on it.",
+          "Ignore price noise when nothing changed.",
+        ],
+        controlTitle: "Monitoring",
+        controlBody: "New evidence gets matched to the written reason here.",
+      }
+    : {
+        title: "Write the thesis first.",
+        body:
+          "Monitoring turns on once this position has a written thesis on file.",
+        unlocks: [
+          "Tie signals to explicit assumptions.",
+          "Keep a verdict trail.",
+          "Stay quiet until the thesis actually moves.",
+        ],
+        controlTitle: "Monitoring",
+        controlBody: "Live evidence gets mapped back to the written thesis here.",
+      };
+
   return (
-              <div className="space-y-10">
+    <div className="space-y-10">
+      {!hasThesis ? (
+        <div className="grid gap-5 lg:grid-cols-[minmax(0,1.2fr)_minmax(16rem,20rem)]">
+          <section className="product-panel product-panel-muted overflow-hidden p-5 sm:p-6">
+            <div className="space-y-5">
+              <div className="space-y-2">
+                <p className="font-mono text-[10px] uppercase tracking-[0.2em] text-primary">
+                  Locked
+                </p>
+                <div className="space-y-2">
+                  <p className="font-display italic text-[1.6rem] leading-tight text-foreground sm:text-[1.85rem]">
+                    {monitoringCopy.title}
+                  </p>
+                  <p className="max-w-2xl font-sans text-sm leading-relaxed text-foreground/80">
+                    {monitoringCopy.body}
+                  </p>
+                </div>
+              </div>
 
-                {/* No thesis guard */}
-                {!hasThesis ? (
-                  <div className="py-16 text-center space-y-4">
-                    <p className="font-display italic text-2xl text-foreground/50">
-                      {emptyCopy.title}
+              <div className="grid gap-3 sm:grid-cols-3">
+                {monitoringCopy.unlocks.map((item) => (
+                  <div key={item} className="border border-border/70 bg-background/75 p-4">
+                    <p className="font-mono text-[10px] uppercase tracking-[0.16em] text-muted-foreground">
+                      Use
                     </p>
-                    <p className="font-sans text-sm text-muted-foreground max-w-xs mx-auto leading-relaxed">
-                      {emptyCopy.body}
+                    <p className="mt-2 font-sans text-sm leading-relaxed text-foreground/85">
+                      {item}
                     </p>
-                    <button
-                      onClick={onWriteThesis}
-                      className="font-mono text-[10px] uppercase tracking-[0.2em] border border-primary/40 text-primary px-5 py-2.5 hover:border-primary transition-colors"
-                    >
-                      {emptyCopy.cta}
-                    </button>
                   </div>
-                ) : (
-                  <>
-                    {/* ── DECISION SECTION ────────────────────────────── */}
-                    <section>
-                      {unreviewedEvents > 0 ? (
-                        <div className="space-y-5">
-                          {isFirstLiveEvidenceMoment && firstPendingEvent && (
-                            <div className="border border-primary/20 bg-primary/5 px-5 py-4 space-y-3">
-                              <p className="font-mono text-[10px] uppercase tracking-[0.2em] text-primary">
-                                ● First live evidence
-                              </p>
-                              {firstPendingAssumptionLabel && (
-                                <div className="space-y-1">
-                                  <p className="font-mono text-[10px] uppercase tracking-[0.18em] text-foreground/55">
-                                    Assumption under test
-                                  </p>
-                                  <p className="font-sans text-sm text-foreground">
-                                    {firstPendingAssumptionLabel}
-                                  </p>
-                                </div>
-                              )}
-                              <div className="space-y-1.5">
-                                <p className="font-display italic text-[1.35rem] leading-tight text-foreground">
-                                  {investorProfile === "hearsay_driven"
-                                    ? "This is the first real test of the reason you wrote down."
-                                    : "This is the first real test of the thesis you wrote down."}
-                                </p>
-                                <p className="font-sans text-sm text-foreground/80 leading-relaxed">
-                                  {firstPendingEvent.ai_analysis ||
-                                    firstPendingEvent.evidence_summary ||
-                                    firstPendingEvent.summary ||
-                                    (investorProfile === "hearsay_driven"
-                                      ? "First alert that may matter for the story. Decide what it means before you move on."
-                                      : "First alert that may matter for the thesis. Decide what it means before you move on.")}
-                                </p>
-                              </div>
-                            </div>
-                          )}
+                ))}
+              </div>
 
-                          {/* Decisions pending header */}
-                          <div className="flex items-baseline justify-between gap-4">
-                            <div>
-                              <p className="font-mono text-[10px] uppercase tracking-[0.2em] text-muted-foreground mb-1">
-                                Decisions pending
-                              </p>
-                              <p className="font-display italic text-[1.6rem] leading-tight text-foreground">
-                                {investorProfile === "thesis_driven"
-                                  ? (unreviewedEvents === 1
-                                      ? "One thesis signal needs your verdict."
-                                      : `${unreviewedEvents} thesis signals need your verdict.`)
-                                  : investorProfile === "hearsay_driven"
-                                    ? (unreviewedEvents === 1
-                                        ? "One change to your reason needs a decision."
-                                        : `${unreviewedEvents} changes to your reason need decisions.`)
-                                    : (unreviewedEvents === 1
-                                        ? "One signal needs your verdict."
-                                        : `${unreviewedEvents} signals need your verdict.`)}
-                              </p>
-                            </div>
-                            <span className="font-mono text-[10px] text-muted-foreground/70 shrink-0 self-end pb-0.5">
-                              drag to decide
-                            </span>
-                          </div>
+              <div className="flex flex-wrap items-center gap-3">
+                <button
+                  onClick={onWriteThesis}
+                  className="bg-primary px-5 py-2.5 font-mono text-[10px] uppercase tracking-[0.18em] text-primary-foreground transition-colors hover:bg-primary/90"
+                >
+                  {emptyCopy.cta}
+                </button>
+                <p className="font-sans text-xs leading-relaxed text-muted-foreground">
+                  A short draft is enough to turn this tab on.
+                </p>
+              </div>
+            </div>
+          </section>
 
-                          {/* Card stack */}
-                          <EventReviewStack
-                            events={events.filter((e) => !e.review_action)}
-                            onReview={onReview}
-                            reviewingEventId={reviewingEventId}
-                            investorProfile={investorProfile ?? null}
-                          />
-                        </div>
-                      ) : (
-                        /* Position clear */
-                        <div className="space-y-4 py-6 border-l-[3px] border-emerald-500/40 pl-6">
-                          <div className="space-y-1">
-                            <p className="font-display italic text-[1.6rem] leading-tight text-foreground">
-                              {calmState.title}
-                            </p>
-                            <p className="font-sans text-sm text-muted-foreground leading-relaxed">
-                              {calmState.body}
-                            </p>
-                            <p className="font-sans text-sm text-foreground/85 leading-relaxed">
-                              {calmState.nextCheck}
-                            </p>
-                          </div>
+          <aside className="product-panel p-5 sm:p-6">
+            <p className="font-mono text-[10px] uppercase tracking-[0.2em] text-muted-foreground">
+              What you get
+            </p>
+            <div className="mt-4 space-y-3">
+              {monitoringCopy.unlocks.map((item) => (
+                <div key={item} className="border-l-2 border-primary/20 pl-3">
+                  <p className="font-sans text-sm leading-relaxed text-foreground/80">
+                    {item}
+                  </p>
+                </div>
+              ))}
+            </div>
+          </aside>
+        </div>
+      ) : (
+        <>
+          <section className="grid gap-4 lg:grid-cols-[minmax(0,1.2fr)_minmax(16rem,20rem)]">
+            <div className="product-panel product-panel-muted p-5 sm:p-6">
+              <div className="space-y-2">
+                <p className="font-mono text-[10px] uppercase tracking-[0.2em] text-primary">
+                  {monitoringCopy.controlTitle}
+                </p>
+                <p className="font-display italic text-[1.55rem] leading-tight text-foreground sm:text-[1.75rem]">
+                  {unreviewedEvents > 0
+                    ? investorProfile === "hearsay_driven"
+                      ? "Fresh evidence is waiting for your call."
+                      : "Fresh evidence is waiting for your call."
+                    : calmState.title}
+                </p>
+                <p className="font-sans text-sm leading-relaxed text-foreground/80">
+                  {unreviewedEvents > 0 ? monitoringCopy.controlBody : calmState.body}
+                </p>
+              </div>
+            </div>
 
-                          {calmState.previewItems.length > 0 && (
-                            <div className="grid gap-2 sm:grid-cols-2 max-w-3xl">
-                              {calmState.previewItems.map((item) => (
-                                <div key={item.key} className="border border-emerald-600/10 bg-card px-3 py-2.5">
-                                  <p className="font-sans text-sm text-foreground">{item.label}</p>
-                                  <p className="font-sans text-xs text-muted-foreground mt-1 leading-relaxed">{item.detail}</p>
-                                </div>
-                              ))}
-                            </div>
-                          )}
+            <div className="grid gap-3 sm:grid-cols-3 lg:grid-cols-1">
+              <div className="product-panel p-4">
+                <p className="font-mono text-[10px] uppercase tracking-[0.18em] text-muted-foreground">
+                  Queue
+                </p>
+                <p className="mt-2 font-display text-[1.55rem] italic leading-none text-foreground">
+                  {unreviewedEvents}
+                </p>
+                <p className="mt-2 font-sans text-xs leading-relaxed text-muted-foreground">
+                  {unreviewedEvents === 1 ? "1 verdict waiting" : `${unreviewedEvents} verdicts waiting`}
+                </p>
+              </div>
 
-                          {calmState.previewItems.length === 0 && calmState.fallbackHints.length > 0 && (
-                            <div className="flex flex-wrap gap-2">
-                              {calmState.fallbackHints.map((hint) => (
-                                <span key={hint} className="font-sans text-xs text-foreground/70 border border-border/60 bg-card px-3 py-1">
-                                  {hint}
-                                </span>
-                              ))}
-                            </div>
-                          )}
-                        </div>
-                      )}
-                    </section>
+              <div className="product-panel p-4">
+                <p className="font-mono text-[10px] uppercase tracking-[0.18em] text-muted-foreground">
+                  Reviewed
+                </p>
+                <p className="mt-2 font-display text-[1.55rem] italic leading-none text-foreground">
+                  {reviewedEventsCount}
+                </p>
+                <p className="mt-2 font-sans text-xs leading-relaxed text-muted-foreground">
+                  Verdicts on file
+                </p>
+              </div>
 
-                    {/* ── EVIDENCE SECTION ────────────────────────────── */}
-                    {events.some((e) => e.review_action) && (
-                      <section className="border-t border-border/40 pt-8 space-y-4">
-                        <div>
-                          <p className="font-mono text-[10px] uppercase tracking-[0.2em] text-muted-foreground mb-0.5">
-                            Evidence on file
-                          </p>
-                          <p className="font-sans text-xs text-muted-foreground/70">
-                            Reviewed events and your verdicts
-                          </p>
-                        </div>
-                        <EventTimeline
-                          events={events.filter((e) => e.review_action)}
-                          reviewingEventId={reviewingEventId}
-                          investorProfile={investorProfile ?? null}
-                        />
-                      </section>
-                    )}
+              <div className="product-panel p-4">
+                <p className="font-mono text-[10px] uppercase tracking-[0.18em] text-muted-foreground">
+                  Signal map
+                </p>
+                <p className="mt-2 font-display text-[1.55rem] italic leading-none text-foreground">
+                  {decompositionLoading ? "..." : hasSignals ? activeSignalCount : "0"}
+                </p>
+                <p className="mt-2 font-sans text-xs leading-relaxed text-muted-foreground">
+                  {decompositionLoading
+                    ? "Building what to watch"
+                    : hasSignals
+                      ? "Active signals armed"
+                      : "No signals confirmed yet"}
+                </p>
+              </div>
+            </div>
+          </section>
 
-                    {/* No events at all */}
-                    {events.length === 0 && !decompositionLoading && (
-                      <div className="border border-border/50 bg-card/60 px-4 py-3 space-y-2">
-                        <p className="font-mono text-[10px] uppercase tracking-[0.18em] text-muted-foreground">
-                          Quiet state
+          {/* ── DECISION SECTION ────────────────────────────── */}
+          <section>
+            {unreviewedEvents > 0 ? (
+              <div className="space-y-5">
+                {isFirstLiveEvidenceMoment && firstPendingEvent && (
+                  <div className="border border-primary/20 bg-primary/5 px-5 py-4 space-y-3">
+                    <p className="font-mono text-[10px] uppercase tracking-[0.2em] text-primary">
+                      ● First live evidence
+                    </p>
+                    {firstPendingAssumptionLabel && (
+                      <div className="space-y-1">
+                        <p className="font-mono text-[10px] uppercase tracking-[0.18em] text-foreground/55">
+                          Assumption under test
                         </p>
-                        <p className="font-sans text-sm text-muted-foreground/80 leading-relaxed">
-                          {investorProfile === "thesis_driven"
-                            ? "Monitoring is active. No thesis-level change is worth a decision yet."
-                            : investorProfile === "hearsay_driven"
-                              ? "Monitoring is active. Nothing has tested the reason strongly enough to force a decision yet."
-                              : "Monitoring is active. Nothing meaningful has changed yet."}
-                        </p>
-                        <p className="font-sans text-xs text-foreground/80">
-                          {calmState.nextCheck}
+                        <p className="font-sans text-sm text-foreground">
+                          {firstPendingAssumptionLabel}
                         </p>
                       </div>
                     )}
-                  </>
+                    <div className="space-y-1.5">
+                      <p className="font-display italic text-[1.35rem] leading-tight text-foreground">
+                        {investorProfile === "hearsay_driven"
+                          ? "This is the first real test of the reason you wrote down."
+                          : "This is the first real test of the thesis you wrote down."}
+                      </p>
+                      <p className="font-sans text-sm text-foreground/80 leading-relaxed">
+                        {firstPendingEvent.ai_analysis ||
+                          firstPendingEvent.evidence_summary ||
+                          firstPendingEvent.summary ||
+                          (investorProfile === "hearsay_driven"
+                            ? "First alert that may matter for the story. Decide what it means."
+                            : "First alert that may matter for the thesis. Decide what it means.")}
+                      </p>
+                    </div>
+                  </div>
                 )}
+
+                <div className="flex items-baseline justify-between gap-4">
+                  <div>
+                    <p className="mb-1 font-mono text-[10px] uppercase tracking-[0.2em] text-muted-foreground">
+                      Review queue
+                    </p>
+                    <p className="font-display italic text-[1.6rem] leading-tight text-foreground">
+                      {investorProfile === "thesis_driven"
+                        ? (unreviewedEvents === 1
+                            ? "One signal needs your verdict."
+                            : `${unreviewedEvents} signals need your verdict.`)
+                        : investorProfile === "hearsay_driven"
+                          ? (unreviewedEvents === 1
+                              ? "One change to your reason needs a decision."
+                              : `${unreviewedEvents} changes to your reason need decisions.`)
+                          : (unreviewedEvents === 1
+                              ? "One signal needs your verdict."
+                              : `${unreviewedEvents} signals need your verdict.`)}
+                    </p>
+                  </div>
+                  <span className="shrink-0 self-end pb-0.5 font-mono text-[10px] text-muted-foreground/70">
+                    drag to decide
+                  </span>
+                </div>
+
+                <EventReviewStack
+                  events={events.filter((e) => !e.review_action)}
+                  onReview={onReview}
+                  reviewingEventId={reviewingEventId}
+                  investorProfile={investorProfile ?? null}
+                />
               </div>
+            ) : (
+              <div className="grid gap-5 lg:grid-cols-[minmax(0,1.2fr)_minmax(16rem,20rem)]">
+                <section className="product-panel product-panel-muted p-5 sm:p-6">
+                  <div className="space-y-4">
+                    <div className="space-y-2">
+                      <p className="font-mono text-[10px] uppercase tracking-[0.2em] text-emerald-700">
+                        Active
+                      </p>
+                      <p className="font-display italic text-[1.6rem] leading-tight text-foreground">
+                        {calmState.title}
+                      </p>
+                      <p className="font-sans text-sm leading-relaxed text-foreground/80">
+                        {calmState.body}
+                      </p>
+                    </div>
+
+                    <div className="border border-emerald-600/15 bg-background/70 px-4 py-3">
+                      <p className="font-mono text-[10px] uppercase tracking-[0.18em] text-muted-foreground">
+                        Next check
+                      </p>
+                      <p className="mt-2 font-sans text-sm leading-relaxed text-foreground/85">
+                        {calmState.nextCheck}
+                      </p>
+                    </div>
+
+                    {calmState.previewItems.length > 0 && (
+                      <div className="grid gap-2 sm:grid-cols-2">
+                        {calmState.previewItems.map((item) => (
+                          <div key={item.key} className="border border-emerald-600/10 bg-background/75 px-3 py-2.5">
+                            <p className="font-sans text-sm text-foreground">{item.label}</p>
+                            <p className="mt-1 font-sans text-xs leading-relaxed text-muted-foreground">{item.detail}</p>
+                          </div>
+                        ))}
+                      </div>
+                    )}
+
+                    {calmState.previewItems.length === 0 && calmState.fallbackHints.length > 0 && (
+                      <div className="flex flex-wrap gap-2">
+                        {calmState.fallbackHints.map((hint) => (
+                          <span key={hint} className="border border-border/60 bg-background/70 px-3 py-1 font-sans text-xs text-foreground/70">
+                            {hint}
+                          </span>
+                        ))}
+                      </div>
+                    )}
+                  </div>
+                </section>
+
+                <aside className="product-panel p-5 sm:p-6">
+                  <p className="font-mono text-[10px] uppercase tracking-[0.2em] text-muted-foreground">
+                    Status
+                  </p>
+                  <div className="mt-4 space-y-3">
+                    <div className="border-l-2 border-primary/20 pl-3">
+                      <p className="font-mono text-[10px] uppercase tracking-[0.16em] text-muted-foreground">
+                        Queue
+                      </p>
+                      <p className="mt-1 font-sans text-sm leading-relaxed text-foreground/80">
+                        Nothing is waiting right now.
+                      </p>
+                    </div>
+                    <div className="border-l-2 border-primary/20 pl-3">
+                      <p className="font-mono text-[10px] uppercase tracking-[0.16em] text-muted-foreground">
+                        Signals armed
+                      </p>
+                      <p className="mt-1 font-sans text-sm leading-relaxed text-foreground/80">
+                        {decompositionLoading
+                          ? "Still turning the thesis into watchable evidence."
+                          : hasSignals
+                            ? `${activeSignalCount} active signal${activeSignalCount === 1 ? "" : "s"} watching for drift.`
+                            : "The thesis is written, but the signal map still needs confirmation."}
+                      </p>
+                    </div>
+                    <div className="border-l-2 border-primary/20 pl-3">
+                      <p className="font-mono text-[10px] uppercase tracking-[0.16em] text-muted-foreground">
+                        Evidence trail
+                      </p>
+                      <p className="mt-1 font-sans text-sm leading-relaxed text-foreground/80">
+                        {reviewedEventsCount > 0
+                          ? `${reviewedEventsCount} reviewed event${reviewedEventsCount === 1 ? "" : "s"} already on file for this position.`
+                          : "Verdicts will build here as the position gets tested."}
+                      </p>
+                    </div>
+                  </div>
+                </aside>
+              </div>
+            )}
+          </section>
+
+          {events.some((e) => e.review_action) && (
+            <section className="border-t border-border/40 pt-8 space-y-4">
+              <div>
+                <p className="mb-0.5 font-mono text-[10px] uppercase tracking-[0.2em] text-muted-foreground">
+                  History
+                </p>
+                <p className="font-sans text-xs text-muted-foreground/70">
+                  Reviewed events on file
+                </p>
+              </div>
+              <EventTimeline
+                events={events.filter((e) => e.review_action)}
+                reviewingEventId={reviewingEventId}
+                investorProfile={investorProfile ?? null}
+              />
+            </section>
+          )}
+
+          {events.length === 0 && !decompositionLoading && unreviewedEvents === 0 && (
+            <div className="border border-border/50 bg-card/60 px-4 py-3 space-y-2">
+              <p className="font-mono text-[10px] uppercase tracking-[0.18em] text-muted-foreground">
+                Quiet state
+              </p>
+              <p className="font-sans text-sm text-muted-foreground/80 leading-relaxed">
+                {investorProfile === "thesis_driven"
+                  ? "Monitoring is active. Nothing has moved enough to force a decision yet."
+                  : investorProfile === "hearsay_driven"
+                    ? "Monitoring is active. Nothing has tested the reason strongly enough to force a decision yet."
+                    : "Monitoring is active. Nothing meaningful has changed yet."}
+              </p>
+              <p className="font-sans text-xs text-foreground/80">
+                {calmState.nextCheck}
+              </p>
+            </div>
+          )}
+        </>
+      )}
+    </div>
   );
 }

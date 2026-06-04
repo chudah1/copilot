@@ -2,14 +2,10 @@
 
 import Link from "next/link";
 import { motion } from "framer-motion";
+import { formatAssumptionLabel } from "@/lib/assumption-label";
 import { formatCurrency, formatPercent } from "@/lib/utils";
+import { classifyThesisQuality } from "@/lib/thesis-quality";
 import type { Holding, Thesis, HoldingPulse, LivePrice, UpcomingEarnings } from "@/types";
-
-const HEALTH_CHIP: Record<string, string> = {
-  Healthy: "text-emerald-700 bg-emerald-500/10",
-  "At Risk": "text-amber-700 bg-amber-500/10",
-  Broken: "text-red-600 bg-red-500/10",
-};
 
 const PULSE_DOT: Record<string, string> = {
   intact: "bg-emerald-500",
@@ -25,39 +21,36 @@ const PULSE_RING: Record<string, string> = {
 function cardStatusCopy(args: {
   hasThesis: boolean;
   pulse?: HoldingPulse;
+  thesis?: Thesis;
   investorProfile?: "thesis_driven" | "hearsay_driven" | null;
 }) {
-  const { hasThesis, pulse, investorProfile } = args;
+  const { hasThesis, pulse, thesis, investorProfile } = args;
   const cadencePressure = Boolean(pulse?.reason?.includes("review cadence"));
-  const assumptionLabel =
-    pulse?.assumption_label && pulse.assumption_label.trim()
-      ? pulse.assumption_label.trim()
-      : investorProfile === "hearsay_driven"
-        ? "The original story"
-        : "The core assumption";
+  const assumptionLabel = formatAssumptionLabel(pulse?.assumption_label, investorProfile, {
+    maxLength: 54,
+    sentenceCaseFallback: true,
+  });
+  const quality = classifyThesisQuality(thesis);
   if (!hasThesis) {
     return {
-      eyebrow: "Monitoring gap",
+      eyebrow: "Missing",
       headline:
         investorProfile === "hearsay_driven"
-          ? "Still no real written reason."
-          : "Still no written thesis.",
+          ? "No written reason yet."
+          : "No written thesis yet.",
       detail:
         investorProfile === "hearsay_driven"
-          ? "Write why you own it — otherwise alerts here won't mean much."
-          : "Write the thesis — otherwise alerts here won't mean much.",
+          ? "Add one so the story can actually be tracked."
+          : "Add one so the thesis can actually be tracked.",
       tone: "text-muted-foreground/70",
     };
   }
 
   if (pulse?.pulse_status === "review") {
     return {
-      eyebrow: "Needs review",
-      headline:
-        investorProfile === "hearsay_driven"
-          ? `${assumptionLabel} needs a fresh decision.`
-          : `${assumptionLabel} needs a fresh decision.`,
-      detail: pulse.reason || "Something meaningful changed and now needs your verdict.",
+      eyebrow: "Review",
+      headline: `${assumptionLabel} needs a call.`,
+      detail: pulse.reason || "Something meaningful changed.",
       tone: "text-red-600",
       subLabel: cadencePressure ? "Review cadence missed" : null,
     };
@@ -65,14 +58,50 @@ function cardStatusCopy(args: {
 
   if (pulse?.pulse_status === "watch") {
     return {
-      eyebrow: "Worth watching",
-      headline:
-        investorProfile === "hearsay_driven"
-          ? `${assumptionLabel} is being tested.`
-          : `${assumptionLabel} is being tested.`,
-      detail: pulse.reason || "Nothing looks broken yet, but this position is no longer fully quiet.",
+      eyebrow: "Watch",
+      headline: `${assumptionLabel} is under pressure.`,
+      detail: pulse.reason || "Nothing looks broken yet, but this position is no longer quiet.",
       tone: "text-amber-700",
       subLabel: cadencePressure ? "Review cadence drifting" : null,
+    };
+  }
+
+  if (quality.kind === "weak") {
+    return {
+      eyebrow: "Weak",
+      headline:
+        investorProfile === "hearsay_driven"
+          ? "The written reason is still too soft."
+          : "The written thesis is still too soft.",
+      detail: "It is still too fuzzy to trust under pressure.",
+      tone: "text-amber-700",
+      subLabel: null,
+    };
+  }
+
+  if (quality.kind === "stale") {
+    return {
+      eyebrow: "Stale",
+      headline:
+        investorProfile === "hearsay_driven"
+          ? "This reason is out of date."
+          : "This thesis is out of date.",
+      detail: `Last refreshed ${quality.daysOld}d ago, outside its ${quality.cadenceDays}d cadence.`,
+      tone: "text-amber-700",
+      subLabel: "Review cadence drifting",
+    };
+  }
+
+  if (quality.kind === "workable") {
+    return {
+      eyebrow: "Workable",
+      headline:
+        investorProfile === "hearsay_driven"
+          ? "The written reason works, but still has soft edges."
+          : "The written thesis works, but still has soft edges.",
+      detail: "Usable now, but not yet crisp.",
+      tone: "text-amber-700",
+      subLabel: null,
     };
   }
 
@@ -82,7 +111,7 @@ function cardStatusCopy(args: {
       investorProfile === "hearsay_driven"
         ? "Reason intact."
         : "Thesis intact.",
-    detail: "Nothing needs a decision right now.",
+    detail: "Nothing needs a call right now.",
     tone: "text-emerald-700",
     subLabel: null,
   };
@@ -133,19 +162,38 @@ export function PositionCard({
   const pnlPct = cost > 0 ? (pnl / cost) * 100 : 0;
   const allocationPct = totalValue > 0 ? (value / totalValue) * 100 : 0;
 
-  const pulseStatus = pulse?.pulse_status ?? (thesis ? "intact" : null);
-  const dotColor = pulseStatus ? (PULSE_DOT[pulseStatus] ?? "bg-border") : "bg-border";
-  const ringClass = pulseStatus ? (PULSE_RING[pulseStatus] ?? "") : "";
   const hasThesis = Boolean(thesis?.why_own_it);
   const noThesisCta =
     investorProfile === "hearsay_driven"
-      ? "+ Turn the story into a reason"
-      : "+ Write down your thesis";
+      ? "Draft a starting reason"
+      : "Draft a starting thesis";
+  const quality = classifyThesisQuality(thesis);
+  const pulseStatus = pulse?.pulse_status ?? (thesis ? "intact" : null);
+  const qualityAdjustedStatus =
+    pulseStatus === "intact" && (quality.kind === "weak" || quality.kind === "stale" || quality.kind === "workable")
+      ? "watch"
+      : pulseStatus;
+  const dotColor = qualityAdjustedStatus ? (PULSE_DOT[qualityAdjustedStatus] ?? "bg-border") : "bg-border";
+  const ringClass = qualityAdjustedStatus ? (PULSE_RING[qualityAdjustedStatus] ?? "") : "";
+  const qualityChipLabel =
+    quality.kind === "sharp"
+      ? "Sharp"
+      : quality.kind === "stale"
+        ? "Stale"
+        : quality.kind === "workable"
+          ? "Workable"
+          : quality.kind === "weak"
+            ? "Weak"
+            : quality.kind === "review"
+              ? "Review"
+              : "Missing";
   const statusCopy = cardStatusCopy({
     hasThesis,
     pulse,
+    thesis,
     investorProfile,
   });
+  const showQualityChip = hasThesis && qualityChipLabel.toLowerCase() !== statusCopy.eyebrow.toLowerCase();
 
   return (
     <motion.div
@@ -228,12 +276,18 @@ export function PositionCard({
                 {statusCopy.eyebrow}
               </span>
               <div className="flex items-center gap-2">
-                {thesis?.health_label && (
-                  <span className={`font-mono text-[9px] uppercase tracking-[0.12em] px-1.5 py-0.5 ${HEALTH_CHIP[thesis.health_label] ?? ""}`}>
-                    {thesis.health_label}
+                {showQualityChip && (
+                  <span className={`font-mono text-[9px] uppercase tracking-[0.12em] px-1.5 py-0.5 ${
+                    quality.kind === "sharp"
+                      ? "text-emerald-700 bg-emerald-500/10"
+                      : quality.kind === "stale" || quality.kind === "workable" || quality.kind === "weak"
+                        ? "text-amber-700 bg-amber-500/10"
+                        : "text-red-600 bg-red-500/10"
+                  }`}>
+                    {qualityChipLabel}
                   </span>
                 )}
-                {pulseStatus && hasThesis && (
+                {qualityAdjustedStatus && hasThesis && (
                   <span className={`h-1.5 w-1.5 rounded-full ${dotColor}`} />
                 )}
               </div>
@@ -249,7 +303,7 @@ export function PositionCard({
             <p className="font-sans text-[11px] text-muted-foreground leading-relaxed line-clamp-2">
               {statusCopy.detail}
             </p>
-            {pulseStatus === "intact" && hasThesis && timeAgo(pulse?.last_checked_at) && (
+            {qualityAdjustedStatus === "intact" && hasThesis && timeAgo(pulse?.last_checked_at) && (
               <p className="font-mono text-[9px] uppercase tracking-[0.12em] text-muted-foreground/50">
                 Checked {timeAgo(pulse?.last_checked_at)}
               </p>
@@ -264,7 +318,7 @@ export function PositionCard({
           ) : (
             <button
               onClick={(e) => { e.preventDefault(); e.stopPropagation(); onGenerateDraft?.(); }}
-              className="font-mono text-[10px] uppercase tracking-[0.12em] text-muted-foreground/60 hover:text-primary transition-colors text-left"
+              className="font-mono text-[10px] tracking-[0.04em] text-muted-foreground/70 hover:text-primary transition-colors text-left"
             >
               {noThesisCta}
             </button>

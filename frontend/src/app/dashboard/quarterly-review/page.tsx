@@ -15,6 +15,18 @@ function cleanTicker(ticker: string) {
   return ticker.replace(/_US_EQ$/, "").replace(/_EQ$/, "");
 }
 
+function formatReasonAgeLabel(days: number) {
+  if (days <= 0) return "Written today";
+  if (days === 1) return "Written yesterday";
+  return `Written ${days}d ago`;
+}
+
+function formatReasonAgeCompact(days: number) {
+  if (days <= 0) return "Today";
+  if (days === 1) return "1d";
+  return `${days}d`;
+}
+
 const RESPONSE_OPTIONS: Array<{
   value: "yes_absolutely" | "probably" | "not_sure" | "no";
   label: string;
@@ -68,10 +80,12 @@ const RESPONSE_LABELS: Record<string, { label: string; color: string }> = {
 
 function LoadingSkeleton() {
   return (
-    <div className="min-h-[calc(100vh-53px)] bg-background flex items-center justify-center">
-      <p className="font-mono text-[10px] uppercase tracking-[0.3em] text-foreground/30 animate-pulse">
-        Loading review…
-      </p>
+    <div className="min-h-[calc(100vh-53px)] flex items-center justify-center px-4 py-10 sm:px-8">
+      <div className="product-panel product-panel-muted w-full max-w-xl p-8 text-center">
+        <p className="font-mono text-[10px] uppercase tracking-[0.3em] text-foreground/30 animate-pulse">
+          Loading review…
+        </p>
+      </div>
     </div>
   );
 }
@@ -80,8 +94,8 @@ function LoadingSkeleton() {
 
 function EmptyState() {
   return (
-    <div className="min-h-[calc(100vh-53px)] bg-background flex items-center justify-center px-8">
-      <div className="max-w-sm text-center space-y-6">
+    <div className="min-h-[calc(100vh-53px)] flex items-center justify-center px-4 py-10 sm:px-8">
+      <div className="product-panel product-panel-muted w-full max-w-xl p-8 text-center space-y-6">
         <div className="space-y-2">
           <p className="font-mono text-[10px] uppercase tracking-[0.2em] text-foreground/40">
             Quarterly review
@@ -109,10 +123,9 @@ function EmptyState() {
 
 function CompletionState({ review }: { review: QuarterlyReviewCurrent }) {
   return (
-    <div className="min-h-[calc(100vh-53px)] bg-background">
-      <div className="max-w-2xl mx-auto px-8 py-16 space-y-12">
-        {/* Header */}
-        <div className="space-y-3">
+    <div className="min-h-[calc(100vh-53px)]">
+      <div className="mx-auto max-w-4xl px-4 py-10 sm:px-8 space-y-6">
+        <div className="product-panel product-panel-muted p-6 sm:p-7 space-y-3">
           <p className="font-mono text-[10px] uppercase tracking-[0.2em] text-foreground/40">
             {review.quarter} · {review.completed_count} reviewed
           </p>
@@ -129,9 +142,9 @@ function CompletionState({ review }: { review: QuarterlyReviewCurrent }) {
         <DecisionPatterns />
 
         {/* Ledger */}
-        <div className="border border-border/60 divide-y divide-border/40">
+        <div className="product-panel divide-y divide-border/40 overflow-hidden">
           {/* Ledger header */}
-          <div className="grid grid-cols-[1fr_auto_auto] gap-6 px-5 py-2.5 bg-secondary/40">
+          <div className="grid grid-cols-[1fr_auto_auto] gap-6 px-5 py-3 bg-secondary/40">
             <p className="font-mono text-[10px] uppercase tracking-[0.15em] text-muted-foreground">Position</p>
             <p className="font-mono text-[10px] uppercase tracking-[0.15em] text-muted-foreground text-right">Age</p>
             <p className="font-mono text-[10px] uppercase tracking-[0.15em] text-muted-foreground text-right w-28">Answer</p>
@@ -161,7 +174,7 @@ function CompletionState({ review }: { review: QuarterlyReviewCurrent }) {
                   )}
                 </div>
                 <p className="font-mono text-[11px] text-muted-foreground text-right tabular-nums">
-                  {h.reason_age_days}d
+                  {formatReasonAgeCompact(h.reason_age_days)}
                 </p>
                 <p className={`font-sans text-[12px] font-medium text-right w-28 ${resp?.color ?? "text-muted-foreground"}`}>
                   {resp?.label ?? "—"}
@@ -250,8 +263,8 @@ export default function QuarterlyReviewPage() {
 
   if (loadError) {
     return (
-      <div className="min-h-[calc(100vh-53px)] bg-background flex items-center justify-center px-8">
-        <div className="text-center space-y-4">
+      <div className="min-h-[calc(100vh-53px)] flex items-center justify-center px-4 py-10 sm:px-8">
+        <div className="product-panel product-panel-muted w-full max-w-xl p-8 text-center space-y-4">
           <p className="font-sans text-sm text-muted-foreground">{loadError}</p>
           <button
             onClick={() => { setLoading(true); void refreshReview(); }}
@@ -271,35 +284,50 @@ export default function QuarterlyReviewPage() {
   const progressPct = (review.completed_count / review.total_holdings) * 100;
 
   return (
-    <div className="min-h-[calc(100vh-53px)] bg-background">
-      {/* Thin progress bar */}
-      <div className="h-px bg-border/40 w-full">
-        <motion.div
-          className="h-full bg-[#5C2018]"
-          initial={{ width: 0 }}
-          animate={{ width: `${progressPct}%` }}
-          transition={{ duration: 0.6, ease: "easeOut" }}
-        />
-      </div>
-
-      <div className="max-w-3xl mx-auto px-8 py-10">
-
-        {/* Top bar */}
-        <div className="flex items-center justify-between mb-10">
-          <Link
-            href="/dashboard"
-            className="font-mono text-[10px] uppercase tracking-[0.18em] text-foreground/40 hover:text-foreground transition-colors"
-          >
-            ← Dashboard
-          </Link>
-          <div className="flex items-center gap-3">
-            <span className="font-mono text-[10px] uppercase tracking-[0.18em] text-foreground/40">
-              {review.quarter}
-            </span>
-            <span className="font-mono text-[10px] text-foreground/30">·</span>
-            <span className="font-mono text-[10px] uppercase tracking-[0.15em] text-foreground/40">
-              {currentIndex} of {review.total_holdings}
-            </span>
+    <div className="min-h-[calc(100vh-53px)]">
+      <div className="mx-auto max-w-4xl px-4 py-10 sm:px-8 space-y-6">
+        <div className="product-panel product-panel-muted overflow-hidden">
+          <div className="h-1 bg-border/40 w-full">
+            <motion.div
+              className="h-full bg-[#5C2018]"
+              initial={{ width: 0 }}
+              animate={{ width: `${progressPct}%` }}
+              transition={{ duration: 0.6, ease: "easeOut" }}
+            />
+          </div>
+          <div className="flex flex-wrap items-start justify-between gap-4 px-5 py-5 sm:px-6">
+            <div className="space-y-2">
+              <Link
+                href="/dashboard"
+                className="font-mono text-[10px] uppercase tracking-[0.18em] text-foreground/40 hover:text-foreground transition-colors"
+              >
+                ← Dashboard
+              </Link>
+              <h1 className="font-display italic text-[2.6rem] leading-[1.05] text-foreground tracking-tight">
+                Would you buy this today?
+              </h1>
+              <p className="max-w-xl font-sans text-sm text-muted-foreground leading-relaxed">
+                Keep this honest. The goal is not to predict the market. It is to test whether your written reason still deserves fresh capital.
+              </p>
+            </div>
+            <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-1">
+              <div className="border border-border/60 bg-background/70 p-4">
+                <p className="font-mono text-[10px] uppercase tracking-[0.16em] text-muted-foreground">
+                  Quarter
+                </p>
+                <p className="mt-2 font-display text-[1.3rem] italic leading-tight text-foreground">
+                  {review.quarter}
+                </p>
+              </div>
+              <div className="border border-border/60 bg-background/70 p-4">
+                <p className="font-mono text-[10px] uppercase tracking-[0.16em] text-muted-foreground">
+                  Progress
+                </p>
+                <p className="mt-2 font-display text-[1.3rem] italic leading-tight text-foreground">
+                  {currentIndex} of {review.total_holdings}
+                </p>
+              </div>
+            </div>
           </div>
         </div>
 
@@ -311,69 +339,61 @@ export default function QuarterlyReviewPage() {
             exit={{ opacity: 0, y: -16 }}
             transition={{ duration: 0.28, ease: "easeOut" }}
           >
-            {/* Question heading */}
-            <div className="mb-8">
-              <h1 className="font-display italic text-[2.75rem] leading-[1.1] text-foreground tracking-tight">
-                Would you buy this today?
-              </h1>
-              <p className="font-sans text-[13px] text-muted-foreground mt-2 leading-relaxed">
-                Keep this honest. The goal is not to predict the market — only to test whether
-                your reason still deserves fresh capital.
-              </p>
-            </div>
-
-            {/* Holding identity strip */}
-            <div className="flex items-baseline justify-between gap-4 border-b border-border/50 pb-5 mb-7">
-              <div className="flex items-baseline gap-3">
-                <span className="font-mono text-[1.45rem] font-bold tracking-[0.1em] text-foreground">
-                  {cleanTicker(currentHolding.ticker)}
-                </span>
-                <span className="font-sans text-sm text-muted-foreground">{currentHolding.name}</span>
-              </div>
-              <div className="flex items-center gap-4 shrink-0">
-                {currentHolding.current_price != null && (
-                  <span className="font-mono text-[11px] tabular-nums text-muted-foreground">
-                    {formatCurrency(currentHolding.current_price, currentHolding.currency)}
+            <div className="product-panel p-5 sm:p-6">
+              <div className="flex flex-wrap items-baseline justify-between gap-4 border-b border-border/50 pb-5 mb-7">
+                <div className="flex items-baseline gap-3">
+                  <span className="font-mono text-[1.45rem] font-bold tracking-[0.1em] text-foreground">
+                    {cleanTicker(currentHolding.ticker)}
                   </span>
-                )}
-                <span className="font-mono text-[10px] uppercase tracking-[0.12em] text-foreground/35">
-                  {currentHolding.reason_age_days}d old
-                </span>
-                <Link
-                  href={`/dashboard/positions/${currentHolding.ticker}`}
-                  className="font-mono text-[10px] uppercase tracking-[0.12em] text-foreground/50 border-b border-foreground/20 pb-px hover:text-foreground transition-colors"
-                >
-                  Open →
-                </Link>
+                  <span className="font-sans text-sm text-muted-foreground">{currentHolding.name}</span>
+                </div>
+                <div className="flex flex-wrap items-center gap-4 shrink-0">
+                  {currentHolding.current_price != null && (
+                    <span className="font-mono text-[11px] tabular-nums text-muted-foreground">
+                      {formatCurrency(currentHolding.current_price, currentHolding.currency)}
+                    </span>
+                  )}
+                  <span className="border border-border/60 bg-background/70 px-2.5 py-1 font-sans text-[11px] text-foreground/75">
+                    {formatReasonAgeLabel(currentHolding.reason_age_days)}
+                  </span>
+                  <Link
+                    href={`/dashboard/positions/${currentHolding.ticker}`}
+                    className="font-mono text-[10px] uppercase tracking-[0.12em] text-foreground/50 border-b border-foreground/20 pb-px hover:text-foreground transition-colors"
+                  >
+                    Position page
+                  </Link>
+                </div>
               </div>
-            </div>
 
-            {/* Thesis block */}
-            <div className="mb-7">
-              <p className="font-mono text-[10px] uppercase tracking-[0.15em] text-foreground/40 mb-3">
-                Your reason for owning it
-              </p>
-              <blockquote className="font-display italic text-[1.2rem] leading-[1.65] text-foreground/90 border-l-2 border-[#5C2018]/30 pl-5">
-                {currentHolding.why_own_it}
-              </blockquote>
-            </div>
+              <div className="space-y-5">
+                <div className="border border-border/70 bg-background/55 p-5">
+                  <p className="font-mono text-[10px] uppercase tracking-[0.15em] text-foreground/40 mb-3">
+                    Your reason for owning it
+                  </p>
+                  <blockquote className="font-display italic text-[1.2rem] leading-[1.65] text-foreground/90 border-l-2 border-[#5C2018]/30 pl-5">
+                    {currentHolding.why_own_it}
+                  </blockquote>
+                </div>
 
-            {/* Notes */}
-            <div className="mb-8">
-              <p className="font-mono text-[10px] uppercase tracking-[0.15em] text-foreground/40 mb-2">
-                Notes for your future self
-              </p>
-              <textarea
-                value={notes}
-                onChange={(e) => setNotes(e.target.value)}
-                placeholder="What changed, if anything? (optional)"
-                rows={3}
-                className="w-full bg-transparent border-0 border-b border-border/50 focus:border-[#5C2018]/40 focus:outline-none resize-none font-sans text-[13px] text-foreground placeholder:text-foreground/25 pb-2 transition-colors"
-              />
-            </div>
+                <div>
+                  <p className="font-mono text-[10px] uppercase tracking-[0.15em] text-foreground/40 mb-2">
+                    Notes for your future self
+                  </p>
+                  <div className="border border-border/70 bg-background/55 p-4">
+                    <textarea
+                      value={notes}
+                      onChange={(e) => setNotes(e.target.value)}
+                      placeholder="What changed, if anything? (optional)"
+                      rows={4}
+                      className="w-full resize-none bg-transparent font-sans text-[13px] text-foreground outline-none placeholder:text-foreground/25"
+                    />
+                  </div>
+                </div>
 
-            {/* Response options */}
-            <div className="space-y-1.5">
+                <div className="space-y-2">
+                  <p className="font-mono text-[10px] uppercase tracking-[0.15em] text-foreground/40">
+                    Your answer
+                  </p>
               {RESPONSE_OPTIONS.map((option) => {
                 const isLoading = submitting === option.value;
                 return (
@@ -382,7 +402,7 @@ export default function QuarterlyReviewPage() {
                     type="button"
                     onClick={() => void handleSubmit(option.value)}
                     disabled={submitting !== null}
-                    className={`group w-full flex items-center justify-between gap-4 border-l-[3px] border border-border/50 bg-card px-5 py-3.5 text-left transition-all duration-150 disabled:opacity-50 disabled:cursor-not-allowed ${option.border} ${option.bg}`}
+                    className={`group w-full flex items-center justify-between gap-4 border-l-[3px] border border-border/50 bg-background/55 px-5 py-3.5 text-left transition-all duration-150 disabled:opacity-50 disabled:cursor-not-allowed ${option.border} ${option.bg}`}
                   >
                     <div className="flex-1 min-w-0">
                       <p className={`font-sans text-[13px] font-medium text-foreground transition-colors ${option.text}`}>
@@ -398,28 +418,28 @@ export default function QuarterlyReviewPage() {
                   </button>
                 );
               })}
+                </div>
+
+                {lastSubmitted && ["not_sure", "no"].includes(lastSubmitted.response) && (
+                  <motion.div
+                    initial={{ opacity: 0, y: 6 }}
+                    animate={{ opacity: 1, y: 0 }}
+                    className="border border-amber-400/40 bg-amber-500/8 px-4 py-3"
+                  >
+                    <p className="font-sans text-[12px] text-amber-800 leading-relaxed">
+                      This answer keeps the holding on your radar. The best next move is to
+                      tighten or rewrite the reason from the holding page.
+                    </p>
+                  </motion.div>
+                )}
+
+                {pendingHoldings.length > 1 && (
+                  <p className="font-mono text-[10px] uppercase tracking-[0.15em] text-foreground/30 text-center">
+                    {pendingHoldings.length - 1} left this quarter
+                  </p>
+                )}
+              </div>
             </div>
-
-            {/* Warning for weak answers */}
-            {lastSubmitted && ["not_sure", "no"].includes(lastSubmitted.response) && (
-              <motion.div
-                initial={{ opacity: 0, y: 6 }}
-                animate={{ opacity: 1, y: 0 }}
-                className="mt-4 border-l-2 border-amber-400 bg-amber-500/8 px-4 py-3"
-              >
-                <p className="font-sans text-[12px] text-amber-800 leading-relaxed">
-                  This answer keeps the holding on your radar. The best next move is to
-                  tighten or rewrite the reason from the holding page.
-                </p>
-              </motion.div>
-            )}
-
-            {/* Remaining count */}
-            {pendingHoldings.length > 1 && (
-              <p className="mt-6 font-mono text-[10px] uppercase tracking-[0.15em] text-foreground/30 text-center">
-                {pendingHoldings.length - 1} more to go
-              </p>
-            )}
           </motion.div>
         </AnimatePresence>
       </div>

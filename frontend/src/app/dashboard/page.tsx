@@ -4,9 +4,19 @@ import { useEffect, useMemo, useState } from "react";
 import Link from "next/link";
 import { useSearchParams } from "next/navigation";
 import { motion, AnimatePresence } from "framer-motion";
+import {
+  ArrowRight,
+  BellRing,
+  CalendarClock,
+  CircleAlert,
+  FilePenLine,
+  ShieldCheck,
+} from "lucide-react";
 import useSWR from "swr";
 import { api, fetcher } from "@/lib/api";
+import { formatAssumptionLabel } from "@/lib/assumption-label";
 import { getErrorMessage } from "@/lib/errors";
+import { classifyThesisQuality } from "@/lib/thesis-quality";
 import { formatCurrency, formatPercent } from "@/lib/utils";
 import { OnboardingBanner } from "@/components/onboarding/onboarding-banner";
 import { QuickAddHolding } from "@/components/portfolio/quick-add-holding";
@@ -79,91 +89,82 @@ function dashboardStateCopy(
   topAttention: PortfolioPulse["pulses"][number] | null,
   recentReview: RecentReviewBannerState | null,
 ) {
-  const topAttentionLabel =
-    topAttention?.assumption_label?.trim() ||
-    (investorProfile === "hearsay_driven" ? "the original story" : "the core assumption");
+  const topAttentionLabel = formatAssumptionLabel(topAttention?.assumption_label, investorProfile, { maxLength: 72 });
   const topAttentionIsCadencePressure = Boolean(topAttention?.reason?.includes("review cadence"));
-  const recentReviewLabel =
-    recentReview?.assumption_label?.trim() ||
-    (investorProfile === "hearsay_driven" ? "the original story" : "the core assumption");
   if (counts.review > 0) {
     return {
       tone: "border-amber-500/25 bg-amber-500/8",
-      eyebrow: "Decisions pending",
+      eyebrow: "Review queue",
       title:
         investorProfile === "hearsay_driven"
-          ? `${counts.review} position${counts.review > 1 ? "s" : ""} need a fresh look before you trust the story.`
-          : `${counts.review} position${counts.review > 1 ? "s" : ""} need thesis review before you treat them as conviction.`,
+          ? `${counts.review} position${counts.review > 1 ? "s need" : " needs"} a call.`
+          : `${counts.review} position${counts.review > 1 ? "s need" : " needs"} a call.`,
       body:
         topAttention
           ? topAttentionIsCadencePressure
-            ? `${cleanTicker(topAttention.ticker)} is first in line — ${topAttentionLabel} is overdue for a re-read.${recentReview ? ` You just cleared ${recentReviewLabel} on ${cleanTicker(recentReview.ticker)}.` : ""}`
-            : `${cleanTicker(topAttention.ticker)} is first in line — ${topAttentionLabel} is closest to needing a call.${recentReview ? ` You just cleared ${recentReviewLabel} on ${cleanTicker(recentReview.ticker)}.` : ""}`
+            ? `${cleanTicker(topAttention.ticker)} is first up. ${topAttentionLabel} is overdue.${recentReview ? ` ${cleanTicker(recentReview.ticker)} was just cleared.` : ""}`
+            : `${cleanTicker(topAttention.ticker)} is first up. ${topAttentionLabel} is closest to a call.${recentReview ? ` ${cleanTicker(recentReview.ticker)} was just cleared.` : ""}`
           : counts.watch > 0
-            ? `${counts.watch} more position${counts.watch > 1 ? "s are" : " is"} worth watching, but the review items come first.`
-            : "Start with the review items first; the rest of the portfolio can wait.",
+            ? `${counts.watch} more position${counts.watch > 1 ? "s are" : " is"} on watch behind it.`
+            : "Start with the review items.",
     };
   }
 
   if (counts.watch > 0) {
     return {
       tone: "border-sky-500/25 bg-sky-500/8",
-      eyebrow: "Worth watching",
+      eyebrow: "Under watch",
       title:
         investorProfile === "hearsay_driven"
-          ? `${counts.watch} position${counts.watch > 1 ? "s are" : " is"} testing the original story, but nothing looks broken yet.`
-          : `${counts.watch} position${counts.watch > 1 ? "s are" : " is"} testing a thesis pillar, but nothing looks broken yet.`,
+          ? `${counts.watch} position${counts.watch > 1 ? "s need" : " needs"} a look.`
+          : `${counts.watch} position${counts.watch > 1 ? "s need" : " needs"} a look.`,
       body: topAttention
         ? topAttentionIsCadencePressure
-          ? `${cleanTicker(topAttention.ticker)} is the clearest watch item because ${topAttentionLabel} is overdue for review even though nothing looks broken yet.${recentReview ? ` You already cleared ${recentReviewLabel} in ${cleanTicker(recentReview.ticker)}.` : ""}`
-          : `${cleanTicker(topAttention.ticker)} is the clearest watch item because ${topAttentionLabel} has the freshest pressure on it.${recentReview ? ` You already cleared ${recentReviewLabel} in ${cleanTicker(recentReview.ticker)}.` : ""}`
-        : "Watch items show which assumptions are wobbling — still below the review queue.",
+          ? `${cleanTicker(topAttention.ticker)} leads the list because ${topAttentionLabel} is overdue.${recentReview ? ` ${cleanTicker(recentReview.ticker)} was already cleared.` : ""}`
+          : `${cleanTicker(topAttention.ticker)} leads the list because ${topAttentionLabel} has the freshest pressure.${recentReview ? ` ${cleanTicker(recentReview.ticker)} was already cleared.` : ""}`
+        : "Nothing looks broken yet, but these names deserve a look.",
     };
   }
 
   if (counts.missing > 0) {
     return {
       tone: "border-border bg-card",
-      eyebrow: "Monitoring gap",
+      eyebrow: "Missing thesis",
       title:
         investorProfile === "hearsay_driven"
-          ? `${counts.missing} position${counts.missing > 1 ? "s still need" : " still needs"} a real written reason.`
-          : `${counts.missing} position${counts.missing > 1 ? "s still need" : " still needs"} a written thesis before monitoring means much.`,
-      body: "Nothing urgent right now — but you won't know what news matters on these until you write what would change your mind.",
+          ? `${counts.missing} position${counts.missing > 1 ? "s still need" : " still needs"} a written reason.`
+          : `${counts.missing} position${counts.missing > 1 ? "s still need" : " still needs"} a written thesis.`,
+      body:
+        investorProfile === "hearsay_driven"
+          ? "The app can see price and news, but not what matters to your story yet."
+          : "The app can see price and news, but not what matters to your thesis yet.",
     };
   }
 
   return {
     tone: "border-emerald-500/25 bg-emerald-500/8",
-    eyebrow: "Nothing needs a decision",
-    title:
-      investorProfile === "hearsay_driven"
-        ? "Your written reasons are calm right now."
-        : "Your written theses look calm right now.",
+    eyebrow: "All clear",
+    title: "Nothing needs a call right now.",
     body: nextEarnings
-      ? `${cleanTicker(nextEarnings.ticker)} is the next likely decision point in ${nextEarnings.days_until === 0 ? "today" : nextEarnings.days_until === 1 ? "1 day" : `${nextEarnings.days_until} days`}.${recentReview ? ` You just resolved ${recentReviewLabel} in ${cleanTicker(recentReview.ticker)}.` : ""}`
+      ? `${cleanTicker(nextEarnings.ticker)} is the next likely decision point in ${nextEarnings.days_until === 0 ? "today" : nextEarnings.days_until === 1 ? "1 day" : `${nextEarnings.days_until} days`}.${recentReview ? ` ${cleanTicker(recentReview.ticker)} was just resolved.` : ""}`
       : recentReview
-        ? `You just resolved ${recentReviewLabel} in ${cleanTicker(recentReview.ticker)}. Nothing else is asking for immediate thought right now.`
-        : "Nothing needs a decision today. When you have a minute, re-read the reasons you wrote — stale words are how positions drift.",
+        ? `${cleanTicker(recentReview.ticker)} was just resolved. Nothing else needs attention right now.`
+        : "No live pressure right now. The next useful pass is tightening stale or weak theses.",
   };
 }
 
 function dashboardStateCta(args: {
-  investorProfile: "thesis_driven" | "hearsay_driven" | null;
   needsAttention: PortfolioPulse["pulses"];
   holdings: Holding[];
   missingHolding: Holding | null;
   nextUpcomingEarnings: UpcomingEarnings | null;
 }) {
-  const { investorProfile, needsAttention, holdings, missingHolding, nextUpcomingEarnings } = args;
-  const pulseTargetLabel = (pulse: PortfolioPulse["pulses"][number]) =>
-    pulse.assumption_label?.trim() ||
-    (investorProfile === "hearsay_driven" ? "the story" : "the thesis");
+  const { needsAttention, holdings, missingHolding, nextUpcomingEarnings } = args;
   const topReview = needsAttention.find((pulse) => pulse.pulse_status === "review") ?? null;
   if (topReview) {
     return {
       href: `/dashboard/positions/${topReview.ticker}`,
-      label: `Open ${cleanTicker(topReview.ticker)} and review ${pulseTargetLabel(topReview)} →`,
+      label: `Review ${cleanTicker(topReview.ticker)} →`,
     };
   }
 
@@ -171,17 +172,14 @@ function dashboardStateCta(args: {
   if (topWatch) {
     return {
       href: `/dashboard/positions/${topWatch.ticker}`,
-      label: `Open ${cleanTicker(topWatch.ticker)} and see why ${pulseTargetLabel(topWatch)} is under pressure →`,
+      label: `Open ${cleanTicker(topWatch.ticker)} →`,
     };
   }
 
   if (missingHolding) {
     return {
       href: `/dashboard/positions/${missingHolding.ticker}?source=dashboard_blind_spot`,
-      label:
-        investorProfile === "hearsay_driven"
-          ? `Write the real reason for ${cleanTicker(missingHolding.ticker)} →`
-          : `Write the thesis for ${cleanTicker(missingHolding.ticker)} →`,
+      label: `Write ${cleanTicker(missingHolding.ticker)} →`,
     };
   }
 
@@ -219,6 +217,12 @@ function isRecentIsoHours(value: string | null | undefined, hours: number) {
   return Date.now() - ts <= hours * 60 * 60 * 1000;
 }
 
+function daysUntilLabel(days: number) {
+  if (days === 0) return "today";
+  if (days === 1) return "tomorrow";
+  return `${days} days`;
+}
+
 function activationBannerCopy(args: {
   investorProfile: "thesis_driven" | "hearsay_driven" | null;
   count: number;
@@ -232,10 +236,10 @@ function activationBannerCopy(args: {
       eyebrow: "Portfolio activated",
       title:
         count === 1
-          ? `We are now watching the reason behind ${joinedTickers}.`
-          : `We are now watching the reasons behind ${joinedTickers}.`,
+          ? `Monitoring is live for ${joinedTickers}.`
+          : `Monitoring is live for ${joinedTickers}.`,
       body:
-        "We'll only ping you when something hits the story you wrote. Quiet means nothing important landed yet.",
+        "We'll stay quiet unless the story gets tested.",
     };
   }
 
@@ -244,10 +248,10 @@ function activationBannerCopy(args: {
       eyebrow: "Portfolio activated",
       title:
         count === 1
-          ? `We are now watching the thesis behind ${joinedTickers}.`
-          : `We are now watching the theses behind ${joinedTickers}.`,
+          ? `Monitoring is live for ${joinedTickers}.`
+          : `Monitoring is live for ${joinedTickers}.`,
       body:
-        "We'll only ping you when an assumption gets tested. Quiet means your theses look intact for now.",
+        "We'll stay quiet unless an assumption gets tested.",
     };
   }
 
@@ -255,10 +259,10 @@ function activationBannerCopy(args: {
     eyebrow: "Portfolio activated",
     title:
       count === 1
-        ? `We are now watching the reason behind ${joinedTickers}.`
-        : `We are now watching the reasons behind ${joinedTickers}.`,
+        ? `Monitoring is live for ${joinedTickers}.`
+        : `Monitoring is live for ${joinedTickers}.`,
     body:
-      "This dashboard is now tied to what you actually wrote down. Quiet means nothing important changed yet.",
+      "We'll stay quiet unless something important changes.",
   };
 }
 
@@ -266,38 +270,35 @@ function recentReviewBannerCopy(
   review: RecentReviewBannerState,
   investorProfile: "thesis_driven" | "hearsay_driven" | null,
 ) {
-  const target = review.assumption_label?.trim() || (investorProfile === "hearsay_driven" ? "the original story" : "the core assumption");
+  const target = formatAssumptionLabel(review.assumption_label, investorProfile, {
+    maxLength: 64,
+    sentenceCaseFallback: true,
+  });
   const ticker = cleanTicker(review.ticker);
 
   if (review.action === "invalidated" || review.thesis_status === "invalidated") {
     return {
       eyebrow: "Reviewed just now",
-      title:
-        investorProfile === "hearsay_driven"
-          ? `You marked ${target} as broken for ${ticker}.`
-          : `You marked ${target} as broken for ${ticker}.`,
+      title: `${target} was marked broken for ${ticker}.`,
       body:
         investorProfile === "hearsay_driven"
-          ? "That position now needs a rewritten reason or an exit decision before it counts as conviction again."
-          : "That position now needs a rewritten thesis or an exit decision before it counts as conviction again.",
+          ? "That position now needs a rewritten reason or an exit call."
+          : "That position now needs a rewritten thesis or an exit call.",
       href: `/dashboard/positions/${review.ticker}`,
-      cta: investorProfile === "hearsay_driven" ? "Rewrite the reason →" : "Rewrite the thesis →",
+      cta: investorProfile === "hearsay_driven" ? "Rewrite →" : "Rewrite →",
     };
   }
 
   return {
     eyebrow: "Reviewed just now",
-    title:
-      investorProfile === "hearsay_driven"
-        ? `You reviewed ${target} for ${ticker}.`
-        : `You reviewed ${target} for ${ticker}.`,
+    title: `${target} was reviewed for ${ticker}.`,
     body: review.resolved_all
       ? (investorProfile === "hearsay_driven"
-          ? "That assumption is back in a monitored quiet state. The next interruption should only happen if the story is tested again."
-          : "That assumption is back in a monitored quiet state. The next interruption should only happen if the thesis is tested again.")
-      : "There are still other items waiting, but the assumption you just reviewed is now on record.",
+          ? "That reason is back to quiet unless the story gets tested again."
+          : "That thesis is back to quiet unless it gets tested again.")
+      : "That review is on record. Other items are still waiting.",
     href: `/dashboard/positions/${review.ticker}`,
-    cta: "Open the position →",
+    cta: "Open position →",
   };
 }
 
@@ -453,12 +454,55 @@ export default function DashboardPage() {
       .sort((a, b) => (b.current_value ?? 0) - (a.current_value ?? 0))[0] ?? null;
   }, [holdings, thesesByHolding]);
   const dashboardStatePrimaryCta = dashboardStateCta({
-    investorProfile: onboardingState?.investor_profile ?? null,
     needsAttention,
     holdings: holdings ?? [],
     missingHolding,
     nextUpcomingEarnings: nearTermEarnings,
   });
+  const thesisQualityStats = useMemo(() => {
+    const counts = { missing: 0, review: 0, weak: 0, stale: 0, workable: 0, sharp: 0 };
+    for (const holding of holdings ?? []) {
+      const quality = classifyThesisQuality(thesesByHolding[holding.id]);
+      counts[quality.kind] += 1;
+    }
+    return counts;
+  }, [holdings, thesesByHolding]);
+  const weakestHolding = useMemo(() => {
+    if (!holdings) return null;
+    return [...holdings]
+      .sort((a, b) => {
+        const qualityDiff = classifyThesisQuality(thesesByHolding[a.id]).rank - classifyThesisQuality(thesesByHolding[b.id]).rank;
+        if (qualityDiff !== 0) return qualityDiff;
+        return (b.current_value ?? 0) - (a.current_value ?? 0);
+      })[0] ?? null;
+  }, [holdings, thesesByHolding]);
+  const thesisQualityHeadline =
+    thesisQualityStats.missing > 0
+      ? `${thesisQualityStats.missing} ${thesisQualityStats.missing === 1 ? "position still runs" : "positions still run"} without a written thesis.`
+      : thesisQualityStats.review > 0
+        ? `${thesisQualityStats.review} ${thesisQualityStats.review === 1 ? "thesis needs" : "theses need"} a fresh decision.`
+        : thesisQualityStats.weak > 0
+        ? `${thesisQualityStats.weak} ${thesisQualityStats.weak === 1 ? "thesis is" : "theses are"} still too fuzzy.`
+        : thesisQualityStats.stale > 0
+          ? `${thesisQualityStats.stale} ${thesisQualityStats.stale === 1 ? "thesis is" : "theses are"} drifting stale.`
+          : thesisQualityStats.workable > 0
+            ? `${thesisQualityStats.workable} ${thesisQualityStats.workable === 1 ? "thesis is" : "theses are"} usable but not sharp yet.`
+            : "Your written thinking looks sharp across the portfolio.";
+  const thesisQualityDetail =
+    thesisQualityStats.missing > 0
+      ? "Monitoring has nothing explicit to defend there yet."
+      : thesisQualityStats.review > 0
+        ? "These positions were tested and still need a verdict."
+      : thesisQualityStats.weak > 0
+        ? "These theses are still too fuzzy to trust under pressure."
+      : thesisQualityStats.stale > 0
+        ? "Nothing broke yet, but stale reasoning lowers the next decision quality."
+        : thesisQualityStats.workable > 0
+          ? "Usable, but still not crisp enough to trust fully under pressure."
+          : "Most positions now have explicit, current thinking behind them."
+  const thesisQualityCta = weakestHolding
+    ? `/dashboard/positions/${weakestHolding.ticker}`
+    : null;
 
   const sortedHoldings = useMemo(() => {
     if (!holdings) return [];
@@ -469,7 +513,11 @@ export default function DashboardPage() {
         if (pulse?.has_thesis && pulse.pulse_status === "review") return 0;
         if (pulse?.has_thesis && pulse.pulse_status === "watch") return 1;
         if (!thesesByHolding[holding.id]) return 2;
-        return 3;
+        const quality = classifyThesisQuality(thesesByHolding[holding.id]).kind;
+        if (quality === "weak") return 3;
+        if (quality === "stale" || quality === "review") return 4;
+        if (quality === "workable") return 5;
+        return 6;
       };
       const groupDiff = groupOrder(a, pulseA) - groupOrder(b, pulseB);
       if (groupDiff !== 0) return groupDiff;
@@ -514,6 +562,23 @@ export default function DashboardPage() {
   const recentReviewCopy = recentReviewBanner
     ? recentReviewBannerCopy(recentReviewBanner, onboardingState?.investor_profile ?? null)
     : null;
+  const shouldRenderOnboardingBanner = missingThesisCount === 0;
+  const holdingsCount = holdings?.length ?? 0;
+  const monitoredCount = summary?.theses_active ?? 0;
+  const monitoredCoverage =
+    holdingsCount > 0 ? Math.round((monitoredCount / holdingsCount) * 100) : 0;
+  const quietCount = useMemo(() => {
+    if (!holdings) return 0;
+    return holdings.filter((holding) => {
+      const thesis = thesesByHolding[holding.id];
+      if (!thesis) return false;
+      const pulse = pulseByHolding[holding.id];
+      if (pulse?.pulse_status === "review" || pulse?.pulse_status === "watch") return false;
+      const quality = classifyThesisQuality(thesis);
+      return quality.kind === "sharp" || quality.kind === "workable";
+    }).length;
+  }, [holdings, thesesByHolding, pulseByHolding]);
+  const totalAlertCount = needsAttention.length;
 
   // Loading state
   const loading = !holdings && !holdingsError;
@@ -588,122 +653,249 @@ export default function DashboardPage() {
 
   // ── Main dashboard ───────────────────────────────────────────────────
   return (
-    <div className="min-h-[calc(100vh-54px)] flex flex-col">
-
-      {/* ── Stat strip ─────────────────────────────────────────────── */}
+    <div className="min-h-[calc(100vh-84px)] flex flex-col pb-8">
       <motion.div
         initial={{ opacity: 0 }}
         animate={{ opacity: 1 }}
         transition={{ duration: 0.35 }}
-        className="border-b border-border bg-card px-4 sm:px-8 py-4"
+        className="relative border-b border-border/80 px-4 py-5 sm:px-8 sm:py-7"
       >
-        <div className="flex items-center justify-between gap-6 flex-wrap">
-          {/* Left: portfolio total */}
-          <div className="flex items-baseline gap-4">
-            <div>
-              <p className="font-mono text-[10px] uppercase tracking-[0.18em] text-muted-foreground mb-1">
-                Portfolio
-              </p>
-              <div className="flex items-baseline gap-3">
-                <span className="font-display italic text-[1.85rem] leading-none text-foreground tracking-tight">
-                  {formatCurrency(displayTotalValue)}
-                </span>
-                {(livePnlPct != null ? livePnlPct : summary?.total_pnl_pct) != null && (
-                  <span className={`font-mono text-sm tabular-nums ${(livePnl ?? summary?.total_pnl ?? 0) >= 0 ? "text-emerald-700" : "text-red-600"}`}>
-                    {formatPercent(livePnlPct ?? summary?.total_pnl_pct ?? 0)}
-                  </span>
-                )}
+        <div
+          aria-hidden
+          className="pointer-events-none absolute inset-0 bg-[radial-gradient(circle_at_top_left,rgba(121,83,48,0.18),transparent_30%),linear-gradient(180deg,rgba(255,255,255,0.35),transparent_80%)]"
+        />
+        <div className="relative grid gap-4 xl:grid-cols-[minmax(0,1.45fr)_minmax(18rem,24rem)]">
+          <section id="dashboard-overview" className="product-panel product-panel-muted overflow-hidden p-5 sm:p-6 scroll-mt-24">
+            <div className="flex flex-wrap items-start justify-between gap-4">
+              <div className="space-y-4">
                 {hasLivePrices && (
-                  <span className="flex items-center gap-1 font-mono text-[10px] uppercase tracking-[0.12em] text-emerald-600">
-                    <span className="inline-block h-1.5 w-1.5 rounded-full bg-emerald-500 animate-pulse" />
-                    live
-                  </span>
+                  <div className="flex flex-wrap items-center gap-2">
+                    <span className="flex items-center gap-2 border border-emerald-500/20 bg-emerald-500/8 px-2.5 py-1 font-mono text-[10px] uppercase tracking-[0.14em] text-emerald-700">
+                      <span className="inline-block h-1.5 w-1.5 rounded-full bg-emerald-500 animate-pulse" />
+                      Live pricing active
+                    </span>
+                  </div>
                 )}
+
+                <div className="space-y-2">
+                  <p className="font-mono text-[10px] uppercase tracking-[0.16em] text-muted-foreground">
+                    Portfolio value
+                  </p>
+                  <div className="flex flex-wrap items-baseline gap-x-3 gap-y-2">
+                    <span className="font-display text-[2.4rem] italic leading-none tracking-tight text-foreground sm:text-[3rem]">
+                      {formatCurrency(displayTotalValue)}
+                    </span>
+                    {(livePnlPct != null ? livePnlPct : summary?.total_pnl_pct) != null && (
+                      <span
+                        className={`border px-2 py-1 font-mono text-[11px] tabular-nums ${
+                          (livePnl ?? summary?.total_pnl ?? 0) >= 0
+                            ? "border-emerald-500/20 bg-emerald-500/8 text-emerald-700"
+                            : "border-red-500/20 bg-red-500/8 text-red-600"
+                        }`}
+                      >
+                        {formatPercent(livePnlPct ?? summary?.total_pnl_pct ?? 0)}
+                      </span>
+                    )}
+                  </div>
+                </div>
+              </div>
+
+              <div className="flex flex-wrap items-center gap-2">
+                <Link
+                  href="/dashboard/simulate"
+                  className="border border-border/80 px-3 py-2 font-mono text-[10px] uppercase tracking-[0.16em] text-muted-foreground transition-colors hover:border-foreground/20 hover:text-foreground"
+                >
+                  Stress test
+                </Link>
+                <Link
+                  href="/connect?return=dashboard"
+                  className="border border-border/80 px-3 py-2 font-mono text-[10px] uppercase tracking-[0.16em] text-muted-foreground transition-colors hover:border-foreground/20 hover:text-foreground"
+                >
+                  Import data
+                </Link>
+                <button
+                  onClick={() => setShowAddForm((v) => !v)}
+                  className={`border px-3 py-2 font-mono text-[10px] uppercase tracking-[0.16em] transition-colors ${
+                    showAddForm
+                      ? "border-border/80 text-muted-foreground"
+                      : "border-primary/30 bg-primary/5 text-primary hover:border-primary/60"
+                  }`}
+                >
+                  {showAddForm ? "Cancel add" : "New position"}
+                </button>
               </div>
             </div>
 
-            {/* Mobile stats row */}
-            <div className="flex sm:hidden items-center gap-3 mt-1">
-              {[
-                { label: "Pos", value: String(summary?.holdings_count ?? 0) },
-                { label: "Mon", value: String(summary?.theses_active ?? 0) },
-                ...(reviewCount > 0 ? [{ label: "Rev", value: String(reviewCount), accent: true }] : []),
-              ].map(({ label, value, accent }) => (
-                <span key={label} className="font-mono text-[10px] text-muted-foreground">
-                  <span className={`tabular-nums ${accent ? "text-primary" : ""}`}>{value}</span>
-                  {" "}{label}
-                </span>
-              ))}
-            </div>
-
-            {/* Divider */}
-            <div className="h-8 w-px bg-border hidden sm:block" />
-
-            {/* Key stats */}
-            <div className="hidden sm:flex items-center gap-5">
-              {[
-                { label: "Positions", value: String(summary?.holdings_count ?? 0) },
-                { label: "Monitored", value: String(summary?.theses_active ?? 0) },
-                ...(reviewCount > 0 ? [{ label: "Review", value: String(reviewCount), accent: true }] : []),
-                ...(missingThesisCount > 0 ? [{ label: "No thesis", value: String(missingThesisCount), accent: true }] : []),
-              ].map(({ label, value, accent }) => (
-                <div key={label} className="text-center">
-                  <p className={`font-mono text-base tabular-nums font-medium ${accent ? "text-primary" : "text-foreground/80"}`}>
-                    {value}
+            <div className="mt-6 grid gap-5 lg:grid-cols-[minmax(0,1fr)_minmax(17rem,22rem)]">
+              <div className="space-y-3">
+                <div className={`border px-4 py-4 ${dashboardState.tone}`}>
+                  <p className="font-mono text-[10px] uppercase tracking-[0.18em] text-foreground/60">
+                    {dashboardState.eyebrow}
                   </p>
-                  <p className="font-mono text-[10px] uppercase tracking-[0.14em] text-muted-foreground mt-0.5">
-                    {label}
+                  <p className="mt-2 font-display text-[1.55rem] italic leading-tight text-foreground sm:text-[1.8rem]">
+                    {dashboardState.title}
                   </p>
+                  <p className="mt-2 max-w-2xl font-sans text-sm leading-relaxed text-foreground/85">
+                    {dashboardState.body}
+                  </p>
+                  {dashboardStatePrimaryCta && (
+                    <Link
+                      href={dashboardStatePrimaryCta.href}
+                      className="mt-4 inline-flex items-center gap-2 font-mono text-[10px] uppercase tracking-[0.16em] text-primary transition-colors hover:text-primary/75"
+                    >
+                      {dashboardStatePrimaryCta.label.replace(" →", "")}
+                      <ArrowRight className="h-3.5 w-3.5" />
+                    </Link>
+                  )}
                 </div>
-              ))}
-            </div>
-          </div>
 
-          {/* Right: digest + actions */}
-          <div className="flex items-center gap-3 flex-wrap">
-            {needsAttention[0] && (
-              <>
-                <div className="hidden xl:flex flex-col text-right max-w-[220px]">
-                  <span className="font-mono text-[10px] uppercase tracking-[0.12em] text-muted-foreground/70">
-                    Hottest assumption
-                  </span>
-                  <span className="font-sans text-xs text-foreground/80 truncate">
-                    {cleanTicker(needsAttention[0].ticker)} · {needsAttention[0].assumption_label?.trim() || (onboardingState?.investor_profile === "hearsay_driven" ? "Original story" : "Core assumption")}
-                  </span>
+                <div className="grid gap-3 sm:grid-cols-3">
+                  <div className="border border-border/80 bg-background/75 p-4">
+                    <p className="font-mono text-[10px] uppercase tracking-[0.16em] text-muted-foreground">
+                      Written
+                    </p>
+                    <p className="mt-2 font-display text-[1.6rem] italic leading-none text-foreground">
+                      {monitoredCoverage}%
+                    </p>
+                    <p className="mt-2 font-sans text-xs leading-relaxed text-muted-foreground">
+                      {monitoredCount} of {holdingsCount} positions have a thesis on file.
+                    </p>
+                  </div>
+                  <div className="border border-border/80 bg-background/75 p-4">
+                    <p className="font-mono text-[10px] uppercase tracking-[0.16em] text-muted-foreground">
+                      Review
+                    </p>
+                    <p className="mt-2 font-display text-[1.6rem] italic leading-none text-foreground">
+                      {reviewCount > 0 ? reviewCount : totalAlertCount}
+                    </p>
+                    <p className="mt-2 font-sans text-xs leading-relaxed text-muted-foreground">
+                      {reviewCount > 0
+                        ? `${reviewCount} ${reviewCount === 1 ? "position needs" : "positions need"} a verdict.`
+                        : totalAlertCount > 0
+                          ? `${totalAlertCount} monitored positions are under watch.`
+                          : "No active pressure right now."}
+                    </p>
+                  </div>
+                  <div className="border border-border/80 bg-background/75 p-4">
+                    <p className="font-mono text-[10px] uppercase tracking-[0.16em] text-muted-foreground">
+                      Stable
+                    </p>
+                    <p className="mt-2 font-display text-[1.6rem] italic leading-none text-foreground">
+                      {quietCount}
+                    </p>
+                    <p className="mt-2 font-sans text-xs leading-relaxed text-muted-foreground">
+                      Positions with a usable thesis and no active pressure.
+                    </p>
+                  </div>
                 </div>
-                <div className="h-4 w-px bg-border hidden xl:block" />
-              </>
-            )}
-            {pulse?.next_digest_at && (
-              <DigestCountdown nextDigestAt={pulse.next_digest_at} />
-            )}
-            <div className="h-4 w-px bg-border hidden sm:block" />
-            <Link href="/dashboard/simulate">
-              <button className="font-mono text-[10px] uppercase tracking-[0.14em] text-muted-foreground hover:text-foreground transition-colors border border-border px-3 py-1.5 hover:border-foreground/30">
-                Simulate
-              </button>
-            </Link>
-            <Link href="/connect?return=dashboard">
-              <button className="font-mono text-[10px] uppercase tracking-[0.14em] text-muted-foreground hover:text-foreground transition-colors border border-border px-3 py-1.5 hover:border-foreground/30">
-                Import
-              </button>
-            </Link>
-            <button
-              onClick={() => setShowAddForm((v) => !v)}
-              className={`font-mono text-[10px] uppercase tracking-[0.14em] transition-colors border px-3 py-1.5 ${
-                showAddForm
-                  ? "text-muted-foreground border-border"
-                  : "text-primary border-primary/30 hover:border-primary/60"
-              }`}
-            >
-              {showAddForm ? "× Cancel" : "+ Position"}
-            </button>
-          </div>
+              </div>
+
+              <div className="grid gap-3">
+                <div className="border border-border/80 bg-background/75 p-4">
+                  <div className="flex items-start gap-3">
+                    <CircleAlert className="mt-0.5 h-4 w-4 text-primary" />
+                    <div className="space-y-1">
+                      <p className="font-mono text-[10px] uppercase tracking-[0.16em] text-muted-foreground">
+                        Weakest area
+                      </p>
+                      <p className="font-sans text-sm leading-relaxed text-foreground/85">
+                        {thesisQualityHeadline}
+                      </p>
+                      <p className="font-sans text-xs leading-relaxed text-muted-foreground">
+                        {thesisQualityDetail}
+                      </p>
+                      {thesisQualityCta && (
+                        <Link
+                          href={thesisQualityCta}
+                          className="inline-flex items-center gap-2 font-mono text-[10px] uppercase tracking-[0.15em] text-primary transition-colors hover:text-primary/75"
+                        >
+                          Open weakest position
+                          <ArrowRight className="h-3.5 w-3.5" />
+                        </Link>
+                      )}
+                    </div>
+                  </div>
+                </div>
+
+                <div className="border border-border/80 bg-background/75 p-4">
+                  <div className="flex items-start gap-3">
+                    <BellRing className="mt-0.5 h-4 w-4 text-primary" />
+                    <div className="space-y-2">
+                      <p className="font-mono text-[10px] uppercase tracking-[0.16em] text-muted-foreground">
+                        Digest
+                      </p>
+                      {pulse?.next_digest_at ? (
+                        <DigestCountdown nextDigestAt={pulse.next_digest_at} />
+                      ) : (
+                        <p className="font-sans text-sm leading-relaxed text-foreground/80">
+                          Digest timing appears once monitoring is active.
+                        </p>
+                      )}
+                    </div>
+                  </div>
+                </div>
+
+                <div className="border border-border/80 bg-background/75 p-4">
+                  <div className="flex items-start gap-3">
+                    {missingThesisCount > 0 ? (
+                      <FilePenLine className="mt-0.5 h-4 w-4 text-primary" />
+                    ) : nearTermEarnings ? (
+                      <CalendarClock className="mt-0.5 h-4 w-4 text-primary" />
+                    ) : (
+                      <ShieldCheck className="mt-0.5 h-4 w-4 text-primary" />
+                    )}
+                    <div className="space-y-1">
+                      <p className="font-mono text-[10px] uppercase tracking-[0.16em] text-muted-foreground">
+                        Next up
+                      </p>
+                      <p className="font-sans text-sm leading-relaxed text-foreground/85">
+                        {missingThesisCount > 0
+                          ? `${missingThesisCount} ${missingThesisCount === 1 ? "position still needs" : "positions still need"} a written thesis.`
+                          : nearTermEarnings
+                            ? `${cleanTicker(nearTermEarnings.ticker)} reports ${daysUntilLabel(nearTermEarnings.days_until)}.`
+                            : "The near-term calendar is quiet."}
+                      </p>
+                    </div>
+                  </div>
+                </div>
+
+                <div className="border border-border/80 bg-background/75 p-4">
+                  <div className="space-y-2">
+                      <p className="font-mono text-[10px] uppercase tracking-[0.16em] text-muted-foreground">
+                        Quality mix
+                      </p>
+                    <div className="grid gap-2 sm:grid-cols-2">
+                      <div className="flex items-center justify-between border border-border/60 bg-background/70 px-3 py-2">
+                        <span className="font-sans text-xs text-foreground/80">Sharp</span>
+                        <span className="font-mono text-[10px] text-emerald-700">{thesisQualityStats.sharp}</span>
+                      </div>
+                      <div className="flex items-center justify-between border border-border/60 bg-background/70 px-3 py-2">
+                        <span className="font-sans text-xs text-foreground/80">Stale</span>
+                        <span className="font-mono text-[10px] text-amber-700">{thesisQualityStats.stale}</span>
+                      </div>
+                      <div className="flex items-center justify-between border border-border/60 bg-background/70 px-3 py-2">
+                        <span className="font-sans text-xs text-foreground/80">Weak</span>
+                        <span className="font-mono text-[10px] text-amber-700">{thesisQualityStats.weak}</span>
+                      </div>
+                      <div className="flex items-center justify-between border border-border/60 bg-background/70 px-3 py-2">
+                        <span className="font-sans text-xs text-foreground/80">Workable</span>
+                        <span className="font-mono text-[10px] text-foreground/70">{thesisQualityStats.workable}</span>
+                      </div>
+                      <div className="flex items-center justify-between border border-border/60 bg-background/70 px-3 py-2">
+                        <span className="font-sans text-xs text-foreground/80">Missing</span>
+                        <span className="font-mono text-[10px] text-red-600">{thesisQualityStats.missing}</span>
+                      </div>
+                    </div>
+                  </div>
+                </div>
+              </div>
+            </div>
+          </section>
         </div>
       </motion.div>
 
       {/* ── Banners ─────────────────────────────────────────────────── */}
-      <div className="px-4 sm:px-8 pt-3 space-y-2 empty:hidden">
+      <div className="px-4 pt-3 sm:px-8 space-y-2 empty:hidden">
         {/* Only one contextual banner at a time — recent review takes priority over activation */}
         {showActivationBanner && !showRecentReviewBanner && (
           <div className="flex items-center justify-between gap-4 border border-emerald-500/20 bg-emerald-500/8 px-5 py-3">
@@ -767,9 +959,11 @@ export default function DashboardPage() {
           </div>
         )}
 
-        <ErrorBoundary>
-          <OnboardingBanner onVisibilityChange={setOnboardingBannerVisible} />
-        </ErrorBoundary>
+        {shouldRenderOnboardingBanner && (
+          <ErrorBoundary>
+            <OnboardingBanner onVisibilityChange={setOnboardingBannerVisible} />
+          </ErrorBoundary>
+        )}
 
         {(() => {
           const noTheses = (summary?.theses_active ?? 0) === 0;
@@ -828,131 +1022,122 @@ export default function DashboardPage() {
             transition={{ duration: 0.2 }}
             className="overflow-hidden px-4 sm:px-8 pt-3"
           >
-            <div className="border border-border bg-card p-5">
+            <div className="product-panel p-5">
               <QuickAddHolding onAdd={() => { setShowAddForm(false); void refresh(); }} />
             </div>
           </motion.div>
         )}
       </AnimatePresence>
 
-      {/* ── Attention section ────────────────────────────────────────── */}
-      <div className="px-4 sm:px-8 pt-5">
-        <motion.div
-          initial={{ opacity: 0, y: -4 }}
-          animate={{ opacity: 1, y: 0 }}
-          transition={{ duration: 0.25 }}
-          className={`border px-5 py-4 space-y-2 ${dashboardState.tone}`}
-        >
-          <p className="font-mono text-[10px] uppercase tracking-[0.18em] text-foreground/60">
-            {dashboardState.eyebrow}
-          </p>
-          <p className="font-display italic text-[1.4rem] leading-tight text-foreground">
-            {dashboardState.title}
-          </p>
-          <p className="font-sans text-sm text-foreground/85 leading-relaxed">
-            {dashboardState.body}
-          </p>
-          {dashboardStatePrimaryCta && (
-            <Link
-              href={dashboardStatePrimaryCta.href}
-              className="inline-block font-mono text-[10px] uppercase tracking-[0.15em] text-primary hover:text-primary/75 transition-colors"
-            >
-              {dashboardStatePrimaryCta.label}
-            </Link>
-          )}
-        </motion.div>
-      </div>
-
-<AnimatePresence>
+      <AnimatePresence>
         {needsAttention.length > 0 && (
           <motion.div
+            id="live-pressure"
             initial={{ opacity: 0, y: -4 }}
             animate={{ opacity: 1, y: 0 }}
             transition={{ duration: 0.3, delay: 0.1 }}
-            className="px-4 sm:px-8 pt-5"
+            className="px-4 sm:px-8 pt-5 scroll-mt-24"
           >
-            <div className="flex items-center gap-3 mb-3">
-              <p className="font-mono text-[10px] uppercase tracking-[0.18em] text-muted-foreground">
-                Needs attention
-              </p>
-              <span className="font-mono text-[10px] text-primary/60">({needsAttention.length})</span>
-            </div>
-            <ErrorBoundary>
-              <div className="flex gap-3 overflow-x-auto pb-1 scrollbar-hide">
-                {needsAttention.map((p, i) => {
-                  const holding = holdings.find((h) => h.id === p.holding_id);
-                  if (!holding) return null;
-                  return (
-                    <AttentionCard
-                      key={p.holding_id}
-                      holding={holding}
-                      pulse={p}
-                      investorProfile={onboardingState?.investor_profile ?? null}
-                      index={i}
-                    />
-                  );
-                })}
+            <div className="product-panel p-4 sm:p-5">
+              <div className="mb-4 flex items-center justify-between gap-3">
+                <div>
+                  <p className="font-mono text-[10px] uppercase tracking-[0.18em] text-muted-foreground">
+                    Live pressure
+                  </p>
+                  <p className="mt-1 font-sans text-sm text-foreground/80">
+                    Fresh evidence touching a written thesis.
+                  </p>
+                </div>
+                <span className="border border-primary/20 bg-primary/6 px-2 py-1 font-mono text-[10px] uppercase tracking-[0.14em] text-primary/75">
+                  {needsAttention.length} live
+                </span>
               </div>
-            </ErrorBoundary>
+              <ErrorBoundary>
+                <div className="flex gap-3 overflow-x-auto pb-1 scrollbar-hide">
+                  {needsAttention.map((p, i) => {
+                    const holding = holdings.find((h) => h.id === p.holding_id);
+                    if (!holding) return null;
+                    return (
+                      <AttentionCard
+                        key={p.holding_id}
+                        holding={holding}
+                        pulse={p}
+                        investorProfile={onboardingState?.investor_profile ?? null}
+                        index={i}
+                      />
+                    );
+                  })}
+                </div>
+              </ErrorBoundary>
+            </div>
           </motion.div>
         )}
       </AnimatePresence>
 
       {/* ── Positions grid ───────────────────────────────────────────── */}
-      <div className="px-4 sm:px-8 pt-6 pb-8 flex-1">
-        <div className="flex items-center justify-between mb-4">
-          <div className="flex items-center gap-2">
-            <p className="font-mono text-[10px] uppercase tracking-[0.18em] text-muted-foreground">
-              All positions
+      <div id="positions" className="px-4 sm:px-8 pt-6 pb-8 flex-1 scroll-mt-24">
+        <div className="product-panel p-4 sm:p-5">
+          <div className="mb-4 flex items-center justify-between gap-4">
+            <div>
+              <div className="flex items-center gap-2">
+                <p className="font-mono text-[10px] uppercase tracking-[0.18em] text-muted-foreground">
+                  Positions
+                </p>
+                <span className="font-mono text-[10px] text-primary/50">({holdings.length})</span>
+              </div>
+              <p className="mt-1 font-sans text-sm text-foreground/80">
+                Sorted by urgency, then value.
+              </p>
+            </div>
+            <p className="hidden font-mono text-[10px] uppercase tracking-[0.12em] text-muted-foreground/40 sm:block">
+              Urgency first
             </p>
-            <span className="font-mono text-[10px] text-primary/50">({holdings.length})</span>
           </div>
-          <p className="font-mono text-[10px] uppercase tracking-[0.12em] text-muted-foreground/40 hidden sm:block">
-            Sorted by status · value
-          </p>
-        </div>
 
-        <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-4 xl:grid-cols-5 gap-3">
-          {sortedHoldings.map((h, i) => (
-            <PositionCard
-              key={h.id}
-              holding={h}
-              thesis={thesesByHolding[h.id]}
-              pulse={pulseByHolding[h.id]}
-              earnings={earningsByHolding[h.id]}
-              livePrice={livePrices[h.ticker]}
-              totalValue={summary?.total_value ?? 0}
-              onGenerateDraft={() => handleGenerateDraft(h.id, h.ticker)}
-              investorProfile={onboardingState?.investor_profile ?? null}
-              index={i}
-            />
-          ))}
+          <div className="grid grid-cols-1 gap-3 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 2xl:grid-cols-5">
+            {sortedHoldings.map((h, i) => (
+              <PositionCard
+                key={h.id}
+                holding={h}
+                thesis={thesesByHolding[h.id]}
+                pulse={pulseByHolding[h.id]}
+                earnings={earningsByHolding[h.id]}
+                livePrice={livePrices[h.ticker]}
+                totalValue={summary?.total_value ?? 0}
+                onGenerateDraft={() => handleGenerateDraft(h.id, h.ticker)}
+                investorProfile={onboardingState?.investor_profile ?? null}
+                index={i}
+              />
+            ))}
+          </div>
         </div>
       </div>
 
       {/* ── Footer strip ─────────────────────────────────────────────── */}
       {(visibleEarnings.length > 0) && (
         <ErrorBoundary>
-          <div className="border-t border-border bg-card px-4 sm:px-8 py-3">
-            <div className="flex items-center gap-6 overflow-x-auto">
-              <p className="font-mono text-[10px] uppercase tracking-[0.18em] text-muted-foreground shrink-0">
-                Upcoming earnings
-              </p>
-              <div className="flex items-center gap-4">
-                {visibleEarnings.slice(0, 6).map((e) => (
-                  <Link
-                    key={e.holding_id}
-                    href={`/dashboard/positions/${e.ticker}`}
-                    className="flex items-center gap-2 group shrink-0"
-                  >
-                    <span className="font-mono text-[10px] font-medium text-primary/70 group-hover:text-primary transition-colors">
-                      {cleanTicker(e.ticker)}
-                    </span>
-                    <span className="font-mono text-[10px] text-muted-foreground">
-                      {e.days_until === 0 ? "today" : e.days_until === 1 ? "tomorrow" : `${e.days_until}d`}
-                    </span>
-                  </Link>
-                ))}
+          <div className="px-4 sm:px-8">
+            <div className="product-panel mb-2 px-4 py-3 sm:px-5">
+              <div className="flex items-center gap-6 overflow-x-auto">
+                <p className="shrink-0 font-mono text-[10px] uppercase tracking-[0.18em] text-muted-foreground">
+                  Upcoming earnings
+                </p>
+                <div className="flex items-center gap-4">
+                  {visibleEarnings.slice(0, 6).map((e) => (
+                    <Link
+                      key={e.holding_id}
+                      href={`/dashboard/positions/${e.ticker}`}
+                      className="group flex items-center gap-2 shrink-0"
+                    >
+                      <span className="font-mono text-[10px] font-medium text-primary/70 transition-colors group-hover:text-primary">
+                        {cleanTicker(e.ticker)}
+                      </span>
+                      <span className="font-mono text-[10px] text-muted-foreground">
+                        {e.days_until === 0 ? "today" : e.days_until === 1 ? "tomorrow" : `${e.days_until}d`}
+                      </span>
+                    </Link>
+                  ))}
+                </div>
               </div>
             </div>
           </div>

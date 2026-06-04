@@ -15,6 +15,28 @@ interface TickerSearchProps {
   onSelect: (ticker: string, name: string) => void;
 }
 
+function getSearchPriority(query: string, result: TickerResult) {
+  const normalizedQuery = query.trim().toUpperCase();
+  const ticker = result.ticker.toUpperCase();
+  const name = result.name.toUpperCase();
+  const exchange = result.exchange.toUpperCase();
+
+  let score = 0;
+
+  if (ticker === normalizedQuery) score += 120;
+  else if (ticker.startsWith(normalizedQuery)) score += 55;
+
+  if (name === normalizedQuery) score += 90;
+  else if (name.startsWith(normalizedQuery)) score += 28;
+  else if (name.includes(normalizedQuery)) score += 10;
+
+  if (["NMS", "NYQ", "NGM", "ASE"].includes(exchange)) score += 8;
+  if (ticker.includes(".")) score -= 6;
+  if (/\b(ETF|TRUST|FUND|DAILY|BULL|BEAR|SHORT|LONG|2X|3X)\b/i.test(result.name)) score -= 18;
+
+  return score;
+}
+
 export function TickerSearch({ value, onSelect }: TickerSearchProps) {
   const [query, setQuery] = useState(value);
   const [results, setResults] = useState<TickerResult[]>([]);
@@ -33,8 +55,11 @@ export function TickerSearch({ value, onSelect }: TickerSearchProps) {
     debounceRef.current = setTimeout(async () => {
       try {
         const data = await api.get<TickerResult[]>(`/api/portfolio/search?q=${encodeURIComponent(q)}`);
-        setResults(data);
-        setOpen(data.length > 0);
+        const ranked = [...data]
+          .sort((a, b) => getSearchPriority(q, b) - getSearchPriority(q, a))
+          .slice(0, 6);
+        setResults(ranked);
+        setOpen(ranked.length > 0);
         setActiveIndex(-1);
       } catch {
         setResults([]);
@@ -44,9 +69,12 @@ export function TickerSearch({ value, onSelect }: TickerSearchProps) {
   }, []);
 
   useEffect(() => {
-    search(query);
-    return () => { if (debounceRef.current) clearTimeout(debounceRef.current); };
-  }, [query, search]);
+    return () => {
+      if (debounceRef.current) {
+        clearTimeout(debounceRef.current);
+      }
+    };
+  }, []);
 
   useEffect(() => {
     function handleClickOutside(e: MouseEvent) {
@@ -85,26 +113,35 @@ export function TickerSearch({ value, onSelect }: TickerSearchProps) {
       <Input
         placeholder="NVDA or Nvidia"
         value={query}
-        onChange={(e) => setQuery(e.target.value.toUpperCase())}
+        onChange={(e) => {
+          const nextQuery = e.target.value.toUpperCase();
+          setQuery(nextQuery);
+          search(nextQuery);
+        }}
         onKeyDown={handleKeyDown}
-        className="h-8 text-sm"
+        className="h-11 text-base"
         autoComplete="off"
         spellCheck={false}
       />
       {open && (
-        <div className="absolute left-0 top-full z-50 mt-1 min-w-[240px] rounded-md border bg-background shadow-md">
+        <div className="absolute left-0 top-full z-50 mt-2 min-w-[280px] overflow-hidden border border-border/70 bg-background shadow-[0_20px_50px_rgba(33,24,17,0.12)]">
+          <div className="border-b border-border/60 px-4 py-2">
+            <p className="font-mono text-[9px] uppercase tracking-[0.18em] text-muted-foreground/70">
+              Top matches
+            </p>
+          </div>
           {results.map((result, i) => (
             <button
               key={result.ticker}
               type="button"
-              className={`flex w-full items-baseline gap-2 px-3 py-2 text-left text-sm transition-colors hover:bg-muted ${i === activeIndex ? "bg-muted" : ""}`}
+              className={`flex w-full items-baseline gap-3 px-4 py-3 text-left text-sm transition-colors hover:bg-muted ${i === activeIndex ? "bg-muted" : ""}`}
               onMouseDown={(e) => { e.preventDefault(); select(result); }}
               onMouseEnter={() => setActiveIndex(i)}
             >
-              <span className="font-mono text-xs font-semibold">{result.ticker}</span>
-              <span className="truncate text-xs text-muted-foreground">{result.name}</span>
+              <span className="font-mono text-[11px] font-semibold uppercase tracking-[0.12em]">{result.ticker}</span>
+              <span className="truncate text-sm text-muted-foreground">{result.name}</span>
               {result.exchange && (
-                <span className="ml-auto shrink-0 text-[10px] text-muted-foreground/60">{result.exchange}</span>
+                <span className="ml-auto shrink-0 font-mono text-[10px] text-muted-foreground/60">{result.exchange}</span>
               )}
             </button>
           ))}

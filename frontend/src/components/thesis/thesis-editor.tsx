@@ -5,7 +5,6 @@ import { Button } from "@/components/ui/button";
 import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
-import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { getErrorMessage } from "@/lib/errors";
 import type { Thesis, ThesisAssistResponse } from "@/types";
 
@@ -134,13 +133,13 @@ export function ThesisEditor({ thesis, investorProfile, mode = "write", onSave, 
       ? {
           title: "Rewrite the reason",
           helperTitle: "What to rewrite this time",
-          helperBody: "Keep what is still true, but remove the part of the story that already broke. The next version should make it obvious why you still own this and what would prove the new reason wrong.",
+          helperBody: "Keep what still holds. Cut what already broke. The next version should say plainly why you still own this and what would break it again.",
           saveLabel: "Save rewritten reason",
         }
       : {
           title: "Rewrite the thesis",
           helperTitle: "What to rewrite this time",
-          helperBody: "Keep what is still true, but remove the assumption that already broke. The next version should make it obvious why you still own this and what would invalidate the new thesis.",
+          helperBody: "Keep what still holds. Cut the assumption that broke. The next version should say plainly why you still own this and what would invalidate it.",
           saveLabel: "Save rewritten thesis",
         }
     : mode === "tighten"
@@ -148,13 +147,13 @@ export function ThesisEditor({ thesis, investorProfile, mode = "write", onSave, 
         ? {
             title: "Tighten the reason",
             helperTitle: "What to tighten here",
-            helperBody: "Make the business driver clearer, make the break condition sharper, and remove any language that still sounds like a loose story.",
+            helperBody: "Make the business driver clearer, sharpen the break condition, and strip out loose story language.",
             saveLabel: "Save tighter reason",
           }
         : {
             title: "Tighten the thesis",
             helperTitle: "What to tighten here",
-            helperBody: "Make the core assumption more specific, sharpen the break condition, and cut wording we can't tie to real evidence.",
+            helperBody: "Make the core assumption more specific, sharpen the break condition, and cut wording you cannot tie to evidence.",
             saveLabel: "Save tighter thesis",
           }
       : mode === "first_write"
@@ -162,13 +161,13 @@ export function ThesisEditor({ thesis, investorProfile, mode = "write", onSave, 
           ? {
               title: "Write the real reason",
               helperTitle: "Turn the story into something testable",
-              helperBody: "Start with why it caught your eye, then nail what would prove you wrong. Messy is fine — vague isn't. We'll watch for evidence against what you write and nudge you to revisit on a schedule, not only when you're rattled.",
+              helperBody: "Start with why it caught your eye, then name what would prove you wrong. Messy is fine. Vague is not.",
               saveLabel: "Save reason and start watching",
             }
           : {
               title: "Write the thesis",
               helperTitle: "Make the position monitorable",
-              helperBody: "Why you own it, what has to stay true, and what would make you sell. Not a sell-side note — a short case we can check against news and earnings, with reminders to re-read it before the tape does your thinking for you.",
+              helperBody: "Write why you own it, what must stay true, and what would make you sell. Keep it short enough to re-read when evidence lands.",
               saveLabel: "Save thesis and start watching",
             }
         : {
@@ -182,6 +181,51 @@ export function ThesisEditor({ thesis, investorProfile, mode = "write", onSave, 
     ...baseCopy,
     ...modeCopy,
   };
+  const completionChecklist = [
+    {
+      label: investorProfile === "hearsay_driven" ? "Own the story" : "State the core case",
+      done: whyOwnIt.trim().length >= 30,
+      detail:
+        investorProfile === "hearsay_driven"
+          ? "Name the business reason you actually believe."
+          : "Name the belief that makes this worth owning.",
+    },
+    {
+      label: "Name what must stay true",
+      done: mustRemainTrue.trim().length >= 20,
+      detail: "This is what monitoring will defend.",
+    },
+    {
+      label: "Define the break condition",
+      done: changeMind.trim().length >= 20,
+      detail: "Say what evidence should force a decision.",
+    },
+  ];
+  const completedChecklistCount = completionChecklist.filter((item) => item.done).length;
+  const monitorabilityTone =
+    monitorability === "high"
+      ? "text-emerald-700"
+      : monitorability === "medium"
+        ? "text-amber-700"
+        : monitorability === "low"
+          ? "text-red-600"
+          : "text-muted-foreground";
+  const workflowEyebrow =
+    mode === "rewrite"
+      ? investorProfile === "hearsay_driven"
+        ? "Rewrite the operating case"
+        : "Rewrite the operating thesis"
+      : mode === "tighten"
+        ? investorProfile === "hearsay_driven"
+          ? "Sharpen the written reason"
+          : "Sharpen the written thesis"
+      : mode === "first_write"
+        ? investorProfile === "hearsay_driven"
+            ? "Write the operating reason"
+            : "Write the operating thesis"
+          : investorProfile === "hearsay_driven"
+            ? "Position operating memo"
+            : "Position thesis memo";
 
   const handleAssist = async () => {
     setAssisting(true);
@@ -205,150 +249,249 @@ export function ThesisEditor({ thesis, investorProfile, mode = "write", onSave, 
   };
 
   return (
-    <Card>
-      <CardHeader>
-        <CardTitle className="text-base">{copy.title}</CardTitle>
-      </CardHeader>
-      <CardContent className="space-y-4">
-        <div className="rounded-xl border bg-muted/30 p-4">
-          <p className="text-sm font-medium">{copy.helperTitle}</p>
-          <p className="mt-1 text-sm text-muted-foreground">
-            {copy.helperBody}
-          </p>
-        </div>
+    <section className="product-panel overflow-hidden">
+      <div className="grid gap-0 lg:grid-cols-[minmax(0,1.2fr)_minmax(18rem,22rem)]">
+        <div className="space-y-6 p-5 sm:p-6">
+          <div className="space-y-4">
+            <div className="space-y-2">
+              <p className="font-mono text-[10px] uppercase tracking-[0.2em] text-primary">
+                {workflowEyebrow}
+              </p>
+              <div className="space-y-2">
+                <h2 className="font-display text-[1.8rem] italic leading-tight text-foreground sm:text-[2.1rem]">
+                  {copy.title}
+                </h2>
+                <p className="max-w-2xl font-sans text-sm leading-relaxed text-foreground/80">
+                  {copy.helperBody}
+                </p>
+              </div>
+            </div>
 
-        {isAiDraft && (
-          <div className="flex items-center justify-between gap-4 rounded-xl border border-primary/20 bg-primary/5 px-4 py-3">
-            <p className="font-sans text-sm text-foreground/75">
-              We prepared a draft based on your position data.
-            </p>
-            <button
-              type="button"
-              onClick={() => {
-                setWhyOwnIt(asText(thesis?.why_own_it));
-                setMustRemainTrue(asText(thesis?.must_remain_true));
-                setChangeMind(asText(thesis?.what_would_change_my_mind));
-              }}
-              className="font-mono text-[10px] uppercase tracking-[0.15em] whitespace-nowrap text-primary hover:text-primary/80 transition-colors"
+            <div className="grid gap-3 sm:grid-cols-3">
+              {completionChecklist.map((item) => (
+                <div key={item.label} className="border border-border/70 bg-background/75 p-4">
+                  <p className={`font-mono text-[10px] uppercase tracking-[0.16em] ${item.done ? "text-emerald-700" : "text-muted-foreground"}`}>
+                    {item.done ? "Ready" : "Needed"}
+                  </p>
+                  <p className="mt-2 font-sans text-sm text-foreground">{item.label}</p>
+                  <p className="mt-1 font-sans text-xs leading-relaxed text-muted-foreground">
+                    {item.detail}
+                  </p>
+                </div>
+              ))}
+            </div>
+          </div>
+
+          {isAiDraft && (
+            <div className="flex flex-col gap-3 border border-primary/20 bg-primary/5 px-4 py-4 sm:flex-row sm:items-center sm:justify-between">
+              <div className="space-y-1">
+                <p className="font-mono text-[10px] uppercase tracking-[0.18em] text-primary">
+                  Draft ready
+                </p>
+                <p className="font-sans text-sm leading-relaxed text-foreground/75">
+                  We prepared a draft from the position context. Load it, tighten it, and make it yours.
+                </p>
+              </div>
+              <button
+                type="button"
+                onClick={() => {
+                  setWhyOwnIt(asText(thesis?.why_own_it));
+                  setMustRemainTrue(asText(thesis?.must_remain_true));
+                  setChangeMind(asText(thesis?.what_would_change_my_mind));
+                }}
+                className="font-mono text-[10px] uppercase tracking-[0.15em] whitespace-nowrap text-primary hover:text-primary/80 transition-colors"
+              >
+                Load starting point
+              </button>
+            </div>
+          )}
+
+          <div className="space-y-5">
+            <div className="space-y-2">
+              <Label>{copy.why}</Label>
+              <Textarea
+                value={whyOwnIt}
+                onChange={(e) => setWhyOwnIt(e.target.value)}
+                rows={5}
+                placeholder={copy.whyPlaceholder}
+                className="min-h-32 bg-background/85"
+              />
+            </div>
+
+            <div className="grid gap-5 lg:grid-cols-2">
+              <div className="space-y-2">
+                <Label>{copy.must}</Label>
+                <Textarea
+                  value={mustRemainTrue}
+                  onChange={(e) => setMustRemainTrue(e.target.value)}
+                  rows={5}
+                  placeholder={copy.mustPlaceholder}
+                  className="min-h-28 bg-background/85"
+                />
+              </div>
+
+              <div className="space-y-2">
+                <Label>{copy.breaks}</Label>
+                <Textarea
+                  value={changeMind}
+                  onChange={(e) => setChangeMind(e.target.value)}
+                  rows={5}
+                  placeholder={copy.breaksPlaceholder}
+                  className="min-h-28 bg-background/85"
+                />
+              </div>
+            </div>
+
+            <div className="grid gap-5 lg:grid-cols-[minmax(0,12rem)_minmax(0,1fr)]">
+              <div className="space-y-2">
+                <Label>Confidence</Label>
+                <Select value={confidence} onValueChange={(v) => v && setConfidence(v as "high" | "medium" | "low")}>
+                  <SelectTrigger className="w-full bg-background/85">
+                    <SelectValue />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="high">High</SelectItem>
+                    <SelectItem value="medium">Medium</SelectItem>
+                    <SelectItem value="low">Low</SelectItem>
+                  </SelectContent>
+                </Select>
+              </div>
+
+              <div className="space-y-2">
+                <Label>AI Assist</Label>
+                <div className="flex flex-wrap items-center gap-3">
+                  <Button type="button" variant="outline" onClick={handleAssist} disabled={assisting}>
+                    {assisting ? "Thinking..." : whyOwnIt.trim().length === 0 ? "Draft with AI" : "Sharpen with AI"}
+                  </Button>
+                  <p className="font-sans text-xs leading-relaxed text-muted-foreground">
+                    Tighten wording and suggest monitorable cues.
+                  </p>
+                </div>
+                {assistError && <p className="text-sm text-red-500">{assistError}</p>}
+              </div>
+            </div>
+          </div>
+
+          <div className="flex flex-wrap items-center gap-3 border-t border-border/50 pt-5">
+            <Button
+              onClick={() =>
+                onSave({
+                  thesis_kind: "company",
+                  why_own_it: whyOwnIt,
+                  must_remain_true: mustRemainTrue || null,
+                  what_would_change_my_mind: changeMind || null,
+                  confidence,
+                  review_cadence_days: thesis?.review_cadence_days ?? 7,
+                  ai_summary: aiSummary || null,
+                  interpretation,
+                  source: aiSummary ? "ai_assisted" : "user",
+                  status: "active",
+                })
+              }
+              disabled={whyOwnIt.trim().length === 0}
             >
-              Load as starting point →
-            </button>
-          </div>
-        )}
-
-        <div className="space-y-2">
-          <Label>{copy.why}</Label>
-          <Textarea
-            value={whyOwnIt}
-            onChange={(e) => setWhyOwnIt(e.target.value)}
-            rows={4}
-            placeholder={copy.whyPlaceholder}
-          />
-        </div>
-
-        <div className="space-y-2">
-          <Label>{copy.must}</Label>
-          <Textarea
-            value={mustRemainTrue}
-            onChange={(e) => setMustRemainTrue(e.target.value)}
-            rows={3}
-            placeholder={copy.mustPlaceholder}
-          />
-        </div>
-
-        <div className="space-y-2">
-          <Label>{copy.breaks}</Label>
-          <Textarea
-            value={changeMind}
-            onChange={(e) => setChangeMind(e.target.value)}
-            rows={3}
-            placeholder={copy.breaksPlaceholder}
-          />
-        </div>
-
-        <div className="space-y-2">
-          <Label>Confidence</Label>
-          <Select value={confidence} onValueChange={(v) => v && setConfidence(v as "high" | "medium" | "low")}>
-            <SelectTrigger className="w-40"><SelectValue /></SelectTrigger>
-            <SelectContent>
-              <SelectItem value="high">High</SelectItem>
-              <SelectItem value="medium">Medium</SelectItem>
-              <SelectItem value="low">Low</SelectItem>
-            </SelectContent>
-          </Select>
-        </div>
-
-        <div className="space-y-2">
-          <Label>AI Assist</Label>
-          <div className="flex gap-2">
-            <Button type="button" variant="outline" onClick={handleAssist} disabled={assisting}>
-              {assisting ? "Thinking..." : whyOwnIt.trim().length === 0 ? "Draft with AI" : "Refine with AI"}
+              {copy.saveLabel}
             </Button>
+            <Button variant="outline" onClick={onCancel}>Cancel</Button>
+            <p className="font-sans text-xs leading-relaxed text-muted-foreground">
+              {completedChecklistCount === completionChecklist.length
+                ? "This is specific enough to monitor cleanly."
+                : `Complete ${completionChecklist.length - completedChecklistCount} more section${completionChecklist.length - completedChecklistCount === 1 ? "" : "s"} to make this easier to monitor.`}
+            </p>
           </div>
-          {assistError && <p className="text-sm text-red-500">{assistError}</p>}
-          {aiSummary && (
-            <div className="rounded-xl border bg-muted/30 p-4">
-              <p className="text-sm font-medium">AI Summary</p>
-              <p className="mt-1 text-sm text-muted-foreground">{aiSummary}</p>
-              {(monitorability || labels.length > 0 || watchHintDescriptions.length > 0 || ambiguityNote) && (
-                <div className="mt-4 space-y-3 border-t pt-4">
-                  <div className="flex flex-wrap items-center gap-2">
+        </div>
+
+        <aside className="border-t border-border/60 bg-muted/15 p-5 sm:p-6 lg:border-l lg:border-t-0">
+          <div className="space-y-5">
+            <div className="space-y-2">
+              <p className="font-mono text-[10px] uppercase tracking-[0.2em] text-muted-foreground">
+                Readiness
+              </p>
+              <p className="font-display text-[1.45rem] italic leading-tight text-foreground">
+                {completedChecklistCount === completionChecklist.length
+                  ? "Ready to monitor."
+                  : "A little more specificity will make this much sharper."}
+              </p>
+            </div>
+
+            <div className="space-y-3">
+              {completionChecklist.map((item) => (
+                <div key={item.label} className="border-l-2 border-primary/15 pl-3">
+                  <p className={`font-mono text-[10px] uppercase tracking-[0.16em] ${item.done ? "text-emerald-700" : "text-muted-foreground"}`}>
+                    {item.done ? "Complete" : "Open"}
+                  </p>
+                  <p className="mt-1 font-sans text-sm leading-relaxed text-foreground/85">
+                    {item.label}
+                  </p>
+                </div>
+              ))}
+            </div>
+
+            {aiSummary ? (
+              <div className="space-y-4 border-t border-border/50 pt-5">
+                <div className="space-y-2">
+                  <p className="font-mono text-[10px] uppercase tracking-[0.2em] text-muted-foreground">
+                    System read
+                  </p>
+                  <p className="font-sans text-sm leading-relaxed text-foreground/80">
+                    {aiSummary}
+                  </p>
+                </div>
+
+                {(monitorability || labels.length > 0) && (
+                  <div className="flex flex-wrap gap-2">
                     {monitorability && (
-                      <span className="rounded-full bg-background px-2 py-1 text-xs font-medium text-muted-foreground">
+                      <span className={`font-mono text-[10px] uppercase tracking-[0.12em] ${monitorabilityTone}`}>
                         {monitorability} monitorability
                       </span>
                     )}
                     {labels.map((label) => (
-                      <span key={label} className="rounded-full border px-2 py-1 text-xs text-muted-foreground">
+                      <span key={label} className="border border-border/60 px-2 py-1 font-mono text-[10px] uppercase tracking-[0.1em] text-muted-foreground">
                         {label}
                       </span>
                     ))}
                   </div>
-                  {watchHintDescriptions.length > 0 && (
-                    <div className="space-y-1">
-                      <p className="text-xs font-medium uppercase tracking-wide text-muted-foreground">Proposed monitoring</p>
-                      {watchHintDescriptions.map((description) => (
-                        <p key={description} className="text-sm text-muted-foreground">
+                )}
+
+                {watchHintDescriptions.length > 0 && (
+                  <div className="space-y-2">
+                    <p className="font-mono text-[10px] uppercase tracking-[0.18em] text-muted-foreground">
+                      Watch for
+                    </p>
+                    {watchHintDescriptions.map((description) => (
+                      <div key={description} className="border border-border/60 bg-background/70 px-3 py-2">
+                        <p className="font-sans text-sm leading-relaxed text-foreground/80">
                           {description}
                         </p>
-                      ))}
-                    </div>
-                  )}
-                  {ambiguityNote && (
-                    <div className="rounded-lg bg-background/80 p-3">
-                      <p className="text-xs font-medium uppercase tracking-wide text-muted-foreground">Ambiguity note</p>
-                      <p className="mt-1 text-sm text-muted-foreground">{ambiguityNote}</p>
-                    </div>
-                  )}
-                </div>
-              )}
-            </div>
-          )}
-        </div>
+                      </div>
+                    ))}
+                  </div>
+                )}
 
-        <div className="flex gap-2">
-          <Button
-            onClick={() =>
-              onSave({
-                thesis_kind: "company",
-                why_own_it: whyOwnIt,
-                must_remain_true: mustRemainTrue || null,
-                what_would_change_my_mind: changeMind || null,
-                confidence,
-                review_cadence_days: thesis?.review_cadence_days ?? 7,
-                ai_summary: aiSummary || null,
-                interpretation,
-                source: aiSummary ? "ai_assisted" : "user",
-                status: "active",
-              })
-            }
-            disabled={whyOwnIt.trim().length === 0}
-          >
-            {copy.saveLabel}
-          </Button>
-          <Button variant="outline" onClick={onCancel}>Cancel</Button>
-        </div>
-      </CardContent>
-    </Card>
+                {ambiguityNote && (
+                  <div className="border border-amber-500/20 bg-amber-500/5 px-3 py-3">
+                    <p className="font-mono text-[10px] uppercase tracking-[0.18em] text-amber-700">
+                      Ambiguity to clean up
+                    </p>
+                    <p className="mt-2 font-sans text-sm leading-relaxed text-foreground/80">
+                      {ambiguityNote}
+                    </p>
+                  </div>
+                )}
+              </div>
+            ) : (
+              <div className="space-y-2 border-t border-border/50 pt-5">
+                <p className="font-mono text-[10px] uppercase tracking-[0.2em] text-muted-foreground">
+                  After save
+                </p>
+                <p className="font-sans text-sm leading-relaxed text-foreground/80">
+                  penKeep can generate signals, check earnings and headlines against the written case, and turn this page into a decision trail.
+                </p>
+              </div>
+            )}
+          </div>
+        </aside>
+      </div>
+    </section>
   );
 }

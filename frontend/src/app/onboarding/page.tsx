@@ -4,6 +4,7 @@ import { useEffect, useState, Suspense } from "react";
 import { useRouter, useSearchParams } from "next/navigation";
 import { AnimatePresence, motion } from "framer-motion";
 import { AuthGuard } from "@/components/layout/auth-guard";
+import { Button } from "@/components/ui/button";
 import { api } from "@/lib/api";
 import { getErrorMessage } from "@/lib/errors";
 import type {
@@ -177,6 +178,9 @@ function WizardInner() {
   const [draftingForMe, setDraftingForMe] = useState(false);
   const profile = wizardState.investorProfile;
   const profileContent = profile ? PROFILE_CONTENT[profile] : null;
+  const holdingValueLabel = holding?.current_value
+    ? `£${holding.current_value.toLocaleString("en-GB", { maximumFractionDigits: 0 })}`
+    : "Value unavailable";
 
   // Sync wizardState to localStorage
   useEffect(() => {
@@ -345,6 +349,108 @@ function WizardInner() {
   const visibleStep = VISIBLE_STEPS.indexOf(step as (typeof VISIBLE_STEPS)[number]);
   const stepDisplay =
     visibleStep >= 0 ? `0${visibleStep + 1} / 0${VISIBLE_STEPS.length}` : null;
+  const sidebarCards = (() => {
+    switch (step) {
+      case "WELCOME":
+        return [
+          {
+            eyebrow: "Time",
+            title: "About two minutes.",
+            body: "One position, two answers, then a working thesis you can actually review later.",
+          },
+          {
+            eyebrow: "Goal",
+            title: "Get to one usable reason fast.",
+            body: "The product gets real once an important holding has a written case behind it.",
+          },
+        ];
+      case "POSITION_FOCUS":
+        return [
+          {
+            eyebrow: "Selected name",
+            title: holding ? `${holding.ticker} · ${holdingValueLabel}` : "Choosing your first holding.",
+            body: holding
+              ? `${holding.name}${holding.sector ? ` · ${holding.sector}` : ""}`
+              : "We start with the largest position that still has no written thesis.",
+          },
+          {
+            eyebrow: "Why this first",
+            title: "Start where missing thinking matters most.",
+            body: "The first thesis should land on a name you already care about, not a throwaway example.",
+          },
+        ];
+      case "QUESTION_1":
+        return [
+          {
+            eyebrow: "Question 1",
+            title: "Write the positive case in your own words.",
+            body: "This becomes the anchor for reviews, monitoring, and your later decision history.",
+          },
+          {
+            eyebrow: "Tip",
+            title: "Direction beats polish.",
+            body: "Get the real idea down first. You can sharpen the sentence once the structure exists.",
+          },
+        ];
+      case "QUESTION_2":
+        return [
+          {
+            eyebrow: "Question 2",
+            title: "Define what would break the case.",
+            body: "This is the part that keeps the thesis honest once the stock starts moving.",
+          },
+          {
+            eyebrow: "What good looks like",
+            title: "Name evidence, not emotion.",
+            body: "Think in terms of demand, guidance, margins, churn, competition, or management behavior.",
+          },
+        ];
+      case "SYNTHESISING":
+        return [
+          {
+            eyebrow: "In progress",
+            title: "Turning your answers into a working thesis.",
+            body: "This is where the product converts free text into something reviewable and monitorable.",
+          },
+        ];
+      case "CLIMB":
+        return [
+          {
+            eyebrow: "Pressure test",
+            title: "Pick the signals that should matter.",
+            body: "You are choosing what evidence would force a revisit later, not building a giant dashboard.",
+          },
+          {
+            eyebrow: "Selected",
+            title: `${selectedSignalIdx.size} watch${selectedSignalIdx.size === 1 ? "" : "es"} chosen.`,
+            body: selectedSignalIdx.size > 0
+              ? "Those watches will be attached once you start monitoring this position."
+              : "You can continue without taking the suggested watches yet.",
+          },
+        ];
+      case "REVIEW":
+        return [
+          {
+            eyebrow: "Outcome",
+            title: "This becomes the first working thesis.",
+            body: "It does not need to be perfect on day one. It needs to be specific enough to test.",
+          },
+          {
+            eyebrow: "Next",
+            title: "Monitoring starts after this save.",
+            body: "From here the position moves into the real loop: evidence, review, and follow-through.",
+          },
+        ];
+      default:
+        return [
+          {
+            eyebrow: "Setup",
+            title: "Building the first decision record.",
+            body: "The onboarding flow should get you to one real position quickly, not trap you in setup theatre.",
+          },
+        ];
+    }
+  })();
 
   // ---------------------------------------------------------------------------
   // Step renders
@@ -381,7 +487,7 @@ function WizardInner() {
               type="button"
               onClick={() => handleSelectProfile(key)}
               className={`text-left border p-4 transition-colors ${
-                selected ? "border-primary bg-primary/5" : "border-border hover:border-primary/40"
+                selected ? "border-primary bg-primary/5" : "border-border hover:border-primary/40 hover:bg-background/50"
               }`}
             >
               <div className="flex items-start justify-between gap-4">
@@ -407,14 +513,13 @@ function WizardInner() {
         </div>
       )}
 
-      <div className="flex items-center gap-6 pt-2">
-        <button
+      <div className="flex items-center gap-4 pt-2">
+        <Button
           onClick={() => goTo("POSITION_FOCUS")}
           disabled={!profile}
-          className="bg-primary text-primary-foreground px-8 py-3 text-sm font-mono tracking-wide hover:bg-primary/90 transition-colors"
         >
-          Begin →
-        </button>
+          Begin
+        </Button>
         <button
           onClick={handleSkip}
           className="text-xs text-muted-foreground hover:text-foreground transition-colors font-mono underline underline-offset-4"
@@ -451,7 +556,7 @@ function WizardInner() {
           </span>
         </div>
       ) : holding ? (
-        <div className="border border-border p-6 space-y-4">
+        <div className="border border-border/70 bg-background/55 p-6 space-y-4">
           <div className="flex items-baseline gap-3">
             <span className="font-display text-[2.5rem] font-bold text-foreground leading-none">
               {holding.ticker}
@@ -486,14 +591,13 @@ function WizardInner() {
         </div>
       ) : null}
 
-      <div className="flex items-center gap-6">
-        <button
+      <div className="flex items-center gap-4">
+        <Button
           onClick={() => goTo("QUESTION_1")}
           disabled={!holding}
-          className="bg-primary text-primary-foreground px-8 py-3 text-sm font-mono tracking-wide hover:bg-primary/90 transition-colors disabled:opacity-40"
         >
-          Continue →
-        </button>
+          Continue
+        </Button>
         <button
           onClick={handleSkip}
           className="text-xs text-muted-foreground hover:text-foreground transition-colors font-mono underline underline-offset-4"
@@ -553,18 +657,21 @@ function WizardInner() {
         </h2>
       </div>
 
-      <div className="relative">
+      <div className="border border-border/70 bg-background/55 p-4 sm:p-5">
         <textarea
           value={wizardState[qKey]}
           onChange={(e) =>
             setWizardState((prev) => ({ ...prev, [qKey]: e.target.value }))
           }
           placeholder={placeholder}
-          rows={5}
+          rows={6}
           autoFocus
-          className="w-full bg-transparent border-0 border-b-2 border-foreground/20 focus:border-primary outline-none resize-none text-foreground placeholder:text-muted-foreground/50 text-base leading-relaxed py-3 transition-colors font-sans"
+          className="w-full resize-none bg-transparent text-base leading-relaxed text-foreground outline-none placeholder:text-muted-foreground/50 font-sans"
         />
-        <div className="absolute bottom-0 right-0 pb-1">
+        <div className="mt-3 flex items-center justify-between gap-4 border-t border-border/50 pt-3">
+          <span className="font-sans text-xs text-muted-foreground">
+            Write the version you would want to defend later.
+          </span>
           <span className="font-mono text-[10px] text-muted-foreground/40">
             {wizardState[qKey].length} chars
           </span>
@@ -575,14 +682,13 @@ function WizardInner() {
         <p className="text-sm text-red-600 font-mono">{error}</p>
       )}
 
-      <div className="flex items-center gap-6">
-        <button
+      <div className="flex items-center gap-4">
+        <Button
           onClick={onNext}
           disabled={wizardState[qKey].trim().length < 5}
-          className="bg-primary text-primary-foreground px-8 py-3 text-sm font-mono tracking-wide hover:bg-primary/90 transition-colors disabled:opacity-40"
         >
-          Continue →
-        </button>
+          {qKey === "answer2" ? "Build thesis" : "Continue"}
+        </Button>
         <button
           onClick={handleSkip}
           className="text-xs text-muted-foreground hover:text-foreground transition-colors font-mono underline underline-offset-4"
@@ -671,7 +777,7 @@ function WizardInner() {
         </div>
 
         {g.bear_case && (
-          <div className="border-l-2 border-primary/40 pl-4 space-y-1">
+          <div className="border border-border/70 bg-background/55 p-4 space-y-1">
             <div className="font-mono text-[9px] uppercase tracking-[0.25em] text-muted-foreground">
               The bear case
             </div>
@@ -715,7 +821,7 @@ function WizardInner() {
                     onClick={() => toggleSignal(i)}
                     aria-pressed={selected}
                     className={`text-left border p-4 transition-colors ${
-                      selected ? "border-primary bg-primary/5" : "border-border hover:border-primary/40"
+                      selected ? "border-primary bg-primary/5" : "border-border hover:border-primary/40 hover:bg-background/50"
                     }`}
                   >
                     <div className="flex items-start justify-between gap-4">
@@ -747,15 +853,14 @@ function WizardInner() {
 
         {error && <p className="text-sm text-red-600 font-mono">{error}</p>}
 
-        <div className="flex items-center gap-6 pt-2">
-          <button
+        <div className="flex items-center gap-4 pt-2">
+          <Button
             onClick={() => goTo("REVIEW")}
-            className="bg-primary text-primary-foreground px-8 py-3 text-sm font-mono tracking-wide hover:bg-primary/90 transition-colors"
           >
             {selectedCount > 0
-              ? `Watch ${selectedCount} signal${selectedCount === 1 ? "" : "s"} →`
-              : "Continue without watches →"}
-          </button>
+              ? `Watch ${selectedCount} signal${selectedCount === 1 ? "" : "s"}`
+              : "Continue without watches"}
+          </Button>
           <button
             onClick={() => {
               setSelectedSignalIdx(new Set());
@@ -803,7 +908,7 @@ function WizardInner() {
         </div>
 
         {result.ai_summary && (
-          <div className="border-l-2 border-primary/40 pl-4">
+          <div className="border border-border/70 bg-background/55 p-4">
             <p className="text-sm text-foreground/70 italic font-sans leading-relaxed">
               &ldquo;{result.ai_summary}&rdquo;
             </p>
@@ -811,7 +916,7 @@ function WizardInner() {
         )}
 
         {selectedCandidateSignals().length > 0 && (
-          <div className="space-y-2 border border-border p-4">
+          <div className="space-y-2 border border-border/70 bg-background/55 p-4">
             <div className="font-mono text-[9px] uppercase tracking-[0.25em] text-muted-foreground">
               Watches you picked
             </div>
@@ -828,14 +933,13 @@ function WizardInner() {
 
         {error && <p className="text-sm text-red-600 font-mono">{error}</p>}
 
-        <div className="flex items-center gap-6 pt-2">
-          <button
+        <div className="flex items-center gap-4 pt-2">
+          <Button
             onClick={handleComplete}
             disabled={savingThesis}
-            className="bg-primary text-primary-foreground px-8 py-3 text-sm font-mono tracking-wide hover:bg-primary/90 transition-colors"
           >
-            {savingThesis ? "Turning on monitoring…" : "Start monitoring this holding →"}
-          </button>
+            {savingThesis ? "Turning on monitoring…" : "Start monitoring this holding"}
+          </Button>
           <button
             onClick={() => router.push(`/onboarding/review-drafts`)}
             className="text-xs text-muted-foreground hover:text-foreground transition-colors font-mono underline underline-offset-4"
@@ -852,62 +956,77 @@ function WizardInner() {
   // ---------------------------------------------------------------------------
 
   return (
-    <div className="min-h-screen bg-background">
-      {/* Header rule */}
-      <div className="border-b border-border/60 px-6 py-4 flex items-center justify-between">
-        <span className="font-mono text-xs text-muted-foreground tracking-wide">
-          penKeep
-        </span>
-        <div className="flex items-center gap-4">
-          {stepDisplay && (
-            <span className="font-mono text-xs text-muted-foreground tabular-nums">
-              {stepDisplay}
+    <div className="product-shell">
+      <div className="product-shell-glow" />
+      <div className="product-main min-h-screen px-4 py-6 sm:px-8">
+        <div className="mx-auto max-w-5xl space-y-5">
+          <div className="product-panel product-panel-muted flex items-center justify-between gap-4 px-4 py-3 sm:px-5">
+            <span className="font-mono text-[10px] uppercase tracking-[0.2em] text-muted-foreground">
+              penKeep
             </span>
-          )}
-          {/* Step pills */}
-          {step !== "WELCOME" && step !== "DONE" && (
-            <div className="flex gap-1">
-              {VISIBLE_STEPS.map((s) => (
-                <div
-                  key={s}
-                  className={`h-1 w-6 transition-colors ${
-                    STEP_ORDER.indexOf(step) >= STEP_ORDER.indexOf(s)
-                      ? "bg-primary"
-                      : "bg-border"
-                  }`}
+            <div className="flex items-center gap-4">
+              {stepDisplay && (
+                <span className="font-mono text-[10px] uppercase tracking-[0.14em] text-muted-foreground tabular-nums">
+                  {stepDisplay}
+                </span>
+              )}
+              {step !== "WELCOME" && step !== "DONE" && (
+                <div className="flex gap-1">
+                  {VISIBLE_STEPS.map((s) => (
+                    <div
+                      key={s}
+                      className={`h-1 w-6 transition-colors ${
+                        STEP_ORDER.indexOf(step) >= STEP_ORDER.indexOf(s)
+                          ? "bg-primary"
+                          : "bg-border"
+                      }`}
+                    />
+                  ))}
+                </div>
+              )}
+            </div>
+          </div>
+
+          <div className="grid gap-5 xl:grid-cols-[minmax(0,1fr)_18rem]">
+            <section className="min-w-0">
+              <div className="product-panel product-panel-muted p-6 sm:p-8">
+                <AnimatePresence mode="wait">
+                  {step === "WELCOME" && renderWelcome()}
+                  {step === "POSITION_FOCUS" && renderPositionFocus()}
+                  {step === "QUESTION_1" &&
+                    renderQuestion(
+                      "answer1",
+                      profileContent?.q1 ?? PROFILE_CONTENT.thesis_driven.q1,
+                      profileContent?.q1Placeholder ?? PROFILE_CONTENT.thesis_driven.q1Placeholder,
+                      () => goTo("QUESTION_2"),
+                      "Question 01"
+                    )}
+                  {step === "QUESTION_2" &&
+                    renderQuestion(
+                      "answer2",
+                      profileContent?.q2 ?? PROFILE_CONTENT.thesis_driven.q2,
+                      profileContent?.q2Placeholder ?? PROFILE_CONTENT.thesis_driven.q2Placeholder,
+                      handleSynthesize,
+                      "Question 02"
+                    )}
+                  {step === "SYNTHESISING" && renderSynthesising()}
+                  {step === "CLIMB" && renderClimb()}
+                  {step === "REVIEW" && renderReview()}
+                </AnimatePresence>
+              </div>
+            </section>
+
+            <aside className="space-y-4">
+              {sidebarCards.map((card) => (
+                <SidebarPanel
+                  key={card.title}
+                  eyebrow={card.eyebrow}
+                  title={card.title}
+                  body={card.body}
                 />
               ))}
-            </div>
-          )}
-        </div>
-      </div>
-
-      {/* Main content */}
-      <div className="flex items-start justify-center pt-16 pb-24 px-6">
-        <div className="w-full max-w-lg">
-          <AnimatePresence mode="wait">
-            {step === "WELCOME" && renderWelcome()}
-            {step === "POSITION_FOCUS" && renderPositionFocus()}
-            {step === "QUESTION_1" &&
-              renderQuestion(
-                "answer1",
-                profileContent?.q1 ?? PROFILE_CONTENT.thesis_driven.q1,
-                profileContent?.q1Placeholder ?? PROFILE_CONTENT.thesis_driven.q1Placeholder,
-                () => goTo("QUESTION_2"),
-                "Question 01"
-              )}
-            {step === "QUESTION_2" &&
-              renderQuestion(
-                "answer2",
-                profileContent?.q2 ?? PROFILE_CONTENT.thesis_driven.q2,
-                profileContent?.q2Placeholder ?? PROFILE_CONTENT.thesis_driven.q2Placeholder,
-                handleSynthesize,
-                "Question 02"
-              )}
-            {step === "SYNTHESISING" && renderSynthesising()}
-            {step === "CLIMB" && renderClimb()}
-            {step === "REVIEW" && renderReview()}
-          </AnimatePresence>
+            </aside>
+          </div>
         </div>
       </div>
     </div>
@@ -920,11 +1039,35 @@ function WizardInner() {
 
 function ThesisBlock({ label, text }: { label: string; text: string }) {
   return (
-    <div className="border border-border p-4 space-y-1">
+    <div className="border border-border/70 bg-background/55 p-4 space-y-1">
       <div className="font-mono text-[9px] uppercase tracking-[0.25em] text-muted-foreground">
         {label}
       </div>
       <p className="text-sm text-foreground leading-relaxed">{text}</p>
+    </div>
+  );
+}
+
+function SidebarPanel({
+  eyebrow,
+  title,
+  body,
+}: {
+  eyebrow: string;
+  title: string;
+  body: string;
+}) {
+  return (
+    <div className="product-panel p-5">
+      <p className="font-mono text-[10px] uppercase tracking-[0.16em] text-muted-foreground">
+        {eyebrow}
+      </p>
+      <p className="mt-2 font-display text-[1.3rem] italic leading-tight text-foreground">
+        {title}
+      </p>
+      <p className="mt-2 font-sans text-sm leading-relaxed text-muted-foreground">
+        {body}
+      </p>
     </div>
   );
 }

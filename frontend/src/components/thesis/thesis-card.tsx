@@ -1,6 +1,7 @@
 "use client";
 
 import { formatDate } from "@/lib/utils";
+import { classifyThesisQuality } from "@/lib/thesis-quality";
 import type { Thesis, ThesisDecomposition } from "@/types";
 
 interface Props {
@@ -33,16 +34,16 @@ const CONFIDENCE_TEXT: Record<string, string> = {
   low: "text-red-600",
 };
 
-const MONITORABILITY_DOT: Record<string, string> = {
-  high: "bg-emerald-500",
-  medium: "bg-amber-400",
-  low: "bg-red-500",
-};
-
 const MONITORABILITY_TEXT: Record<string, string> = {
   high: "text-emerald-700",
   medium: "text-amber-700",
   low: "text-red-600",
+};
+
+const QUALITY_TONE: Record<string, string> = {
+  strong: "text-emerald-700",
+  workable: "text-amber-700",
+  weak: "text-red-600",
 };
 
 // ── Helpers ───────────────────────────────────────────────────────────────────
@@ -142,11 +143,48 @@ function getInterpretation(thesis: Thesis) {
 // ── Component ─────────────────────────────────────────────────────────────────
 
 export function ThesisCard({ thesis, decomposition, investorProfile, onEdit, onInvalidate }: Props) {
-  const { labels, watchHints, monitorability, ambiguityNote } = getInterpretation(thesis);
+  const { labels, watchHints, ambiguityNote } = getInterpretation(thesis);
   const watchDescriptions = watchHints
     .map(describeWatchHint)
     .filter((d): d is string => Boolean(d));
   const activeSignals = getActiveSignals(decomposition);
+  const quality = classifyThesisQuality(thesis);
+  const qualityState =
+    quality.kind === "sharp"
+      ? "strong"
+      : quality.kind === "workable" || quality.kind === "stale"
+        ? "workable"
+        : "weak";
+  const qualityHeadline =
+    quality.kind === "sharp"
+      ? "Sharp"
+      : quality.kind === "workable"
+        ? "Workable"
+        : quality.kind === "stale"
+          ? "Stale"
+          : quality.kind === "review"
+            ? "Needs review"
+            : "Weak";
+  const qualityChecks = [
+    {
+      label: "Must remain true",
+      detail: quality.missingMustRemainTrue ? "Missing" : "Defined",
+      tone: quality.missingMustRemainTrue ? "text-red-600" : "text-emerald-700",
+    },
+    {
+      label: "Break condition",
+      detail: quality.missingBreakCondition ? "Too vague" : "Defined",
+      tone: quality.missingBreakCondition ? "text-red-600" : "text-emerald-700",
+    },
+    {
+      label: "Freshness",
+      detail:
+        quality.kind === "stale"
+          ? `${quality.daysOld}d old vs ${quality.cadenceDays}d cadence`
+          : `${quality.daysOld}d old`,
+      tone: quality.kind === "stale" ? "text-amber-700" : "text-foreground",
+    },
+  ];
   const copy = investorProfile === "thesis_driven"
     ? {
         edit: "Edit thesis",
@@ -155,6 +193,15 @@ export function ThesisCard({ thesis, decomposition, investorProfile, onEdit, onI
         breaks: "Breaks if",
         activeSignals: "Active signals",
         watching: "Watching for",
+        qualityRead: "Read",
+        qualitySummary:
+          quality.kind === "sharp"
+            ? "Specific enough to rely on."
+            : quality.kind === "stale"
+              ? "The thesis still works, but it is overdue for a refresh."
+              : qualityState === "workable"
+                ? "Usable, but still worth sharpening."
+                : "Too fuzzy to trust without tightening.",
       }
     : investorProfile === "hearsay_driven"
       ? {
@@ -164,6 +211,15 @@ export function ThesisCard({ thesis, decomposition, investorProfile, onEdit, onI
           breaks: "Breaks if",
           activeSignals: "Active signals",
           watching: "Watching for",
+          qualityRead: "Read",
+          qualitySummary:
+            quality.kind === "sharp"
+              ? "Specific enough to rely on."
+              : quality.kind === "stale"
+                ? "The reason still works, but it is overdue for a refresh."
+              : qualityState === "workable"
+                  ? "Usable, but the story still needs sharpening."
+                  : "Still too story-like to rely on without tightening.",
         }
       : {
           edit: "Edit",
@@ -172,6 +228,15 @@ export function ThesisCard({ thesis, decomposition, investorProfile, onEdit, onI
           breaks: "Breaks if",
           activeSignals: "Active signals",
           watching: "Watching for",
+          qualityRead: "Read",
+          qualitySummary:
+            quality.kind === "sharp"
+              ? "Specific enough to rely on."
+              : quality.kind === "stale"
+                ? "This case still works, but it is overdue for a refresh."
+              : qualityState === "workable"
+                  ? "Usable, but still worth sharpening."
+                  : "Too fuzzy to trust without tightening.",
         };
 
   return (
@@ -199,21 +264,9 @@ export function ThesisCard({ thesis, decomposition, investorProfile, onEdit, onI
 
           {/* Source */}
           <span className="font-mono text-[10px] uppercase tracking-[0.1em] text-muted-foreground/60">
-            {thesis.source === "ai_assisted" ? "AI assisted" : "Authored"}
+            {thesis.source === "ai_assisted" ? "Assisted" : "Manual"}
           </span>
 
-          {/* Monitorability */}
-          {monitorability && (
-            <>
-              <span className="text-border/60 text-xs">·</span>
-              <div className="flex items-center gap-1.5">
-                <span className={`h-1.5 w-1.5 rounded-full ${MONITORABILITY_DOT[monitorability] ?? "bg-border"}`} />
-                <span className={`font-mono text-[10px] uppercase tracking-[0.1em] ${MONITORABILITY_TEXT[monitorability] ?? "text-muted-foreground"}`}>
-                  {monitorability} monitorability
-                </span>
-              </div>
-            </>
-          )}
         </div>
 
         {/* Actions */}
@@ -256,6 +309,65 @@ export function ThesisCard({ thesis, decomposition, investorProfile, onEdit, onI
             ))}
           </div>
         )}
+      </div>
+
+      <div className="grid gap-0 border-t border-border/40 lg:grid-cols-[minmax(0,1.15fr)_minmax(16rem,20rem)]">
+        <div className="px-5 py-5">
+          <div className="space-y-2">
+            <p className="font-mono text-[10px] uppercase tracking-[0.2em] text-muted-foreground">
+              {copy.qualityRead}
+            </p>
+            <div className="space-y-1">
+              <p className={`font-display italic text-[1.35rem] leading-tight ${QUALITY_TONE[qualityState]}`}>
+                {qualityHeadline}
+              </p>
+              <p className="font-sans text-sm leading-relaxed text-foreground/80">
+                {copy.qualitySummary}
+              </p>
+            </div>
+          </div>
+          <div className="mt-4 grid gap-3 sm:grid-cols-3">
+            <div className="border border-border/60 bg-background/70 p-3">
+              <p className="font-mono text-[10px] uppercase tracking-[0.16em] text-muted-foreground">
+                Monitorability
+              </p>
+              <p className={`mt-2 font-display text-[1.2rem] italic ${MONITORABILITY_TEXT[quality.monitorability ?? "medium"] ?? "text-muted-foreground"}`}>
+                {quality.monitorability ?? "medium"}
+              </p>
+            </div>
+            <div className="border border-border/60 bg-background/70 p-3">
+              <p className="font-mono text-[10px] uppercase tracking-[0.16em] text-muted-foreground">
+                Review cadence
+              </p>
+              <p className="mt-2 font-display text-[1.2rem] italic text-foreground">
+                {quality.cadenceDays}d
+              </p>
+            </div>
+            <div className="border border-border/60 bg-background/70 p-3">
+              <p className="font-mono text-[10px] uppercase tracking-[0.16em] text-muted-foreground">
+                Signals armed
+              </p>
+              <p className="mt-2 font-display text-[1.2rem] italic text-foreground">
+                {activeSignals.length}
+              </p>
+            </div>
+          </div>
+        </div>
+
+        <aside className="border-t border-border/40 bg-muted/15 px-5 py-5 lg:border-l lg:border-t-0">
+          <div className="grid gap-3">
+            {qualityChecks.map((item) => (
+              <div key={item.label} className="border border-border/60 bg-background/70 px-3 py-3">
+                <p className="font-mono text-[10px] uppercase tracking-[0.16em] text-muted-foreground">
+                  {item.label}
+                </p>
+                <p className={`mt-2 font-sans text-sm leading-relaxed ${item.tone}`}>
+                  {item.detail}
+                </p>
+              </div>
+            ))}
+          </div>
+        </aside>
       </div>
 
       {/* ── Must remain true + Exit trigger ── */}
@@ -342,7 +454,7 @@ export function ThesisCard({ thesis, decomposition, investorProfile, onEdit, onI
       {thesis.ai_summary && (
         <div className="px-5 py-4">
           <p className="font-mono text-[10px] uppercase tracking-[0.18em] text-muted-foreground mb-1.5">
-            Summary
+            Snapshot
           </p>
           <p className="font-sans text-xs text-muted-foreground/80 leading-relaxed">
             {thesis.ai_summary}

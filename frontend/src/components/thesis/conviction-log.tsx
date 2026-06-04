@@ -58,7 +58,8 @@ function SimpleEntry({ entry }: { entry: ConvictionLogEntry }) {
   const isDark =
     entry.entry_type === "reason_created" || entry.entry_type === "reason_updated";
   return (
-    <div className="flex items-start gap-4 py-3 border-b border-border/20 last:border-b-0">
+    <div className="border border-border/60 bg-background/70 px-4 py-4">
+      <div className="flex items-start gap-4">
       <div className="shrink-0 mt-0.5">
         <span
           className={`h-1.5 w-1.5 rounded-full block mt-1 ${isDark ? "bg-primary/50" : "bg-border"}`}
@@ -76,6 +77,7 @@ function SimpleEntry({ entry }: { entry: ConvictionLogEntry }) {
         <p className="font-sans text-[13px] text-foreground/85 leading-relaxed mt-0.5">
           {entry.content}
         </p>
+      </div>
       </div>
     </div>
   );
@@ -100,7 +102,7 @@ function DecisionEntry({ entry }: { entry: ConvictionLogEntry }) {
         : "text-muted-foreground/50 border-border/40";
 
   return (
-    <div className="py-4 border-b border-border/20 last:border-b-0">
+    <div className="border border-border/60 bg-background/70 px-4 py-4">
       {/* Header row */}
       <div className="flex items-start justify-between gap-3 mb-3">
         <div className="flex items-center gap-2 flex-wrap">
@@ -178,6 +180,7 @@ export function ConvictionLog({
   const copy =
     investorProfile === "thesis_driven"
       ? {
+          title: "History",
           age: "Thesis age",
           placeholder:
             "Write a short note about what changed, which assumption moved, or how your view is evolving.",
@@ -186,6 +189,7 @@ export function ConvictionLog({
         }
       : investorProfile === "hearsay_driven"
         ? {
+            title: "History",
             age: "Reason age",
             placeholder:
               "Write a short note about what changed or how your view of the story is evolving.",
@@ -193,6 +197,7 @@ export function ConvictionLog({
               "No history yet. Once you write a reason, review evidence, or add notes, it will appear here.",
           }
         : {
+            title: "History",
             age: "Reason age",
             placeholder: "Write a short note about what changed or how your view is evolving.",
             empty: "Nothing logged yet. Reviews, notes, and reason changes show up here.",
@@ -207,33 +212,47 @@ export function ConvictionLog({
 
   return (
     <div className="space-y-5">
-      {/* Stats strip */}
-      <div className="flex items-center gap-4 border-b border-border/30 pb-4">
-        <div>
-          <p className="font-mono text-[9px] uppercase tracking-[0.15em] text-muted-foreground">
-            {copy.age}
-          </p>
-          <p className="font-mono text-[13px] text-foreground mt-0.5">
-            {data?.reason_age_days != null ? `${data.reason_age_days}d` : "—"}
-          </p>
+      <div className="product-panel p-5 sm:p-6">
+        <div className="flex items-start justify-between gap-4">
+          <div className="space-y-1">
+            <p className="font-mono text-[10px] uppercase tracking-[0.18em] text-muted-foreground">
+              {copy.title}
+            </p>
+            <p className="font-sans text-sm leading-relaxed text-foreground/80">
+              Notes, evidence, and decisions that changed the case over time.
+            </p>
+          </div>
         </div>
-        <div className="w-px h-6 bg-border/30" />
-        <div>
-          <p className="font-mono text-[9px] uppercase tracking-[0.15em] text-muted-foreground">
-            Reviews
-          </p>
-          <p className="font-mono text-[13px] text-foreground mt-0.5">
-            {data?.review_count ?? 0}
-          </p>
+        <div className="mt-4 grid gap-3 sm:grid-cols-2">
+          <div className="border border-border/60 bg-background/70 p-3">
+            <p className="font-mono text-[10px] uppercase tracking-[0.16em] text-muted-foreground">
+              {copy.age}
+            </p>
+            <p className="mt-2 font-display text-[1.15rem] italic leading-none text-foreground">
+              {data?.reason_age_days != null ? `${data.reason_age_days}d` : "—"}
+            </p>
+          </div>
+          <div className="border border-border/60 bg-background/70 p-3">
+            <p className="font-mono text-[10px] uppercase tracking-[0.16em] text-muted-foreground">
+              Reviews
+            </p>
+            <p className="mt-2 font-display text-[1.15rem] italic leading-none text-foreground">
+              {data?.review_count ?? 0}
+            </p>
+          </div>
         </div>
       </div>
 
-      {/* Add note */}
       {onAddNote && (
-        <div className="border border-border/40 bg-muted/20 px-4 py-3 space-y-3">
-          <p className="font-mono text-[10px] uppercase tracking-[0.15em] text-muted-foreground">
-            Add a note
-          </p>
+        <div className="product-panel p-5 sm:p-6 space-y-3">
+          <div className="space-y-1">
+            <p className="font-mono text-[10px] uppercase tracking-[0.15em] text-muted-foreground">
+              Add note
+            </p>
+            <p className="font-sans text-sm leading-relaxed text-foreground/80">
+              Capture a change in view before it gets lost.
+            </p>
+          </div>
           <textarea
             value={note}
             onChange={(e) => setNote(e.target.value)}
@@ -254,13 +273,14 @@ export function ConvictionLog({
         </div>
       )}
 
-      {/* Timeline */}
       {loading ? (
-        <p className="font-mono text-[10px] uppercase tracking-[0.2em] text-muted-foreground/40 animate-pulse">
-          Loading…
-        </p>
+        <div className="product-panel p-5 sm:p-6">
+          <p className="font-mono text-[10px] uppercase tracking-[0.2em] text-muted-foreground/40 animate-pulse">
+            Loading history…
+          </p>
+        </div>
       ) : data && data.entries.length > 0 ? (
-        <div>
+        <div className="space-y-3">
           {data.entries.map((entry) =>
             entry.event_title != null ? (
               <DecisionEntry key={entry.id} entry={entry} />
@@ -270,7 +290,9 @@ export function ConvictionLog({
           )}
         </div>
       ) : (
-        <p className="font-sans text-sm text-muted-foreground">{copy.empty}</p>
+        <div className="product-panel p-5 sm:p-6">
+          <p className="font-sans text-sm text-muted-foreground">{copy.empty}</p>
+        </div>
       )}
     </div>
   );

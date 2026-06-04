@@ -1,5 +1,29 @@
 import { mk } from "../../_mkt/tokens";
 
+const TOP_POINTS = [
+  ["Read-only by design", "Broker links can read positions, never place trades."],
+  ["Notes stay scoped", "Your thesis notes are kept to your account and not sold."],
+  ["Human response", "Security and privacy requests go to real people, not a black hole."],
+];
+
+const SECURITY_PROMISES = [
+  {
+    eyebrow: "Product design",
+    title: "We do not need your trade history to do the job.",
+    body: "penKeep is built around why you own something now, not around storing every historical transaction you ever made.",
+  },
+  {
+    eyebrow: "Incentives",
+    title: "We never act on the positions we can see.",
+    body: "The product exists to help you think more clearly, not to turn your account into an execution surface.",
+  },
+  {
+    eyebrow: "Failure mode",
+    title: "If we make a mistake, we tell you plainly.",
+    body: "Security trust is not just prevention. It is also how directly and quickly a team responds when something goes wrong.",
+  },
+];
+
 export default function SecurityPage() {
   const pad = "clamp(22px, 4.5vw, 56px)";
   return (
@@ -25,6 +49,36 @@ export default function SecurityPage() {
           We&apos;ve built penKeep around one promise: we know what you own, but we never act on it.
           Below is what that means in practice.
         </p>
+
+        <div
+          style={{
+            display: "grid",
+            gridTemplateColumns: "repeat(3, minmax(0, 1fr))",
+            gap: 12,
+            marginTop: "clamp(24px,3vw,32px)",
+            maxWidth: 980,
+          }}
+          className="max-md:grid-cols-1"
+        >
+          {TOP_POINTS.map(([label, value]) => (
+            <div
+              key={label}
+              style={{
+                background: mk.card,
+                border: `1px solid ${mk.pencilLight}`,
+                borderRadius: 16,
+                padding: "16px 18px",
+              }}
+            >
+              <div style={{ fontFamily: mk.mono, fontSize: 10, letterSpacing: "0.14em", textTransform: "uppercase", color: mk.pencil }}>
+                {label}
+              </div>
+              <div style={{ fontFamily: mk.sans, fontSize: 15, lineHeight: 1.45, color: mk.inkSoft, marginTop: 8 }}>
+                {value}
+              </div>
+            </div>
+          ))}
+        </div>
       </section>
 
       {/* What we store / don't */}
@@ -76,6 +130,44 @@ export default function SecurityPage() {
         </div>
       </section>
 
+      <section style={{ padding: `clamp(50px,8vw,90px) ${pad}` }}>
+        <div style={{ marginBottom: 22 }}>
+          <div style={{ fontFamily: mk.mono, fontSize: 11, letterSpacing: "0.14em", textTransform: "uppercase", color: mk.pencil, marginBottom: 10 }}>
+            How we think about trust
+          </div>
+          <h2 style={{ fontFamily: mk.sans, fontSize: "clamp(30px,4vw,46px)", fontWeight: 600, margin: 0, lineHeight: 1.05, letterSpacing: "-0.025em", maxWidth: 760 }}>
+            The security model follows the product model.
+          </h2>
+        </div>
+
+        <div
+          style={{ display: "grid", gridTemplateColumns: "repeat(3, minmax(0, 1fr))", gap: 14 }}
+          className="max-md:grid-cols-1"
+        >
+          {SECURITY_PROMISES.map((item) => (
+            <div
+              key={item.title}
+              style={{
+                background: mk.card,
+                border: `1px solid ${mk.pencilLight}`,
+                borderRadius: 18,
+                padding: "20px 20px 22px",
+              }}
+            >
+              <div style={{ fontFamily: mk.mono, fontSize: 10, letterSpacing: "0.14em", textTransform: "uppercase", color: mk.accent }}>
+                {item.eyebrow}
+              </div>
+              <div style={{ fontFamily: mk.sans, fontSize: 21, fontWeight: 600, lineHeight: 1.15, letterSpacing: "-0.02em", color: mk.ink, marginTop: 10 }}>
+                {item.title}
+              </div>
+              <div style={{ fontFamily: mk.sans, fontSize: 15, lineHeight: 1.55, color: mk.pencil, marginTop: 10 }}>
+                {item.body}
+              </div>
+            </div>
+          ))}
+        </div>
+      </section>
+
       {/* Technical details */}
       <section style={{ padding: `clamp(50px,8vw,90px) ${pad}` }}>
         <div style={{ fontFamily: mk.mono, fontSize: 11, letterSpacing: "0.14em", textTransform: "uppercase", color: mk.pencil, marginBottom: 14 }}>
@@ -84,6 +176,9 @@ export default function SecurityPage() {
         <h2 style={{ fontFamily: mk.sans, fontSize: "clamp(32px,4vw,48px)", fontWeight: 600, margin: 0, lineHeight: 1.05, letterSpacing: "-0.025em" }}>
           What&apos;s under the hood.
         </h2>
+        <p style={{ fontFamily: mk.sans, fontSize: 16, lineHeight: 1.6, color: mk.pencil, margin: "14px 0 0", maxWidth: 700 }}>
+          This is the practical layer: how credentials, hosting, access, and disclosure are handled around the core product.
+        </p>
         <div
           style={{ display: "grid", gridTemplateColumns: "repeat(2, 1fr)", gap: 14, marginTop: "clamp(28px,3vw,40px)" }}
           className="max-md:grid-cols-1"
@@ -137,12 +232,25 @@ export default function SecurityPage() {
 
       {/* Footnote */}
       <section style={{ padding: `clamp(50px,8vw,90px) ${pad}` }}>
-        <p style={{ fontFamily: mk.sans, fontStyle: "italic", color: mk.pencil, fontSize: "clamp(15px,1.8vw,18px)", lineHeight: 1.6, maxWidth: 720, margin: 0 }}>
-          We are a small team. We will make mistakes. When we do, we will tell you, fix them, and write
-          publicly about what we learned. That&apos;s the deal.
-        </p>
-        <div style={{ marginTop: 24, fontFamily: mk.mono, fontSize: 11, color: mk.pencil, letterSpacing: "0.08em" }}>
-          Security questions → <span style={{ color: mk.ink }}>security@penkeep.io</span>
+        <div
+          style={{
+            background: mk.card,
+            border: `1px solid ${mk.pencilLight}`,
+            borderRadius: 18,
+            padding: "22px 22px 24px",
+            maxWidth: 860,
+          }}
+        >
+          <div style={{ fontFamily: mk.mono, fontSize: 11, letterSpacing: "0.14em", textTransform: "uppercase", color: mk.pencil, marginBottom: 12 }}>
+            Incident posture
+          </div>
+          <p style={{ fontFamily: mk.sans, fontStyle: "italic", color: mk.pencil, fontSize: "clamp(15px,1.8vw,18px)", lineHeight: 1.6, maxWidth: 720, margin: 0 }}>
+            We are a small team. We will make mistakes. When we do, we will tell you, fix them, and write
+            publicly about what we learned. That&apos;s the deal.
+          </p>
+          <div style={{ marginTop: 18, fontFamily: mk.mono, fontSize: 11, color: mk.pencil, letterSpacing: "0.08em" }}>
+            Security questions → <span style={{ color: mk.ink }}>security@penkeep.io</span>
+          </div>
         </div>
       </section>
     </>

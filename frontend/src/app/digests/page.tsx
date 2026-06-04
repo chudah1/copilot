@@ -19,26 +19,26 @@ function statusDot(status: string) {
 function digestArchiveCopy(investorProfile: "thesis_driven" | "hearsay_driven" | null) {
   if (investorProfile === "thesis_driven") {
     return {
-      title: "Weekly thesis reviews",
-      subtitle: "What moved, what held, and which assumptions need another look.",
-      empty: "Your first digest will arrive after at least one position has an active thesis and monitoring is running.",
+      title: "Digest archive",
+      subtitle: "Weekly thesis reviews: what moved, what held, and which assumptions need another look.",
+      empty: "Your first digest lands once at least one position is written and monitoring is running.",
       fallbackHeadline: "Weekly thesis review",
     };
   }
 
   if (investorProfile === "hearsay_driven") {
     return {
-      title: "Weekly reason reviews",
-      subtitle: "What moved, what held, and where the story you wrote may need a decision.",
-      empty: "Your first digest will arrive after at least one position has a written reason and monitoring is running.",
+      title: "Digest archive",
+      subtitle: "Weekly reason reviews: what moved, what held, and where the story you wrote may need a decision.",
+      empty: "Your first digest lands once at least one position has a written reason and monitoring is running.",
       fallbackHeadline: "Weekly reason review",
     };
   }
 
   return {
-    title: "Weekly reviews",
-    subtitle: "What moved, what stayed quiet, and where your thesis needs a decision.",
-    empty: "Your first digest will arrive on Sunday after at least one holding has an active thesis and monitoring is running.",
+    title: "Digest archive",
+    subtitle: "Weekly reviews: what moved, what stayed quiet, and where your thesis needs a decision.",
+    empty: "Your first digest lands once at least one holding has an active thesis and monitoring is running.",
     fallbackHeadline: "Weekly thesis review",
   };
 }
@@ -69,14 +69,17 @@ export default function DigestsPage() {
 
   const investorProfile = digests[0]?.content.investor_profile ?? null;
   const copy = digestArchiveCopy(investorProfile);
+  const latestDigest = digests[0] ?? null;
+  const totalEvents = digests.reduce((sum, digest) => sum + (digest.content.events_count || 0), 0);
+  const hasDigests = digests.length > 0;
 
   return (
     <AppShell>
-      <div className="max-w-4xl mx-auto px-4 sm:px-8 py-10">
+      <div className="max-w-5xl mx-auto px-4 sm:px-8 py-10 space-y-6">
 
-        {/* Page header */}
-        <div className="border-b border-border pb-6 mb-8 flex items-end justify-between gap-4">
-          <div>
+        <div className="product-panel product-panel-muted overflow-hidden p-5 sm:p-6">
+          <div className="flex items-end justify-between gap-4">
+            <div className="space-y-2">
             <p className="font-mono text-[10px] uppercase tracking-[0.3em] text-muted-foreground mb-2">
               Archive
             </p>
@@ -86,20 +89,60 @@ export default function DigestsPage() {
             <p className="font-sans text-sm text-muted-foreground mt-2 max-w-xl leading-relaxed">
               {copy.subtitle}
             </p>
+            </div>
+            <button
+              onClick={generateNow}
+              disabled={generating}
+              className="shrink-0 font-mono text-[10px] uppercase tracking-[0.15em] text-primary border border-primary/30 px-4 py-2 hover:bg-primary/5 transition-colors disabled:opacity-50"
+            >
+              {generating ? "Building…" : "Generate now"}
+            </button>
           </div>
-          <button
-            onClick={generateNow}
-            disabled={generating}
-            className="shrink-0 font-mono text-[10px] uppercase tracking-[0.15em] text-primary border border-primary/30 px-4 py-2 hover:bg-primary/5 transition-colors disabled:opacity-50"
-          >
-            {generating ? "Building…" : "Generate now"}
-          </button>
+
+          <div className="mt-6 grid gap-3 sm:grid-cols-3">
+            <div className="border border-border/60 bg-background/70 p-4">
+              <p className="font-mono text-[10px] uppercase tracking-[0.16em] text-muted-foreground">
+                {hasDigests ? "In archive" : "First run"}
+              </p>
+              {hasDigests ? (
+                <p className="mt-2 font-display text-[1.5rem] italic leading-none text-foreground">
+                  {digests.length}
+                </p>
+              ) : (
+                <p className="mt-2 font-sans text-sm leading-relaxed text-foreground">
+                  Ready once monitoring is live.
+                </p>
+              )}
+            </div>
+            <div className="border border-border/60 bg-background/70 p-4">
+              <p className="font-mono text-[10px] uppercase tracking-[0.16em] text-muted-foreground">
+                {hasDigests ? "Events covered" : "Cadence"}
+              </p>
+              {hasDigests ? (
+                <p className="mt-2 font-display text-[1.5rem] italic leading-none text-foreground">
+                  {totalEvents}
+                </p>
+              ) : (
+                <p className="mt-2 font-sans text-sm leading-relaxed text-foreground">
+                  Weekly, built for a quick Sunday review.
+                </p>
+              )}
+            </div>
+            <div className="border border-border/60 bg-background/70 p-4">
+              <p className="font-mono text-[10px] uppercase tracking-[0.16em] text-muted-foreground">
+                {hasDigests ? "Latest" : "Reads like"}
+              </p>
+              <p className="mt-2 font-sans text-sm leading-relaxed text-foreground">
+                {latestDigest ? formatDate(latestDigest.period_end) : "A weekly decision memo, not an alert dump."}
+              </p>
+            </div>
+          </div>
         </div>
 
         {loading ? (
-          <div className="animate-pulse space-y-0">
+          <div className="animate-pulse space-y-3">
             {[1, 2, 3].map((i) => (
-              <div key={i} className="flex items-start justify-between gap-6 border-b border-border/60 py-6">
+              <div key={i} className="product-panel p-5 flex items-start justify-between gap-6">
                 <div className="flex-1 space-y-2.5">
                   <div className="h-2.5 w-40 bg-muted rounded" />
                   <div className="h-4 w-3/4 bg-muted rounded" />
@@ -117,28 +160,87 @@ export default function DigestsPage() {
             ))}
           </div>
         ) : digests.length === 0 ? (
-          <div className="py-16 text-center">
-            <p className="font-display italic text-2xl text-foreground/60 mb-3">
-              No digests yet.
-            </p>
-            <p className="font-sans text-sm text-muted-foreground max-w-sm mx-auto leading-relaxed">
-              {copy.empty}
-            </p>
-            <button
-              onClick={generateNow}
-              disabled={generating}
-              className="mt-5 font-mono text-[10px] uppercase tracking-[0.15em] text-primary border border-primary/30 px-4 py-2 hover:bg-primary/5 transition-colors disabled:opacity-50"
-            >
-              {generating ? "Building…" : "Generate one now"}
-            </button>
+          <div className="product-panel p-6 sm:p-8">
+            <div className="grid gap-6 lg:grid-cols-[minmax(0,1.15fr)_minmax(16rem,20rem)]">
+              <div className="space-y-4">
+                <div className="space-y-2">
+                  <p className="font-mono text-[10px] uppercase tracking-[0.18em] text-muted-foreground">
+                    First digest
+                  </p>
+                  <p className="font-display italic text-[1.9rem] leading-tight text-foreground">
+                    Nothing on file yet.
+                  </p>
+                  <p className="max-w-xl font-sans text-sm leading-relaxed text-muted-foreground">
+                    {copy.empty}
+                  </p>
+                </div>
+
+                <div className="grid gap-3 sm:grid-cols-3">
+                  <div className="border border-border/60 bg-background/70 p-4">
+                    <p className="font-mono text-[10px] uppercase tracking-[0.14em] text-muted-foreground">
+                      What it covers
+                    </p>
+                    <p className="mt-2 font-sans text-sm leading-relaxed text-foreground/85">
+                      What moved, what stayed quiet, and where a decision may be needed.
+                    </p>
+                  </div>
+                  <div className="border border-border/60 bg-background/70 p-4">
+                    <p className="font-mono text-[10px] uppercase tracking-[0.14em] text-muted-foreground">
+                      Best used for
+                    </p>
+                    <p className="mt-2 font-sans text-sm leading-relaxed text-foreground/85">
+                      A weekly portfolio pass without reopening every position one by one.
+                    </p>
+                  </div>
+                  <div className="border border-border/60 bg-background/70 p-4">
+                    <p className="font-mono text-[10px] uppercase tracking-[0.14em] text-muted-foreground">
+                      Right now
+                    </p>
+                    <p className="mt-2 font-sans text-sm leading-relaxed text-foreground/85">
+                      Generate one now, or wait for the next scheduled run.
+                    </p>
+                  </div>
+                </div>
+              </div>
+
+              <aside className="product-panel product-panel-muted p-5 sm:p-6">
+                <p className="font-mono text-[10px] uppercase tracking-[0.18em] text-muted-foreground">
+                  Start here
+                </p>
+                <div className="mt-4 space-y-3">
+                  <div className="border-l-2 border-primary/20 pl-3">
+                    <p className="font-sans text-sm leading-relaxed text-foreground/85">
+                      Keep at least one position written and monitored.
+                    </p>
+                  </div>
+                  <div className="border-l-2 border-primary/20 pl-3">
+                    <p className="font-sans text-sm leading-relaxed text-foreground/85">
+                      Let the digest pull the important changes into one review pass.
+                    </p>
+                  </div>
+                  <div className="border-l-2 border-primary/20 pl-3">
+                    <p className="font-sans text-sm leading-relaxed text-foreground/85">
+                      Use it as a weekly memo, not a replacement for live alerts.
+                    </p>
+                  </div>
+                </div>
+                <button
+                  onClick={generateNow}
+                  disabled={generating}
+                  className="mt-5 font-mono text-[10px] uppercase tracking-[0.15em] text-primary border border-primary/30 px-4 py-2 hover:bg-primary/5 transition-colors disabled:opacity-50"
+                >
+                  {generating ? "Building…" : "Generate one now"}
+                </button>
+              </aside>
+            </div>
           </div>
         ) : (
-          <div>
+          <div className="space-y-3">
             {digests.map((d) => (
               <Link
                 key={d.id}
                 href={`/digests/${d.id}`}
-                className="group flex items-start justify-between gap-6 border-b border-border/60 py-6 transition-colors hover:bg-card -mx-4 px-4"
+                className="group product-panel p-5 flex items-start justify-between gap-6 transition-colors hover:bg-card"
               >
                 <div className="flex-1 min-w-0 space-y-2">
                   {/* Date range */}

@@ -5,6 +5,7 @@ import { useRouter } from "next/navigation";
 import Link from "next/link";
 import { motion, AnimatePresence } from "framer-motion";
 import { api } from "@/lib/api";
+import { Button } from "@/components/ui/button";
 import { formatCurrency } from "@/lib/utils";
 import type { Holding, OnboardingState, PortfolioSummary, SimulateTradeResponse, Thesis } from "@/types";
 
@@ -277,62 +278,118 @@ export default function SimulatePage() {
     .slice(0, 5);
 
   return (
-    <div className="max-w-xl mx-auto px-6 py-10">
+    <div className="mx-auto max-w-5xl px-4 py-10 sm:px-8 space-y-5">
+      <Link href="/dashboard" className="inline-block font-mono text-[10px] uppercase tracking-[0.2em] text-muted-foreground hover:text-primary transition-colors">
+        ← Portfolio
+      </Link>
 
-      {/* ── Header ── */}
-      <div className="mb-8">
-        <Link href="/dashboard" className="font-mono text-[10px] uppercase tracking-[0.2em] text-muted-foreground hover:text-primary transition-colors">
-          ← Portfolio
-        </Link>
-        <h1 className="font-display italic text-[2.8rem] leading-none text-foreground mt-3">
-          What if&hellip;
-        </h1>
+      <div className="product-panel product-panel-muted p-6 sm:p-7">
+        <div className="grid gap-5 lg:grid-cols-[minmax(0,1fr)_18rem]">
+          <div className="space-y-3">
+            <p className="font-mono text-[10px] uppercase tracking-[0.22em] text-muted-foreground">
+              Simulation
+            </p>
+            <h1 className="font-display italic text-[2.7rem] leading-[1.02] text-foreground">
+              Simulate an add before you size up.
+            </h1>
+            <p className="max-w-2xl font-sans text-sm leading-relaxed text-muted-foreground">
+              Run the trade before you commit capital. See what it does to concentration, holdings mix, and whether the position deserves more size right now.
+            </p>
+          </div>
+
+          <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-1">
+            <div className="border border-border/60 bg-background/70 p-4">
+              <p className="font-mono text-[10px] uppercase tracking-[0.16em] text-muted-foreground">
+                Best used for
+              </p>
+              <p className="mt-2 font-sans text-sm leading-relaxed text-foreground/80">
+                Checking concentration before a new buy or adding to an existing name.
+              </p>
+            </div>
+            {summary && (
+              <div className="border border-border/60 bg-background/70 p-4">
+                <p className="font-mono text-[10px] uppercase tracking-[0.16em] text-muted-foreground">
+                  Portfolio now
+                </p>
+                <p className="mt-2 font-display text-[1.35rem] italic leading-tight text-foreground">
+                  {formatCurrency(summary.total_value)}
+                </p>
+                <p className="mt-2 font-sans text-sm leading-relaxed text-muted-foreground">
+                  {summary.holdings_count} holdings · top 3 at {pct(summary.top_3_concentration_pct)}
+                </p>
+              </div>
+            )}
+          </div>
+        </div>
       </div>
 
-      {/* ── Input sentence ── */}
-      <div className="border border-border bg-card px-5 py-6 space-y-5 mb-8">
-        <div className="flex items-baseline gap-2 text-base text-foreground/80 flex-wrap font-sans">
-          <span>I buy</span>
-          <input
-            type="number"
-            placeholder="10"
-            value={quantity}
-            onChange={(e) => setQuantity(e.target.value)}
-            className="w-14 border-b border-foreground/25 bg-transparent text-center text-foreground font-mono text-base outline-none focus:border-primary pb-0.5 transition-colors"
-          />
-          <span>shares of</span>
-          <input
-            placeholder="NVDA"
-            value={ticker}
-            onChange={(e) => setTicker(e.target.value)}
-            className="w-20 border-b border-foreground/25 bg-transparent text-center text-foreground font-mono text-base uppercase outline-none focus:border-primary pb-0.5 transition-colors"
-          />
-          <span>at</span>
-          <input
-            type="number"
-            step="0.01"
-            placeholder="135"
-            value={price}
-            onChange={(e) => setPrice(e.target.value)}
-            className="w-20 border-b border-foreground/25 bg-transparent text-center text-foreground font-mono text-base outline-none focus:border-primary pb-0.5 transition-colors"
-          />
-          <span>each.</span>
+      <div className="product-panel p-5 sm:p-6 space-y-5">
+        <div className="space-y-3">
+          <div>
+            <p className="font-mono text-[10px] uppercase tracking-[0.16em] text-muted-foreground">
+              Trade to test
+            </p>
+            <p className="mt-2 font-sans text-sm leading-relaxed text-muted-foreground">
+              Enter the add you are considering, then check the portfolio impact before you size up.
+            </p>
+          </div>
+
+          <div className="grid gap-3 sm:grid-cols-3">
+            <label className="space-y-2">
+              <span className="font-mono text-[10px] uppercase tracking-[0.15em] text-muted-foreground/70">
+                Shares
+              </span>
+              <input
+                type="number"
+                inputMode="decimal"
+                placeholder="10"
+                value={quantity}
+                onChange={(e) => setQuantity(e.target.value)}
+                className="flex h-11 w-full border border-input bg-background px-3 py-2 text-sm text-foreground outline-none transition-colors focus-visible:ring-2 focus-visible:ring-ring"
+              />
+            </label>
+            <label className="space-y-2">
+              <span className="font-mono text-[10px] uppercase tracking-[0.15em] text-muted-foreground/70">
+                Ticker
+              </span>
+              <input
+                placeholder="NVDA"
+                value={ticker}
+                onChange={(e) => setTicker(e.target.value.toUpperCase())}
+                className="flex h-11 w-full border border-input bg-background px-3 py-2 font-mono text-sm uppercase text-foreground outline-none transition-colors focus-visible:ring-2 focus-visible:ring-ring"
+              />
+            </label>
+            <label className="space-y-2">
+              <span className="font-mono text-[10px] uppercase tracking-[0.15em] text-muted-foreground/70">
+                Price per share
+              </span>
+              <input
+                type="number"
+                inputMode="decimal"
+                step="0.01"
+                placeholder="135.00"
+                value={price}
+                onChange={(e) => setPrice(e.target.value)}
+                className="flex h-11 w-full border border-input bg-background px-3 py-2 text-sm text-foreground outline-none transition-colors focus-visible:ring-2 focus-visible:ring-ring"
+              />
+            </label>
+          </div>
         </div>
 
-        <button
-          onClick={handleSimulate}
-          disabled={loading || !ticker || !quantity || !price}
-          className="font-mono text-[10px] uppercase tracking-[0.2em] bg-primary text-primary-foreground px-5 py-2.5 hover:bg-primary/90 transition-colors disabled:opacity-40 disabled:cursor-not-allowed"
-        >
-          {loading ? "Thinking…" : "Show me the impact"}
-        </button>
+        <div className="flex flex-wrap items-center gap-3">
+          <Button onClick={handleSimulate} disabled={loading || !ticker || !quantity || !price}>
+            {loading ? "Thinking…" : "Show me the impact"}
+          </Button>
+          <p className="font-sans text-xs leading-relaxed text-muted-foreground">
+            This does not place a trade. It shows how the portfolio would look if you did.
+          </p>
+        </div>
 
         {error && (
           <p className="font-sans text-sm text-red-600">{error}</p>
         )}
       </div>
 
-      {/* ── Pre-simulation: current portfolio ── */}
       <AnimatePresence mode="wait">
         {!result && summary && (
           <motion.div
@@ -341,76 +398,96 @@ export default function SimulatePage() {
             animate={{ opacity: 1, y: 0 }}
             exit={{ opacity: 0 }}
             transition={{ duration: 0.25 }}
-            className="space-y-5"
+            className="grid gap-5 xl:grid-cols-[minmax(0,1fr)_18rem]"
           >
-            {/* Current stats */}
-            <div className="border border-border bg-card divide-y divide-border/40">
-              <div className="px-5 py-3">
-                <p className="font-mono text-[9px] uppercase tracking-[0.3em] text-muted-foreground">
-                  Your portfolio right now
+            <div className="space-y-5">
+              <div className="product-panel divide-y divide-border/40 overflow-hidden">
+                <div className="px-5 py-3">
+                  <p className="font-mono text-[9px] uppercase tracking-[0.3em] text-muted-foreground">
+                    Your portfolio right now
+                  </p>
+                </div>
+                <div className="grid grid-cols-3 divide-x divide-border/40">
+                  {[
+                    { label: "Total value", value: formatCurrency(summary.total_value), accent: false },
+                    { label: "Holdings", value: String(summary.holdings_count), accent: false },
+                    { label: "Top 3 conc.", value: pct(summary.top_3_concentration_pct), accent: summary.top_3_concentration_pct >= 50 },
+                  ].map(({ label, value, accent }) => (
+                    <div key={label} className="px-5 py-4 text-center">
+                      <p className={`font-mono text-xl tabular-nums font-medium ${accent ? "text-amber-700" : "text-foreground"}`}>
+                        {value}
+                      </p>
+                      <p className="font-mono text-[9px] uppercase tracking-[0.15em] text-muted-foreground mt-1">{label}</p>
+                    </div>
+                  ))}
+                </div>
+              </div>
+
+              <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
+                {Object.keys(summary.sector_breakdown).length > 0 && (
+                  <div className="product-panel px-5 py-5 flex items-center justify-center min-h-[180px]">
+                    <DonutChart breakdown={summary.sector_breakdown} label="Sector allocation" size={96} />
+                  </div>
+                )}
+
+                {topHoldings.length > 0 && (
+                  <div className="product-panel px-5 py-5 space-y-3">
+                    <p className="font-mono text-[9px] uppercase tracking-[0.25em] text-muted-foreground">
+                      Largest positions
+                    </p>
+                    <div className="space-y-2.5">
+                      {topHoldings.map((h) => {
+                        const weight = summary.total_value > 0 ? ((h.current_value ?? 0) / summary.total_value) * 100 : 0;
+                        return (
+                          <div key={h.id} className="flex items-center gap-3">
+                            <span className="font-mono text-[11px] font-medium text-foreground w-14 shrink-0">
+                              {cleanTicker(h.ticker)}
+                            </span>
+                            <div className="flex-1 h-px bg-border overflow-hidden">
+                              <div
+                                className="h-full bg-primary/40 transition-all"
+                                style={{ width: `${Math.min(weight * 1.2, 100)}%` }}
+                              />
+                            </div>
+                            <span className="font-mono text-[10px] text-muted-foreground tabular-nums w-10 text-right shrink-0">
+                              {pct(weight)}
+                            </span>
+                          </div>
+                        );
+                      })}
+                    </div>
+                  </div>
+                )}
+              </div>
+            </div>
+
+            <aside className="space-y-4">
+              <div className="product-panel p-5">
+                <p className="font-mono text-[10px] uppercase tracking-[0.16em] text-muted-foreground">
+                  What this is for
+                </p>
+                <p className="mt-2 font-display text-[1.3rem] italic leading-tight text-foreground">
+                  Check the add before the impulse turns into size.
+                </p>
+                <p className="mt-2 font-sans text-sm leading-relaxed text-muted-foreground">
+                  Use this when you already like the idea and want to see whether the portfolio impact still looks disciplined.
                 </p>
               </div>
-              <div className="grid grid-cols-3 divide-x divide-border/40">
-                {[
-                  { label: "Total value", value: formatCurrency(summary.total_value), accent: false },
-                  { label: "Holdings", value: String(summary.holdings_count), accent: false },
-                  { label: "Top 3 conc.", value: pct(summary.top_3_concentration_pct), accent: summary.top_3_concentration_pct >= 50 },
-                ].map(({ label, value, accent }) => (
-                  <div key={label} className="px-5 py-4 text-center">
-                    <p className={`font-mono text-xl tabular-nums font-medium ${accent ? "text-amber-700" : "text-foreground"}`}>
-                      {value}
-                    </p>
-                    <p className="font-mono text-[9px] uppercase tracking-[0.15em] text-muted-foreground mt-1">{label}</p>
-                  </div>
-                ))}
+              <div className="product-panel p-5">
+                <p className="font-mono text-[10px] uppercase tracking-[0.16em] text-muted-foreground">
+                  Read it as
+                </p>
+                <p className="mt-2 font-display text-[1.3rem] italic leading-tight text-foreground">
+                  A sizing check, not a stock picker.
+                </p>
+                <p className="mt-2 font-sans text-sm leading-relaxed text-muted-foreground">
+                  The product is telling you what the trade does to the portfolio and whether the thesis work around it is strong enough.
+                </p>
               </div>
-            </div>
-
-            {/* Sector + top holdings */}
-            <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
-              {Object.keys(summary.sector_breakdown).length > 0 && (
-                <div className="border border-border bg-card px-5 py-5 flex items-center justify-center min-h-[180px]">
-                  <DonutChart breakdown={summary.sector_breakdown} label="Sector allocation" size={96} />
-                </div>
-              )}
-
-              {topHoldings.length > 0 && (
-                <div className="border border-border bg-card px-5 py-5 space-y-3">
-                  <p className="font-mono text-[9px] uppercase tracking-[0.25em] text-muted-foreground">
-                    Largest positions
-                  </p>
-                  <div className="space-y-2.5">
-                    {topHoldings.map((h) => {
-                      const weight = summary.total_value > 0 ? ((h.current_value ?? 0) / summary.total_value) * 100 : 0;
-                      return (
-                        <div key={h.id} className="flex items-center gap-3">
-                          <span className="font-mono text-[11px] font-medium text-foreground w-14 shrink-0">
-                            {cleanTicker(h.ticker)}
-                          </span>
-                          <div className="flex-1 h-px bg-border overflow-hidden">
-                            <div
-                              className="h-full bg-primary/40 transition-all"
-                              style={{ width: `${Math.min(weight * 1.2, 100)}%` }}
-                            />
-                          </div>
-                          <span className="font-mono text-[10px] text-muted-foreground tabular-nums w-10 text-right shrink-0">
-                            {pct(weight)}
-                          </span>
-                        </div>
-                      );
-                    })}
-                  </div>
-                </div>
-              )}
-            </div>
-
-            <p className="font-mono text-[9px] text-center text-muted-foreground/50 uppercase tracking-[0.15em]">
-              Simulate a trade above to see how it shifts your portfolio
-            </p>
+            </aside>
           </motion.div>
         )}
 
-        {/* ── Post-simulation results ── */}
         {result && verdict && (
           <motion.div
             key="post"
@@ -418,167 +495,178 @@ export default function SimulatePage() {
             animate={{ opacity: 1, y: 0 }}
             exit={{ opacity: 0 }}
             transition={{ duration: 0.3 }}
-            className="space-y-6"
+            className="grid gap-5 xl:grid-cols-[minmax(0,1fr)_18rem]"
           >
-            {/* Verdict */}
-            <div className={`border-l-4 ${verdict.borderClass} pl-5 py-2 flex items-start gap-4`}>
-              <div className="space-y-1">
-                <div className="flex items-center gap-2">
-                  <span className={`h-2 w-2 rounded-full shrink-0 ${verdict.dot}`} />
-                  <p className={`font-mono text-[10px] uppercase tracking-[0.2em] ${verdict.labelClass}`}>
-                    Grade {verdict.grade}
-                  </p>
-                </div>
-                <p className="font-display italic text-xl text-foreground">{verdict.headline}</p>
-                <p className="font-sans text-sm text-muted-foreground leading-relaxed">{verdict.detail}</p>
-              </div>
-            </div>
-
-            {/* Narrative */}
-            <div className="space-y-1.5">
-              {narrative.map((line, i) => (
-                <p key={i} className="font-sans text-sm text-muted-foreground leading-relaxed">{line}</p>
-              ))}
-            </div>
-
-            {/* Warnings */}
-            {result.warnings.length > 0 && (
-              <div className="space-y-2">
-                {result.warnings.map((w, i) => (
-                  <div key={i} className={`border-l-2 pl-4 py-2 ${
-                    w.warning_type === "missing_thesis"
-                      ? "border-l-sky-400 bg-sky-500/5"
-                      : "border-l-amber-400 bg-amber-500/5"
-                  }`}>
-                    <p className={`font-sans text-sm leading-relaxed ${
-                      w.warning_type === "missing_thesis" ? "text-sky-700" : "text-amber-700"
-                    }`}>
-                      {w.message}
+            <div className="space-y-5">
+              <div className={`product-panel border-l-4 ${verdict.borderClass} p-5`}>
+                <div className="space-y-1">
+                  <div className="flex items-center gap-2">
+                    <span className={`h-2 w-2 rounded-full shrink-0 ${verdict.dot}`} />
+                    <p className={`font-mono text-[10px] uppercase tracking-[0.2em] ${verdict.labelClass}`}>
+                      Grade {verdict.grade}
                     </p>
                   </div>
+                  <p className="font-display italic text-xl text-foreground">{verdict.headline}</p>
+                  <p className="font-sans text-sm text-muted-foreground leading-relaxed">{verdict.detail}</p>
+                </div>
+              </div>
+
+              <div className="product-panel p-5 space-y-1.5">
+                <p className="font-mono text-[9px] uppercase tracking-[0.25em] text-muted-foreground">
+                  What changes
+                </p>
+                {narrative.map((line, i) => (
+                  <p key={i} className="font-sans text-sm text-muted-foreground leading-relaxed">{line}</p>
                 ))}
               </div>
-            )}
 
-            {intervention && (
-              <div className={`border px-5 py-4 space-y-3 ${intervention.tone}`}>
-                <p className="font-mono text-[9px] uppercase tracking-[0.25em] opacity-80">
-                  {intervention.eyebrow}
-                </p>
-                <div className="space-y-1.5">
-                  <p className="font-display italic text-xl text-foreground">{intervention.title}</p>
-                  <p className="font-sans text-sm leading-relaxed text-current/90">{intervention.body}</p>
+              {result.warnings.length > 0 && (
+                <div className="space-y-2">
+                  {result.warnings.map((w, i) => (
+                    <div key={i} className={`product-panel border-l-2 p-4 ${
+                      w.warning_type === "missing_thesis"
+                        ? "border-l-sky-400 bg-sky-500/5"
+                        : "border-l-amber-400 bg-amber-500/5"
+                    }`}>
+                      <p className={`font-sans text-sm leading-relaxed ${
+                        w.warning_type === "missing_thesis" ? "text-sky-700" : "text-amber-700"
+                      }`}>
+                        {w.message}
+                      </p>
+                    </div>
+                  ))}
                 </div>
-                {intervention.ctaHref && (
-                  <Link
-                    href={intervention.ctaHref}
-                    className="inline-flex font-mono text-[10px] uppercase tracking-[0.15em] text-primary hover:text-primary/80 transition-colors"
+              )}
+
+              <div className="product-panel divide-y divide-border/40 overflow-hidden">
+                <div className="grid grid-cols-4 divide-x divide-border/40">
+                  <div className="px-3 py-2" />
+                  {["Before", "After", "Delta"].map((h) => (
+                    <div key={h} className="px-3 py-2 text-right">
+                      <p className="font-mono text-[9px] uppercase tracking-[0.2em] text-muted-foreground">{h}</p>
+                    </div>
+                  ))}
+                </div>
+                {[
+                  {
+                    label: "Portfolio",
+                    before: formatCurrency(result.before.total_value),
+                    after: formatCurrency(result.after.total_value),
+                    delta: `+${formatCurrency(result.after.total_value - result.before.total_value)}`,
+                    positive: true,
+                  },
+                  {
+                    label: "Holdings",
+                    before: String(result.before.holdings_count),
+                    after: String(result.after.holdings_count),
+                    delta: result.after.holdings_count > result.before.holdings_count ? "+1 new" : "—",
+                    positive: result.after.holdings_count > result.before.holdings_count,
+                  },
+                  {
+                    label: "Top 3 conc.",
+                    before: pct(result.before.top_3_concentration_pct),
+                    after: pct(result.after.top_3_concentration_pct),
+                    delta: `${result.after.top_3_concentration_pct > result.before.top_3_concentration_pct ? "+" : ""}${(result.after.top_3_concentration_pct - result.before.top_3_concentration_pct).toFixed(1)}%`,
+                    positive: result.after.top_3_concentration_pct <= result.before.top_3_concentration_pct,
+                  },
+                ].map(({ label, before, after, delta, positive }) => (
+                  <div key={label} className="grid grid-cols-4 divide-x divide-border/40">
+                    <div className="px-3 py-3">
+                      <p className="font-mono text-[10px] text-muted-foreground">{label}</p>
+                    </div>
+                    <div className="px-3 py-3 text-right">
+                      <p className="font-mono text-[11px] text-muted-foreground/50 line-through decoration-muted-foreground/30 tabular-nums">{before}</p>
+                    </div>
+                    <div className="px-3 py-3 text-right">
+                      <p className="font-mono text-[11px] text-foreground tabular-nums font-medium">{after}</p>
+                    </div>
+                    <div className="px-3 py-3 text-right">
+                      <p className={`font-mono text-[10px] tabular-nums ${positive ? "text-emerald-700" : "text-amber-700"}`}>{delta}</p>
+                    </div>
+                  </div>
+                ))}
+              </div>
+
+              {(Object.keys(result.before.sector_breakdown).length > 0 || Object.keys(result.after.sector_breakdown).length > 0) && (
+                <div className="product-panel px-5 py-5 space-y-4">
+                  <p className="font-mono text-[9px] uppercase tracking-[0.3em] text-muted-foreground">
+                    Sector allocation shift
+                  </p>
+                  <div className="grid grid-cols-2 gap-6">
+                    <DonutChart breakdown={result.before.sector_breakdown} label="Before" size={88} />
+                    <DonutChart breakdown={result.after.sector_breakdown} label={`After +${cleanTicker(result.ticker)}`} size={88} />
+                  </div>
+                </div>
+              )}
+
+              <div className="product-panel p-5 space-y-3">
+                <p className="font-mono text-[9px] uppercase tracking-[0.25em] text-muted-foreground">
+                  Ready to commit?
+                </p>
+                <div className="flex flex-col gap-2 sm:flex-row">
+                  <Button
+                    onClick={() => addHolding("thesis")}
+                    disabled={adding}
+                    className="flex-1"
                   >
-                    {intervention.ctaLabel}
-                  </Link>
-                )}
-              </div>
-            )}
-
-            {/* Before / after numbers */}
-            <div className="border border-border bg-card divide-y divide-border/40">
-              <div className="grid grid-cols-4 divide-x divide-border/40">
-                <div className="px-3 py-2" />
-                {["Before", "After", "Δ"].map((h) => (
-                  <div key={h} className="px-3 py-2 text-right">
-                    <p className="font-mono text-[9px] uppercase tracking-[0.2em] text-muted-foreground">{h}</p>
-                  </div>
-                ))}
-              </div>
-              {[
-                {
-                  label: "Portfolio",
-                  before: formatCurrency(result.before.total_value),
-                  after: formatCurrency(result.after.total_value),
-                  delta: `+${formatCurrency(result.after.total_value - result.before.total_value)}`,
-                  positive: true,
-                },
-                {
-                  label: "Holdings",
-                  before: String(result.before.holdings_count),
-                  after: String(result.after.holdings_count),
-                  delta: result.after.holdings_count > result.before.holdings_count ? "+1 new" : "—",
-                  positive: result.after.holdings_count > result.before.holdings_count,
-                },
-                {
-                  label: "Top 3 conc.",
-                  before: pct(result.before.top_3_concentration_pct),
-                  after: pct(result.after.top_3_concentration_pct),
-                  delta: `${result.after.top_3_concentration_pct > result.before.top_3_concentration_pct ? "+" : ""}${(result.after.top_3_concentration_pct - result.before.top_3_concentration_pct).toFixed(1)}%`,
-                  positive: result.after.top_3_concentration_pct <= result.before.top_3_concentration_pct,
-                },
-              ].map(({ label, before, after, delta, positive }) => (
-                <div key={label} className="grid grid-cols-4 divide-x divide-border/40">
-                  <div className="px-3 py-3">
-                    <p className="font-mono text-[10px] text-muted-foreground">{label}</p>
-                  </div>
-                  <div className="px-3 py-3 text-right">
-                    <p className="font-mono text-[11px] text-muted-foreground/50 line-through decoration-muted-foreground/30 tabular-nums">{before}</p>
-                  </div>
-                  <div className="px-3 py-3 text-right">
-                    <p className="font-mono text-[11px] text-foreground tabular-nums font-medium">{after}</p>
-                  </div>
-                  <div className="px-3 py-3 text-right">
-                    <p className={`font-mono text-[10px] tabular-nums ${positive ? "text-emerald-700" : "text-amber-700"}`}>{delta}</p>
-                  </div>
+                    {adding
+                      ? "Adding…"
+                      : intervention?.ctaHref === null
+                        ? intervention.ctaLabel
+                        : `Add ${cleanTicker(result.ticker)} & write thesis`}
+                  </Button>
+                  <button
+                    onClick={() => addHolding("dashboard")}
+                    disabled={adding}
+                    className={`flex-1 font-mono text-[10px] uppercase tracking-[0.15em] border px-4 py-3 transition-colors disabled:opacity-40 ${
+                      intervention?.softenSecondary
+                        ? "border-border text-foreground/45 hover:text-foreground/60 hover:border-foreground/25"
+                        : "border-border text-foreground/70 hover:text-foreground hover:border-foreground/40"
+                    }`}
+                  >
+                    Just add it
+                  </button>
                 </div>
-              ))}
+              </div>
             </div>
 
-            {/* Sector comparison */}
-            {(Object.keys(result.before.sector_breakdown).length > 0 || Object.keys(result.after.sector_breakdown).length > 0) && (
-              <div className="border border-border bg-card px-5 py-5 space-y-4">
-                <p className="font-mono text-[9px] uppercase tracking-[0.3em] text-muted-foreground">
-                  Sector allocation shift
+            <aside className="space-y-4">
+              {intervention && (
+                <div className={`product-panel border p-5 space-y-3 ${intervention.tone}`}>
+                  <p className="font-mono text-[9px] uppercase tracking-[0.25em] opacity-80">
+                    {intervention.eyebrow}
+                  </p>
+                  <div className="space-y-1.5">
+                    <p className="font-display italic text-xl text-foreground">{intervention.title}</p>
+                    <p className="font-sans text-sm leading-relaxed text-current/90">{intervention.body}</p>
+                  </div>
+                  {intervention.ctaHref && (
+                    <Link
+                      href={intervention.ctaHref}
+                      className="inline-flex font-mono text-[10px] uppercase tracking-[0.15em] text-primary hover:text-primary/80 transition-colors"
+                    >
+                      {intervention.ctaLabel}
+                    </Link>
+                  )}
+                </div>
+              )}
+              <div className="product-panel p-5">
+                <p className="font-mono text-[10px] uppercase tracking-[0.16em] text-muted-foreground">
+                  Read the result as
                 </p>
-                <div className="grid grid-cols-2 gap-6">
-                  <DonutChart breakdown={result.before.sector_breakdown} label="Before" size={88} />
-                  <DonutChart breakdown={result.after.sector_breakdown} label={`After +${cleanTicker(result.ticker)}`} size={88} />
-                </div>
+                <p className="mt-2 font-display text-[1.3rem] italic leading-tight text-foreground">
+                  A portfolio decision check.
+                </p>
+                <p className="mt-2 font-sans text-sm leading-relaxed text-muted-foreground">
+                  The point is not whether you like the company. It is whether this add still looks disciplined once size, concentration, and thesis quality are visible.
+                </p>
               </div>
-            )}
-
-            {/* CTAs */}
-            <div className="border border-border bg-card px-5 py-5 space-y-3">
-              <p className="font-mono text-[9px] uppercase tracking-[0.25em] text-muted-foreground">
-                Ready to commit?
+              <p className="text-center">
+                <Link href="/dashboard" className="font-mono text-[9px] uppercase tracking-[0.2em] text-muted-foreground/50 hover:text-primary transition-colors">
+                  ← Back to portfolio
+                </Link>
               </p>
-              <div className="flex flex-col gap-2 sm:flex-row">
-                <button
-                  onClick={() => addHolding("thesis")}
-                  disabled={adding}
-                  className="flex-1 font-mono text-[10px] uppercase tracking-[0.15em] bg-primary text-primary-foreground px-4 py-3 hover:bg-primary/90 transition-colors disabled:opacity-40"
-                >
-                  {adding
-                    ? "Adding…"
-                    : intervention?.ctaHref === null
-                      ? intervention.ctaLabel
-                      : `Add ${cleanTicker(result.ticker)} & write thesis`}
-                </button>
-                <button
-                  onClick={() => addHolding("dashboard")}
-                  disabled={adding}
-                  className={`flex-1 font-mono text-[10px] uppercase tracking-[0.15em] border px-4 py-3 transition-colors disabled:opacity-40 ${
-                    intervention?.softenSecondary
-                      ? "border-border text-foreground/45 hover:text-foreground/60 hover:border-foreground/25"
-                      : "border-border text-foreground/70 hover:text-foreground hover:border-foreground/40"
-                  }`}
-                >
-                  Just add it
-                </button>
-              </div>
-            </div>
-
-            <p className="text-center">
-              <Link href="/dashboard" className="font-mono text-[9px] uppercase tracking-[0.2em] text-muted-foreground/50 hover:text-primary transition-colors">
-                ← Back to portfolio
-              </Link>
-            </p>
+            </aside>
           </motion.div>
         )}
       </AnimatePresence>

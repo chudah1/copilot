@@ -1,6 +1,7 @@
 "use client";
 
 import Link from "next/link";
+import { usePathname } from "next/navigation";
 import { useAuth } from "@/lib/auth";
 import { mk } from "./tokens";
 import { PenKeepMark } from "./mark";
@@ -11,16 +12,32 @@ interface MarketingNavProps {
 
 export function MarketingNav({ active }: MarketingNavProps) {
   const { isAuthenticated } = useAuth();
+  const pathname = usePathname();
+
+  const derivedActive =
+    pathname.startsWith("/blog") ? "blog" :
+    pathname.startsWith("/pricing") ? "pricing" :
+    pathname.startsWith("/faq") ? "faq" :
+    pathname.startsWith("/security") ? "security" :
+    undefined;
+  const currentActive = active ?? derivedActive;
 
   const linkStyle = (page?: string): React.CSSProperties => ({
-    color: active === page ? mk.ink : mk.pencil,
+    color: currentActive === page ? mk.ink : mk.pencil,
     textDecoration: "none",
-    fontWeight: active === page ? 500 : 400,
-    borderBottom: active === page ? `1.6px solid ${mk.ink}` : "none",
-    paddingBottom: active === page ? 2 : 0,
+    fontWeight: currentActive === page ? 500 : 400,
+    borderBottom: currentActive === page ? `1.6px solid ${mk.ink}` : "none",
+    paddingBottom: currentActive === page ? 2 : 0,
     fontSize: 14,
     transition: "color 150ms",
   });
+
+  const links: Array<{ href: string; label: string; page?: MarketingNavProps["active"] }> = [
+    { href: "/blog", label: "Blog", page: "blog" },
+    { href: "/pricing", label: "Pricing", page: "pricing" },
+    { href: "/faq", label: "FAQ", page: "faq" },
+    { href: "/security", label: "Security", page: "security" },
+  ];
 
   return (
     <nav
@@ -41,22 +58,34 @@ export function MarketingNav({ active }: MarketingNavProps) {
           justifyContent: "space-between",
           padding: "0 clamp(22px, 4.5vw, 56px)",
           height: "clamp(52px, 8vw, 72px)",
+          gap: 20,
         }}
       >
-        <Link href="/" style={{ display: "flex", alignItems: "center", gap: 10, textDecoration: "none" }}>
+        <Link href="/" style={{ display: "flex", alignItems: "center", gap: 10, textDecoration: "none", minWidth: 0 }}>
           <PenKeepMark size={22} color={mk.ink} />
-          <span style={{ fontFamily: mk.sans, fontWeight: 600, fontSize: "1.1rem", letterSpacing: "-0.02em", color: mk.ink }}>
-            penKeep
-          </span>
+          <div style={{ display: "flex", alignItems: "baseline", gap: 10, minWidth: 0 }}>
+            <span style={{ fontFamily: mk.sans, fontWeight: 600, fontSize: "1.1rem", letterSpacing: "-0.02em", color: mk.ink }}>
+              penKeep
+            </span>
+            <span
+              style={{
+                fontFamily: mk.mono,
+                fontSize: 10,
+                letterSpacing: "0.12em",
+                textTransform: "uppercase",
+                color: mk.pencil,
+              }}
+              className="hidden md:inline"
+            >
+              Thesis-first portfolio review
+            </span>
+          </div>
         </Link>
 
-        <div style={{ display: "flex", gap: 26, alignItems: "center" }}>
-          <Link href="/blog" style={linkStyle("blog")} className="hidden sm:inline">
-            Blog
-          </Link>
+        <div style={{ display: "flex", gap: 22, alignItems: "center", flexWrap: "wrap", justifyContent: "flex-end" }}>
           <Link
             href="/#how-it-works"
-            className="hidden sm:inline"
+            className="hidden lg:inline"
             style={{
               color: mk.pencil,
               textDecoration: "none",
@@ -66,9 +95,11 @@ export function MarketingNav({ active }: MarketingNavProps) {
           >
             How it works
           </Link>
-          <Link href="/security" style={linkStyle("security")} className="hidden sm:inline">
-            Security
-          </Link>
+          {links.map((link) => (
+            <Link key={link.href} href={link.href} style={linkStyle(link.page)} className="hidden sm:inline">
+              {link.label}
+            </Link>
+          ))}
 
           {isAuthenticated ? (
             <Link

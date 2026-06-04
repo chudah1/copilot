@@ -339,9 +339,18 @@ async def compute_portfolio_pulse(user_id: uuid.UUID, db: AsyncSession) -> tuple
             continue
 
         days_since_update = _days_since_update(thesis.updated_at, now=now)
-        latest_summary = _combined_event_summary(events, now=now, signal_labels=signal_labels)
+        latest_summary = _combined_event_summary(
+            events,
+            now=now,
+            signal_labels=signal_labels,
+            ticker=holding.ticker,
+        )
         latest_assumption = (
-            _event_assumption_label(events[0], signal_labels=signal_labels)
+            _event_assumption_label(
+                events[0],
+                signal_labels=signal_labels,
+                ticker=holding.ticker,
+            )
             if events
             else None
         )

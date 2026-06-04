@@ -3,6 +3,7 @@
 import { useState } from "react";
 import Link from "next/link";
 import { useAuth } from "@/lib/auth";
+import { AuthShell } from "@/components/auth/auth-shell";
 import { Button } from "@/components/ui/button";
 import { getErrorMessage } from "@/lib/errors";
 
@@ -35,17 +36,34 @@ export default function RegisterPage() {
   };
 
   return (
-    <div className="flex min-h-screen items-center justify-center px-4">
-      <div className="w-full max-w-sm border border-border/60 bg-card p-8 space-y-6">
-        <div>
-          <p className="font-mono text-[10px] uppercase tracking-[0.2em] text-muted-foreground mb-2">
-            penKeep
-          </p>
-          <h1 className="font-display italic text-[2rem] leading-tight text-foreground">
-            Keep your thinking honest.
-          </h1>
-        </div>
-
+    <AuthShell
+      eyebrow="Create Account"
+      title="Keep your thinking honest."
+      description="Bring in a few positions, write the reason down, and let the product watch the thesis instead of the tape."
+      asideHeading="What happens next"
+      asideBody="You do not need a full portfolio import to feel the product. Start small and get to the decision loop fast."
+      asideItems={[
+        {
+          eyebrow: "Start Small",
+          title: "Add one to three names first.",
+          body: "That is enough to pressure-test the thesis workflow before you bother importing everything else.",
+        },
+        {
+          eyebrow: "Outcome",
+          title: "Turn opinions into a monitorable record.",
+          body: "Write what must stay true, what would break the case, and what evidence should matter next.",
+        },
+      ]}
+      footer={(
+        <p className="font-mono text-[10px] text-muted-foreground/70 text-center">
+          Already have an account?{" "}
+          <Link href="/login" className="underline underline-offset-2 hover:text-foreground transition-colors">
+            Sign in
+          </Link>
+        </p>
+      )}
+    >
+      <div className="max-w-sm">
         <form onSubmit={handleSubmit} className="space-y-4">
           <div className="space-y-1.5">
             <label htmlFor="email" className="font-mono text-[10px] uppercase tracking-[0.15em] text-muted-foreground block">
@@ -90,14 +108,7 @@ export default function RegisterPage() {
             <span className="font-mono text-[11px] uppercase tracking-[0.15em]">Create account</span>
           </Button>
         </form>
-
-        <p className="font-mono text-[10px] text-muted-foreground/70 text-center">
-          Already have an account?{" "}
-          <Link href="/login" className="underline underline-offset-2 hover:text-foreground transition-colors">
-            Sign in
-          </Link>
-        </p>
       </div>
-    </div>
+    </AuthShell>
   );
 }

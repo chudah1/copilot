@@ -2,6 +2,7 @@
 
 import Link from "next/link";
 import { motion } from "framer-motion";
+import { formatAssumptionLabel } from "@/lib/assumption-label";
 import { cleanTicker } from "./position-card";
 import type { Holding, HoldingPulse } from "@/types";
 
@@ -16,10 +17,10 @@ function assumptionHeadline(
   assumptionLabel: string | null | undefined,
   investorProfile?: "thesis_driven" | "hearsay_driven" | null,
 ) {
-  if (assumptionLabel && assumptionLabel.trim()) {
-    return assumptionLabel.trim();
-  }
-  return investorProfile === "hearsay_driven" ? "The original story" : "The core assumption";
+  return formatAssumptionLabel(assumptionLabel, investorProfile, {
+    maxLength: 52,
+    sentenceCaseFallback: true,
+  });
 }
 
 function attentionCopy(
@@ -31,31 +32,25 @@ function attentionCopy(
   const cadencePressure = pulse.reason.includes("review cadence");
   if (isReview) {
     return {
-      eyebrow: "Decision now",
-      headline:
-        investorProfile === "hearsay_driven"
-          ? `${target} may no longer hold.`
-          : `${target} may no longer hold.`,
+      eyebrow: "Review",
+      headline: `${target} may have changed.`,
       detail:
         pulse.reason ||
         (investorProfile === "hearsay_driven"
-          ? "Past watch mode — you need to decide what this means for the story."
-          : "Past watch mode — you need to decide what this means for the thesis."),
+          ? "This story now needs a clear call."
+          : "This thesis now needs a clear call."),
       subLabel: cadencePressure ? "Review cadence missed" : null,
     };
   }
 
   return {
-    eyebrow: "Watch closely",
-    headline:
-      investorProfile === "hearsay_driven"
-        ? `${target} is being tested.`
-        : `${target} is being tested.`,
+    eyebrow: "Watch",
+    headline: `${target} is under pressure.`,
     detail:
       pulse.reason ||
       (investorProfile === "hearsay_driven"
-        ? "Nothing looks broken yet, but the original story has new pressure on it."
-        : "Nothing looks broken yet, but one thesis pillar has new pressure on it."),
+        ? "Nothing looks broken yet, but the story needs a closer look."
+        : "Nothing looks broken yet, but this thesis needs a closer look."),
     subLabel: cadencePressure ? "Review cadence drifting" : null,
   };
 }
@@ -103,12 +98,12 @@ export function AttentionCard({ holding, pulse, investorProfile, index }: Attent
           )}
           {pulse.days_since_thesis_update != null && (
             <p className="font-mono text-[10px] text-muted-foreground/60">
-              Reason age {pulse.days_since_thesis_update}d
+              Updated {pulse.days_since_thesis_update}d ago
             </p>
           )}
           {pulse.recent_event_count > 0 && (
             <p className={`font-mono text-[10px] ${isReview ? "text-red-600/80" : "text-amber-700/80"}`}>
-              {pulse.recent_event_count} recent event{pulse.recent_event_count !== 1 ? "s" : ""} building here →
+              {pulse.recent_event_count} recent event{pulse.recent_event_count !== 1 ? "s" : ""}
             </p>
           )}
           {!pulse.recent_event_count && pulse.last_checked_at && (

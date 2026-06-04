@@ -1,6 +1,9 @@
 from datetime import datetime, timezone
 from typing import Optional
-from fastapi import APIRouter, Depends, HTTPException, status, Response, Request
+from urllib.parse import urlparse
+
+from fastapi import APIRouter, Depends, HTTPException, Query, Request, Response, status
+from fastapi.responses import RedirectResponse
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
@@ -16,12 +19,51 @@ from app.limiter import limiter
 
 router = APIRouter(prefix="/api/auth", tags=["auth"])
 
-_COOKIE_KWARGS = dict(httponly=True, secure=True, samesite="none")
+
+def _cookie_kwargs(request: Request) -> dict[str, object]:
+    secure = request.url.scheme == "https"
+    # Browsers drop `SameSite=None` cookies unless `Secure` is also set.
+    # For local HTTP development, use `Lax` so auth works on localhost/127.0.0.1.
+    return dict(httponly=True, secure=secure, samesite="none" if secure else "lax")
 
 
-def _set_auth_cookies(response: Response, *, access_token: str, refresh_token: str) -> None:
-    response.set_cookie(key="access_token", value=access_token, max_age=settings.jwt_access_token_expire_minutes * 60, **_COOKIE_KWARGS)
-    response.set_cookie(key="refresh_token", value=refresh_token, max_age=settings.jwt_refresh_token_expire_days * 24 * 60 * 60, **_COOKIE_KWARGS)
+def _is_local_dev_request(request: Request) -> bool:
+    return request.url.hostname in {"127.0.0.1", "localhost"}
+
+
+def _safe_local_redirect(target: str | None) -> str:
+    fallback = f"{settings.frontend_url.rstrip('/')}/dashboard"
+    if not target:
+        return fallback
+
+    parsed = urlparse(target)
+    if parsed.scheme not in {"http", "https"}:
+        return fallback
+    if parsed.hostname not in {"127.0.0.1", "localhost"}:
+        return fallback
+    return target
+
+
+def _set_auth_cookies(
+    request: Request,
+    response: Response,
+    *,
+    access_token: str,
+    refresh_token: str,
+) -> None:
+    cookie_kwargs = _cookie_kwargs(request)
+    response.set_cookie(
+        key="access_token",
+        value=access_token,
+        max_age=settings.jwt_access_token_expire_minutes * 60,
+        **cookie_kwargs,
+    )
+    response.set_cookie(
+        key="refresh_token",
+        value=refresh_token,
+        max_age=settings.jwt_refresh_token_expire_days * 24 * 60 * 60,
+        **cookie_kwargs,
+    )
 
 
 @router.post("/register", response_model=TokenResponse, status_code=status.HTTP_201_CREATED)
@@ -38,7 +80,7 @@ async def register(request: Request, body: RegisterRequest, response: Response, 
 
     access_token = create_access_token(str(user.id))
     refresh_token = create_refresh_token(str(user.id))
-    _set_auth_cookies(response, access_token=access_token, refresh_token=refresh_token)
+    _set_auth_cookies(request, response, access_token=access_token, refresh_token=refresh_token)
     return TokenResponse(access_token=access_token, refresh_token=refresh_token)
 
 
@@ -55,7 +97,7 @@ async def login(request: Request, body: LoginRequest, response: Response, db: As
     refresh_token = create_refresh_token(str(user.id))
     await db.commit()
 
-    _set_auth_cookies(response, access_token=access_token, refresh_token=refresh_token)
+    _set_auth_cookies(request, response, access_token=access_token, refresh_token=refresh_token)
     return TokenResponse(access_token=access_token, refresh_token=refresh_token)
 
 
@@ -80,15 +122,44 @@ async def refresh(
     user_id = payload.get("sub")
     access_token = create_access_token(user_id)
     new_refresh_token = create_refresh_token(user_id)
-    _set_auth_cookies(response, access_token=access_token, refresh_token=new_refresh_token)
+    _set_auth_cookies(request, response, access_token=access_token, refresh_token=new_refresh_token)
     return TokenResponse(access_token=access_token, refresh_token=new_refresh_token)
 
 
 @router.post("/logout")
-async def logout(response: Response):
-    response.delete_cookie(key="access_token", **_COOKIE_KWARGS)
-    response.delete_cookie(key="refresh_token", **_COOKIE_KWARGS)
+async def logout(request: Request, response: Response):
+    cookie_kwargs = _cookie_kwargs(request)
+    response.delete_cookie(key="access_token", **cookie_kwargs)
+    response.delete_cookie(key="refresh_token", **cookie_kwargs)
     return {"message": "Logged out successfully"}
+
+
+@router.get("/dev-login")
+async def dev_login(
+    request: Request,
+    email: str = Query(...),
+    redirect: str | None = Query(None),
+    db: AsyncSession = Depends(get_db),
+):
+    if not _is_local_dev_request(request):
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Not found")
+
+    normalized_email = email.strip().lower()
+    result = await db.execute(select(User).where(User.email == normalized_email))
+    user = result.scalar_one_or_none()
+    if user is None:
+        user = User(email=normalized_email, password_hash=hash_password("dev-login-only"))
+        db.add(user)
+        await db.commit()
+        await db.refresh(user)
+
+    user.last_seen_at = datetime.now(timezone.utc)
+    access_token = create_access_token(str(user.id))
+    refresh_token = create_refresh_token(str(user.id))
+    response = RedirectResponse(url=_safe_local_redirect(redirect), status_code=status.HTTP_303_SEE_OTHER)
+    _set_auth_cookies(request, response, access_token=access_token, refresh_token=refresh_token)
+    await db.commit()
+    return response
 
 
 @router.get("/me")

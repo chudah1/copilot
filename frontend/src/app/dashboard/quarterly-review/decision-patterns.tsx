@@ -20,7 +20,7 @@ interface PatternsResponse {
 const TONE: Record<string, string> = {
   warning: "border-amber-500/30 bg-amber-500/8",
   calm: "border-emerald-500/30 bg-emerald-500/8",
-  neutral: "border-border bg-card",
+  neutral: "border-border/70 bg-background/55",
 };
 
 export function DecisionPatterns() {
@@ -39,7 +39,7 @@ export function DecisionPatterns() {
 
   return (
     <section className="space-y-3">
-      <div>
+      <div className="product-panel product-panel-muted p-5">
         <p className="font-mono text-[10px] uppercase tracking-[0.2em] text-muted-foreground mb-0.5">
           What your calls reveal
         </p>
@@ -49,7 +49,7 @@ export function DecisionPatterns() {
       </div>
       <div className="space-y-2">
         {data.patterns.map((p, i) => (
-          <div key={i} className={`border px-5 py-4 space-y-1 ${TONE[p.tone] ?? TONE.neutral}`}>
+          <div key={i} className={`product-panel border px-5 py-4 space-y-1 ${TONE[p.tone] ?? TONE.neutral}`}>
             <p className="font-display italic text-[1.2rem] leading-tight text-foreground">{p.headline}</p>
             <p className="font-sans text-sm text-foreground/80 leading-relaxed">{p.detail}</p>
           </div>

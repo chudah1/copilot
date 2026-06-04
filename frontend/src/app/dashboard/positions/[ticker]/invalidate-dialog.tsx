@@ -1,6 +1,6 @@
 "use client";
 
-import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from "@/components/ui/dialog";
+import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle, DialogFooter } from "@/components/ui/dialog";
 import { Textarea } from "@/components/ui/textarea";
 import { Button } from "@/components/ui/button";
 
@@ -30,11 +30,26 @@ export function InvalidateDialog({
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
-      <DialogContent>
+      <DialogContent className="product-panel product-panel-muted max-w-lg p-0 overflow-hidden" showCloseButton={false}>
         <DialogHeader>
-          <DialogTitle className="font-display italic">Mark as broken</DialogTitle>
+          <div className="px-5 pt-5 sm:px-6 sm:pt-6">
+            <p className="font-mono text-[10px] uppercase tracking-[0.2em] text-muted-foreground mb-2">
+              Thesis status
+            </p>
+            <DialogTitle className="font-display italic text-[1.65rem] leading-tight">Mark as broken</DialogTitle>
+            <DialogDescription className="mt-2">
+              Use this when the original case no longer holds and the position should stop being treated as intact.
+            </DialogDescription>
+          </div>
         </DialogHeader>
-        <Textarea placeholder={placeholder} value={reason} onChange={(e) => onReasonChange(e.target.value)} />
+        <div className="px-5 pb-5 sm:px-6">
+          <Textarea
+            placeholder={placeholder}
+            value={reason}
+            onChange={(e) => onReasonChange(e.target.value)}
+            className="min-h-28 border-border/70 bg-background/70"
+          />
+        </div>
         <DialogFooter>
           <Button variant="outline" onClick={() => onOpenChange(false)}>Cancel</Button>
           <Button variant="destructive" onClick={onConfirm}>Invalidate</Button>

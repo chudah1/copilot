@@ -1,8 +1,10 @@
 "use client";
 
-import { useState } from "react";
+import { useEffect, useEffectEvent, useState } from "react";
 import { motion, useMotionValue, useTransform, AnimatePresence } from "framer-motion";
 import { Button } from "@/components/ui/button";
+import { Textarea } from "@/components/ui/textarea";
+import { getErrorMessage } from "@/lib/errors";
 import { formatDate } from "@/lib/utils";
 import type { MonitoringEvent } from "@/types";
 
@@ -116,6 +118,17 @@ function reviewCopy(investorProfile?: "thesis_driven" | "hearsay_driven" | null)
       buttonBroken: "Thesis broken",
       reviewHint: "drag to decide · swipe up to flag weakening confidence",
       allCaughtUp: "You've reviewed every signal. Your thesis stands until something changes.",
+      noteLabel: "Decision note",
+      notePlaceholder: "Optional: record why the thesis still holds, what weakened, or what broke.",
+      noteHelper: "This becomes part of the evidence trail for the position.",
+      actionLabel: "Decision rail",
+      keyboardHint: "Shortcuts: → holds · ↑ weaker · ← irrelevant · X broken",
+      descriptions: {
+        reaffirmed: "Keep the thesis intact and log that this evidence does not break the case.",
+        lowered_confidence: "The thesis still stands, but one assumption looks less sturdy now.",
+        not_relevant: "This signal does not matter to the thesis you actually wrote.",
+        invalidated: "The evidence broke the case badly enough that the thesis needs rewriting.",
+      },
     };
   }
 
@@ -130,6 +143,17 @@ function reviewCopy(investorProfile?: "thesis_driven" | "hearsay_driven" | null)
       buttonBroken: "Story broken",
       reviewHint: "drag to decide · swipe up if the story feels weaker",
       allCaughtUp: "You've reviewed every signal. Your reason stands until something real changes.",
+      noteLabel: "Decision note",
+      notePlaceholder: "Optional: log why the story still works, feels weaker, or broke.",
+      noteHelper: "These notes make the position easier to revisit later without rewriting history.",
+      actionLabel: "Decision rail",
+      keyboardHint: "Shortcuts: → holds · ↑ less sure · ← irrelevant · X broken",
+      descriptions: {
+        reaffirmed: "Keep the original story intact and note why this did not change it.",
+        lowered_confidence: "The story still stands, but your confidence in it took a real hit.",
+        not_relevant: "This update is noise relative to the written reason.",
+        invalidated: "The evidence broke the story badly enough that the position needs a rewrite.",
+      },
     };
   }
 
@@ -143,6 +167,17 @@ function reviewCopy(investorProfile?: "thesis_driven" | "hearsay_driven" | null)
     buttonBroken: "Broken",
     reviewHint: "drag to decide · swipe up to flag",
     allCaughtUp: "You've reviewed every signal. Your reason stands until something changes.",
+    noteLabel: "Decision note",
+    notePlaceholder: "Optional: log why this still matters, matters less, or no longer matters.",
+    noteHelper: "These notes become part of the running decision log.",
+    actionLabel: "Decision rail",
+    keyboardHint: "Shortcuts: → holds · ↑ weaker · ← irrelevant · X broken",
+    descriptions: {
+      reaffirmed: "Log that the position case still stands.",
+      lowered_confidence: "Log that the case still stands, but with weaker conviction.",
+      not_relevant: "Log that this evidence should not influence the position.",
+      invalidated: "Log that the written case is broken.",
+    },
   };
 }
 
@@ -329,25 +364,56 @@ function DraggableCard({ event, index, total, isTop, onSwipe, busy, investorProf
 // ── Stack container ────────────────────────────────────────────────────────
 
 export function EventReviewStack({ events, onReview, reviewingEventId, investorProfile }: Props) {
-  const [dismissed, setDismissed] = useState<Set<string>>(new Set());
+  const [notesByEvent, setNotesByEvent] = useState<Record<string, string>>({});
+  const [actionErrorsByEvent, setActionErrorsByEvent] = useState<Record<string, string>>({});
   const copy = reviewCopy(investorProfile);
-
-  // Events not yet dismissed from stack
-  const pending = events.filter((e) => !dismissed.has(e.id));
+  const pending = events;
   const topEvent = pending[0];
+  const note = topEvent ? (notesByEvent[topEvent.id] ?? "") : "";
+  const actionError = topEvent ? (actionErrorsByEvent[topEvent.id] ?? "") : "";
 
-  const handleSwipe = async (action: ReviewAction) => {
+  const submitReview = async (action: ReviewAction) => {
     if (!topEvent || reviewingEventId) return;
-    setDismissed((prev) => new Set([...prev, topEvent.id]));
-    // Fire-and-forget — parent handles optimistic update
-    void onReview(topEvent, action);
+    try {
+      setActionErrorsByEvent((current) => ({ ...current, [topEvent.id]: "" }));
+      await onReview(topEvent, action, note);
+    } catch (error) {
+      setActionErrorsByEvent((current) => ({
+        ...current,
+        [topEvent.id]: getErrorMessage(error, "Failed to save review"),
+      }));
+    }
   };
+  const handleShortcutReview = useEffectEvent((action: ReviewAction) => {
+    void submitReview(action);
+  });
 
-  const handleInvalidate = async () => {
+  useEffect(() => {
     if (!topEvent || reviewingEventId) return;
-    setDismissed((prev) => new Set([...prev, topEvent.id]));
-    void onReview(topEvent, "invalidated");
-  };
+
+    const onKeyDown = (event: KeyboardEvent) => {
+      const target = event.target as HTMLElement | null;
+      const tag = target?.tagName;
+      if (tag === "TEXTAREA" || tag === "INPUT" || target?.isContentEditable) return;
+
+      if (event.key === "ArrowRight") {
+        event.preventDefault();
+        handleShortcutReview("reaffirmed");
+      } else if (event.key === "ArrowLeft") {
+        event.preventDefault();
+        handleShortcutReview("not_relevant");
+      } else if (event.key === "ArrowUp") {
+        event.preventDefault();
+        handleShortcutReview("lowered_confidence");
+      } else if (event.key.toLowerCase() === "x") {
+        event.preventDefault();
+        handleShortcutReview("invalidated");
+      }
+    };
+
+    window.addEventListener("keydown", onKeyDown);
+    return () => window.removeEventListener("keydown", onKeyDown);
+  }, [topEvent, reviewingEventId]);
 
   // ── All cleared ─────────────────────────────────────
   if (pending.length === 0) {
@@ -373,16 +439,21 @@ export function EventReviewStack({ events, onReview, reviewingEventId, investorP
     <div className="space-y-5">
       {/* Counter */}
       <div className="flex items-center justify-between">
-        <p className="font-mono text-[10px] uppercase tracking-[0.2em] text-muted-foreground">
-          {pending.length} to review
-        </p>
+        <div>
+          <p className="font-mono text-[10px] uppercase tracking-[0.2em] text-muted-foreground">
+            {pending.length} to review
+          </p>
+          <p className="mt-1 font-sans text-xs text-muted-foreground/80">
+            {copy.keyboardHint}
+          </p>
+        </div>
         <p className="font-mono text-[10px] text-muted-foreground/80">
-          {copy.reviewHint}
+          drag or use keys
         </p>
       </div>
 
       {/* Card stack */}
-      <div className="relative h-[340px]">
+      <div className="relative h-[340px] sm:h-[360px]">
         <AnimatePresence>
           {visibleCards.map((event, index) => (
             <motion.div
@@ -391,7 +462,6 @@ export function EventReviewStack({ events, onReview, reviewingEventId, investorP
               exit={
                 index === 0
                   ? {
-                      x: dismissed.has(event.id) ? 0 : 0,
                       opacity: 0,
                       scale: 0.88,
                       transition: { duration: 0.22, ease: "easeIn" },
@@ -404,7 +474,7 @@ export function EventReviewStack({ events, onReview, reviewingEventId, investorP
                 index={index}
                 total={visibleCards.length}
                 isTop={index === 0}
-                onSwipe={handleSwipe}
+                onSwipe={(action) => void submitReview(action)}
                 busy={!!reviewingEventId}
                 investorProfile={investorProfile}
               />
@@ -413,40 +483,141 @@ export function EventReviewStack({ events, onReview, reviewingEventId, investorP
         </AnimatePresence>
       </div>
 
-      {/* Explicit action buttons under stack */}
-      <div className="flex items-center gap-2 pt-1">
-        <Button
-          size="sm"
-          onClick={() => void handleSwipe("reaffirmed")}
-          disabled={!!reviewingEventId}
-          className="flex-1"
-        >
-          {copy.buttonHold}
-        </Button>
-        <Button
-          size="sm"
-          variant="outline"
-          onClick={() => void handleSwipe("lowered_confidence")}
-          disabled={!!reviewingEventId}
-        >
-          {copy.buttonErode}
-        </Button>
-        <Button
-          size="sm"
-          variant="outline"
-          onClick={() => void handleSwipe("not_relevant")}
-          disabled={!!reviewingEventId}
-        >
-          {copy.buttonSkip}
-        </Button>
-        <Button
-          size="sm"
-          variant="destructive"
-          onClick={() => void handleInvalidate()}
-          disabled={!!reviewingEventId}
-        >
-          {copy.buttonBroken}
-        </Button>
+      <div className="product-panel overflow-hidden">
+        <div className="grid gap-0 lg:grid-cols-[minmax(0,1fr)_minmax(0,1.05fr)]">
+          <div className="space-y-3 p-4 sm:p-5">
+            <div className="space-y-1">
+              <p className="font-mono text-[10px] uppercase tracking-[0.2em] text-muted-foreground">
+                {copy.noteLabel}
+              </p>
+              <p className="font-sans text-xs leading-relaxed text-muted-foreground">
+                {copy.noteHelper}
+              </p>
+            </div>
+            <Textarea
+              value={note}
+              onChange={(event) => {
+                if (!topEvent) return;
+                setNotesByEvent((current) => ({
+                  ...current,
+                  [topEvent.id]: event.target.value,
+                }));
+              }}
+              placeholder={copy.notePlaceholder}
+              className="min-h-28 bg-background/85"
+            />
+            {actionError && (
+              <p className="font-sans text-sm text-red-600">
+                {actionError}
+              </p>
+            )}
+          </div>
+
+          <div className="border-t border-border/60 bg-muted/15 p-4 sm:p-5 lg:border-l lg:border-t-0">
+            <div className="space-y-3">
+              <p className="font-mono text-[10px] uppercase tracking-[0.2em] text-muted-foreground">
+                {copy.actionLabel}
+              </p>
+
+              <div className="grid gap-3 sm:grid-cols-2">
+                <button
+                  type="button"
+                  onClick={() => void submitReview("reaffirmed")}
+                  disabled={!!reviewingEventId}
+                  className="border border-emerald-500/25 bg-emerald-500/8 p-4 text-left transition-colors hover:bg-emerald-500/12 disabled:opacity-40"
+                >
+                  <p className="font-mono text-[10px] uppercase tracking-[0.16em] text-emerald-700">
+                    Hold
+                  </p>
+                  <p className="mt-2 font-sans text-sm text-foreground">{copy.buttonHold}</p>
+                  <p className="mt-1 font-sans text-xs leading-relaxed text-foreground/70">
+                    {copy.descriptions.reaffirmed}
+                  </p>
+                </button>
+
+                <button
+                  type="button"
+                  onClick={() => void submitReview("lowered_confidence")}
+                  disabled={!!reviewingEventId}
+                  className="border border-amber-500/25 bg-amber-500/8 p-4 text-left transition-colors hover:bg-amber-500/12 disabled:opacity-40"
+                >
+                  <p className="font-mono text-[10px] uppercase tracking-[0.16em] text-amber-700">
+                    Weaker
+                  </p>
+                  <p className="mt-2 font-sans text-sm text-foreground">{copy.buttonErode}</p>
+                  <p className="mt-1 font-sans text-xs leading-relaxed text-foreground/70">
+                    {copy.descriptions.lowered_confidence}
+                  </p>
+                </button>
+
+                <button
+                  type="button"
+                  onClick={() => void submitReview("not_relevant")}
+                  disabled={!!reviewingEventId}
+                  className="border border-border/70 bg-background/80 p-4 text-left transition-colors hover:bg-background disabled:opacity-40"
+                >
+                  <p className="font-mono text-[10px] uppercase tracking-[0.16em] text-muted-foreground">
+                    Ignore
+                  </p>
+                  <p className="mt-2 font-sans text-sm text-foreground">{copy.buttonSkip}</p>
+                  <p className="mt-1 font-sans text-xs leading-relaxed text-foreground/70">
+                    {copy.descriptions.not_relevant}
+                  </p>
+                </button>
+
+                <button
+                  type="button"
+                  onClick={() => void submitReview("invalidated")}
+                  disabled={!!reviewingEventId}
+                  className="border border-red-500/25 bg-red-500/8 p-4 text-left transition-colors hover:bg-red-500/12 disabled:opacity-40"
+                >
+                  <p className="font-mono text-[10px] uppercase tracking-[0.16em] text-red-700">
+                    Break
+                  </p>
+                  <p className="mt-2 font-sans text-sm text-foreground">{copy.buttonBroken}</p>
+                  <p className="mt-1 font-sans text-xs leading-relaxed text-foreground/70">
+                    {copy.descriptions.invalidated}
+                  </p>
+                </button>
+              </div>
+
+              <div className="flex flex-wrap items-center gap-2 pt-1">
+                <Button
+                  size="sm"
+                  onClick={() => void submitReview("reaffirmed")}
+                  disabled={!!reviewingEventId}
+                  loading={reviewingEventId === topEvent?.id}
+                >
+                  {copy.buttonHold}
+                </Button>
+                <Button
+                  size="sm"
+                  variant="outline"
+                  onClick={() => void submitReview("lowered_confidence")}
+                  disabled={!!reviewingEventId}
+                >
+                  {copy.buttonErode}
+                </Button>
+                <Button
+                  size="sm"
+                  variant="outline"
+                  onClick={() => void submitReview("not_relevant")}
+                  disabled={!!reviewingEventId}
+                >
+                  {copy.buttonSkip}
+                </Button>
+                <Button
+                  size="sm"
+                  variant="destructive"
+                  onClick={() => void submitReview("invalidated")}
+                  disabled={!!reviewingEventId}
+                >
+                  {copy.buttonBroken}
+                </Button>
+              </div>
+            </div>
+          </div>
+        </div>
       </div>
     </div>
   );

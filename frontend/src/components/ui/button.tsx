@@ -1,4 +1,4 @@
-import { Button as ButtonPrimitive } from "@base-ui/react/button"
+import type { ComponentPropsWithoutRef } from "react"
 import { cva, type VariantProps } from "class-variance-authority"
 
 import { cn } from "@/lib/utils"
@@ -53,7 +53,7 @@ function Spinner({ className }: { className?: string }) {
   )
 }
 
-interface ButtonProps extends ButtonPrimitive.Props, VariantProps<typeof buttonVariants> {
+interface ButtonProps extends ComponentPropsWithoutRef<"button">, VariantProps<typeof buttonVariants> {
   loading?: boolean
 }
 
@@ -67,7 +67,7 @@ function Button({
   ...props
 }: ButtonProps) {
   return (
-    <ButtonPrimitive
+    <button
       data-slot="button"
       disabled={disabled || loading}
       className={cn(buttonVariants({ variant, size, className }))}
@@ -75,7 +75,7 @@ function Button({
     >
       {loading && <Spinner className="size-3.5 shrink-0" />}
       {children}
-    </ButtonPrimitive>
+    </button>
   )
 }
 

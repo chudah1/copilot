@@ -3,6 +3,7 @@
 import { useState } from "react";
 import Link from "next/link";
 import { useAuth } from "@/lib/auth";
+import { AuthShell } from "@/components/auth/auth-shell";
 import { Button } from "@/components/ui/button";
 import { getErrorMessage } from "@/lib/errors";
 
@@ -29,17 +30,34 @@ export default function LoginPage() {
   };
 
   return (
-    <div className="flex min-h-screen items-center justify-center px-4">
-      <div className="w-full max-w-sm border border-border/60 bg-card p-8 space-y-6">
-        <div>
-          <p className="font-mono text-[10px] uppercase tracking-[0.2em] text-muted-foreground mb-2">
-            penKeep
-          </p>
-          <h1 className="font-display italic text-[2rem] leading-tight text-foreground">
-            Welcome back.
-          </h1>
-        </div>
-
+    <AuthShell
+      eyebrow="Sign In"
+      title="Welcome back."
+      description="Pick up your positions, review queue, and thesis changes where you left them."
+      asideHeading="Inside your account"
+      asideBody="The product opens on what needs thought first, not on a generic watchlist."
+      asideItems={[
+        {
+          eyebrow: "Review",
+          title: "See what needs judgment first.",
+          body: "Weak theses, stale names, and live pressure surface before the quiet holdings do.",
+        },
+        {
+          eyebrow: "History",
+          title: "Keep the decision record intact.",
+          body: "Every thesis, review, and conviction note stays attached to the position it belongs to.",
+        },
+      ]}
+      footer={(
+        <p className="font-mono text-[10px] text-muted-foreground/70 text-center">
+          No account?{" "}
+          <Link href="/register" className="underline underline-offset-2 hover:text-foreground transition-colors">
+            Sign up
+          </Link>
+        </p>
+      )}
+    >
+      <div className="max-w-sm">
         <form onSubmit={handleSubmit} className="space-y-4">
           <div className="space-y-1.5">
             <label htmlFor="email" className="font-mono text-[10px] uppercase tracking-[0.15em] text-muted-foreground block">
@@ -87,14 +105,7 @@ export default function LoginPage() {
             <span className="font-mono text-[11px] uppercase tracking-[0.15em]">Sign in</span>
           </Button>
         </form>
-
-        <p className="font-mono text-[10px] text-muted-foreground/70 text-center">
-          No account?{" "}
-          <Link href="/register" className="underline underline-offset-2 hover:text-foreground transition-colors">
-            Sign up
-          </Link>
-        </p>
       </div>
-    </div>
+    </AuthShell>
   );
 }

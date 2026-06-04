@@ -6,6 +6,35 @@ export const metadata = {
   description: "We built the app we wished we'd had ten years ago.",
 };
 
+const STORY_POINTS = [
+  {
+    eyebrow: "The problem",
+    title: "The original reason disappears.",
+    body: "Most investing mistakes start when the first rationale becomes fuzzy and gets replaced by emotion or hindsight.",
+  },
+  {
+    eyebrow: "The response",
+    title: "Write the reason down while it is still honest.",
+    body: "That gives the product something real to compare future evidence against.",
+  },
+  {
+    eyebrow: "The result",
+    title: "The app stays quiet until the reason changes.",
+    body: "No endless feed, no fake urgency, just a sharper loop around conviction and evidence.",
+  },
+];
+
+const CONTRAST = [
+  [
+    "What most tools optimize for",
+    "More charts, more ticks, more reasons to keep checking whether the line is green or red.",
+  ],
+  [
+    "What penKeep optimizes for",
+    "Remembering why you own it, noticing when the case changes, and acting from evidence instead of mood.",
+  ],
+];
+
 export default function BlogPage() {
   const pad = "clamp(22px, 4.5vw, 56px)";
 
@@ -76,6 +105,64 @@ export default function BlogPage() {
 
         <div
           style={{
+            display: "grid",
+            gridTemplateColumns: "repeat(3, minmax(0, 1fr))",
+            gap: 14,
+          }}
+          className="max-md:grid-cols-1"
+        >
+          {STORY_POINTS.map((item) => (
+            <div
+              key={item.title}
+              style={{
+                background: mk.card,
+                border: `1px solid ${mk.rule}`,
+                borderRadius: 16,
+                padding: "18px 18px 20px",
+              }}
+            >
+              <div
+                style={{
+                  fontFamily: mk.mono,
+                  fontSize: 10,
+                  letterSpacing: "0.14em",
+                  textTransform: "uppercase",
+                  color: mk.accent,
+                }}
+              >
+                {item.eyebrow}
+              </div>
+              <div
+                style={{
+                  fontFamily: mk.sans,
+                  fontSize: 22,
+                  fontWeight: 600,
+                  lineHeight: 1.15,
+                  letterSpacing: "-0.02em",
+                  color: mk.ink,
+                  marginTop: 10,
+                }}
+              >
+                {item.title}
+              </div>
+              <div
+                style={{
+                  fontFamily: mk.display,
+                  fontWeight: 500,
+                  fontSize: 15,
+                  lineHeight: 1.55,
+                  color: mk.inkSoft,
+                  marginTop: 10,
+                }}
+              >
+                {item.body}
+              </div>
+            </div>
+          ))}
+        </div>
+
+        <div
+          style={{
             fontFamily: mk.display,
             fontWeight: 500,
             fontSize: "clamp(16px,1.8vw,19px)",
@@ -141,6 +228,51 @@ export default function BlogPage() {
             actually care about moves, one short note. No buy buttons. No &ldquo;you&apos;re up
             0.4%.&rdquo; No charts you stare at while waiting for the train.
           </p>
+        </div>
+
+        <div
+          style={{
+            display: "grid",
+            gridTemplateColumns: "repeat(2, minmax(0, 1fr))",
+            gap: 14,
+          }}
+          className="max-md:grid-cols-1"
+        >
+          {CONTRAST.map(([title, body], index) => (
+            <div
+              key={title}
+              style={{
+                background: index === 0 ? mk.cardSoft : mk.card,
+                border: `1px solid ${mk.rule}`,
+                borderRadius: 16,
+                padding: "20px 20px 22px",
+              }}
+            >
+              <div
+                style={{
+                  fontFamily: mk.mono,
+                  fontSize: 10,
+                  letterSpacing: "0.14em",
+                  textTransform: "uppercase",
+                  color: index === 0 ? mk.pencil : mk.accent,
+                }}
+              >
+                {title}
+              </div>
+              <div
+                style={{
+                  fontFamily: mk.display,
+                  fontWeight: 500,
+                  fontSize: "clamp(18px,2vw,22px)",
+                  lineHeight: 1.4,
+                  color: mk.inkSoft,
+                  marginTop: 10,
+                }}
+              >
+                {body}
+              </div>
+            </div>
+          ))}
         </div>
 
         {/* Principles */}

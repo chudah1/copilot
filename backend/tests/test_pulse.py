@@ -160,6 +160,43 @@ async def test_pulse_watch_on_warning_event(client, auth_headers, test_user, db:
 
 
 @pytest.mark.asyncio
+async def test_pulse_normalizes_raw_assumption_labels(client, auth_headers, test_user, db: AsyncSession):
+    holding = Holding(
+        id=uuid.uuid4(), ticker="NVDA", name="NVIDIA",
+        quantity=5, average_cost_basis=120, currency="GBP",
+        user_id=test_user.id,
+    )
+    db.add(holding)
+    await db.commit()
+
+    thesis = Thesis(
+        id=uuid.uuid4(), holding_id=holding.id, user_id=test_user.id,
+        status="active", why_own_it="AI infrastructure leadership", confidence="high",
+    )
+    db.add(thesis)
+    await db.commit()
+
+    event = MonitoringEvent(
+        id=uuid.uuid4(), holding_id=holding.id, thesis_id=thesis.id,
+        event_type="news_or_earnings_candidate", severity="warning",
+        title="NVDA: news touches 'NVDA dominates GPU compute for AI training with strong demand'",
+        summary="News keeps the AI demand case in focus.",
+        raw_data={
+            "signal_label": "NVDA:NVDA:news touches 'NVDA dominates GPU compute for AI training with strong demand'",
+        },
+        created_at=datetime.now(timezone.utc),
+    )
+    db.add(event)
+    await db.commit()
+
+    resp = await client.get("/api/portfolio/pulse", headers=auth_headers)
+    assert resp.status_code == 200
+    pulse = resp.json()["pulses"][0]
+    assert pulse["pulse_status"] == "watch"
+    assert pulse["assumption_label"] == "dominates GPU compute for AI training with strong demand"
+
+
+@pytest.mark.asyncio
 async def test_pulse_batches_same_day_events_into_one_summary(client, auth_headers, test_user, db: AsyncSession):
     holding = Holding(
         id=uuid.uuid4(), ticker="NVDA", name="NVIDIA",

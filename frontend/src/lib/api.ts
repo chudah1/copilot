@@ -1,13 +1,17 @@
-const API_URL = process.env.NEXT_PUBLIC_API_URL || "http://localhost:8000";
+import { getApiBaseUrl } from "./api-base";
+import { getStoredAccessToken, getStoredRefreshToken, storeTokens, clearStoredTokens } from "./auth-tokens";
 
 class ApiClient {
   private async request<T>(path: string, options: RequestInit = {}): Promise<T> {
+    const apiUrl = getApiBaseUrl();
+    const accessToken = getStoredAccessToken();
     const headers: Record<string, string> = {
       "Content-Type": "application/json",
+      ...(accessToken ? { Authorization: `Bearer ${accessToken}` } : {}),
       ...(options.headers as Record<string, string>),
     };
 
-    const response = await fetch(`${API_URL}${path}`, {
+    const response = await fetch(`${apiUrl}${path}`, {
       ...options,
       headers,
       credentials: "include",
@@ -16,9 +20,13 @@ class ApiClient {
     if (response.status === 401) {
       const refreshed = await this.tryRefresh();
       if (refreshed) {
-        const retry = await fetch(`${API_URL}${path}`, {
+        const retryAccessToken = getStoredAccessToken();
+        const retry = await fetch(`${apiUrl}${path}`, {
           ...options,
-          headers,
+          headers: {
+            ...headers,
+            ...(retryAccessToken ? { Authorization: `Bearer ${retryAccessToken}` } : {}),
+          },
           credentials: "include",
         });
         if (!retry.ok) throw new Error(`API error: ${retry.status}`);
@@ -43,12 +51,20 @@ class ApiClient {
   }
 
   private async tryRefresh(): Promise<boolean> {
+    const apiUrl = getApiBaseUrl();
     try {
-      const response = await fetch(`${API_URL}/api/auth/refresh`, {
+      const response = await fetch(`${apiUrl}/api/auth/refresh`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ refresh_token: getStoredRefreshToken() }),
         credentials: "include",
       });
+      if (response.ok) {
+        const tokens = await response.json();
+        storeTokens(tokens);
+        return true;
+      }
+      clearStoredTokens();
       return response.ok;
     } catch {
       return false;

@@ -1,9 +1,12 @@
 "use client";
 
+import { AlertTriangle, ArrowRight, CheckCircle2, LoaderCircle, X } from "lucide-react";
 import { useState } from "react";
 import { api } from "@/lib/api";
+import { cn } from "@/lib/utils";
 import { getErrorMessage } from "@/lib/errors";
-import { ClaimVerdict, EarningsReviewResult } from "@/types";
+import { Button } from "@/components/ui/button";
+import type { ClaimVerdict, EarningsReviewResult } from "@/types";
 
 interface EarningsReviewModalProps {
   thesisId: string;
@@ -12,174 +15,130 @@ interface EarningsReviewModalProps {
   onClose: () => void;
 }
 
-const VERDICT_CONFIG = {
+const VERDICT_CONFIG: Record<
+  ClaimVerdict["verdict"],
+  { label: string; tone: string; chip: string; dot: string }
+> = {
   holds: {
     label: "Holds",
-    color: "#166534",
-    bg: "#f0fdf4",
-    border: "#bbf7d0",
-    dot: "#16a34a",
+    tone: "border-emerald-500/25 bg-emerald-500/6",
+    chip: "text-emerald-700 bg-emerald-500/10 border-emerald-500/20",
+    dot: "bg-emerald-500",
   },
   watch: {
     label: "Watch",
-    color: "#92400e",
-    bg: "#fffbeb",
-    border: "#fde68a",
-    dot: "#d97706",
+    tone: "border-amber-500/25 bg-amber-500/6",
+    chip: "text-amber-700 bg-amber-500/10 border-amber-500/20",
+    dot: "bg-amber-500",
   },
   broken: {
     label: "Broken",
-    color: "#7f1d1d",
-    bg: "#fef2f2",
-    border: "#fecaca",
-    dot: "#dc2626",
+    tone: "border-red-500/25 bg-red-500/6",
+    chip: "text-red-600 bg-red-500/10 border-red-500/20",
+    dot: "bg-red-500",
   },
   unclear: {
     label: "Unclear",
-    color: "#374151",
-    bg: "#f9fafb",
-    border: "#e5e7eb",
-    dot: "#9ca3af",
+    tone: "border-border/80 bg-background/70",
+    chip: "text-muted-foreground bg-muted/50 border-border",
+    dot: "bg-muted-foreground/50",
   },
-} as const;
+};
 
 function assessmentConfigForProfile(investorProfile?: "thesis_driven" | "hearsay_driven" | null) {
   if (investorProfile === "thesis_driven") {
     return {
       thesis_intact: {
-        label: "Thesis Intact",
-        color: "#166534",
-        bg: "#f0fdf4",
-        border: "#86efac",
-        icon: "✓",
+        eyebrow: "Review result",
+        label: "Thesis intact",
+        tone: "border-emerald-500/25 bg-emerald-500/8",
+        chip: "text-emerald-700 bg-emerald-500/10 border-emerald-500/20",
       },
       watch: {
+        eyebrow: "Review result",
         label: "Assumption to watch",
-        color: "#92400e",
-        bg: "#fffbeb",
-        border: "#fde68a",
-        icon: "⚠",
+        tone: "border-amber-500/25 bg-amber-500/8",
+        chip: "text-amber-700 bg-amber-500/10 border-amber-500/20",
       },
       thesis_challenged: {
-        label: "Thesis Challenged",
-        color: "#7f1d1d",
-        bg: "#fef2f2",
-        border: "#fca5a5",
-        icon: "✗",
+        eyebrow: "Review result",
+        label: "Thesis challenged",
+        tone: "border-red-500/25 bg-red-500/8",
+        chip: "text-red-600 bg-red-500/10 border-red-500/20",
       },
     } as const;
   }
 
   return {
     thesis_intact: {
-      label: "Reason Intact",
-      color: "#166534",
-      bg: "#f0fdf4",
-      border: "#86efac",
-      icon: "✓",
+      eyebrow: "Review result",
+      label: "Reason intact",
+      tone: "border-emerald-500/25 bg-emerald-500/8",
+      chip: "text-emerald-700 bg-emerald-500/10 border-emerald-500/20",
     },
     watch: {
-      label: "Worth Watching",
-      color: "#92400e",
-      bg: "#fffbeb",
-      border: "#fde68a",
-      icon: "⚠",
+      eyebrow: "Review result",
+      label: "Worth watching",
+      tone: "border-amber-500/25 bg-amber-500/8",
+      chip: "text-amber-700 bg-amber-500/10 border-amber-500/20",
     },
     thesis_challenged: {
-      label: investorProfile === "hearsay_driven" ? "Story Challenged" : "Reason Challenged",
-      color: "#7f1d1d",
-      bg: "#fef2f2",
-      border: "#fca5a5",
-      icon: "✗",
+      eyebrow: "Review result",
+      label: investorProfile === "hearsay_driven" ? "Story challenged" : "Reason challenged",
+      tone: "border-red-500/25 bg-red-500/8",
+      chip: "text-red-600 bg-red-500/10 border-red-500/20",
     },
   } as const;
 }
 
+function reviewSubtitle(ticker: string, investorProfile?: "thesis_driven" | "hearsay_driven" | null) {
+  if (investorProfile === "thesis_driven") {
+    return `${ticker} · check whether the thesis still holds after earnings.`;
+  }
+  if (investorProfile === "hearsay_driven") {
+    return `${ticker} · check whether the original story still works as a reason.`;
+  }
+  return `${ticker} · check whether your reason still holds after earnings.`;
+}
+
+function formatReviewedAt(value: string) {
+  const date = new Date(value);
+  if (Number.isNaN(date.getTime())) return null;
+  return new Intl.DateTimeFormat("en", {
+    month: "short",
+    day: "numeric",
+    year: "numeric",
+  }).format(date);
+}
+
 function VerdictCard({ verdict }: { verdict: ClaimVerdict }) {
   const config = VERDICT_CONFIG[verdict.verdict] ?? VERDICT_CONFIG.unclear;
+
   return (
-    <div
-      style={{
-        border: `1px solid ${config.border}`,
-        backgroundColor: config.bg,
-        borderRadius: "6px",
-        padding: "16px",
-        display: "flex",
-        gap: "12px",
-      }}
-    >
-      <div
-        style={{
-          width: "8px",
-          height: "8px",
-          borderRadius: "50%",
-          backgroundColor: config.dot,
-          marginTop: "6px",
-          flexShrink: 0,
-        }}
-      />
-      <div style={{ flex: 1 }}>
-        <div
-          style={{
-            display: "flex",
-            justifyContent: "space-between",
-            alignItems: "flex-start",
-            gap: "8px",
-            marginBottom: "8px",
-          }}
-        >
-          <p
-            style={{
-              fontFamily: "'Instrument Sans', sans-serif",
-              fontSize: "13px",
-              color: "#374151",
-              lineHeight: "1.5",
-              margin: 0,
-            }}
-          >
-            {verdict.claim_text}
-          </p>
-          <span
-            style={{
-              fontFamily: "'JetBrains Mono', monospace",
-              fontSize: "10px",
-              fontWeight: 600,
-              color: config.color,
-              backgroundColor: config.bg,
-              border: `1px solid ${config.border}`,
-              borderRadius: "4px",
-              padding: "2px 6px",
-              whiteSpace: "nowrap",
-              textTransform: "uppercase",
-              letterSpacing: "0.05em",
-            }}
-          >
-            {config.label}
-          </span>
+    <div className={cn("product-panel p-4 sm:p-5", config.tone)}>
+      <div className="flex items-start justify-between gap-4">
+        <div className="min-w-0 space-y-2">
+          <div className="flex items-start gap-3">
+            <span className={cn("mt-1 h-2.5 w-2.5 shrink-0 rounded-full", config.dot)} />
+            <p className="font-sans text-sm leading-relaxed text-foreground/90">{verdict.claim_text}</p>
+          </div>
+          <div className="pl-5">
+            <p className="font-sans text-sm leading-relaxed text-muted-foreground">{verdict.explanation}</p>
+            {verdict.evidence && (
+              <p className="mt-2 font-mono text-[10px] uppercase tracking-[0.12em] text-foreground/55">
+                Evidence: {verdict.evidence}
+              </p>
+            )}
+          </div>
         </div>
-        <p
-          style={{
-            fontFamily: "'Instrument Sans', sans-serif",
-            fontSize: "13px",
-            color: "#4b5563",
-            lineHeight: "1.6",
-            margin: "0 0 6px 0",
-          }}
+        <span
+          className={cn(
+            "shrink-0 border px-2 py-1 font-mono text-[10px] uppercase tracking-[0.14em]",
+            config.chip,
+          )}
         >
-          {verdict.explanation}
-        </p>
-        {verdict.evidence && (
-          <p
-            style={{
-              fontFamily: "'JetBrains Mono', monospace",
-              fontSize: "11px",
-              color: "#6b7280",
-              margin: 0,
-            }}
-          >
-            {verdict.evidence}
-          </p>
-        )}
+          {config.label}
+        </span>
       </div>
     </div>
   );
@@ -199,10 +158,10 @@ export function EarningsReviewModal({
     setLoading(true);
     setError(null);
     try {
-      const result = await api.post<EarningsReviewResult>(`/api/theses/${thesisId}/earnings-review`);
-      setResult(result);
-    } catch (error: unknown) {
-      setError(getErrorMessage(error, "Review failed"));
+      const nextResult = await api.post<EarningsReviewResult>(`/api/theses/${thesisId}/earnings-review`);
+      setResult(nextResult);
+    } catch (nextError: unknown) {
+      setError(getErrorMessage(nextError, "Review failed"));
     } finally {
       setLoading(false);
     }
@@ -212,309 +171,226 @@ export function EarningsReviewModal({
   const assessmentConfig = result
     ? assessmentMap[result.overall_assessment] ?? assessmentMap.watch
     : null;
-  const subtitle =
-    investorProfile === "thesis_driven"
-      ? `${ticker} — do the thesis assumptions still hold?`
-      : investorProfile === "hearsay_driven"
-        ? `${ticker} — does the original story still hold up as a reason?`
-        : `${ticker} — does your reason still hold?`;
+  const verdictCounts = result?.verdicts.reduce(
+    (counts, verdict) => {
+      counts[verdict.verdict] += 1;
+      return counts;
+    },
+    { holds: 0, watch: 0, broken: 0, unclear: 0 },
+  ) ?? { holds: 0, watch: 0, broken: 0, unclear: 0 };
+  const reviewedAt = result ? formatReviewedAt(result.reviewed_at) : null;
 
   return (
     <div
-      style={{
-        position: "fixed",
-        inset: 0,
-        backgroundColor: "rgba(0,0,0,0.4)",
-        zIndex: 50,
-        display: "flex",
-        alignItems: "flex-end",
-        justifyContent: "center",
-        padding: "0",
-      }}
+      className="fixed inset-0 z-50 flex items-end justify-center bg-[rgba(17,15,10,0.58)] p-0 backdrop-blur-[2px] sm:items-center sm:p-6"
       onClick={(e) => e.target === e.currentTarget && onClose()}
     >
-      <div
-        style={{
-          backgroundColor: "var(--card)",
-          width: "100%",
-          maxWidth: "680px",
-          maxHeight: "90vh",
-          borderRadius: "12px 12px 0 0",
-          overflow: "hidden",
-          display: "flex",
-          flexDirection: "column",
-        }}
-      >
-        {/* Header */}
-        <div
-          style={{
-            padding: "20px 24px 16px",
-            borderBottom: "1px solid #e8e0d5",
-            display: "flex",
-            justifyContent: "space-between",
-            alignItems: "flex-start",
-          }}
-        >
-          <div>
-            <h2
-              style={{
-                fontFamily: "'Cormorant', serif",
-                fontStyle: "italic",
-                fontSize: "22px",
-                fontWeight: 600,
-                color: "#1a0f0a",
-                margin: "0 0 2px 0",
-              }}
-            >
-              Post-Earnings Review
-            </h2>
-            <p
-              style={{
-                fontFamily: "'Instrument Sans', sans-serif",
-                fontSize: "13px",
-                color: "#78716c",
-                margin: 0,
-              }}
-            >
-              {subtitle}
+      <div className="product-panel flex max-h-[92vh] w-full max-w-3xl flex-col overflow-hidden rounded-t-2xl sm:rounded-2xl">
+        <div className="flex items-start justify-between gap-4 border-b border-border/70 px-5 py-4 sm:px-6 sm:py-5">
+          <div className="space-y-2">
+            <p className="font-mono text-[10px] uppercase tracking-[0.16em] text-muted-foreground">
+              Post-earnings review
             </p>
+            <div>
+              <h2 className="font-display text-[1.9rem] italic leading-none text-foreground sm:text-[2.2rem]">
+                Re-read the case
+              </h2>
+              <p className="mt-2 max-w-2xl font-sans text-sm leading-relaxed text-muted-foreground">
+                {reviewSubtitle(ticker, investorProfile)}
+              </p>
+            </div>
           </div>
-          <button
-            onClick={onClose}
-            style={{
-              background: "none",
-              border: "none",
-              cursor: "pointer",
-              color: "#78716c",
-              fontSize: "20px",
-              padding: "4px",
-              lineHeight: 1,
-            }}
-          >
-            ×
-          </button>
+          <Button aria-label="Close review" variant="ghost" size="icon-sm" onClick={onClose}>
+            <X className="size-4" />
+          </Button>
         </div>
 
-        {/* Body */}
-        <div style={{ flex: 1, overflowY: "auto", padding: "24px" }}>
+        <div className="flex-1 overflow-y-auto px-5 py-5 sm:px-6 sm:py-6">
           {!result && !loading && (
-            <div style={{ textAlign: "center", padding: "32px 0" }}>
-              <p
-                style={{
-                  fontFamily: "'Cormorant', serif",
-                  fontStyle: "italic",
-                  fontSize: "18px",
-                  color: "#44302a",
-                  marginBottom: "12px",
-                }}
-              >
-                Ready to check your reason against latest earnings.
-              </p>
-              <p
-                style={{
-                  fontFamily: "'Instrument Sans', sans-serif",
-                  fontSize: "13px",
-                  color: "#78716c",
-                  marginBottom: "28px",
-                  maxWidth: "360px",
-                  margin: "0 auto 28px",
-                  lineHeight: "1.6",
-                }}
-              >
-                Claude will evaluate each of your reason&apos;s claims against the
-                latest earnings data and tell you what still holds — and what
-                doesn&apos;t.
-              </p>
-              {error && (
-                <p
-                  style={{
-                    fontFamily: "'Instrument Sans', sans-serif",
-                    fontSize: "13px",
-                    color: "#dc2626",
-                    marginBottom: "16px",
-                  }}
-                >
-                  {error}
-                </p>
-              )}
-              <button
-                onClick={runReview}
-                style={{
-                  backgroundColor: "#5C2018",
-                  color: "var(--primary-foreground)",
-                  border: "none",
-                  borderRadius: "6px",
-                  padding: "10px 24px",
-                  fontFamily: "'Instrument Sans', sans-serif",
-                  fontSize: "14px",
-                  fontWeight: 500,
-                  cursor: "pointer",
-                  letterSpacing: "0.01em",
-                }}
-              >
-                Run Review
-              </button>
+            <div className="space-y-5">
+              <div className="product-panel product-panel-muted p-6 sm:p-7">
+                <div className="flex items-start gap-3">
+                  <div className="mt-0.5 rounded-full border border-primary/20 bg-primary/8 p-2 text-primary">
+                    <ArrowRight className="size-4" />
+                  </div>
+                  <div className="space-y-3">
+                    <div>
+                      <p className="font-mono text-[10px] uppercase tracking-[0.16em] text-muted-foreground">
+                        What this does
+                      </p>
+                      <p className="mt-2 font-sans text-base leading-relaxed text-foreground/90">
+                        Run the latest earnings against what you actually wrote down.
+                      </p>
+                    </div>
+                    <div className="grid gap-3 sm:grid-cols-3">
+                      <div className="product-panel p-4">
+                        <p className="font-mono text-[10px] uppercase tracking-[0.14em] text-muted-foreground">
+                          Overall call
+                        </p>
+                        <p className="mt-2 font-sans text-sm leading-relaxed text-foreground/85">
+                          Intact, worth watching, or genuinely challenged.
+                        </p>
+                      </div>
+                      <div className="product-panel p-4">
+                        <p className="font-mono text-[10px] uppercase tracking-[0.14em] text-muted-foreground">
+                          Claim checks
+                        </p>
+                        <p className="mt-2 font-sans text-sm leading-relaxed text-foreground/85">
+                          Each core claim gets its own verdict and evidence line.
+                        </p>
+                      </div>
+                      <div className="product-panel p-4">
+                        <p className="font-mono text-[10px] uppercase tracking-[0.14em] text-muted-foreground">
+                          On record
+                        </p>
+                        <p className="mt-2 font-sans text-sm leading-relaxed text-foreground/85">
+                          The result is saved to the conviction log automatically.
+                        </p>
+                      </div>
+                    </div>
+                    {error && (
+                      <div className="border border-red-500/20 bg-red-500/6 px-4 py-3">
+                        <p className="font-sans text-sm text-red-600">{error}</p>
+                      </div>
+                    )}
+                    <div className="flex flex-wrap items-center gap-3">
+                      <Button onClick={runReview}>Run review</Button>
+                      <p className="font-sans text-sm text-muted-foreground">
+                        Best used right after the quarter lands.
+                      </p>
+                    </div>
+                  </div>
+                </div>
+              </div>
             </div>
           )}
 
           {loading && (
-            <div style={{ textAlign: "center", padding: "48px 0" }}>
-              <div
-                style={{
-                  width: "32px",
-                  height: "32px",
-                  border: "2px solid #e8e0d5",
-                  borderTopColor: "#5C2018",
-                  borderRadius: "50%",
-                  animation: "spin 0.8s linear infinite",
-                  margin: "0 auto 16px",
-                }}
-              />
-              <p
-                style={{
-                  fontFamily: "'Instrument Sans', sans-serif",
-                  fontSize: "13px",
-                  color: "#78716c",
-                }}
-              >
-                Evaluating your reason against latest earnings…
-              </p>
-              <style>{`@keyframes spin { to { transform: rotate(360deg); } }`}</style>
+            <div className="product-panel product-panel-muted flex min-h-[280px] flex-col items-center justify-center gap-4 px-6 py-10 text-center">
+              <LoaderCircle className="size-8 animate-spin text-primary" />
+              <div className="space-y-2">
+                <p className="font-sans text-base text-foreground/90">Checking the latest quarter against your written case.</p>
+                <p className="font-sans text-sm text-muted-foreground">
+                  This usually takes a moment while the review is written and logged.
+                </p>
+              </div>
             </div>
           )}
 
           {result && assessmentConfig && (
-            <div style={{ display: "flex", flexDirection: "column", gap: "20px" }}>
-              {/* Overall assessment */}
-              <div
-                style={{
-                  border: `1px solid ${assessmentConfig.border}`,
-                  backgroundColor: assessmentConfig.bg,
-                  borderRadius: "8px",
-                  padding: "16px 20px",
-                }}
-              >
-                <div
-                  style={{
-                    display: "flex",
-                    alignItems: "center",
-                    gap: "10px",
-                    marginBottom: "8px",
-                  }}
-                >
-                  <span
-                    style={{
-                      fontFamily: "'JetBrains Mono', monospace",
-                      fontSize: "16px",
-                      color: assessmentConfig.color,
-                      fontWeight: 700,
-                    }}
-                  >
-                    {assessmentConfig.icon}
-                  </span>
-                  <span
-                    style={{
-                      fontFamily: "'Instrument Sans', sans-serif",
-                      fontSize: "13px",
-                      fontWeight: 600,
-                      color: assessmentConfig.color,
-                      textTransform: "uppercase",
-                      letterSpacing: "0.06em",
-                    }}
-                  >
-                    {assessmentConfig.label}
-                  </span>
-                  {result.fiscal_quarter && (
-                    <span
-                      style={{
-                        fontFamily: "'JetBrains Mono', monospace",
-                        fontSize: "11px",
-                        color: "#9ca3af",
-                        marginLeft: "auto",
-                      }}
-                    >
-                      {result.fiscal_quarter}
-                      {result.earnings_surprise_pct !== null &&
-                        ` · ${result.earnings_surprise_pct > 0 ? "+" : ""}${result.earnings_surprise_pct.toFixed(1)}% surprise`}
-                    </span>
-                  )}
-                </div>
-                <p
-                  style={{
-                    fontFamily: "'Instrument Sans', sans-serif",
-                    fontSize: "14px",
-                    color: "#1a0f0a",
-                    lineHeight: "1.65",
-                    margin: 0,
-                  }}
-                >
-                  {result.summary}
-                </p>
-              </div>
-
-              {/* Claim verdicts */}
-              {result.verdicts.length > 0 && (
-                <div>
-                  <p
-                    style={{
-                      fontFamily: "'Instrument Sans', sans-serif",
-                      fontSize: "11px",
-                      fontWeight: 600,
-                      color: "#9ca3af",
-                      textTransform: "uppercase",
-                      letterSpacing: "0.08em",
-                      marginBottom: "10px",
-                    }}
-                  >
-                    Claim-by-Claim
-                  </p>
-                  <div style={{ display: "flex", flexDirection: "column", gap: "10px" }}>
-                    {result.verdicts.map((v) => (
-                      <VerdictCard key={v.claim_id} verdict={v} />
-                    ))}
+            <div className="space-y-5">
+              <div className={cn("product-panel p-5 sm:p-6", assessmentConfig.tone)}>
+                <div className="flex flex-wrap items-start justify-between gap-3">
+                  <div className="space-y-2">
+                    <p className="font-mono text-[10px] uppercase tracking-[0.16em] text-foreground/60">
+                      {assessmentConfig.eyebrow}
+                    </p>
+                    <div className="flex flex-wrap items-center gap-2">
+                      <h3 className="font-display text-[1.7rem] italic leading-none text-foreground">
+                        {assessmentConfig.label}
+                      </h3>
+                      <span className={cn("border px-2 py-1 font-mono text-[10px] uppercase tracking-[0.14em]", assessmentConfig.chip)}>
+                        {ticker}
+                      </span>
+                    </div>
+                  </div>
+                  <div className="flex flex-wrap items-center gap-2">
+                    {result.fiscal_quarter && (
+                      <span className="border border-border/70 bg-background/70 px-2 py-1 font-mono text-[10px] uppercase tracking-[0.14em] text-muted-foreground">
+                        {result.fiscal_quarter}
+                      </span>
+                    )}
+                    {result.earnings_surprise_pct !== null && (
+                      <span className="border border-border/70 bg-background/70 px-2 py-1 font-mono text-[10px] uppercase tracking-[0.14em] text-muted-foreground">
+                        {result.earnings_surprise_pct > 0 ? "+" : ""}
+                        {result.earnings_surprise_pct.toFixed(1)}% surprise
+                      </span>
+                    )}
                   </div>
                 </div>
-              )}
+                <p className="mt-4 font-sans text-sm leading-relaxed text-foreground/88 sm:text-[0.95rem]">
+                  {result.summary}
+                </p>
+                <div className="mt-5 grid gap-3 sm:grid-cols-4">
+                  <div className="product-panel border-border/60 bg-background/65 p-4">
+                    <p className="font-mono text-[10px] uppercase tracking-[0.14em] text-muted-foreground">
+                      Holds
+                    </p>
+                    <p className="mt-2 font-display text-[1.45rem] italic leading-none text-emerald-700">
+                      {verdictCounts.holds}
+                    </p>
+                  </div>
+                  <div className="product-panel border-border/60 bg-background/65 p-4">
+                    <p className="font-mono text-[10px] uppercase tracking-[0.14em] text-muted-foreground">
+                      Watch
+                    </p>
+                    <p className="mt-2 font-display text-[1.45rem] italic leading-none text-amber-700">
+                      {verdictCounts.watch}
+                    </p>
+                  </div>
+                  <div className="product-panel border-border/60 bg-background/65 p-4">
+                    <p className="font-mono text-[10px] uppercase tracking-[0.14em] text-muted-foreground">
+                      Broken
+                    </p>
+                    <p className="mt-2 font-display text-[1.45rem] italic leading-none text-red-600">
+                      {verdictCounts.broken}
+                    </p>
+                  </div>
+                  <div className="product-panel border-border/60 bg-background/65 p-4">
+                    <p className="font-mono text-[10px] uppercase tracking-[0.14em] text-muted-foreground">
+                      Unclear
+                    </p>
+                    <p className="mt-2 font-display text-[1.45rem] italic leading-none text-foreground/70">
+                      {verdictCounts.unclear}
+                    </p>
+                  </div>
+                </div>
+              </div>
+
+              <div className="space-y-3">
+                <div className="flex items-center justify-between gap-3">
+                  <div>
+                    <p className="font-mono text-[10px] uppercase tracking-[0.16em] text-muted-foreground">
+                      Claim review
+                    </p>
+                    <p className="mt-1 font-sans text-sm text-foreground/80">
+                      Each written claim checked against the quarter.
+                    </p>
+                  </div>
+                  <span className="border border-primary/20 bg-primary/6 px-2 py-1 font-mono text-[10px] uppercase tracking-[0.14em] text-primary/75">
+                    {result.verdicts.length} checked
+                  </span>
+                </div>
+
+                <div className="space-y-3">
+                  {result.verdicts.map((verdict) => (
+                    <VerdictCard key={verdict.claim_id} verdict={verdict} />
+                  ))}
+                </div>
+              </div>
             </div>
           )}
         </div>
 
-        {/* Footer */}
         {result && (
-          <div
-            style={{
-              padding: "16px 24px",
-              borderTop: "1px solid #e8e0d5",
-              display: "flex",
-              justifyContent: "space-between",
-              alignItems: "center",
-            }}
-          >
-            <p
-              style={{
-                fontFamily: "'JetBrains Mono', monospace",
-                fontSize: "10px",
-                color: "#a8a29e",
-                margin: 0,
-              }}
-            >
-              Saved to conviction log
-            </p>
-            <button
-              onClick={onClose}
-              style={{
-                backgroundColor: "transparent",
-                color: "#5C2018",
-                border: "1px solid #5C2018",
-                borderRadius: "6px",
-                padding: "8px 20px",
-                fontFamily: "'Instrument Sans', sans-serif",
-                fontSize: "13px",
-                cursor: "pointer",
-              }}
-            >
-              Done
-            </button>
+          <div className="flex flex-wrap items-center justify-between gap-3 border-t border-border/70 px-5 py-4 sm:px-6">
+            <div className="flex items-center gap-2 text-muted-foreground">
+              <CheckCircle2 className="size-4 text-emerald-600" />
+              <p className="font-mono text-[10px] uppercase tracking-[0.14em]">
+                Saved to conviction log{reviewedAt ? ` · ${reviewedAt}` : ""}
+              </p>
+            </div>
+            <div className="flex items-center gap-2">
+              {verdictCounts.broken > 0 && (
+                <div className="hidden items-center gap-1.5 text-red-600 sm:flex">
+                  <AlertTriangle className="size-4" />
+                  <span className="font-sans text-sm">One or more claims broke.</span>
+                </div>
+              )}
+              <Button variant="outline" onClick={onClose}>
+                Done
+              </Button>
+            </div>
           </div>
         )}
       </div>

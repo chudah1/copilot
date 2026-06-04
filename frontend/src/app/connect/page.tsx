@@ -3,6 +3,7 @@
 import { useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
 import { api } from "@/lib/api";
+import { getApiBaseUrl } from "@/lib/api-base";
 import { AuthGuard } from "@/components/layout/auth-guard";
 import { Navbar } from "@/components/layout/navbar";
 import { Button } from "@/components/ui/button";
@@ -17,6 +18,47 @@ const TABS: { id: TabId; label: string }[] = [
   { id: "manual", label: "Manual Entry" },
   { id: "broker", label: "Trading 212 API" },
 ];
+
+const TAB_DETAILS: Record<
+  TabId,
+  {
+    eyebrow: string;
+    title: string;
+    body: string;
+    note: string;
+    formTitle: string;
+    formBody: string;
+    after: string;
+  }
+> = {
+  csv: {
+    eyebrow: "Fastest path",
+    title: "Import the full ledger in one move.",
+    body: "Best when you already have a broker export and want the portfolio in quickly.",
+    note: "Accepted shape: Trading 212 export or columns for ticker, name, quantity, and average cost basis.",
+    formTitle: "Upload a broker file",
+    formBody: "Bring in the portfolio first, then move straight to writing the thesis on the name that matters most.",
+    after: "After import, go to your largest position and write the first thesis there.",
+  },
+  manual: {
+    eyebrow: "Best for first use",
+    title: "Start with just a few names.",
+    body: "Add one to three positions and pressure-test the thesis workflow before doing a larger import.",
+    note: "This is the easiest path if you want to feel the product before committing to a full setup.",
+    formTitle: "Add the first position",
+    formBody: "Use one real holding to feel the workflow before you commit to importing the rest of the portfolio.",
+    after: "After adding the holding, go write the reason you own it while the case is still fresh.",
+  },
+  broker: {
+    eyebrow: "Connected source",
+    title: "Sync holdings straight from Trading 212.",
+    body: "Best when you want portfolio state to come in directly instead of maintaining files.",
+    note: "New holdings are added to what is already here. Existing positions are not overwritten.",
+    formTitle: "Connect the live source",
+    formBody: "Use this when you want holdings to come in directly from Trading 212 instead of managing exports.",
+    after: "After sync, the next useful move is still writing the thesis on the position that matters most.",
+  },
+};
 
 function Field({
   id,
@@ -86,6 +128,7 @@ export default function ConnectPage() {
   const [csvError, setCsvError] = useState("");
   const [csvLoading, setCsvLoading] = useState(false);
   const [csvResult, setCsvResult] = useState("");
+  const activeTab = TAB_DETAILS[tab];
 
   const handleConnect = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -138,8 +181,7 @@ export default function ConnectPage() {
     try {
       const formData = new FormData();
       formData.append("file", csvFile);
-      const API_URL = process.env.NEXT_PUBLIC_API_URL || "http://localhost:8000";
-      const res = await fetch(`${API_URL}/api/portfolio/upload-csv`, {
+      const res = await fetch(`${getApiBaseUrl()}/api/portfolio/upload-csv`, {
         method: "POST",
         credentials: "include",
         body: formData,
@@ -161,156 +203,231 @@ export default function ConnectPage() {
   return (
     <AuthGuard>
       <Navbar />
-      <main className="max-w-2xl mx-auto px-4 sm:px-8 py-10">
-
-        {/* Header */}
-        <div className="border-b border-border pb-7 mb-8">
-          <p className="font-mono text-[10px] uppercase tracking-[0.3em] text-muted-foreground mb-2">
-            {addingMore ? "Add a source" : "Getting started"}
-          </p>
-          <h1 className="font-display italic text-[2.5rem] leading-tight text-foreground mb-3">
-            {addingMore ? "Add more holdings." : "Connect your portfolio."}
-          </h1>
-          <p className="font-sans text-sm text-muted-foreground leading-relaxed max-w-lg">
-            {addingMore
-              ? "Connect another broker, upload a CSV, or add a position by hand. New holdings are added to what you already have — nothing is overwritten."
-              : "Import what you own. Then write why each position exists — what must stay true, and what would make you reconsider."}
-          </p>
-
-          {/* Steps — only relevant on first-run onboarding */}
-          {!addingMore && (
-            <div className="grid grid-cols-3 gap-px mt-6 border border-border">
-              {[
-                { n: "01", title: "Import holdings", body: "CSV, manual entry, or Trading 212." },
-                { n: "02", title: "Write top theses", body: "Start with your biggest positions." },
-                { n: "03", title: "Get monitored", body: "We watch for changes that matter to your reasoning." },
-              ].map(({ n, title, body }) => (
-                <div key={n} className="bg-muted/30 px-4 py-4">
-                  <p className="font-mono text-[10px] tracking-[0.2em] text-primary mb-1.5">{n}</p>
-                  <p className="font-sans text-sm font-medium text-foreground">{title}</p>
-                  <p className="font-sans text-xs text-muted-foreground mt-1 leading-relaxed">{body}</p>
+      <main className="mx-auto max-w-5xl px-4 py-10 sm:px-8">
+        <div className="grid gap-5 xl:grid-cols-[minmax(0,1fr)_20rem]">
+          <section className="space-y-5">
+            <div className="product-panel product-panel-muted overflow-hidden p-6 sm:p-7">
+              <div className="grid gap-5 lg:grid-cols-[minmax(0,1fr)_minmax(18rem,20rem)]">
+                <div className="space-y-3">
+                  <p className="font-mono text-[10px] uppercase tracking-[0.22em] text-muted-foreground">
+                    {addingMore ? "Add a source" : "Getting started"}
+                  </p>
+                  <h1 className="font-display italic text-[2.4rem] leading-tight text-foreground">
+                    {addingMore ? "Add more holdings." : "Connect your portfolio."}
+                  </h1>
+                  <p className="max-w-xl font-sans text-sm leading-relaxed text-muted-foreground">
+                    {addingMore
+                      ? "Connect another broker, upload a CSV, or add a position by hand. New holdings are added to what you already have."
+                      : "Import what you own, write why each position exists, and let the product watch the case instead of the tape."}
+                  </p>
                 </div>
-              ))}
-            </div>
-          )}
-        </div>
 
-        {/* Tab strip */}
-        <div className="flex gap-1 border-b border-border mb-6 -mx-1">
-          {TABS.map((t) => (
-            <button
-              key={t.id}
-              onClick={() => setTab(t.id)}
-              className={`relative px-3 pb-3 pt-1 font-mono text-[10px] uppercase tracking-[0.18em] transition-colors ${
-                tab === t.id ? "text-foreground" : "text-muted-foreground hover:text-foreground/70"
-              }`}
-            >
-              {t.label}
-              {tab === t.id && (
-                <span className="absolute bottom-0 inset-x-3 h-px bg-primary" />
+                <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-1">
+                  <div className="border border-border/60 bg-background/70 p-4">
+                    <p className="font-mono text-[10px] uppercase tracking-[0.16em] text-muted-foreground">
+                      Outcome
+                    </p>
+                    <p className="mt-2 font-sans text-sm leading-relaxed text-foreground/80">
+                      Holdings in, thesis work next, monitoring after that.
+                    </p>
+                  </div>
+                  <div className="border border-border/60 bg-background/70 p-4">
+                    <p className="font-mono text-[10px] uppercase tracking-[0.16em] text-muted-foreground">
+                      Best move
+                    </p>
+                    <p className="mt-2 font-sans text-sm leading-relaxed text-foreground/80">
+                      Start with the path that gets you to one written position fastest.
+                    </p>
+                  </div>
+                </div>
+              </div>
+
+              {!addingMore && (
+                <div className="mt-6 grid gap-3 sm:grid-cols-3">
+                  {[
+                    { n: "01", title: "Import", body: "CSV, manual entry, or Trading 212." },
+                    { n: "02", title: "Write", body: "Start with the names that matter most." },
+                    { n: "03", title: "Review", body: "Watch the thesis, not just the price." },
+                  ].map(({ n, title, body }) => (
+                    <div key={n} className="border border-border/60 bg-background/60 p-4">
+                      <p className="font-mono text-[10px] tracking-[0.2em] text-primary mb-1.5">{n}</p>
+                      <p className="font-sans text-sm font-medium text-foreground">{title}</p>
+                      <p className="mt-1 font-sans text-xs leading-relaxed text-muted-foreground">{body}</p>
+                    </div>
+                  ))}
+                </div>
               )}
-            </button>
-          ))}
-        </div>
-
-        {/* CSV tab */}
-        {tab === "csv" && (
-          <form onSubmit={handleCsvUpload} className="space-y-4">
-            <Field id="csvFile" label="CSV file" note="Trading 212 transaction export or a file with columns: ticker, name, quantity, average_cost_basis.">
-              <input
-                id="csvFile"
-                type="file"
-                accept=".csv"
-                onChange={(e) => setCsvFile(e.target.files?.[0] || null)}
-                required
-                className={inputCls}
-              />
-            </Field>
-            <Note>
-              Fastest path for most people. Once imported, head to your top 3 positions and write why each one exists.
-            </Note>
-            {csvError && <p className="font-sans text-sm text-destructive" role="alert">{csvError}</p>}
-            {csvResult && <p className="font-sans text-sm text-emerald-600">{csvResult}</p>}
-            <Button type="submit" loading={csvLoading} disabled={!csvFile}>
-              <span className="font-mono text-[11px] uppercase tracking-[0.15em]">Upload & Import</span>
-            </Button>
-          </form>
-        )}
-
-        {/* Manual tab */}
-        {tab === "manual" && (
-          <form onSubmit={handleManual} className="space-y-4">
-            <Field label="Stock">
-              <TickerSearch value={ticker} onSelect={(t, n) => { setTicker(t); setName(n); }} />
-              {name && <p className="font-sans text-xs text-muted-foreground mt-1">{name}</p>}
-            </Field>
-            <div className="grid grid-cols-2 gap-4">
-              <Field id="quantity" label="Quantity">
-                <input
-                  id="quantity"
-                  type="number"
-                  step="any"
-                  min="0.000001"
-                  value={quantity}
-                  onChange={(e) => setQuantity(e.target.value)}
-                  required
-                  className={inputCls}
-                />
-              </Field>
-              <Field id="avgCost" label="Average cost">
-                <input
-                  id="avgCost"
-                  type="number"
-                  step="any"
-                  min="0.000001"
-                  value={avgCost}
-                  onChange={(e) => setAvgCost(e.target.value)}
-                  required
-                  className={inputCls}
-                />
-              </Field>
             </div>
-            <Note>
-              Add 1–3 positions first, write a thesis for each, and see how the product feels before importing everything else.
-            </Note>
-            {manualError && <p className="font-sans text-sm text-destructive" role="alert">{manualError}</p>}
-            <Button type="submit" loading={manualLoading} disabled={!ticker || !quantity || !avgCost}>
-              <span className="font-mono text-[11px] uppercase tracking-[0.15em]">Add Holding</span>
-            </Button>
-          </form>
-        )}
 
-        {/* Trading 212 tab */}
-        {tab === "broker" && (
-          <form onSubmit={handleConnect} className="space-y-4">
-            <Field id="apiKey" label="API Key">
-              <input
-                id="apiKey"
-                type="password"
-                value={apiKey}
-                onChange={(e) => setApiKey(e.target.value)}
-                required
-                className={inputCls}
-              />
-            </Field>
-            <Field id="apiSecret" label="Secret Key" note="Leave blank if Trading 212 only gave you one key.">
-              <input
-                id="apiSecret"
-                type="password"
-                value={apiSecret}
-                onChange={(e) => setApiSecret(e.target.value)}
-                className={inputCls}
-              />
-            </Field>
-            <Note>
-              Generate credentials in Trading 212 Settings → API. Don&rsquo;t set an IP restriction when generating — leave it unrestricted.
-            </Note>
-            {brokerError && <p className="font-sans text-sm text-destructive" role="alert">{brokerError}</p>}
-            <Button type="submit" loading={brokerLoading}>
-              <span className="font-mono text-[11px] uppercase tracking-[0.15em]">Connect & Sync</span>
-            </Button>
-          </form>
-        )}
+            <div className="product-panel p-2">
+              <div className="grid gap-2 md:grid-cols-3">
+                {TABS.map((t) => (
+                  <button
+                    key={t.id}
+                    onClick={() => setTab(t.id)}
+                    className={`px-4 py-3 text-left transition-colors ${
+                      tab === t.id
+                        ? "bg-muted text-foreground"
+                        : "text-muted-foreground hover:bg-muted/50 hover:text-foreground"
+                    }`}
+                  >
+                    <p className="font-mono text-[10px] uppercase tracking-[0.16em]">{t.label}</p>
+                  </button>
+                ))}
+              </div>
+            </div>
+
+            <div className="product-panel p-5 sm:p-6">
+              {tab === "csv" && (
+                <form onSubmit={handleCsvUpload} className="space-y-4">
+                  <div className="space-y-2">
+                    <p className="font-mono text-[10px] uppercase tracking-[0.16em] text-muted-foreground">
+                      {activeTab.formTitle}
+                    </p>
+                    <p className="font-sans text-sm leading-relaxed text-muted-foreground">
+                      {activeTab.formBody}
+                    </p>
+                  </div>
+                  <Field id="csvFile" label="CSV file" note="Trading 212 transaction export or a file with columns: ticker, name, quantity, average_cost_basis.">
+                    <input
+                      id="csvFile"
+                      type="file"
+                      accept=".csv"
+                      onChange={(e) => setCsvFile(e.target.files?.[0] || null)}
+                      required
+                      className={inputCls}
+                    />
+                  </Field>
+                  <Note>Best when you already have the file ready and want the portfolio in quickly.</Note>
+                  {csvError && <p className="font-sans text-sm text-destructive" role="alert">{csvError}</p>}
+                  {csvResult && <p className="font-sans text-sm text-emerald-600">{csvResult}</p>}
+                  <Button type="submit" loading={csvLoading} disabled={!csvFile}>
+                    <span className="font-mono text-[11px] uppercase tracking-[0.15em]">Upload & Import</span>
+                  </Button>
+                </form>
+              )}
+
+              {tab === "manual" && (
+                <form onSubmit={handleManual} className="space-y-4">
+                  <div className="space-y-2">
+                    <p className="font-mono text-[10px] uppercase tracking-[0.16em] text-muted-foreground">
+                      {activeTab.formTitle}
+                    </p>
+                    <p className="font-sans text-sm leading-relaxed text-muted-foreground">
+                      {activeTab.formBody}
+                    </p>
+                  </div>
+                  <Field label="Stock" note="Search the listed company name or ticker, then pick the common-stock match.">
+                    <TickerSearch value={ticker} onSelect={(t, n) => { setTicker(t); setName(n); }} />
+                    {name && <p className="font-sans text-xs text-muted-foreground mt-1">{name}</p>}
+                  </Field>
+                  <div className="grid grid-cols-2 gap-4">
+                    <Field id="quantity" label="Quantity" note="Use the real share count you hold today.">
+                      <input
+                        id="quantity"
+                        type="number"
+                        step="any"
+                        min="0.000001"
+                        value={quantity}
+                        onChange={(e) => setQuantity(e.target.value)}
+                        required
+                        placeholder="12"
+                        className={inputCls}
+                      />
+                    </Field>
+                    <Field id="avgCost" label="Average cost" note="Per-share average cost basis for the holding.">
+                      <input
+                        id="avgCost"
+                        type="number"
+                        step="any"
+                        min="0.000001"
+                        value={avgCost}
+                        onChange={(e) => setAvgCost(e.target.value)}
+                        required
+                        placeholder="187.40"
+                        className={inputCls}
+                      />
+                    </Field>
+                  </div>
+                  <Note>One to three positions is enough to feel the product before doing a larger import.</Note>
+                  {manualError && <p className="font-sans text-sm text-destructive" role="alert">{manualError}</p>}
+                  <Button type="submit" loading={manualLoading} disabled={!ticker || !quantity || !avgCost}>
+                    <span className="font-mono text-[11px] uppercase tracking-[0.15em]">Add Holding</span>
+                  </Button>
+                </form>
+              )}
+
+              {tab === "broker" && (
+                <form onSubmit={handleConnect} className="space-y-4">
+                  <div className="space-y-2">
+                    <p className="font-mono text-[10px] uppercase tracking-[0.16em] text-muted-foreground">
+                      {activeTab.formTitle}
+                    </p>
+                    <p className="font-sans text-sm leading-relaxed text-muted-foreground">
+                      {activeTab.formBody}
+                    </p>
+                  </div>
+                  <Field id="apiKey" label="API Key">
+                    <input
+                      id="apiKey"
+                      type="password"
+                      value={apiKey}
+                      onChange={(e) => setApiKey(e.target.value)}
+                      required
+                      className={inputCls}
+                    />
+                  </Field>
+                  <Field id="apiSecret" label="Secret Key" note="Leave blank if Trading 212 only gave you one key.">
+                    <input
+                      id="apiSecret"
+                      type="password"
+                      value={apiSecret}
+                      onChange={(e) => setApiSecret(e.target.value)}
+                      className={inputCls}
+                    />
+                  </Field>
+                  <Note>
+                    Generate credentials in Trading 212 Settings → API. When generating, leave the IP restriction off.
+                  </Note>
+                  {brokerError && <p className="font-sans text-sm text-destructive" role="alert">{brokerError}</p>}
+                  <Button type="submit" loading={brokerLoading}>
+                    <span className="font-mono text-[11px] uppercase tracking-[0.15em]">Connect & Sync</span>
+                  </Button>
+                </form>
+              )}
+            </div>
+          </section>
+
+          <aside className="space-y-4">
+            <div className="product-panel p-5">
+              <p className="font-mono text-[10px] uppercase tracking-[0.16em] text-muted-foreground">
+                {activeTab.eyebrow}
+              </p>
+              <p className="mt-2 font-display text-[1.35rem] italic leading-tight text-foreground">
+                {activeTab.title}
+              </p>
+              <p className="mt-2 font-sans text-sm leading-relaxed text-muted-foreground">
+                {activeTab.body}
+              </p>
+            </div>
+            <div className="product-panel p-5">
+              <p className="font-mono text-[10px] uppercase tracking-[0.16em] text-muted-foreground">
+                Practical note
+              </p>
+              <p className="mt-2 font-sans text-sm leading-relaxed text-foreground/80">
+                {activeTab.note}
+              </p>
+            </div>
+            <div className="product-panel p-5">
+              <p className="font-mono text-[10px] uppercase tracking-[0.16em] text-muted-foreground">
+                What happens next
+              </p>
+              <p className="mt-2 font-sans text-sm leading-relaxed text-foreground/80">
+                {activeTab.after}
+              </p>
+            </div>
+          </aside>
+        </div>
       </main>
     </AuthGuard>
   );

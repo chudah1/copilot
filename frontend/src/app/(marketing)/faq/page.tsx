@@ -55,10 +55,25 @@ const FAQS = [
   },
 ] as const;
 
+const CATEGORY_INTROS: Record<string, string> = {
+  "The product": "What penKeep is, what it is not, and who it is actually built for.",
+  "Signals & alerts": "How the product decides when to stay quiet and when a reason may have changed.",
+  "Connections & data": "What gets connected, what does not, and how your information is treated.",
+  Money: "How the business works without turning the app into a feed of incentives and noise.",
+};
+
 function FAQItem({ q, a, defaultOpen }: { q: string; a: string; defaultOpen?: boolean }) {
   const [open, setOpen] = useState(!!defaultOpen);
   return (
-    <div style={{ borderTop: `1px solid ${mk.pencilLight}` }}>
+    <div
+      style={{
+        border: `1px solid ${open ? mk.accent : mk.pencilLight}`,
+        borderRadius: 16,
+        background: open ? mk.paperHi : mk.card,
+        padding: "0 18px",
+        transition: "all 220ms ease",
+      }}
+    >
       <button
         onClick={() => setOpen((o) => !o)}
         style={{
@@ -67,7 +82,7 @@ function FAQItem({ q, a, defaultOpen }: { q: string; a: string; defaultOpen?: bo
           display: "flex",
           alignItems: "center",
           gap: 18,
-          padding: "20px 0",
+          padding: "20px 0 18px",
           width: "100%",
           textAlign: "left",
         }}
@@ -97,7 +112,7 @@ function FAQItem({ q, a, defaultOpen }: { q: string; a: string; defaultOpen?: bo
       {open && (
         <div
           style={{
-            paddingBottom: 22,
+            paddingBottom: 20,
             fontFamily: mk.sans,
             fontSize: 16,
             lineHeight: 1.6,
@@ -139,6 +154,40 @@ export default function FAQPage() {
           The short answers are here. If you have something else,
           email <span style={{ color: mk.ink, fontWeight: 500 }}>hi@penkeep.io</span>.
         </p>
+
+        <div
+          style={{
+            display: "grid",
+            gridTemplateColumns: "repeat(3, minmax(0, 1fr))",
+            gap: 12,
+            marginTop: "clamp(24px,3vw,32px)",
+            maxWidth: 920,
+          }}
+          className="max-md:grid-cols-1"
+        >
+          {[
+            ["No stock tips", "The product never tells you what to buy."],
+            ["Quiet by default", "Most weeks, if nothing relevant changed, it says nothing."],
+            ["Read-only data", "Broker links are optional and never execute trades."],
+          ].map(([label, value]) => (
+            <div
+              key={label}
+              style={{
+                background: mk.card,
+                border: `1px solid ${mk.pencilLight}`,
+                borderRadius: 16,
+                padding: "16px 18px",
+              }}
+            >
+              <div style={{ fontFamily: mk.mono, fontSize: 10, letterSpacing: "0.14em", textTransform: "uppercase", color: mk.pencil }}>
+                {label}
+              </div>
+              <div style={{ fontFamily: mk.sans, fontSize: 15, lineHeight: 1.45, color: mk.inkSoft, marginTop: 8 }}>
+                {value}
+              </div>
+            </div>
+          ))}
+        </div>
       </section>
 
       {/* Categories */}
@@ -147,29 +196,59 @@ export default function FAQPage() {
           <div key={cat.cat} style={{ marginBottom: 50 }}>
             <div
               style={{
-                fontFamily: mk.mono,
-                fontSize: 11,
-                letterSpacing: "0.14em",
-                textTransform: "uppercase",
-                color: mk.accent,
-                padding: "0 0 14px",
+                background: mk.card,
+                border: `1px solid ${mk.pencilLight}`,
+                borderRadius: 18,
+                padding: "22px 22px 18px",
+                marginBottom: 14,
               }}
             >
-              § {cat.cat}
+              <div
+                style={{
+                  fontFamily: mk.mono,
+                  fontSize: 11,
+                  letterSpacing: "0.14em",
+                  textTransform: "uppercase",
+                  color: mk.accent,
+                  marginBottom: 10,
+                }}
+              >
+                § {cat.cat}
+              </div>
+              <div
+                style={{
+                  fontFamily: mk.sans,
+                  fontSize: 15,
+                  lineHeight: 1.55,
+                  color: mk.inkSoft,
+                  maxWidth: 760,
+                }}
+              >
+                {CATEGORY_INTROS[cat.cat] ?? ""}
+              </div>
             </div>
-            {cat.items.map(([q, a], i) => (
-              <FAQItem key={q} q={q} a={a} defaultOpen={ci === 0 && i === 0} />
-            ))}
-            <div style={{ borderTop: `1px solid ${mk.pencilLight}` }} />
+            <div style={{ display: "flex", flexDirection: "column", gap: 10 }}>
+              {cat.items.map(([q, a], i) => (
+                <FAQItem key={q} q={q} a={a} defaultOpen={ci === 0 && i === 0} />
+              ))}
+            </div>
           </div>
         ))}
       </section>
 
       {/* CTA */}
       <section style={{ padding: `clamp(50px,8vw,100px) ${pad}`, background: mk.ink, color: mk.paper }}>
+        <div style={{ maxWidth: 760 }}>
+          <div style={{ fontFamily: mk.mono, fontSize: 11, letterSpacing: "0.14em", textTransform: "uppercase", color: "#8f877d", marginBottom: 12 }}>
+            Try the product
+          </div>
         <h2 style={{ fontFamily: mk.sans, fontSize: "clamp(36px,5vw,56px)", fontWeight: 600, margin: 0, lineHeight: 1, letterSpacing: "-0.03em" }}>
           Still curious? <span style={{ color: mk.accent }}>Just try it.</span>
         </h2>
+        <p style={{ fontFamily: mk.sans, fontSize: "clamp(15px,1.6vw,17px)", color: "#bdb4ab", lineHeight: 1.6, margin: "16px 0 0", maxWidth: 560 }}>
+          The fastest way to understand penKeep is to put one real position through the thesis and review loop.
+        </p>
+        </div>
         <div style={{ marginTop: "clamp(24px,3vw,36px)" }}>
           <WaitlistForm dark />
         </div>

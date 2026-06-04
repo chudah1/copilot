@@ -3,6 +3,7 @@
 import { useState } from "react";
 import Link from "next/link";
 import { api } from "@/lib/api";
+import { AuthShell } from "@/components/auth/auth-shell";
 import { Button } from "@/components/ui/button";
 import { getErrorMessage } from "@/lib/errors";
 
@@ -29,28 +30,40 @@ export default function ForgotPasswordPage() {
   };
 
   return (
-    <div className="flex min-h-screen items-center justify-center px-4">
-      <div className="w-full max-w-sm border border-border/60 bg-card p-8 space-y-6">
-        <div>
-          <p className="font-mono text-[10px] uppercase tracking-[0.2em] text-muted-foreground mb-2">
-            penKeep
-          </p>
-          <h1 className="font-display italic text-[2rem] leading-tight text-foreground">
-            {sent ? "Check your inbox." : "Reset your password."}
-          </h1>
-        </div>
-
+    <AuthShell
+      eyebrow={sent ? "Email Sent" : "Password Reset"}
+      title={sent ? "Check your inbox." : "Reset your password."}
+      description={sent
+        ? "If the address exists, the reset link is already on its way."
+        : "We will send a reset link without confirming whether the address has an account."}
+      asideHeading="What to expect"
+      asideBody="Password reset should feel calm and obvious, not like a dead end."
+      asideItems={[
+        {
+          eyebrow: "Delivery",
+          title: "The email usually arrives quickly.",
+          body: "If it is not there within a minute, check spam and then try again.",
+        },
+        {
+          eyebrow: "Access",
+          title: "Use the newest link.",
+          body: "Fresh reset links are the safest way back in if you requested more than one.",
+        },
+      ]}
+      footer={(
+        <p className="font-mono text-[10px] text-muted-foreground/70 text-center">
+          <Link href="/login" className="underline underline-offset-2 hover:text-foreground transition-colors">
+            Back to sign in
+          </Link>
+        </p>
+      )}
+    >
+      <div className="max-w-sm">
         {sent ? (
           <div className="space-y-4">
             <p className="font-sans text-sm text-muted-foreground leading-relaxed">
               If <span className="text-foreground">{email}</span> has an account, a reset link is on its way. Check your spam folder if it doesn&apos;t arrive within a minute.
             </p>
-            <Link
-              href="/login"
-              className="font-mono text-[10px] uppercase tracking-[0.15em] text-primary hover:text-primary/70 transition-colors block"
-            >
-              ← Back to sign in
-            </Link>
           </div>
         ) : (
           <form onSubmit={handleSubmit} className="space-y-4">
@@ -76,15 +89,9 @@ export default function ForgotPasswordPage() {
             <Button type="submit" className="w-full" loading={loading}>
               <span className="font-mono text-[11px] uppercase tracking-[0.15em]">Send reset link</span>
             </Button>
-
-            <p className="font-mono text-[10px] text-muted-foreground/70 text-center">
-              <Link href="/login" className="underline underline-offset-2 hover:text-foreground transition-colors">
-                Back to sign in
-              </Link>
-            </p>
           </form>
         )}
       </div>
-    </div>
+    </AuthShell>
   );
 }
