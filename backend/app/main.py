@@ -110,6 +110,30 @@ def _ensure_sqlite_dev_compatibility(conn) -> None:
         conn.execute(text("CREATE INDEX IF NOT EXISTS ix_thesis_health_snapshots_thesis_id ON thesis_health_snapshots(thesis_id)"))
         logger.info("Created thesis_health_snapshots table for local SQLite compatibility")
 
+    if "founding_orders" not in tables:
+        conn.execute(text(
+            "CREATE TABLE IF NOT EXISTS founding_orders ("
+            "stripe_session_id TEXT PRIMARY KEY, "
+            "email VARCHAR(255) NOT NULL, "
+            "tier VARCHAR(32) NOT NULL, "
+            "amount INTEGER NOT NULL, "
+            "currency VARCHAR(8) NOT NULL, "
+            "status VARCHAR(16) NOT NULL DEFAULT 'pending', "
+            "created_at DATETIME NOT NULL, "
+            "paid_at DATETIME)"
+        ))
+        conn.execute(text("CREATE INDEX IF NOT EXISTS ix_founding_orders_status ON founding_orders(status)"))
+        logger.info("Created founding_orders table for local SQLite compatibility")
+
+    if "founding_reservations" not in tables:
+        conn.execute(text(
+            "CREATE TABLE IF NOT EXISTS founding_reservations ("
+            "email VARCHAR(255) PRIMARY KEY, "
+            "tier VARCHAR(32) NOT NULL, "
+            "created_at DATETIME NOT NULL)"
+        ))
+        logger.info("Created founding_reservations table for local SQLite compatibility")
+
     if "onboarding_states" in tables:
         ob_columns = {column["name"] for column in inspector.get_columns("onboarding_states")}
         for col in ("drafts_generated_at", "drafts_reviewed_at", "wizard_skipped_at", "wizard_completed_at"):
@@ -181,6 +205,9 @@ app.include_router(research_router)
 
 from app.routes.waitlist import router as waitlist_router
 app.include_router(waitlist_router)
+
+from app.routes.presale import router as presale_router
+app.include_router(presale_router)
 
 
 @app.get("/health")

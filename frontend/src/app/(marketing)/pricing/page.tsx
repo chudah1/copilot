@@ -1,4 +1,5 @@
 import { WaitlistForm } from "../../_mkt/waitlist-form";
+import { FoundingForm } from "../../_mkt/founding-form";
 import { mk } from "../../_mkt/tokens";
 
 const FREE_FEATURES = [
@@ -79,11 +80,11 @@ export default function PricingPage() {
           }}
         >
           Free to start.<br />
-          <span style={{ color: mk.accent }}>Premium when you&apos;re ready.</span>
+          <span style={{ color: mk.accent }}>Found it for life.</span>
         </h1>
         <p style={{ fontFamily: mk.sans, fontSize: "clamp(17px,1.8vw,19px)", lineHeight: 1.55, color: mk.pencil, marginTop: "clamp(18px,2vw,24px)", maxWidth: 600 }}>
-          The free tier is free at launch and stays free. Premium pricing will be announced
-          closer to launch. No credit card required to join.
+          The free tier is free at launch and stays free. A limited run of founding seats
+          locks in Premium at the lowest price it will ever be — refundable until we launch.
         </p>
 
         <div
@@ -204,7 +205,7 @@ export default function PricingPage() {
             <div>
               <div style={{ display: "flex", alignItems: "center", gap: 8, marginBottom: 10 }}>
                 <div style={{ fontFamily: mk.mono, fontSize: 11, letterSpacing: "0.14em", textTransform: "uppercase", color: "#999" }}>
-                  Premium
+                  Founding Premium
                 </div>
                 <span
                   style={{
@@ -218,14 +219,14 @@ export default function PricingPage() {
                     letterSpacing: "0.06em",
                   }}
                 >
-                  COMING SOON
+                  LIMITED SEATS
                 </span>
               </div>
               <div style={{ fontFamily: mk.sans, fontSize: "clamp(36px,5vw,52px)", fontWeight: 600, letterSpacing: "-0.03em", lineHeight: 1 }}>
-                TBD
+                from £59
               </div>
               <div style={{ fontFamily: mk.sans, fontSize: 14, color: "#aaa", marginTop: 6 }}>
-                Announced at launch.
+                Founding price, locked for life.
               </div>
             </div>
 
@@ -257,10 +258,7 @@ export default function PricingPage() {
             </ul>
 
             <div style={{ marginTop: "auto", paddingTop: 8 }}>
-              <p style={{ fontFamily: mk.sans, fontSize: 13, color: "#888", margin: "0 0 12px" }}>
-                Join the waitlist. We&apos;ll notify you when premium is available.
-              </p>
-              <WaitlistForm dark />
+              <FoundingForm dark />
             </div>
           </div>
         </div>

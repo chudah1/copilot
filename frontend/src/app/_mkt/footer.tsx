@@ -20,6 +20,14 @@ export function MarketingFooter() {
         { label: "Security", href: "/security" },
       ],
     },
+    {
+      title: "Legal",
+      links: [
+        { label: "Privacy", href: "/privacy" },
+        { label: "Terms", href: "/terms" },
+        { label: "Refunds", href: "/refunds" },
+      ],
+    },
   ] as const;
 
   return (
@@ -34,7 +42,7 @@ export function MarketingFooter() {
       <div
         style={{
           display: "grid",
-          gridTemplateColumns: "minmax(0, 1.2fr) minmax(0, 0.8fr) minmax(0, 0.8fr)",
+          gridTemplateColumns: "minmax(0, 1.2fr) minmax(0, 0.8fr) minmax(0, 0.8fr) minmax(0, 0.8fr)",
           gap: 28,
         }}
         className="max-lg:grid-cols-1"

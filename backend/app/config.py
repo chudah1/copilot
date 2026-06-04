@@ -30,6 +30,22 @@ class Settings(BaseSettings):
 
     encryption_key: str = "change-me-32-byte-key-in-prod!!"  # Must be 32 bytes
 
+    # Founding-member presale.
+    # While this is False (the default), the presale runs in *reserve* mode: it
+    # captures founding-seat intent without taking any money. Flip to True only
+    # once you're legally clear to trade — it switches the same flow to a real
+    # Stripe charge. Keeping it off keeps you out of "trading" entirely.
+    presale_charge_enabled: bool = False
+    # Stripe Checkout config (only used when presale_charge_enabled is True).
+    # Empty stripe_secret_key also disables charging, so the app runs fine before
+    # payments are set up.
+    stripe_secret_key: str = ""
+    stripe_webhook_secret: str = ""
+    presale_currency: str = "gbp"
+    # Total founding seats across all tiers; drives the scarcity counter and the
+    # hard stop once they're gone. Sold = count of paid founding_orders.
+    founding_seats_total: int = 100
+
     anthropic_api_key: str = ""
     anthropic_model: str = "claude-sonnet-4-20250514"
     openai_api_key: str = ""
