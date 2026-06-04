@@ -5,6 +5,8 @@ import { useRouter } from "next/navigation";
 import Link from "next/link";
 import { motion, AnimatePresence } from "framer-motion";
 import { api } from "@/lib/api";
+import { classifyThesisQuality } from "@/lib/thesis-quality";
+import { TickerSearch } from "@/components/portfolio/ticker-search";
 import { Button } from "@/components/ui/button";
 import { formatCurrency } from "@/lib/utils";
 import type { Holding, OnboardingState, PortfolioSummary, SimulateTradeResponse, Thesis } from "@/types";
@@ -38,6 +40,7 @@ function getTradeIntervention(
           (thesis.status === "draft" || thesis.status === "active" || thesis.status === "needs_review"),
       ) ?? null
     : null;
+  const quality = classifyThesisQuality(currentThesis ?? undefined);
   const monitorability = getMonitorability(currentThesis);
   const ambiguityNote =
     currentThesis?.interpretation && typeof currentThesis.interpretation.ambiguity_note === "string"
@@ -76,6 +79,24 @@ function getTradeIntervention(
           : "Hard to know if you're adding to a real case or just reacting to price and headlines.",
       ctaLabel: "Add it and write the reason →",
       ctaHref: null,
+      softenSecondary: true,
+    };
+  }
+
+  if (matchingHolding && currentThesis && quality.kind === "stale") {
+    return {
+      tone: "border-amber-500/25 bg-amber-500/6 text-amber-800",
+      eyebrow: "Before you add more",
+      title:
+        investorProfile === "hearsay_driven"
+          ? "The written reason is stale."
+          : "The written thesis is stale.",
+      body:
+        investorProfile === "hearsay_driven"
+          ? "Refresh the current reason before you add more size, so you know the original story still earns fresh capital."
+          : "Refresh the current thesis before you add more size, so you know the original case still earns fresh capital.",
+      ctaLabel: `Refresh ${cleanTicker(result.ticker)} first →`,
+      ctaHref: `/dashboard/positions/${result.ticker}`,
       softenSecondary: true,
     };
   }
@@ -293,7 +314,7 @@ export default function SimulatePage() {
               Simulate an add before you size up.
             </h1>
             <p className="max-w-2xl font-sans text-sm leading-relaxed text-muted-foreground">
-              Run the trade before you commit capital. See what it does to concentration, holdings mix, and whether the position deserves more size right now.
+              Check the sizing first. See what the add does to concentration, holdings mix, and whether this position has earned more capital.
             </p>
           </div>
 
@@ -303,7 +324,7 @@ export default function SimulatePage() {
                 Best used for
               </p>
               <p className="mt-2 font-sans text-sm leading-relaxed text-foreground/80">
-                Checking concentration before a new buy or adding to an existing name.
+                New buys and adds to existing names.
               </p>
             </div>
             {summary && (
@@ -330,7 +351,7 @@ export default function SimulatePage() {
               Trade to test
             </p>
             <p className="mt-2 font-sans text-sm leading-relaxed text-muted-foreground">
-              Enter the add you are considering, then check the portfolio impact before you size up.
+              Enter the add you are considering, then run the portfolio check.
             </p>
           </div>
 
@@ -352,11 +373,11 @@ export default function SimulatePage() {
               <span className="font-mono text-[10px] uppercase tracking-[0.15em] text-muted-foreground/70">
                 Ticker
               </span>
-              <input
-                placeholder="NVDA"
+              <TickerSearch
                 value={ticker}
-                onChange={(e) => setTicker(e.target.value.toUpperCase())}
-                className="flex h-11 w-full border border-input bg-background px-3 py-2 font-mono text-sm uppercase text-foreground outline-none transition-colors focus-visible:ring-2 focus-visible:ring-ring"
+                onChange={setTicker}
+                onSelect={(selectedTicker) => setTicker(selectedTicker)}
+                placeholder="NVDA or Nvidia"
               />
             </label>
             <label className="space-y-2">
@@ -381,7 +402,7 @@ export default function SimulatePage() {
             {loading ? "Thinking…" : "Show me the impact"}
           </Button>
           <p className="font-sans text-xs leading-relaxed text-muted-foreground">
-            This does not place a trade. It shows how the portfolio would look if you did.
+            No order is placed. This is a portfolio check only.
           </p>
         </div>
 
@@ -470,7 +491,7 @@ export default function SimulatePage() {
                   Check the add before the impulse turns into size.
                 </p>
                 <p className="mt-2 font-sans text-sm leading-relaxed text-muted-foreground">
-                  Use this when you already like the idea and want to see whether the portfolio impact still looks disciplined.
+                  Use it when you already like the idea and want to see whether the sizing still looks disciplined.
                 </p>
               </div>
               <div className="product-panel p-5">
@@ -478,10 +499,10 @@ export default function SimulatePage() {
                   Read it as
                 </p>
                 <p className="mt-2 font-display text-[1.3rem] italic leading-tight text-foreground">
-                  A sizing check, not a stock picker.
+                  Portfolio impact first.
                 </p>
                 <p className="mt-2 font-sans text-sm leading-relaxed text-muted-foreground">
-                  The product is telling you what the trade does to the portfolio and whether the thesis work around it is strong enough.
+                  It tells you what the add does to the portfolio and whether the written thesis work is strong enough for more size.
                 </p>
               </div>
             </aside>
@@ -604,17 +625,24 @@ export default function SimulatePage() {
                   Ready to commit?
                 </p>
                 <div className="flex flex-col gap-2 sm:flex-row">
-                  <Button
-                    onClick={() => addHolding("thesis")}
-                    disabled={adding}
-                    className="flex-1"
-                  >
-                    {adding
-                      ? "Adding…"
-                      : intervention?.ctaHref === null
-                        ? intervention.ctaLabel
-                        : `Add ${cleanTicker(result.ticker)} & write thesis`}
-                  </Button>
+                  {intervention?.ctaHref ? (
+                    <Button
+                      onClick={() => router.push(intervention.ctaHref!)}
+                      className="flex-1"
+                    >
+                      {intervention.ctaLabel.replace(" →", "")}
+                    </Button>
+                  ) : (
+                    <Button
+                      onClick={() => addHolding("thesis")}
+                      disabled={adding}
+                      className="flex-1"
+                    >
+                      {adding
+                        ? "Adding…"
+                        : intervention?.ctaLabel ?? `Add ${cleanTicker(result.ticker)} & write thesis`}
+                    </Button>
+                  )}
                   <button
                     onClick={() => addHolding("dashboard")}
                     disabled={adding}

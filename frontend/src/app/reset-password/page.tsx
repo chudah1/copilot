@@ -48,14 +48,14 @@ function ResetPasswordInner() {
       <AuthShell
         eyebrow="Password Reset"
         title="Invalid link."
-        description="This reset link is missing or malformed."
-        asideHeading="Next step"
-        asideBody="Request a fresh reset email and use the newest link that arrives."
+        description="Request a new reset link."
+        asideHeading="Try again"
+        asideBody="Use the newest reset email."
         asideItems={[
           {
-            eyebrow: "Retry",
-            title: "Generate a new reset link.",
-            body: "If you opened an older email, a newer reset request may already have replaced it.",
+            eyebrow: "Link",
+            title: "Open the newest one.",
+            body: "Older reset emails may no longer work.",
           },
         ]}
         footer={(
@@ -79,19 +79,14 @@ function ResetPasswordInner() {
     <AuthShell
       eyebrow="Password Reset"
       title="Set a new password."
-      description="Use a new password you have not used for this account before."
+      description="You will sign in again after this."
       asideHeading="After reset"
-      asideBody="Once this succeeds, you will head back to sign in with the updated password."
+      asideBody="Head back to sign in."
       asideItems={[
         {
-          eyebrow: "Security",
-          title: "Keep it simple but strong.",
-          body: "The goal is a password you can reliably use, not a recovery ritual every week.",
-        },
-        {
-          eyebrow: "Access",
-          title: "You will sign in again right after.",
-          body: "That makes it easy to confirm the reset worked before you move on.",
+          eyebrow: "Password",
+          title: "Use something you can keep.",
+          body: "At least 8 characters.",
         },
       ]}
     >

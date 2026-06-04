@@ -3,6 +3,7 @@
 import Link from "next/link";
 import { motion } from "framer-motion";
 import { formatAssumptionLabel } from "@/lib/assumption-label";
+import { normalizeInvestorTerminology } from "@/lib/investor-language";
 import { cleanTicker } from "./position-card";
 import type { Holding, HoldingPulse } from "@/types";
 
@@ -30,12 +31,13 @@ function attentionCopy(
   const isReview = pulse.pulse_status === "review";
   const target = assumptionHeadline(pulse.assumption_label, investorProfile);
   const cadencePressure = pulse.reason.includes("review cadence");
+  const pulseReason = normalizeInvestorTerminology(pulse.reason, investorProfile);
   if (isReview) {
     return {
       eyebrow: "Review",
       headline: `${target} may have changed.`,
       detail:
-        pulse.reason ||
+        pulseReason ||
         (investorProfile === "hearsay_driven"
           ? "This story now needs a clear call."
           : "This thesis now needs a clear call."),
@@ -47,7 +49,7 @@ function attentionCopy(
     eyebrow: "Watch",
     headline: `${target} is under pressure.`,
     detail:
-      pulse.reason ||
+      pulseReason ||
       (investorProfile === "hearsay_driven"
         ? "Nothing looks broken yet, but the story needs a closer look."
         : "Nothing looks broken yet, but this thesis needs a closer look."),
@@ -55,9 +57,19 @@ function attentionCopy(
   };
 }
 
+function formatThesisUpdateAge(days: number) {
+  if (days <= 0) return "Updated today";
+  if (days === 1) return "Updated yesterday";
+  return `Updated ${days}d ago`;
+}
+
 export function AttentionCard({ holding, pulse, investorProfile, index }: AttentionCardProps) {
   const isReview = pulse.pulse_status === "review";
   const copy = attentionCopy(pulse, investorProfile);
+  const pulseReason = normalizeInvestorTerminology(pulse.reason, investorProfile);
+  const latestEventSummary = pulse.latest_event_summary
+    ? normalizeInvestorTerminology(pulse.latest_event_summary, investorProfile)
+    : null;
   return (
     <motion.div
       initial={{ opacity: 0, x: -8 }}
@@ -88,17 +100,17 @@ export function AttentionCard({ holding, pulse, investorProfile, index }: Attent
               {copy.headline}
             </p>
             <p className="font-sans text-[11px] text-muted-foreground leading-relaxed line-clamp-3">
-              {pulse.latest_event_summary ?? copy.detail}
+              {latestEventSummary ?? copy.detail}
             </p>
           </div>
-          {pulse.reason && pulse.latest_event_summary && pulse.reason !== pulse.latest_event_summary && (
+          {pulseReason && latestEventSummary && pulseReason !== latestEventSummary && (
             <p className="font-mono text-[10px] text-foreground/65 leading-relaxed line-clamp-2">
-              Why now: {pulse.reason}
+              Why now: {pulseReason}
             </p>
           )}
           {pulse.days_since_thesis_update != null && (
             <p className="font-mono text-[10px] text-muted-foreground/60">
-              Updated {pulse.days_since_thesis_update}d ago
+              {formatThesisUpdateAge(pulse.days_since_thesis_update)}
             </p>
           )}
           {pulse.recent_event_count > 0 && (

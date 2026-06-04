@@ -318,7 +318,14 @@ export default function ConnectPage() {
                     </p>
                   </div>
                   <Field label="Stock" note="Search the listed company name or ticker, then pick the common-stock match.">
-                    <TickerSearch value={ticker} onSelect={(t, n) => { setTicker(t); setName(n); }} />
+                    <TickerSearch
+                      value={ticker}
+                      onChange={(nextTicker) => {
+                        setTicker(nextTicker);
+                        setName("");
+                      }}
+                      onSelect={(t, n) => { setTicker(t); setName(n); }}
+                    />
                     {name && <p className="font-sans text-xs text-muted-foreground mt-1">{name}</p>}
                   </Field>
                   <div className="grid grid-cols-2 gap-4">

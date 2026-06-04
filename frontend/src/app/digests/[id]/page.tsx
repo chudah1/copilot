@@ -49,6 +49,44 @@ function digestDetailCopy(investorProfile: "thesis_driven" | "hearsay_driven" | 
 
 const POINTS_INITIAL = 5;
 
+function normalizeDigestTerminology(
+  value: string,
+  investorProfile: "thesis_driven" | "hearsay_driven" | null,
+) {
+  if (investorProfile !== "thesis_driven") {
+    return value;
+  }
+
+  return value
+    .replace(/Missing reasons:/g, "Missing theses:")
+    .replace(/Stale reasons:/g, "Stale theses:")
+    .replace(/Your reason:/g, "Your thesis:")
+    .replace(/Threatens this reason/g, "Threatens this thesis")
+    .replace(/Review this reason/g, "Review this thesis")
+    .replace(/worth a look against your reason\./g, "worth a look against your thesis.")
+    .replace(/The reason still holds,/g, "The thesis still holds,")
+    .replace(/(\d+) of your reasons need review this week\./g, "$1 of your theses need review this week.");
+}
+
+function normalizeDigestText(
+  value: string | null | undefined,
+  investorProfile: "thesis_driven" | "hearsay_driven" | null,
+) {
+  if (!value) return "";
+  return normalizeDigestTerminology(
+    value.replace(/\\n/g, "\n").replace(/\n{3,}/g, "\n\n").trim(),
+    investorProfile,
+  );
+}
+
+function normalizeDigestHtml(
+  value: string | null | undefined,
+  investorProfile: "thesis_driven" | "hearsay_driven" | null,
+) {
+  if (!value) return "";
+  return normalizeDigestTerminology(value.replace(/\\n/g, "<br />"), investorProfile);
+}
+
 export default function DigestDetailPage() {
   const { id } = useParams<{ id: string }>();
   const [digest, setDigest] = useState<Digest | null>(null);
@@ -139,7 +177,10 @@ export default function DigestDetailPage() {
               </div>
 
               <h1 className="font-display italic text-[2.25rem] leading-tight text-foreground">
-                {digest.content.headline || `${copy.fallbackHeadlinePrefix}: ${formatDate(digest.period_start)} — ${formatDate(digest.period_end)}`}
+                {normalizeDigestText(
+                  digest.content.headline || `${copy.fallbackHeadlinePrefix}: ${formatDate(digest.period_start)} — ${formatDate(digest.period_end)}`,
+                  digest.content.investor_profile ?? null,
+                )}
               </h1>
 
               <p className="font-mono text-[10px] uppercase tracking-[0.2em] text-muted-foreground/60">
@@ -182,8 +223,8 @@ export default function DigestDetailPage() {
                       ? (digest.content.summary_points || [])
                       : (digest.content.summary_points || []).slice(0, POINTS_INITIAL)
                     ).map((point) => (
-                      <p key={point} className="font-sans text-sm text-foreground/80 leading-relaxed">
-                        {point}
+                      <p key={point} className="whitespace-pre-line font-sans text-sm text-foreground/80 leading-relaxed">
+                        {normalizeDigestText(point, digest.content.investor_profile ?? null)}
                       </p>
                     ))}
                     {(digest.content.summary_points?.length ?? 0) > POINTS_INITIAL && !showAllPoints && (
@@ -200,8 +241,8 @@ export default function DigestDetailPage() {
                       </p>
                     )}
                     {digest.content.quiet_nudge && (
-                      <p className="font-sans italic text-sm text-muted-foreground leading-relaxed">
-                        {digest.content.quiet_nudge}
+                      <p className="whitespace-pre-line font-sans italic text-sm text-muted-foreground leading-relaxed">
+                        {normalizeDigestText(digest.content.quiet_nudge, digest.content.investor_profile ?? null)}
                       </p>
                     )}
                   </div>
@@ -224,13 +265,13 @@ export default function DigestDetailPage() {
                     ))}
                   </div>
                   {digest.content.concentration_warning && (
-                    <p className="font-sans text-xs text-amber-700/80 border-t border-border/60 pt-3 leading-relaxed">
-                      {digest.content.concentration_warning}
+                    <p className="whitespace-pre-line font-sans text-xs text-amber-700/80 border-t border-border/60 pt-3 leading-relaxed">
+                      {normalizeDigestText(digest.content.concentration_warning, digest.content.investor_profile ?? null)}
                     </p>
                   )}
                   {digest.content.monitoring_receipt && (
-                    <p className="font-mono text-[9px] text-muted-foreground/50 leading-relaxed">
-                      {digest.content.monitoring_receipt}
+                    <p className="whitespace-pre-line font-mono text-[9px] text-muted-foreground/50 leading-relaxed">
+                      {normalizeDigestText(digest.content.monitoring_receipt, digest.content.investor_profile ?? null)}
                     </p>
                   )}
                 </div>
@@ -241,7 +282,7 @@ export default function DigestDetailPage() {
               {digest.content.html ? (
                 <div
                   className="prose prose-sm max-w-none prose-headings:font-display prose-headings:italic prose-headings:font-normal prose-a:text-primary prose-p:text-foreground/80 prose-li:text-foreground/80 prose-strong:text-foreground/90"
-                  dangerouslySetInnerHTML={{ __html: digest.content.html }}
+                  dangerouslySetInnerHTML={{ __html: normalizeDigestHtml(digest.content.html, digest.content.investor_profile ?? null) }}
                 />
               ) : (
                 <p className="font-sans italic text-muted-foreground">{copy.unavailable}</p>

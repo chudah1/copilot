@@ -53,7 +53,14 @@ export function QuickAddHolding({ onAdd }: QuickAddHoldingProps) {
       <div className="grid grid-cols-[1fr_1fr_1fr_auto] gap-2 items-end">
         <div>
           <p className="text-[11px] text-muted-foreground mb-1">Ticker</p>
-          <TickerSearch value={ticker} onSelect={handleSelect} />
+          <TickerSearch
+            value={ticker}
+            onChange={(nextTicker) => {
+              setTicker(nextTicker);
+              setName("");
+            }}
+            onSelect={handleSelect}
+          />
         </div>
         <div>
           <p className="text-[11px] text-muted-foreground mb-1">Shares</p>

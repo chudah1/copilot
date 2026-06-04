@@ -13,6 +13,8 @@ interface TickerResult {
 interface TickerSearchProps {
   value: string;
   onSelect: (ticker: string, name: string) => void;
+  onChange?: (value: string) => void;
+  placeholder?: string;
 }
 
 function getSearchPriority(query: string, result: TickerResult) {
@@ -37,8 +39,7 @@ function getSearchPriority(query: string, result: TickerResult) {
   return score;
 }
 
-export function TickerSearch({ value, onSelect }: TickerSearchProps) {
-  const [query, setQuery] = useState(value);
+export function TickerSearch({ value, onSelect, onChange, placeholder = "NVDA or Nvidia" }: TickerSearchProps) {
   const [results, setResults] = useState<TickerResult[]>([]);
   const [open, setOpen] = useState(false);
   const [activeIndex, setActiveIndex] = useState(-1);
@@ -87,7 +88,7 @@ export function TickerSearch({ value, onSelect }: TickerSearchProps) {
   }, []);
 
   const select = (result: TickerResult) => {
-    setQuery(result.ticker);
+    onChange?.(result.ticker);
     setOpen(false);
     onSelect(result.ticker, result.name);
   };
@@ -109,13 +110,13 @@ export function TickerSearch({ value, onSelect }: TickerSearchProps) {
   };
 
   return (
-    <div ref={containerRef} className="relative">
+    <div ref={containerRef} className="relative w-full">
       <Input
-        placeholder="NVDA or Nvidia"
-        value={query}
+        placeholder={placeholder}
+        value={value}
         onChange={(e) => {
           const nextQuery = e.target.value.toUpperCase();
-          setQuery(nextQuery);
+          onChange?.(nextQuery);
           search(nextQuery);
         }}
         onKeyDown={handleKeyDown}
@@ -124,27 +125,37 @@ export function TickerSearch({ value, onSelect }: TickerSearchProps) {
         spellCheck={false}
       />
       {open && (
-        <div className="absolute left-0 top-full z-50 mt-2 min-w-[280px] overflow-hidden border border-border/70 bg-background shadow-[0_20px_50px_rgba(33,24,17,0.12)]">
+        <div className="absolute left-0 top-full z-50 mt-2 w-full overflow-hidden border border-border/70 bg-background shadow-[0_20px_50px_rgba(33,24,17,0.12)]">
           <div className="border-b border-border/60 px-4 py-2">
             <p className="font-mono text-[9px] uppercase tracking-[0.18em] text-muted-foreground/70">
               Top matches
             </p>
           </div>
-          {results.map((result, i) => (
-            <button
-              key={result.ticker}
-              type="button"
-              className={`flex w-full items-baseline gap-3 px-4 py-3 text-left text-sm transition-colors hover:bg-muted ${i === activeIndex ? "bg-muted" : ""}`}
-              onMouseDown={(e) => { e.preventDefault(); select(result); }}
-              onMouseEnter={() => setActiveIndex(i)}
-            >
-              <span className="font-mono text-[11px] font-semibold uppercase tracking-[0.12em]">{result.ticker}</span>
-              <span className="truncate text-sm text-muted-foreground">{result.name}</span>
-              {result.exchange && (
-                <span className="ml-auto shrink-0 font-mono text-[10px] text-muted-foreground/60">{result.exchange}</span>
-              )}
-            </button>
-          ))}
+          <div className="max-h-[22rem] overflow-y-auto">
+            {results.map((result, i) => (
+              <button
+                key={result.ticker}
+                type="button"
+                className={`grid w-full grid-cols-[auto_minmax(0,1fr)_auto] items-center gap-3 px-4 py-3 text-left text-sm transition-colors hover:bg-muted ${i === activeIndex ? "bg-muted" : ""}`}
+                onMouseDown={(e) => { e.preventDefault(); select(result); }}
+                onMouseEnter={() => setActiveIndex(i)}
+              >
+                <span className="font-mono text-[11px] font-semibold uppercase tracking-[0.12em] text-foreground">
+                  {result.ticker}
+                </span>
+                <span className="min-w-0 truncate text-sm text-muted-foreground">
+                  {result.name}
+                </span>
+                {result.exchange ? (
+                  <span className="shrink-0 font-mono text-[10px] text-muted-foreground/60">
+                    {result.exchange}
+                  </span>
+                ) : (
+                  <span />
+                )}
+              </button>
+            ))}
+          </div>
         </div>
       )}
     </div>

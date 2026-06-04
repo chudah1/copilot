@@ -43,6 +43,31 @@ function digestArchiveCopy(investorProfile: "thesis_driven" | "hearsay_driven" |
   };
 }
 
+function normalizeDigestTerminology(
+  value: string,
+  investorProfile: "thesis_driven" | "hearsay_driven" | null,
+) {
+  if (investorProfile !== "thesis_driven") {
+    return value;
+  }
+
+  return value
+    .replace(/Missing reasons:/g, "Missing theses:")
+    .replace(/Stale reasons:/g, "Stale theses:")
+    .replace(/(\d+) of your reasons need review this week\./g, "$1 of your theses need review this week.");
+}
+
+function normalizeDigestText(
+  value: string | null | undefined,
+  investorProfile: "thesis_driven" | "hearsay_driven" | null,
+) {
+  if (!value) return "";
+  return normalizeDigestTerminology(
+    value.replace(/\\n/g, "\n").replace(/\n{3,}/g, "\n\n").trim(),
+    investorProfile,
+  );
+}
+
 export default function DigestsPage() {
   const router = useRouter();
   const [digests, setDigests] = useState<Digest[]>([]);
@@ -257,13 +282,13 @@ export default function DigestsPage() {
 
                   {/* Headline */}
                   <p className="font-display italic text-[1.1rem] text-foreground leading-snug group-hover:text-primary transition-colors">
-                    {d.content.headline || copy.fallbackHeadline}
+                    {normalizeDigestText(d.content.headline || copy.fallbackHeadline, d.content.investor_profile ?? null)}
                   </p>
 
                   {/* Summary points */}
                   {d.content.summary_points && d.content.summary_points.length > 0 && (
-                    <p className="font-sans italic text-sm text-muted-foreground leading-relaxed line-clamp-2">
-                      {d.content.summary_points[0]}
+                    <p className="whitespace-pre-line font-sans italic text-sm text-muted-foreground leading-relaxed line-clamp-3">
+                      {normalizeDigestText(d.content.summary_points[0], d.content.investor_profile ?? null)}
                     </p>
                   )}
 
@@ -288,7 +313,7 @@ export default function DigestsPage() {
                       <>
                         <span className="text-border/60">·</span>
                         <span className="font-mono text-[10px] text-red-600/80">
-                          {d.content.missing_theses_count} missing thesis
+                          {d.content.missing_theses_count} missing {d.content.missing_theses_count === 1 ? "thesis" : "theses"}
                         </span>
                       </>
                     )}

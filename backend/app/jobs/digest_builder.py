@@ -384,6 +384,18 @@ def _stable_section_title(*, investor_profile: InvestorProfile = None) -> str:
     return "Reasons holding up"
 
 
+def _missing_section_label(*, investor_profile: InvestorProfile = None) -> str:
+    if investor_profile == "thesis_driven":
+        return "Missing theses"
+    return "Missing reasons"
+
+
+def _stale_section_label(*, investor_profile: InvestorProfile = None) -> str:
+    if investor_profile == "thesis_driven":
+        return "Stale theses"
+    return "Stale reasons"
+
+
 async def _load_investor_profile(db, user_id: uuid.UUID) -> InvestorProfile:
     result = await db.execute(
         select(OnboardingState.investor_profile).where(OnboardingState.user_id == user_id)
@@ -737,12 +749,12 @@ def _render_digest_html(
 
     if observations.get("missing_theses"):
         parts.append(
-            f'<p style="margin:6px 0;"><strong style="color:{_DZ["ink"]};">Missing reasons:</strong> '
+            f'<p style="margin:6px 0;"><strong style="color:{_DZ["ink"]};">{_missing_section_label(investor_profile=investor_profile)}:</strong> '
             f'<span style="color:{_DZ["muted"]};">{escape(", ".join(observations["missing_theses"]))}</span></p>'
         )
     if observations.get("stale_theses"):
         parts.append(
-            f'<p style="margin:6px 0;"><strong style="color:{_DZ["ink"]};">Stale reasons:</strong> '
+            f'<p style="margin:6px 0;"><strong style="color:{_DZ["ink"]};">{_stale_section_label(investor_profile=investor_profile)}:</strong> '
             f'<span style="color:{_DZ["muted"]};">{escape(", ".join(observations["stale_theses"]))}</span></p>'
         )
     if observations.get("concentration_warnings"):

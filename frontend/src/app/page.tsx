@@ -427,7 +427,8 @@ export default function LandingPage() {
                 So you check the price instead. Green feels like being right. Red feels like being
                 wrong. Neither one tells you whether{" "}
                 <strong style={{ color: mk.ink, fontWeight: 600 }}>the reason you bought</strong>{" "}
-                still holds. Penkeep figures it out for you, and tells you when it doesn&apos;t</p>
+                still holds. penKeep checks that for you, and tells you when it doesn&apos;t.
+              </p>
             </div>
           </div>
         </div>
@@ -502,7 +503,7 @@ export default function LandingPage() {
                 [
                   "02",
                   "We stand watch",
-                  "PenKeep reads the earnings, filings, analyst notes and news, then ignores everything that does not touch the reason you wrote.",
+                  "penKeep reads the earnings, filings, analyst notes and news, then ignores everything that does not touch the reason you wrote.",
                 ],
                 [
                   "03",
@@ -741,9 +742,9 @@ export default function LandingPage() {
               margin: "0 0 clamp(32px, 5vw, 48px)",
             }}
           >
-            Someone bought TSLA in March 2024 with a specific reason. Here is exactly how the
-            evidence moved, and the moment penKeep would have surfaced their own exit condition
-            back to them.
+            One TSLA thesis, followed from entry to the first real test. Here is how the evidence
+            moved, and the moment penKeep would have put the written exit condition back in front
+            of the investor.
           </p>
           <WatchThesisChange />
           <p
@@ -914,8 +915,8 @@ export default function LandingPage() {
             Maybe a friend keeps bringing it up. Maybe it was all over your feed and you
             didn&apos;t want to be the one who missed it. Tell us the ticker. We&apos;ll build
             the case against it, the ways it could go wrong that never come up in the group
-            chat, and a short list of things worth watching. Then we keep an eye on them for
-            you, so the hunch turns into a reason you can actually point to.
+            chat, and a short list of things worth watching. Then we keep an eye on those
+            signals for you, so the hunch turns into a reason you can actually defend.
           </div>
         </div>
       </section>
@@ -1014,7 +1015,7 @@ export default function LandingPage() {
               [
                 [
                   "Is this financial advice?",
-                  "No. PenKeep never tells you to buy, hold or sell. It shows you what is happening to the reasons you wrote down, and every decision stays yours.",
+                  "No. penKeep never tells you to buy, hold or sell. It shows you what is happening to the reasons you wrote down, and every decision stays yours.",
                 ],
                 [
                   "Do you connect to my brokerage?",

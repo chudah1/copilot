@@ -1,5 +1,6 @@
 "use client";
 
+import { useState } from "react";
 import { useRouter } from "next/navigation";
 import { motion } from "framer-motion";
 import { TickerSearch } from "@/components/portfolio/ticker-search";
@@ -13,6 +14,7 @@ const BULLETS = [
 
 export default function ResearchLandingPage() {
   const router = useRouter();
+  const [query, setQuery] = useState("");
 
   return (
     <div className="min-h-[calc(100vh-54px)] px-4 py-12 sm:px-8">
@@ -38,7 +40,8 @@ export default function ResearchLandingPage() {
               </div>
 
               <TickerSearch
-                value=""
+                value={query}
+                onChange={setQuery}
                 onSelect={(ticker) => router.push(`/research/${ticker}`)}
               />
             </div>
