@@ -103,7 +103,7 @@ export default function SettingsPage() {
             Settings
           </h1>
           <p className="font-sans text-sm text-muted-foreground mt-2">
-            Email cadence, alerts, and monitoring noise.
+            Email, alerts, and feed sensitivity.
           </p>
           {summary && (
             <div className="mt-6 grid gap-3 sm:grid-cols-3">
@@ -142,7 +142,7 @@ export default function SettingsPage() {
                 {summary ? `${summary.holdings_count} position${summary.holdings_count === 1 ? "" : "s"} tracked` : "Your holdings"}
               </p>
               <p className="font-sans text-xs text-muted-foreground mt-1 leading-relaxed">
-                Add another source any time. Existing holdings stay in place.
+                Add another source without replacing current holdings.
               </p>
             </div>
             <Link href="/connect?return=settings" className="shrink-0">
@@ -155,22 +155,16 @@ export default function SettingsPage() {
 
         {/* Email master switch */}
         <Section label="Email">
-          <p className="font-sans text-xs text-muted-foreground mb-4 leading-relaxed">
-            Pause every outbound email from penKeep.
-          </p>
           <Toggle
             checked={prefs.email_enabled}
             onChange={(v) => set("email_enabled", v)}
             label="Email updates"
-            description="Digests, earnings alerts, and onboarding mail."
+            description="Digests, alerts, and onboarding mail."
           />
         </Section>
 
         {/* Digest schedule */}
         <Section label="Weekly digest" disabled={!prefs.email_enabled}>
-          <p className="font-sans text-xs text-muted-foreground mb-5 leading-relaxed">
-            A recurring portfolio review memo.
-          </p>
           <div className="space-y-4">
             <div className="space-y-2">
               <p className="font-mono text-[10px] uppercase tracking-[0.15em] text-muted-foreground/70">Frequency</p>
@@ -232,21 +226,18 @@ export default function SettingsPage() {
             checked={prefs.earnings_alerts}
             onChange={(v) => set("earnings_alerts", v)}
             label="Earnings alerts"
-            description="Heads-up before results, plus a next-morning thesis check."
+            description="Before results, plus a next-morning thesis check."
           />
           <Toggle
             checked={prefs.quarterly_review_reminders}
             onChange={(v) => set("quarterly_review_reminders", v)}
             label="Quarterly review reminders"
-            description="Quarter-open reminder to revisit each position."
+            description="Reminder to revisit each position each quarter."
           />
         </Section>
 
         {/* Monitoring sensitivity */}
         <Section label="Monitoring sensitivity">
-          <p className="font-sans text-xs text-muted-foreground mb-4 leading-relaxed">
-            Choose how much monitoring signal reaches the timeline.
-          </p>
           <div className="space-y-2">
             <Select
               value={prefs.notification_sensitivity}
@@ -261,7 +252,7 @@ export default function SettingsPage() {
               </SelectContent>
             </Select>
             <p className="font-sans text-xs text-muted-foreground leading-relaxed">
-              Use &ldquo;Thesis-breaking only&rdquo; for the tightest feed.
+              Use &ldquo;Thesis-breaking only&rdquo; for the quietest feed.
             </p>
           </div>
         </Section>
@@ -279,7 +270,7 @@ export default function SettingsPage() {
                   : "border-primary/40 text-primary hover:border-primary hover:bg-primary/8"
             }`}
           >
-            {saving ? "Saving…" : saved ? "Saved" : "Save preferences"}
+            {saving ? "Saving…" : saved ? "Saved" : "Save"}
           </button>
         </div>
       </div>
