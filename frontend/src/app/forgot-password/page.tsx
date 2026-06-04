@@ -35,19 +35,14 @@ export default function ForgotPasswordPage() {
       title={sent ? "Check your inbox." : "Reset your password."}
       description={sent
         ? "If the address exists, the reset link is already on its way."
-        : "We will send a reset link without confirming whether the address has an account."}
-      asideHeading="What to expect"
-      asideBody="Password reset should feel calm and obvious, not like a dead end."
+        : "Enter your email and we'll send a reset link if the account exists."}
+      asideHeading="Next"
+      asideBody="Use the newest email."
       asideItems={[
         {
           eyebrow: "Delivery",
-          title: "The email usually arrives quickly.",
-          body: "If it is not there within a minute, check spam and then try again.",
-        },
-        {
-          eyebrow: "Access",
-          title: "Use the newest link.",
-          body: "Fresh reset links are the safest way back in if you requested more than one.",
+          title: "Check spam if needed.",
+          body: "If nothing shows up soon, request another link.",
         },
       ]}
       footer={(
@@ -62,7 +57,7 @@ export default function ForgotPasswordPage() {
         {sent ? (
           <div className="space-y-4">
             <p className="font-sans text-sm text-muted-foreground leading-relaxed">
-              If <span className="text-foreground">{email}</span> has an account, a reset link is on its way. Check your spam folder if it doesn&apos;t arrive within a minute.
+              If <span className="text-foreground">{email}</span> has an account, a reset link is on its way.
             </p>
           </div>
         ) : (
