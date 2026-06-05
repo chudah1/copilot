@@ -31,12 +31,8 @@ export function DigestCountdown({ nextDigestAt }: { nextDigestAt: string | null 
   });
 
   return (
-    <div className="inline-flex items-center gap-3 border border-border px-4 py-1.5">
-      <span className="font-mono text-[10px] uppercase tracking-[0.18em] text-muted-foreground">
-        Next review digest
-      </span>
-      <span className="w-px h-3 bg-border" />
-      <span className="font-mono text-[11px] font-medium text-primary tabular-nums">
+    <div className="flex items-baseline gap-2">
+      <span className="font-mono text-[13px] font-medium text-primary tabular-nums">
         {countdown}
       </span>
       <span className="font-mono text-[10px] text-muted-foreground/70">
