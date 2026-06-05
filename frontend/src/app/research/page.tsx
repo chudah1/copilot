@@ -35,7 +35,7 @@ export default function ResearchLandingPage() {
                   Which stock are you considering?
                 </h1>
                 <p className="max-w-xl font-sans text-sm leading-relaxed text-muted-foreground">
-                  Stress-test the case before you commit capital. We pull out the bear case, the real risks, the blind spots, and what to watch next.
+                  Stress-test the case before you buy.
                 </p>
               </div>
 
@@ -60,7 +60,7 @@ export default function ResearchLandingPage() {
                   Best used for
                 </p>
                 <p className="mt-2 font-sans text-sm leading-relaxed text-foreground/80">
-                  Pre-buy underwriting, sizing a new position, or forcing yourself to look at the other side first.
+                  Pre-buy underwriting and sizing.
                 </p>
               </div>
             </aside>

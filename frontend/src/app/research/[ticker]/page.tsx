@@ -103,7 +103,7 @@ export default function ResearchPage() {
                   {ticker}
                 </h1>
                 <p className="font-sans text-sm text-muted-foreground">
-                  Before you buy, pressure-test the case against it.
+                  Stress-test the case before you buy.
                 </p>
               </div>
 
@@ -121,7 +121,7 @@ export default function ResearchPage() {
                     Best used before
                   </p>
                   <p className="mt-2 font-sans text-sm leading-relaxed text-foreground/80">
-                    Buying, sizing up, or convincing yourself the other side is weak.
+                    Buying or sizing up.
                   </p>
                 </div>
               </div>
@@ -160,7 +160,7 @@ export default function ResearchPage() {
                     <span className="font-mono text-[11px] uppercase tracking-[0.15em]">Run Stress Test</span>
                   </Button>
                   <p className="font-sans text-xs leading-relaxed text-muted-foreground">
-                    No draft yet? Leave it blank and we&apos;ll still build the bear case.
+                    Leave it blank if you just want the bear case.
                   </p>
                 </div>
 
@@ -204,7 +204,7 @@ export default function ResearchPage() {
                     You&apos;ll get
                   </p>
                   <p className="mt-2 font-sans text-sm leading-relaxed text-foreground/80">
-                    A fast bear-case memo you can use before buying, sizing up, or walking away.
+                    A fast bear-case memo.
                   </p>
                 </div>
               </aside>
@@ -279,7 +279,7 @@ export default function ResearchPage() {
                     Read it as
                   </p>
                   <p className="mt-2 font-sans text-sm leading-relaxed text-foreground/80">
-                    {hasDraftContext ? "A counter-case against your current thesis." : "A fast bear-case memo before first buy."}
+                    {hasDraftContext ? "A counter-case against your draft." : "A fast bear-case memo."}
                   </p>
                 </div>
               </div>
@@ -336,7 +336,7 @@ export default function ResearchPage() {
                   </ul>
                 ) : (
                   <p className="font-sans text-sm text-foreground/80 leading-relaxed">
-                    No clear blind spot was flagged from this input. Add your own draft thesis next time if you want a sharper check on what your case may be missing.
+                    No blind spot was flagged from this input. Add your own draft next time for a sharper check.
                   </p>
                 )}
               </div>
@@ -372,17 +372,26 @@ export default function ResearchPage() {
                   Next step
                 </p>
                 <p className="font-display italic text-[1.3rem] text-foreground leading-snug">
-                  Monitor {ticker} once you buy
+                  {isAuthenticated ? `If you buy ${ticker}, track it from the dashboard` : `Monitor ${ticker} once you buy`}
                 </p>
               </div>
               <p className="font-sans text-sm text-muted-foreground leading-relaxed">
-                We&apos;ll alert you when something threatens or confirms this thesis — earnings misses, management changes, metric breaches.
+                {isAuthenticated
+                  ? "Write the thesis and monitor it once it becomes a position."
+                  : "We&apos;ll alert you when something threatens or confirms the thesis."}
               </p>
               <div className="flex gap-2 pt-1">
-                <Button onClick={() => router.push("/register")} className="flex-1">
-                  <span className="font-mono text-[11px] uppercase tracking-[0.15em]">Create free account</span>
-                  <ArrowRight className="w-3.5 h-3.5 ml-2" />
-                </Button>
+                {isAuthenticated ? (
+                  <Button onClick={() => router.push("/dashboard")} className="flex-1">
+                    <span className="font-mono text-[11px] uppercase tracking-[0.15em]">Open dashboard</span>
+                    <ArrowRight className="w-3.5 h-3.5 ml-2" />
+                  </Button>
+                ) : (
+                  <Button onClick={() => router.push("/register")} className="flex-1">
+                    <span className="font-mono text-[11px] uppercase tracking-[0.15em]">Create free account</span>
+                    <ArrowRight className="w-3.5 h-3.5 ml-2" />
+                  </Button>
+                )}
                 {!isAuthenticated && (
                   <Button variant="outline" onClick={() => router.push("/login")} className="flex-1">
                     <span className="font-mono text-[11px] uppercase tracking-[0.15em]">Sign in</span>
