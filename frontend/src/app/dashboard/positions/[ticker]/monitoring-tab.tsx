@@ -35,11 +35,11 @@ export function MonitoringTab({
     ? {
         title: "Write the reason first.",
         body:
-          "Monitoring turns on once this position has a written reason on file.",
+          "Monitoring turns on once this position has a written reason.",
         unlocks: [
-          "Tie signals to the story you wrote.",
-          "Queue evidence until you rule on it.",
-          "Ignore price noise when nothing changed.",
+          "Tie signals to the story.",
+          "Queue evidence for a verdict.",
+          "Ignore noise when nothing changed.",
         ],
         controlTitle: "Monitoring",
         controlBody: "New evidence gets matched to the written reason here.",
@@ -47,11 +47,11 @@ export function MonitoringTab({
     : {
         title: "Write the thesis first.",
         body:
-          "Monitoring turns on once this position has a written thesis on file.",
+          "Monitoring turns on once this position has a written thesis.",
         unlocks: [
-          "Tie signals to explicit assumptions.",
+          "Tie signals to assumptions.",
           "Keep a verdict trail.",
-          "Stay quiet until the thesis actually moves.",
+          "Stay quiet until the thesis moves.",
         ],
         controlTitle: "Monitoring",
         controlBody: "Live evidence gets mapped back to the written thesis here.",
@@ -98,7 +98,7 @@ export function MonitoringTab({
                   {emptyCopy.cta}
                 </button>
                 <p className="font-sans text-xs leading-relaxed text-muted-foreground">
-                  A short draft is enough to turn this tab on.
+                  A short draft is enough.
                 </p>
               </div>
             </div>
@@ -174,10 +174,10 @@ export function MonitoringTab({
                 </p>
                 <p className="mt-2 font-sans text-xs leading-relaxed text-muted-foreground">
                   {decompositionLoading
-                    ? "Building what to watch"
+                    ? "Building the map"
                     : hasSignals
-                      ? "Active signals armed"
-                      : "No signals confirmed yet"}
+                      ? "Signals live"
+                      : "No live signals yet"}
                 </p>
               </div>
             </div>
@@ -309,29 +309,29 @@ export function MonitoringTab({
                         Queue
                       </p>
                       <p className="mt-1 font-sans text-sm leading-relaxed text-foreground/80">
-                        Nothing is waiting right now.
+                        Nothing waiting.
                       </p>
                     </div>
                     <div className="border-l-2 border-primary/20 pl-3">
                       <p className="font-mono text-[10px] uppercase tracking-[0.16em] text-muted-foreground">
-                        Signals armed
+                        Signals live
                       </p>
                       <p className="mt-1 font-sans text-sm leading-relaxed text-foreground/80">
                         {decompositionLoading
-                          ? "Still turning the thesis into watchable evidence."
+                          ? "Still building the map."
                           : hasSignals
-                            ? `${activeSignalCount} active signal${activeSignalCount === 1 ? "" : "s"} watching for drift.`
-                            : "The thesis is written, but the signal map still needs confirmation."}
+                            ? `${activeSignalCount} active signal${activeSignalCount === 1 ? "" : "s"}.`
+                            : "The thesis is written, but the map still needs confirmation."}
                       </p>
                     </div>
                     <div className="border-l-2 border-primary/20 pl-3">
                       <p className="font-mono text-[10px] uppercase tracking-[0.16em] text-muted-foreground">
-                        Evidence trail
+                        Reviewed
                       </p>
                       <p className="mt-1 font-sans text-sm leading-relaxed text-foreground/80">
                         {reviewedEventsCount > 0
-                          ? `${reviewedEventsCount} reviewed event${reviewedEventsCount === 1 ? "" : "s"} already on file for this position.`
-                          : "Verdicts will build here as the position gets tested."}
+                          ? `${reviewedEventsCount} verdict${reviewedEventsCount === 1 ? "" : "s"} on file.`
+                          : "No verdicts yet."}
                       </p>
                     </div>
                   </div>
@@ -365,10 +365,10 @@ export function MonitoringTab({
               </p>
               <p className="font-sans text-sm text-muted-foreground/80 leading-relaxed">
                 {investorProfile === "thesis_driven"
-                  ? "Monitoring is active. Nothing has moved enough to force a decision yet."
+                  ? "Monitoring is live. Nothing has forced a decision yet."
                   : investorProfile === "hearsay_driven"
-                    ? "Monitoring is active. Nothing has tested the reason strongly enough to force a decision yet."
-                    : "Monitoring is active. Nothing meaningful has changed yet."}
+                    ? "Monitoring is live. Nothing has tested the reason enough to force a decision yet."
+                    : "Monitoring is live. Nothing meaningful has changed yet."}
               </p>
               <p className="font-sans text-xs text-foreground/80">
                 {calmState.nextCheck}

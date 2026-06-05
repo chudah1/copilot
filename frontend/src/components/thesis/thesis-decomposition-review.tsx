@@ -123,7 +123,7 @@ export function ThesisDecompositionReview({ envelope, loading, saving, onGenerat
       <div className="product-panel p-5 sm:p-6">
         <div className="flex items-center gap-3">
           <span className="font-mono text-[10px] uppercase tracking-[0.25em] text-muted-foreground animate-pulse">
-            Mapping thesis to signals…
+            Building signal map…
           </span>
         </div>
       </div>
@@ -140,11 +140,11 @@ export function ThesisDecompositionReview({ envelope, loading, saving, onGenerat
             Signal setup
           </p>
           <p className="font-display italic text-xl leading-tight text-foreground">
-            Turn this thesis into observable signals.
+            Turn the thesis into signals.
           </p>
         </div>
         <p className="font-sans text-sm text-muted-foreground leading-relaxed max-w-lg">
-          We pull out what has to stay true and suggest concrete things to watch: earnings, revenue trends, margins, and management commentary.
+          We pull out what has to stay true and suggest what to watch.
         </p>
         <div className="flex items-center gap-4 pt-1">
           <button
@@ -154,7 +154,7 @@ export function ThesisDecompositionReview({ envelope, loading, saving, onGenerat
             Generate signals
           </button>
           <span className="font-mono text-[9px] text-muted-foreground/80 uppercase tracking-[0.15em]">
-            Takes ~30 seconds
+            About 30s
           </span>
         </div>
       </div>
@@ -173,7 +173,7 @@ export function ThesisDecompositionReview({ envelope, loading, saving, onGenerat
           <p className="font-sans text-sm text-foreground/80 leading-relaxed">{envelope.message}</p>
         )}
         <p className="font-sans text-sm text-muted-foreground leading-relaxed">
-          Tighten the thesis with more specific, observable conditions, then retry.
+          Add more specific conditions, then retry.
         </p>
         <button
           onClick={onGenerate}
@@ -202,10 +202,10 @@ export function ThesisDecompositionReview({ envelope, loading, saving, onGenerat
   const primaryButtonLabel = saving
     ? "Saving…"
     : !dirty && envelope.status === "draft"
-      ? "Use recommended setup"
+      ? "Use setup"
       : !dirty && envelope.status === "partially_confirmed"
-        ? "Keep this setup"
-        : "Save choices";
+        ? "Keep setup"
+        : "Save setup";
 
   return (
     <div className="space-y-6">
@@ -218,7 +218,7 @@ export function ThesisDecompositionReview({ envelope, loading, saving, onGenerat
               Signal setup
             </p>
             <p className="font-sans text-sm leading-relaxed text-foreground/80">
-              Keep the signals that best reflect the written case.
+              Keep what matches the case.
             </p>
           </div>
           <span className={`shrink-0 font-mono text-[9px] uppercase tracking-[0.15em] ${
@@ -233,7 +233,7 @@ export function ThesisDecompositionReview({ envelope, loading, saving, onGenerat
         <div className="mt-4 grid gap-3 sm:grid-cols-3">
           <div className="border border-border/60 bg-background/70 p-3">
             <p className="font-mono text-[10px] uppercase tracking-[0.16em] text-muted-foreground">
-              Active
+              Live
             </p>
             <p className="mt-2 font-display text-[1.15rem] italic leading-none text-foreground">
               {activeCount}/{totalSignals}
@@ -242,7 +242,7 @@ export function ThesisDecompositionReview({ envelope, loading, saving, onGenerat
           {mon && (
             <div className="border border-border/60 bg-background/70 p-3">
               <p className="font-mono text-[10px] uppercase tracking-[0.16em] text-muted-foreground">
-                Monitorability
+                Watchability
               </p>
               <div className="mt-2 flex items-center gap-2">
                 <span className={`h-1.5 w-1.5 rounded-full ${MONITORABILITY_DOT[mon] ?? "bg-border"}`} />
@@ -266,7 +266,7 @@ export function ThesisDecompositionReview({ envelope, loading, saving, onGenerat
 
         {!dirty && envelope.status === "draft" && activeCount > 0 && (
           <p className="mt-4 font-mono text-[9px] uppercase tracking-[0.12em] text-primary/80 border border-primary/20 px-2 py-1 inline-block">
-            Recommended setup preselected
+            Setup ready
           </p>
         )}
       </div>
@@ -295,7 +295,7 @@ export function ThesisDecompositionReview({ envelope, loading, saving, onGenerat
                     </span>
                   )}
                   <span className="font-mono text-[9px] text-muted-foreground/80 tabular-nums">
-                    {claimActiveSignals} signal{claimActiveSignals !== 1 ? "s" : ""} active
+                    {claimActiveSignals} active
                   </span>
                 </div>
                 <blockquote className="border-l-2 border-primary/25 pl-4">
@@ -324,7 +324,7 @@ export function ThesisDecompositionReview({ envelope, loading, saving, onGenerat
                         )}
                         {entity.confirmation_required && (
                           <span className="font-mono text-[10px] uppercase tracking-[0.1em] text-amber-700 border border-amber-200 px-1 py-px">
-                            external data
+                            check source
                           </span>
                         )}
                       </div>
@@ -368,7 +368,7 @@ export function ThesisDecompositionReview({ envelope, loading, saving, onGenerat
                                   </span>
                                   {signal.confirmation_required && !signal.active && (
                                     <span className="font-mono text-[7px] uppercase tracking-[0.12em] text-amber-700/70 border border-amber-200/60 px-1 py-px">
-                                      needs confirmation
+                                      review first
                                     </span>
                                   )}
                                   {signal.confidence != null && (
@@ -412,8 +412,8 @@ export function ThesisDecompositionReview({ envelope, loading, saving, onGenerat
           {needsExplicitConfirmation && (
             <p className="font-sans text-xs text-muted-foreground leading-relaxed">
               {activeCount > 0
-                ? "We pre-picked the setup that best matches the thesis. Keep it or tweak it signal by signal."
-                : "Pick at least one signal to watch, then confirm the setup."}
+                ? "We pre-picked the best match. Keep it or tweak it."
+                : "Pick at least one signal, then confirm."}
             </p>
           )}
         </div>

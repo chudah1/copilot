@@ -2,7 +2,6 @@
 
 import { useEffect, useEffectEvent, useState } from "react";
 import { motion, useMotionValue, useTransform, AnimatePresence } from "framer-motion";
-import { Button } from "@/components/ui/button";
 import { Textarea } from "@/components/ui/textarea";
 import { getErrorMessage } from "@/lib/errors";
 import { formatDate } from "@/lib/utils";
@@ -94,6 +93,22 @@ function eventDecisionCopy(
   };
 }
 
+function verdictLabel(
+  verdict: MonitoringEvent["verdict"],
+  investorProfile?: "thesis_driven" | "hearsay_driven" | null,
+) {
+  const subject = investorProfile === "hearsay_driven"
+    ? "reason"
+    : investorProfile === "thesis_driven"
+      ? "thesis"
+      : "case";
+
+  if (verdict === "supports") return `Supports ${subject}`;
+  if (verdict === "threatens") return `Threatens ${subject}`;
+  if (verdict === "review") return "Needs review";
+  return "Neutral";
+}
+
 // ── Single draggable card ──────────────────────────────────────────────────
 
 interface CardProps {
@@ -109,50 +124,50 @@ interface CardProps {
 function reviewCopy(investorProfile?: "thesis_driven" | "hearsay_driven" | null) {
   if (investorProfile === "thesis_driven") {
     return {
-      right: "Thesis holds",
-      up: "Assumption weaker",
-      left: "Not relevant",
+      right: "Holds",
+      up: "Weaker",
+      left: "Noise",
       buttonHold: "Thesis holds",
-      buttonErode: "Assumption weaker",
-      buttonSkip: "Not relevant",
-      buttonBroken: "Thesis broken",
+      buttonErode: "Less sure",
+      buttonSkip: "Noise",
+      buttonBroken: "Broken",
       reviewHint: "drag to decide · swipe up to flag weakening confidence",
-      allCaughtUp: "You've reviewed every signal. Your thesis stands until something changes.",
-      noteLabel: "Decision note",
-      notePlaceholder: "Optional: record why the thesis still holds, what weakened, or what broke.",
-      noteHelper: "This becomes part of the evidence trail for the position.",
-      actionLabel: "Decision rail",
-      keyboardHint: "Shortcuts: → holds · ↑ weaker · ← irrelevant · X broken",
+      allCaughtUp: "Every alert reviewed.",
+      noteLabel: "Note",
+      notePlaceholder: "Optional note",
+      noteHelper: "Optional. Saved to the decision log.",
+      actionLabel: "Decide",
+      keyboardHint: "→ holds · ↑ weaker · ← noise · X broken",
       descriptions: {
-        reaffirmed: "Keep the thesis intact and log that this evidence does not break the case.",
-        lowered_confidence: "The thesis still stands, but one assumption looks less sturdy now.",
-        not_relevant: "This signal does not matter to the thesis you actually wrote.",
-        invalidated: "The evidence broke the case badly enough that the thesis needs rewriting.",
+        reaffirmed: "Keep the thesis intact.",
+        lowered_confidence: "The thesis still holds, but with less conviction.",
+        not_relevant: "This does not matter to the thesis.",
+        invalidated: "The thesis is broken.",
       },
     };
   }
 
   if (investorProfile === "hearsay_driven") {
     return {
-      right: "Reason holds",
+      right: "Holds",
       up: "Less sure",
-      left: "Not relevant",
+      left: "Noise",
       buttonHold: "Reason holds",
       buttonErode: "Less sure now",
-      buttonSkip: "Not relevant",
-      buttonBroken: "Story broken",
+      buttonSkip: "Noise",
+      buttonBroken: "Broken",
       reviewHint: "drag to decide · swipe up if the story feels weaker",
-      allCaughtUp: "You've reviewed every signal. Your reason stands until something real changes.",
-      noteLabel: "Decision note",
-      notePlaceholder: "Optional: log why the story still works, feels weaker, or broke.",
-      noteHelper: "These notes make the position easier to revisit later without rewriting history.",
-      actionLabel: "Decision rail",
-      keyboardHint: "Shortcuts: → holds · ↑ less sure · ← irrelevant · X broken",
+      allCaughtUp: "Every alert reviewed.",
+      noteLabel: "Note",
+      notePlaceholder: "Optional note",
+      noteHelper: "Optional. Saved to the decision log.",
+      actionLabel: "Decide",
+      keyboardHint: "→ holds · ↑ less sure · ← noise · X broken",
       descriptions: {
-        reaffirmed: "Keep the original story intact and note why this did not change it.",
-        lowered_confidence: "The story still stands, but your confidence in it took a real hit.",
-        not_relevant: "This update is noise relative to the written reason.",
-        invalidated: "The evidence broke the story badly enough that the position needs a rewrite.",
+        reaffirmed: "Keep the story intact.",
+        lowered_confidence: "The story still holds, but with less conviction.",
+        not_relevant: "This is noise relative to the reason.",
+        invalidated: "The story is broken.",
       },
     };
   }
@@ -160,23 +175,23 @@ function reviewCopy(investorProfile?: "thesis_driven" | "hearsay_driven" | null)
   return {
     right: "Holds",
     up: "Eroding",
-    left: "Irrelevant",
-    buttonHold: "Reason holds",
+    left: "Noise",
+    buttonHold: "Case holds",
     buttonErode: "Eroding",
-    buttonSkip: "Skip",
+    buttonSkip: "Noise",
     buttonBroken: "Broken",
     reviewHint: "drag to decide · swipe up to flag",
-    allCaughtUp: "You've reviewed every signal. Your reason stands until something changes.",
-    noteLabel: "Decision note",
-    notePlaceholder: "Optional: log why this still matters, matters less, or no longer matters.",
-    noteHelper: "These notes become part of the running decision log.",
-    actionLabel: "Decision rail",
-    keyboardHint: "Shortcuts: → holds · ↑ weaker · ← irrelevant · X broken",
+    allCaughtUp: "Every alert reviewed.",
+    noteLabel: "Note",
+    notePlaceholder: "Optional note",
+    noteHelper: "Optional. Saved to the decision log.",
+    actionLabel: "Decide",
+    keyboardHint: "→ holds · ↑ weaker · ← noise · X broken",
     descriptions: {
-      reaffirmed: "Log that the position case still stands.",
-      lowered_confidence: "Log that the case still stands, but with weaker conviction.",
-      not_relevant: "Log that this evidence should not influence the position.",
-      invalidated: "Log that the written case is broken.",
+      reaffirmed: "Keep the case intact.",
+      lowered_confidence: "The case still holds, but with less conviction.",
+      not_relevant: "This should not move the case.",
+      invalidated: "The case is broken.",
     },
   };
 }
@@ -291,7 +306,7 @@ function DraggableCard({ event, index, total, isTop, onSwipe, busy, investorProf
           {/* Verdict chip */}
           {verdict && (
             <div className={`mt-3 inline-flex self-start items-center border rounded-sm px-2 py-0.5 font-mono text-[10px] uppercase tracking-[0.12em] ${verdictBg[verdict] ?? verdictBg.neutral}`}>
-              {verdict === "supports" ? "Supports reason" : verdict === "threatens" ? "Threatens reason" : verdict === "review" ? "Warrants review" : "Neutral"}
+              {verdictLabel(verdict, investorProfile)}
             </div>
           )}
 
@@ -441,14 +456,14 @@ export function EventReviewStack({ events, onReview, reviewingEventId, investorP
       <div className="flex items-center justify-between">
         <div>
           <p className="font-mono text-[10px] uppercase tracking-[0.2em] text-muted-foreground">
-            {pending.length} to review
+            {pending.length} left
           </p>
           <p className="mt-1 font-sans text-xs text-muted-foreground/80">
             {copy.keyboardHint}
           </p>
         </div>
         <p className="font-mono text-[10px] text-muted-foreground/80">
-          drag or use keys
+          swipe or keys
         </p>
       </div>
 
@@ -486,14 +501,9 @@ export function EventReviewStack({ events, onReview, reviewingEventId, investorP
       <div className="product-panel overflow-hidden">
         <div className="grid gap-0 lg:grid-cols-[minmax(0,1fr)_minmax(0,1.05fr)]">
           <div className="space-y-3 p-4 sm:p-5">
-            <div className="space-y-1">
-              <p className="font-mono text-[10px] uppercase tracking-[0.2em] text-muted-foreground">
-                {copy.noteLabel}
-              </p>
-              <p className="font-sans text-xs leading-relaxed text-muted-foreground">
-                {copy.noteHelper}
-              </p>
-            </div>
+            <p className="font-mono text-[10px] uppercase tracking-[0.2em] text-muted-foreground">
+              {copy.noteLabel}
+            </p>
             <Textarea
               value={note}
               onChange={(event) => {
@@ -557,7 +567,7 @@ export function EventReviewStack({ events, onReview, reviewingEventId, investorP
                   className="border border-border/70 bg-background/80 p-4 text-left transition-colors hover:bg-background disabled:opacity-40"
                 >
                   <p className="font-mono text-[10px] uppercase tracking-[0.16em] text-muted-foreground">
-                    Ignore
+                    Noise
                   </p>
                   <p className="mt-2 font-sans text-sm text-foreground">{copy.buttonSkip}</p>
                   <p className="mt-1 font-sans text-xs leading-relaxed text-foreground/70">
@@ -579,41 +589,6 @@ export function EventReviewStack({ events, onReview, reviewingEventId, investorP
                     {copy.descriptions.invalidated}
                   </p>
                 </button>
-              </div>
-
-              <div className="flex flex-wrap items-center gap-2 pt-1">
-                <Button
-                  size="sm"
-                  onClick={() => void submitReview("reaffirmed")}
-                  disabled={!!reviewingEventId}
-                  loading={reviewingEventId === topEvent?.id}
-                >
-                  {copy.buttonHold}
-                </Button>
-                <Button
-                  size="sm"
-                  variant="outline"
-                  onClick={() => void submitReview("lowered_confidence")}
-                  disabled={!!reviewingEventId}
-                >
-                  {copy.buttonErode}
-                </Button>
-                <Button
-                  size="sm"
-                  variant="outline"
-                  onClick={() => void submitReview("not_relevant")}
-                  disabled={!!reviewingEventId}
-                >
-                  {copy.buttonSkip}
-                </Button>
-                <Button
-                  size="sm"
-                  variant="destructive"
-                  onClick={() => void submitReview("invalidated")}
-                  disabled={!!reviewingEventId}
-                >
-                  {copy.buttonBroken}
-                </Button>
               </div>
             </div>
           </div>
