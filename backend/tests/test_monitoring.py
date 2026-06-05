@@ -1,4 +1,5 @@
 import uuid
+from decimal import Decimal
 from datetime import datetime, timedelta, timezone
 from unittest.mock import AsyncMock, patch
 
@@ -137,6 +138,37 @@ def test_generate_monitoring_candidates_combines_quant_and_qualitative_signals()
     assert "earnings_call_transcript" in event_types
     assert "insider_transaction" in event_types
     assert any(candidate["event_type"] == "metric_threshold" for candidate in candidates)
+
+
+def test_generate_monitoring_candidates_accepts_decimal_previous_price():
+    company_data = CompanyData(
+        ticker="AAPL",
+        name="Apple",
+        sector="Technology",
+        industry="Consumer Electronics",
+        current_price=120.0,
+        market_cap=None,
+        pe_ratio=None,
+        revenue_growth_yoy=None,
+        earnings_growth_yoy=None,
+        dividend_yield=None,
+        description="",
+        recent_news=[],
+        upcoming_earnings_date=None,
+        recent_earnings_surprise_pct=None,
+        news_items=[],
+        provider_payload={},
+    )
+
+    candidates = generate_monitoring_candidates(
+        {"watch_hints": [{"kind": "price_move_pct", "threshold": 10.0}]},
+        company_data,
+        previous_price=Decimal("100.0"),
+    )
+
+    assert len(candidates) == 1
+    assert candidates[0]["event_type"] == "price_move"
+    assert candidates[0]["evidence"]["previous_price"] == 100.0
 
 
 def test_generate_monitoring_candidates_ignores_irrelevant_news():

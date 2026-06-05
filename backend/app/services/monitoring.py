@@ -1,6 +1,7 @@
 import operator
 from dataclasses import dataclass
 from datetime import datetime, timezone
+from decimal import Decimal
 from typing import Any
 
 from app.services.market_data import CompanyData, shortlist_qualitative_candidates
@@ -13,7 +14,7 @@ OPERATORS = {
 def _coerce_float(value: Any) -> float | None:
     if isinstance(value, bool) or value is None:
         return None
-    if isinstance(value, (int, float)):
+    if isinstance(value, (int, float, Decimal)):
         return float(value)
     if isinstance(value, str):
         stripped = value.strip()
@@ -143,18 +144,20 @@ def generate_monitoring_candidates(
     effective = _effective_interpretation(interpretation)
     candidates: list[dict[str, Any]] = []
     normalized_now = now or datetime.now(timezone.utc)
+    current_price = _coerce_float(company_data.current_price)
+    normalized_previous_price = _coerce_float(previous_price)
 
     price_info = get_price_watch_info(effective)
     if (
         price_info.threshold is not None
-        and company_data.current_price is not None
-        and previous_price is not None
-        and check_price_move(company_data.current_price, previous_price, price_info.threshold)
+        and current_price is not None
+        and normalized_previous_price is not None
+        and check_price_move(current_price, normalized_previous_price, price_info.threshold)
     ):
-        pct_change = abs((company_data.current_price - previous_price) / previous_price) * 100
+        pct_change = abs((current_price - normalized_previous_price) / normalized_previous_price) * 100
         evidence: dict[str, Any] = {
-            "current_price": company_data.current_price,
-            "previous_price": previous_price,
+            "current_price": current_price,
+            "previous_price": normalized_previous_price,
             "threshold_pct": price_info.threshold,
         }
         if price_info.signal_id:
