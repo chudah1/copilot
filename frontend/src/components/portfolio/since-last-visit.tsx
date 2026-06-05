@@ -31,13 +31,17 @@ export function SinceLastVisit({ summary, trend, recentEventCount }: SinceLastVi
   }
 
   if (changes.length === 0) {
-    changes.push("nothing meaningful changed");
+    changes.push("No meaningful change");
   }
 
   return (
-    <div className="rounded-lg border border-emerald-500/25 bg-emerald-500/8 px-4 py-2.5 text-sm text-emerald-700">
-      <span className="font-medium">Since last visit ({daysLabel}):</span>{" "}
-      {changes.join(", ")}
+    <div className="flex flex-wrap items-center gap-x-3 gap-y-1 rounded-lg border border-emerald-500/25 bg-emerald-500/8 px-4 py-2.5 text-emerald-700">
+      <span className="font-mono text-[10px] uppercase tracking-[0.16em] text-emerald-700/80">
+        Since {daysLabel}
+      </span>
+      <span className="font-sans text-sm">
+        {changes.join(" · ")}
+      </span>
     </div>
   );
 }
