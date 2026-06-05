@@ -177,8 +177,8 @@ export function PositionCard({
   const hasThesis = Boolean(thesis?.why_own_it);
   const noThesisCta =
     investorProfile === "hearsay_driven"
-      ? "Draft a starting reason"
-      : "Draft a starting thesis";
+      ? "Write reason"
+      : "Write thesis";
   const quality = classifyThesisQuality(thesis);
   const pulseStatus = pulse?.pulse_status ?? (thesis ? "intact" : null);
   const qualityAdjustedStatus =
