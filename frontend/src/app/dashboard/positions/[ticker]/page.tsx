@@ -1197,14 +1197,40 @@ export default function PositionDetailPage() {
                           />
                         ) : (
                           !decompositionLoading && (
-                            <div className="py-10 text-center space-y-3">
-                              <p className="font-display italic text-xl text-foreground/50">No signals defined yet.</p>
-                              <p className="font-sans text-sm text-muted-foreground max-w-xs mx-auto leading-relaxed">
-                                Generate from thesis.
-                              </p>
-                              <button onClick={handleGenerateDecomposition} className="font-mono text-[10px] uppercase tracking-[0.15em] border border-primary/40 text-primary px-5 py-2.5 hover:border-primary transition-colors">
-                                Generate signals
-                              </button>
+                            <div className="space-y-6">
+                              {monitoringPreviewItems.length > 0 && (
+                                <div className="product-panel p-5 sm:p-6 space-y-4">
+                                  <div className="space-y-1.5">
+                                    <p className="font-mono text-[10px] uppercase tracking-[0.18em] text-muted-foreground">
+                                      Current watch rules
+                                    </p>
+                                    <p className="font-sans text-sm text-foreground/80 leading-relaxed">
+                                      These are the temporary rules already attached to the thesis. Generate full signals to tie them to claims, entities, and evidence.
+                                    </p>
+                                  </div>
+                                  <div className="grid gap-3">
+                                    {monitoringPreviewItems.map((item) => (
+                                      <div key={item.key} className="border border-border/60 bg-background/70 px-4 py-3 space-y-1.5">
+                                        <p className="font-sans text-sm text-foreground">{item.label}</p>
+                                        <p className="font-sans text-xs text-muted-foreground leading-relaxed">{item.detail}</p>
+                                      </div>
+                                    ))}
+                                  </div>
+                                </div>
+                              )}
+                              <div className="py-6 text-center space-y-3">
+                                <p className="font-display italic text-xl text-foreground/50">
+                                  {monitoringPreviewItems.length > 0 ? "No signal map yet." : "No signals defined yet."}
+                                </p>
+                                <p className="font-sans text-sm text-muted-foreground max-w-md mx-auto leading-relaxed">
+                                  {monitoringPreviewItems.length > 0
+                                    ? "Generate signals to turn these watch rules into a proper signal map."
+                                    : "Generate signals from the thesis."}
+                                </p>
+                                <button onClick={handleGenerateDecomposition} className="font-mono text-[10px] uppercase tracking-[0.15em] border border-primary/40 text-primary px-5 py-2.5 hover:border-primary transition-colors">
+                                  Generate signals
+                                </button>
+                              </div>
                             </div>
                           )
                         )}

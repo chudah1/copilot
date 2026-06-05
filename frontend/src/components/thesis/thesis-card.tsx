@@ -2,6 +2,7 @@
 
 import { formatDate } from "@/lib/utils";
 import { classifyThesisQuality } from "@/lib/thesis-quality";
+import { describeWatchHint } from "@/lib/watch-hints";
 import type { Thesis, ThesisDecomposition } from "@/types";
 
 interface Props {
@@ -48,39 +49,12 @@ const QUALITY_TONE: Record<string, string> = {
 
 // ── Helpers ───────────────────────────────────────────────────────────────────
 
-const METRIC_LABELS: Record<string, string> = {
-  revenue_growth_yoy: "Revenue growth (YoY)",
-  earnings_growth_yoy: "Earnings growth (YoY)",
-  pe_ratio: "P/E ratio",
-  dividend_yield: "Dividend yield",
-  gross_margin: "Gross margin",
-  operating_margin: "Operating margin",
-};
-
-function formatThresholdValue(unit: string | undefined, threshold: number): string {
+function formatSignalThresholdValue(unit: string | undefined, threshold: number): string {
   if (unit === "pct") {
     const pct = Math.abs(threshold) <= 1 ? threshold * 100 : threshold;
     return `${pct % 1 === 0 ? pct.toFixed(0) : pct.toFixed(1)}%`;
   }
   return String(threshold);
-}
-
-function describeWatchHint(hint: Record<string, unknown>): string | null {
-  if (hint.kind === "price_move_pct" && typeof hint.threshold === "number") {
-    return `Review if price moves ${hint.threshold}% or more.`;
-  }
-  if (
-    hint.kind === "metric_threshold" &&
-    typeof hint.metric === "string" &&
-    typeof hint.operator === "string" &&
-    typeof hint.threshold === "number"
-  ) {
-    if (hint.threshold === 0) return null;
-    const label = typeof hint.label === "string" ? hint.label : (METRIC_LABELS[hint.metric] ?? hint.metric.replaceAll("_", " "));
-    const unit = typeof hint.unit === "string" ? hint.unit : undefined;
-    return `${label} stays ${hint.operator} ${formatThresholdValue(unit, hint.threshold)}.`;
-  }
-  return null;
 }
 
 function describeSignalCheckLogic(signalType: string, config: Record<string, unknown> | null): string | null {
@@ -96,7 +70,7 @@ function describeSignalCheckLogic(signalType: string, config: Record<string, unk
     if (threshold == null || (threshold === 0 && operator === ">=")) {
       return `Flags when ${label} turns negative YoY.`;
     }
-    const fmt = formatThresholdValue(
+    const fmt = formatSignalThresholdValue(
       signalType === "revenue_growth" ? "revenue_growth_yoy" : "earnings_growth_yoy",
       threshold,
     );
@@ -145,7 +119,7 @@ function getInterpretation(thesis: Thesis) {
 export function ThesisCard({ thesis, decomposition, investorProfile, onEdit, onInvalidate }: Props) {
   const { labels, watchHints, ambiguityNote } = getInterpretation(thesis);
   const watchDescriptions = watchHints
-    .map(describeWatchHint)
+    .map((hint) => describeWatchHint(hint))
     .filter((d): d is string => Boolean(d));
   const activeSignals = getActiveSignals(decomposition);
   const quality = classifyThesisQuality(thesis);

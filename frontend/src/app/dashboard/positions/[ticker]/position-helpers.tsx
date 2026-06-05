@@ -5,6 +5,7 @@ import type {
   ThesisDecompositionEnvelope,
   UpcomingEarnings,
 } from "@/types";
+import { describeWatchHint as baseDescribeWatchHint } from "@/lib/watch-hints";
 
 // Pure presentational helpers + local types extracted from the position
 // page to shrink the god-component. No hooks/state — unit-testable in isolation.
@@ -405,42 +406,8 @@ export function getMonitoringCalmState(args: {
   };
 }
 
-export const METRIC_LABELS: Record<string, string> = {
-  revenue_growth_yoy: "Revenue growth (YoY)",
-  earnings_growth_yoy: "Earnings growth (YoY)",
-  pe_ratio: "P/E ratio",
-  dividend_yield: "Dividend yield",
-  gross_margin: "Gross margin",
-  operating_margin: "Operating margin",
-  debt_to_equity: "Debt / equity",
-};
-
-export function formatThreshold(unit: string | undefined, value: number): string {
-  if (unit === "pct") {
-    const pct = value <= 1 && value >= -1 ? value * 100 : value;
-    return `${pct % 1 === 0 ? pct.toFixed(0) : pct.toFixed(1)}%`;
-  }
-  return String(value);
-}
-
 export function describeWatchHint(hint: Record<string, unknown>) {
-  if (hint.kind === "price_move_pct" && typeof hint.threshold === "number") {
-    return `Price discipline if the stock moves ${hint.threshold}% or more.`;
-  }
-  if (
-    hint.kind === "metric_threshold" &&
-    typeof hint.metric === "string" &&
-    typeof hint.operator === "string" &&
-    typeof hint.threshold === "number"
-  ) {
-    if (hint.threshold === 0) {
-      return null;
-    }
-    const label = typeof hint.label === "string" ? hint.label : (METRIC_LABELS[hint.metric] ?? hint.metric.replaceAll("_", " "));
-    const unit = typeof hint.unit === "string" ? hint.unit : undefined;
-    return `${label} stays ${hint.operator} ${formatThreshold(unit, hint.threshold)}.`;
-  }
-  return null;
+  return baseDescribeWatchHint(hint, { priceStyle: "discipline" });
 }
 
 export function getMonitoringPreviewItems(

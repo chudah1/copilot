@@ -6,6 +6,7 @@ import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { getErrorMessage } from "@/lib/errors";
+import { describeWatchHint } from "@/lib/watch-hints";
 import type { Thesis, ThesisAssistResponse } from "@/types";
 
 interface ThesisDraftFields {
@@ -59,37 +60,8 @@ export function ThesisEditor({ thesis, investorProfile, mode = "write", onSave, 
   const monitorability = typeof interpretationData.monitorability === "string" ? interpretationData.monitorability : null;
   const ambiguityNote = typeof interpretationData.ambiguity_note === "string" ? interpretationData.ambiguity_note : "";
 
-  const METRIC_LABELS: Record<string, string> = {
-    revenue_growth_yoy: "Revenue growth (YoY)",
-    earnings_growth_yoy: "Earnings growth (YoY)",
-    pe_ratio: "P/E ratio",
-    dividend_yield: "Dividend yield",
-    gross_margin: "Gross margin",
-    operating_margin: "Operating margin",
-  };
   const watchHintDescriptions = watchHints
-    .map((hint) => {
-      if (hint.kind === "price_move_pct" && typeof hint.threshold === "number") {
-        return `Review if price moves ${hint.threshold}% or more.`;
-      }
-      if (
-        hint.kind === "metric_threshold" &&
-        typeof hint.metric === "string" &&
-        typeof hint.operator === "string" &&
-        typeof hint.threshold === "number"
-      ) {
-        if (hint.threshold === 0) return null;
-        const m = hint.metric;
-        const label = typeof hint.label === "string" ? hint.label : (METRIC_LABELS[m] ?? m.replaceAll("_", " "));
-        const t = hint.threshold as number;
-        const unit = typeof hint.unit === "string" ? hint.unit : undefined;
-        const fmt = unit === "pct"
-          ? `${Math.abs(t) <= 1 ? (t * 100) % 1 === 0 ? (t * 100).toFixed(0) : (t * 100).toFixed(1) : t}%`
-          : String(t);
-        return `${label} stays ${hint.operator} ${fmt}.`;
-      }
-      return null;
-    })
+    .map((hint) => describeWatchHint(hint))
     .filter((value): value is string => Boolean(value));
 
   const baseCopy = investorProfile === "thesis_driven"

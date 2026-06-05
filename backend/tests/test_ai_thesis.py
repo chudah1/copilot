@@ -167,6 +167,54 @@ def test_normalize_interpretation_filters_invalid_proxy_tickers():
     ]
 
 
+def test_normalize_interpretation_repairs_below_threshold_metric_operator():
+    from app.services.ai_thesis import _normalize_interpretation
+
+    interpretation = {
+        "labels": ["growth"],
+        "monitorability": "high",
+        "watch_hints": [
+            {
+                "kind": "metric_threshold",
+                "metric": "revenue_growth_yoy",
+                "operator": "<",
+                "threshold": 0.10,
+                "rationale": "Revenue growth falling below 10% would weaken the thesis.",
+            }
+        ],
+        "proxy_signals": [],
+        "ambiguity_note": "",
+    }
+
+    result = _normalize_interpretation(interpretation)
+    metric_hint = next(hint for hint in result["watch_hints"] if hint.get("kind") == "metric_threshold")
+    assert metric_hint["operator"] == ">="
+
+
+def test_normalize_interpretation_repairs_above_threshold_metric_operator():
+    from app.services.ai_thesis import _normalize_interpretation
+
+    interpretation = {
+        "labels": ["valuation"],
+        "monitorability": "high",
+        "watch_hints": [
+            {
+                "kind": "metric_threshold",
+                "metric": "pe_ratio",
+                "operator": ">",
+                "threshold": 35.0,
+                "rationale": "If the P/E ratio rises above 35, valuation gets too expensive.",
+            }
+        ],
+        "proxy_signals": [],
+        "ambiguity_note": "",
+    }
+
+    result = _normalize_interpretation(interpretation)
+    metric_hint = next(hint for hint in result["watch_hints"] if hint.get("kind") == "metric_threshold")
+    assert metric_hint["operator"] == "<="
+
+
 def test_parse_draft_output_sanitizes_stale_administration_references():
     result = _parse_draft_output(
         {

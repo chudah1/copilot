@@ -988,6 +988,15 @@ def _metric_unit(metric: str) -> str:
     return "pct" if any(kw in lower for kw in _RATIO_KEYWORDS) else "number"
 
 
+def _normalize_metric_operator(operator: str, rationale: str) -> str:
+    text = rationale.lower()
+    if re.search(r"(falls?|falling|drops?|dropping|slips?|slipping|below|stalling|weakens?)", text):
+        return ">="
+    if re.search(r"(rises?|rising|jumps?|jumping|spikes?|spiking|above|overheats?|too high|too expensive|expands?)", text):
+        return "<="
+    return operator
+
+
 def _normalize_interpretation(interpretation: dict | None) -> dict:
     data = interpretation if isinstance(interpretation, dict) else {}
 
@@ -1023,21 +1032,23 @@ def _normalize_interpretation(interpretation: dict | None) -> dict:
             metric = hint.get("metric")
             operator = hint.get("operator")
             threshold = hint.get("threshold")
+            rationale = str(hint.get("rationale", "")).strip()
             if (
                 isinstance(metric, str)
                 and isinstance(operator, str)
                 and operator in {">=", "<=", ">", "<", "=="}
                 and isinstance(threshold, (int, float))
             ):
+                normalized_operator = _normalize_metric_operator(operator, rationale)
                 normalized_watch_hints.append(
                     {
                         "kind": "metric_threshold",
                         "metric": metric,
                         "label": _metric_label(metric),
                         "unit": _metric_unit(metric),
-                        "operator": operator,
+                        "operator": normalized_operator,
                         "threshold": float(threshold),
-                        "rationale": str(hint.get("rationale", "")).strip(),
+                        "rationale": rationale,
                     }
                 )
 
