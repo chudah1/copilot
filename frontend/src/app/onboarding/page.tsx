@@ -420,7 +420,7 @@ function WizardInner() {
           {
             eyebrow: "Next",
             title: "Monitoring starts after this save.",
-            body: "From here the position moves into the real loop: evidence, review, and follow-through.",
+            body: "News, filings, and earnings get checked against what you wrote. Your first digest arrives Sunday.",
           },
         ];
       default:
@@ -630,7 +630,7 @@ function WizardInner() {
         </h2>
         <p className="text-muted-foreground text-sm max-w-sm leading-relaxed">
           Turning what you said into a structured investment thesis
-          {holding ? ` for ${holding.ticker}` : ""}.
+          {holding ? ` for ${holding.ticker}` : ""}. Usually takes about 10 seconds.
         </p>
       </div>
 
@@ -841,10 +841,10 @@ function WizardInner() {
             {savingThesis ? "Turning on monitoring…" : "Start monitoring this holding"}
           </Button>
           <button
-            onClick={() => router.push(`/onboarding/review-drafts`)}
+            onClick={() => goTo("QUESTION_1")}
             className="text-xs text-muted-foreground hover:text-foreground transition-colors font-mono underline underline-offset-4"
           >
-            Review all drafts
+            Edit answers
           </button>
         </div>
       </motion.div>

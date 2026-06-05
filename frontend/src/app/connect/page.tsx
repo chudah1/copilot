@@ -14,8 +14,8 @@ import type { BrokerConnection, Holding } from "@/types";
 type TabId = "csv" | "manual" | "broker";
 
 const TABS: { id: TabId; label: string }[] = [
-  { id: "csv", label: "CSV Upload" },
   { id: "manual", label: "Manual Entry" },
+  { id: "csv", label: "CSV Upload" },
   { id: "broker", label: "Trading 212" },
 ];
 
@@ -94,7 +94,7 @@ const inputCls = "w-full border border-border bg-background px-3 py-2 font-sans 
 
 export default function ConnectPage() {
   const router = useRouter();
-  const [tab, setTab] = useState<TabId>("csv");
+  const [tab, setTab] = useState<TabId>("manual");
 
   // When reached from the dashboard/settings ("add another source") rather than
   // first-run onboarding, return the user where they came from instead of
