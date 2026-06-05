@@ -97,20 +97,20 @@ export default function ResearchPage() {
             <div className="grid gap-4 lg:grid-cols-[minmax(0,1fr)_minmax(16rem,20rem)]">
               <div className="space-y-2">
                 <p className="font-mono text-[10px] uppercase tracking-[0.18em] text-muted-foreground">
-                  Pre-Buy Stress Test
+                  Stress Test
                 </p>
                 <h1 className="font-display italic text-[2.8rem] leading-none text-foreground">
                   {ticker}
                 </h1>
                 <p className="font-sans text-sm text-muted-foreground">
-                  Stress-test the case before you buy.
+                  Bear case before you buy.
                 </p>
               </div>
 
               <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-1">
                 <div className="border border-border/60 bg-background/70 p-4">
                   <p className="font-mono text-[10px] uppercase tracking-[0.16em] text-muted-foreground">
-                    Output
+                    You get
                   </p>
                   <p className="mt-2 font-sans text-sm leading-relaxed text-foreground/80">
                     Bear case, key risks, blind spots, and what to watch.
@@ -118,7 +118,7 @@ export default function ResearchPage() {
                 </div>
                 <div className="border border-border/60 bg-background/70 p-4">
                   <p className="font-mono text-[10px] uppercase tracking-[0.16em] text-muted-foreground">
-                    Best used before
+                    Use before
                   </p>
                   <p className="mt-2 font-sans text-sm leading-relaxed text-foreground/80">
                     Buying or sizing up.
@@ -144,12 +144,12 @@ export default function ResearchPage() {
               <div className="space-y-4">
                 <div>
                   <label className="font-mono text-[10px] uppercase tracking-[0.18em] text-muted-foreground block mb-2">
-                    Your current case{" "}
+                    Your case{" "}
                     <span className="normal-case tracking-normal opacity-60">(optional)</span>
                   </label>
                   <textarea
                     className="w-full min-h-[140px] border border-border bg-card px-3 py-2.5 font-sans text-sm text-foreground placeholder:text-muted-foreground/50 focus:outline-none focus:border-foreground/30 resize-none"
-                    placeholder={`Why are you considering ${ticker}? E.g. "Their AI chip dominance gives them pricing power for the next 3 years..."`}
+                    placeholder={`Why buy ${ticker}? What has to go right?`}
                     value={draftThesis}
                     onChange={(e) => setDraftThesis(e.target.value)}
                   />
@@ -160,7 +160,7 @@ export default function ResearchPage() {
                     <span className="font-mono text-[11px] uppercase tracking-[0.15em]">Run Stress Test</span>
                   </Button>
                   <p className="font-sans text-xs leading-relaxed text-muted-foreground">
-                    Leave it blank if you just want the bear case.
+                    Leave blank for the bear case only.
                   </p>
                 </div>
 
@@ -181,7 +181,7 @@ export default function ResearchPage() {
               <aside className="space-y-3">
                 <div className="border border-border/60 bg-background/70 p-4">
                   <p className="font-mono text-[10px] uppercase tracking-[0.16em] text-muted-foreground">
-                    Stronger with
+                    Better with
                   </p>
                   <ul className="mt-3 space-y-2">
                     {[
@@ -201,7 +201,7 @@ export default function ResearchPage() {
 
                 <div className="border border-border/60 bg-background/70 p-4">
                   <p className="font-mono text-[10px] uppercase tracking-[0.16em] text-muted-foreground">
-                    You&apos;ll get
+                    Result
                   </p>
                   <p className="mt-2 font-sans text-sm leading-relaxed text-foreground/80">
                     A fast bear-case memo.

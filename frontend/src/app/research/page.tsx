@@ -6,10 +6,10 @@ import { motion } from "framer-motion";
 import { TickerSearch } from "@/components/portfolio/ticker-search";
 
 const BULLETS = [
-  "Bear case — what the market is pricing in that could hurt you",
-  "Key risks — the 3–5 things that could break the trade",
-  "Blind spots — what your thesis might be ignoring",
-  "What to watch — specific signals with thresholds and dates",
+  "Bear case — what can hurt you",
+  "Key risks — what breaks the trade",
+  "Blind spots — what your thesis may miss",
+  "What to watch — signals, thresholds, dates",
 ];
 
 export default function ResearchLandingPage() {
@@ -29,13 +29,13 @@ export default function ResearchLandingPage() {
             <div className="space-y-4">
               <div className="space-y-2">
                 <p className="font-mono text-[10px] uppercase tracking-[0.18em] text-muted-foreground">
-                  Pre-Buy Stress Test
+                  Stress Test
                 </p>
                 <h1 className="font-display italic text-[2.5rem] leading-tight text-foreground sm:text-[3rem]">
-                  Which stock are you considering?
+                  Stress-test a ticker
                 </h1>
                 <p className="max-w-xl font-sans text-sm leading-relaxed text-muted-foreground">
-                  Stress-test the case before you buy.
+                  Bear case before you buy.
                 </p>
               </div>
 
@@ -49,18 +49,18 @@ export default function ResearchLandingPage() {
             <aside className="grid gap-3">
               <div className="border border-border/60 bg-background/70 p-4">
                 <p className="font-mono text-[10px] uppercase tracking-[0.16em] text-muted-foreground">
-                  Output
+                  You get
                 </p>
                 <p className="mt-2 font-display text-[1.4rem] italic leading-tight text-foreground">
-                  A decision memo, not a stock blurb.
+                  A decision memo, not a blurb.
                 </p>
               </div>
               <div className="border border-border/60 bg-background/70 p-4">
                 <p className="font-mono text-[10px] uppercase tracking-[0.16em] text-muted-foreground">
-                  Best used for
+                  Use for
                 </p>
                 <p className="mt-2 font-sans text-sm leading-relaxed text-foreground/80">
-                  Pre-buy underwriting and sizing.
+                  Buying and sizing.
                 </p>
               </div>
             </aside>
