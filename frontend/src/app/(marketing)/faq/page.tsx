@@ -1,7 +1,7 @@
 "use client";
 
 import { useState } from "react";
-import { WaitlistForm } from "../../_mkt/waitlist-form";
+import { LaunchActions } from "../../_mkt/launch-actions";
 import { mk } from "../../_mkt/tokens";
 
 const FAQS = [
@@ -250,7 +250,7 @@ export default function FAQPage() {
         </p>
         </div>
         <div style={{ marginTop: "clamp(24px,3vw,36px)" }}>
-          <WaitlistForm dark />
+          <LaunchActions dark />
         </div>
       </section>
     </>

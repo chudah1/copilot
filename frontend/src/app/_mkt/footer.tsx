@@ -15,8 +15,8 @@ export function MarketingFooter() {
     {
       title: "Use penKeep",
       links: [
-        { label: "Join waitlist", href: "/#signup" },
-        { label: "Go to app", href: "/dashboard" },
+        { label: "Create account", href: "/register" },
+        { label: "Stress test", href: "/research" },
         { label: "Security", href: "/security" },
       ],
     },

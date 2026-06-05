@@ -1,4 +1,4 @@
-import { WaitlistForm } from "../../_mkt/waitlist-form";
+import { LaunchActions } from "../../_mkt/launch-actions";
 import { mk } from "../../_mkt/tokens";
 
 export const metadata = {
@@ -428,9 +428,9 @@ export default function BlogPage() {
             maxWidth: 800,
           }}
         >
-          Build the app with us.
+          Try the app.
           <br />
-          <span style={{ fontStyle: "italic", color: mk.accent }}>Join the waitlist.</span>
+          <span style={{ fontStyle: "italic", color: mk.accent }}>Start with one real position.</span>
         </h2>
         <p
           style={{
@@ -443,11 +443,11 @@ export default function BlogPage() {
             lineHeight: 1.6,
           }}
         >
-          We&apos;re shipping with a small group of early users first. If you want to be one, drop
-          your email below.
+          The fastest way to understand penKeep is to write one thesis or run one free stress
+          test.
         </p>
         <div style={{ marginTop: "clamp(22px,3vw,32px)" }}>
-          <WaitlistForm />
+          <LaunchActions />
         </div>
       </section>
     </>

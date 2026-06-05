@@ -1,7 +1,7 @@
 import Link from "next/link";
 import { MarketingNav } from "./_mkt/nav";
 import { MarketingFooter } from "./_mkt/footer";
-import { WaitlistForm } from "./_mkt/waitlist-form";
+import { LaunchActions } from "./_mkt/launch-actions";
 import { ThesisDemo } from "./_mkt/thesis-demo";
 import { WatchThesisChange } from "./_mkt/timeline";
 import { ConvictionDemo } from "./_mkt/conviction-demo";
@@ -241,7 +241,7 @@ export default function LandingPage() {
                     color: mk.pencil,
                   }}
                 >
-                  Private beta · summer 2026
+                  Live now · free tier open
                 </span>
               </div>
 
@@ -280,8 +280,8 @@ export default function LandingPage() {
               </p>
 
               <div style={{ display: "flex", alignItems: "center", gap: 14, flexWrap: "wrap" }}>
-                <a
-                  href="#signup"
+                <Link
+                  href="/register"
                   style={{
                     display: "inline-flex",
                     alignItems: "center",
@@ -297,8 +297,8 @@ export default function LandingPage() {
                     whiteSpace: "nowrap",
                   }}
                 >
-                  Write your first reason →
-                </a>
+                  Create free account →
+                </Link>
                 <a
                   href="#try-it"
                   style={{
@@ -1098,7 +1098,7 @@ export default function LandingPage() {
               marginBottom: "clamp(20px, 3vw, 28px)",
             }}
           >
-            Limited seats · private beta
+            Free tier live · founding seats optional
           </div>
           <h2
             style={{
@@ -1126,11 +1126,11 @@ export default function LandingPage() {
               lineHeight: 1.5,
             }}
           >
-            Join the waitlist. We&apos;ll reach out before launch with early access and a say in what
-            we build.
+            Create a free account to write your first thesis now, or start with a free stress
+            test if you want the bear case first.
           </p>
           <div style={{ display: "flex", justifyContent: "center" }}>
-            <WaitlistForm dark />
+            <LaunchActions dark />
           </div>
         </div>
       </section>

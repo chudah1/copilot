@@ -41,7 +41,7 @@ export function Navbar() {
       <div className="px-4 py-3 sm:px-8">
         <div className="product-panel product-panel-muted flex items-center justify-between gap-4 px-4 py-3 sm:px-5">
           <div className="flex items-center gap-3">
-            <Link href="/dashboard" className="group">
+            <Link href={isAuthenticated ? "/dashboard" : "/"} className="group">
               <div className="flex flex-col">
                 <span className="font-display text-[1.3rem] font-semibold italic leading-none tracking-tight text-primary transition-colors group-hover:text-primary/80">
                   penKeep

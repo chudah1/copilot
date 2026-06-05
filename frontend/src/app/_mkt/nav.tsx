@@ -119,7 +119,7 @@ export function MarketingNav({ active }: MarketingNavProps) {
             </Link>
           ) : (
             <Link
-              href="/#signup"
+              href="/register"
               style={{
                 padding: "8px 16px",
                 background: mk.ink,
@@ -131,7 +131,7 @@ export function MarketingNav({ active }: MarketingNavProps) {
                 whiteSpace: "nowrap",
               }}
             >
-              Join waitlist →
+              Create account →
             </Link>
           )}
         </div>

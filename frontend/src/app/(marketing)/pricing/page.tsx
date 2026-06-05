@@ -1,4 +1,4 @@
-import { WaitlistForm } from "../../_mkt/waitlist-form";
+import Link from "next/link";
 import { FoundingForm } from "../../_mkt/founding-form";
 import { mk } from "../../_mkt/tokens";
 
@@ -83,8 +83,8 @@ export default function PricingPage() {
           <span style={{ color: mk.accent }}>Found it for life.</span>
         </h1>
         <p style={{ fontFamily: mk.sans, fontSize: "clamp(17px,1.8vw,19px)", lineHeight: 1.55, color: mk.pencil, marginTop: "clamp(18px,2vw,24px)", maxWidth: 600 }}>
-          The free tier is free at launch and stays free. A limited run of founding seats
-          locks in Premium at the lowest price it will ever be — refundable until we launch.
+          The free tier is live now. A limited run of founding seats locks in Premium at the
+          lowest price it will ever be — refundable until Premium opens.
         </p>
 
         <div
@@ -98,9 +98,9 @@ export default function PricingPage() {
           className="max-md:grid-cols-1"
         >
           {[
-            ["Launch access", "Free tier open at launch"],
-            ["Commitment", "No card to join the waitlist"],
-            ["Upgrade path", "Premium only when you need more depth"],
+            ["Access", "Free tier live now"],
+            ["Commitment", "No card to start free"],
+            ["Upgrade path", "Founding Premium when you want more depth"],
           ].map(([label, value]) => (
             <div
               key={label}
@@ -153,7 +153,7 @@ export default function PricingPage() {
                 £0
               </div>
               <div style={{ fontFamily: mk.sans, fontSize: 14, color: mk.pencil, marginTop: 6 }}>
-                Free at launch. No catch.
+                Free now. No catch.
               </div>
             </div>
 
@@ -185,7 +185,38 @@ export default function PricingPage() {
             </ul>
 
             <div style={{ marginTop: "auto", paddingTop: 8 }}>
-              <WaitlistForm />
+              <div style={{ display: "flex", flexDirection: "column", gap: 10 }}>
+                <Link
+                  href="/register"
+                  style={{
+                    display: "inline-flex",
+                    alignItems: "center",
+                    justifyContent: "center",
+                    padding: "14px 18px",
+                    borderRadius: 999,
+                    background: mk.ink,
+                    color: mk.paper,
+                    fontFamily: mk.sans,
+                    fontSize: 15,
+                    fontWeight: 500,
+                    textDecoration: "none",
+                    whiteSpace: "nowrap",
+                  }}
+                >
+                  Create free account →
+                </Link>
+                <div
+                  style={{
+                    fontFamily: mk.mono,
+                    fontSize: 11,
+                    color: mk.pencil,
+                    letterSpacing: "0.03em",
+                    textAlign: "center",
+                  }}
+                >
+                  No card · up to 5 active theses
+                </div>
+              </div>
             </div>
           </div>
 
