@@ -24,7 +24,7 @@ export default function ResearchLandingPage() {
         transition={{ duration: 0.3 }}
         className="mx-auto w-full max-w-4xl space-y-6"
       >
-        <div className="product-panel product-panel-muted overflow-hidden p-6 sm:p-8">
+        <div className="product-panel product-panel-muted p-6 sm:p-8">
           <div className="grid gap-6 lg:grid-cols-[minmax(0,1.3fr)_minmax(18rem,22rem)]">
             <div className="space-y-4">
               <div className="space-y-2">

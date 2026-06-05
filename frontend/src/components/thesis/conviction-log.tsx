@@ -50,13 +50,89 @@ const SEVERITY_COLOR: Record<string, string> = {
   low: "text-muted-foreground",
 };
 
+const EVENT_TYPE_LABELS: Record<string, string> = {
+  price_move: "Price move",
+  earnings_surprise: "Earnings surprise",
+  earnings_call_transcript: "Earnings call",
+  upcoming_earnings: "Upcoming earnings",
+  metric_threshold: "Metric breach",
+  edgar_8k: "SEC filing",
+  insider_transaction: "Insider activity",
+  gemini_news: "News",
+  news_keyword_match: "News",
+  news_or_earnings_candidate: "News",
+};
+
 function entryLabel(entryType: string) {
   return ENTRY_LABELS[entryType] ?? entryType.replaceAll("_", " ");
+}
+
+function parseEvidenceContent(content: string) {
+  const structuredKeys = new Set([
+    "Your thesis",
+    "You said",
+    "Your reason",
+    "We were watching",
+    "What changed",
+    "What happened",
+    "Why it matters now",
+    "Why this matters now",
+    "Next step",
+  ]);
+
+  const parsed: Record<string, string> = {};
+  const body: string[] = [];
+
+  for (const line of content.split("\n")) {
+    const i = line.indexOf(":");
+    if (i > 0 && i < 28) {
+      const key = line.slice(0, i).trim();
+      const value = line.slice(i + 1).trim().replace(/^"|"$/g, "");
+      if (value && structuredKeys.has(key)) {
+        parsed[key] = value;
+        continue;
+      }
+    }
+    if (line.trim()) body.push(line.trim());
+  }
+
+  const rawBody = body.join(" ").trim();
+  const repeatedReasonMatch = rawBody.match(
+    /^Your (?:reason|thesis):\s*"([^"]+)"\s*(.*)$/i,
+  );
+
+  const repeatedReason = repeatedReasonMatch?.[1]?.trim() ?? null;
+  const remainder = repeatedReasonMatch?.[2]?.trim() ?? rawBody;
+
+  return {
+    reason:
+      parsed["Your thesis"] ??
+      parsed["Your reason"] ??
+      parsed["You said"] ??
+      repeatedReason,
+    whatChanged:
+      parsed["What changed"] ??
+      parsed["What happened"] ??
+      remainder,
+    whyItMatters:
+      parsed["Why it matters now"] ??
+      parsed["Why this matters now"] ??
+      null,
+    nextStep: parsed["Next step"] ?? null,
+  };
 }
 
 function SimpleEntry({ entry }: { entry: ConvictionLogEntry }) {
   const isDark =
     entry.entry_type === "reason_created" || entry.entry_type === "reason_updated";
+  const isEvidence = entry.entry_type === "evidence_received";
+  const parsedEvidence = isEvidence ? parseEvidenceContent(entry.content) : null;
+  const meta = entry.metadata_json ?? {};
+  const eventType =
+    typeof meta.event_type === "string" ? EVENT_TYPE_LABELS[meta.event_type] ?? meta.event_type.replaceAll("_", " ") : null;
+  const severity =
+    typeof meta.severity === "string" ? meta.severity : null;
+
   return (
     <div className="border border-border/60 bg-background/70 px-4 py-4">
       <div className="flex items-start gap-4">
@@ -73,10 +149,41 @@ function SimpleEntry({ entry }: { entry: ConvictionLogEntry }) {
           <span className="font-mono text-[10px] text-muted-foreground/40">
             {formatDate(entry.created_at)}
           </span>
+          {isEvidence && eventType && (
+            <>
+              <span className="text-border/40 text-xs">·</span>
+              <span className="font-mono text-[10px] uppercase tracking-[0.12em] text-foreground/60">
+                {eventType}
+              </span>
+            </>
+          )}
+          {isEvidence && severity && (
+            <span className={`font-mono text-[10px] uppercase tracking-[0.12em] ${SEVERITY_COLOR[severity] ?? "text-muted-foreground"}`}>
+              {severity}
+            </span>
+          )}
         </div>
-        <p className="font-sans text-[13px] text-foreground/85 leading-relaxed mt-0.5">
-          {entry.content}
-        </p>
+        {isEvidence && parsedEvidence ? (
+          <div className="mt-1 space-y-2">
+            <p className="font-sans text-[13px] text-foreground/90 leading-relaxed">
+              {parsedEvidence.whatChanged}
+            </p>
+            {parsedEvidence.whyItMatters && (
+              <p className="font-sans text-[13px] text-foreground/75 leading-relaxed">
+                {parsedEvidence.whyItMatters}
+              </p>
+            )}
+            {parsedEvidence.nextStep && (
+              <p className="font-mono text-[10px] uppercase tracking-[0.12em] text-muted-foreground/70">
+                {parsedEvidence.nextStep}
+              </p>
+            )}
+          </div>
+        ) : (
+          <p className="font-sans text-[13px] text-foreground/85 leading-relaxed mt-0.5">
+            {entry.content}
+          </p>
+        )}
       </div>
       </div>
     </div>
