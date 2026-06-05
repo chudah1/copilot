@@ -198,7 +198,7 @@ export function ThesisCard({ thesis, decomposition, investorProfile, onEdit, onI
           quality.kind === "sharp"
             ? "Specific enough to rely on."
             : quality.kind === "stale"
-              ? "The thesis still works, but it is overdue for a refresh."
+              ? "Overdue for refresh."
               : qualityState === "workable"
                 ? "Usable, but still worth sharpening."
                 : "Too fuzzy to trust without tightening.",
@@ -216,7 +216,7 @@ export function ThesisCard({ thesis, decomposition, investorProfile, onEdit, onI
             quality.kind === "sharp"
               ? "Specific enough to rely on."
               : quality.kind === "stale"
-                ? "The reason still works, but it is overdue for a refresh."
+                ? "Overdue for refresh."
               : qualityState === "workable"
                   ? "Usable, but the story still needs sharpening."
                   : "Still too story-like to rely on without tightening.",
@@ -233,7 +233,7 @@ export function ThesisCard({ thesis, decomposition, investorProfile, onEdit, onI
             quality.kind === "sharp"
               ? "Specific enough to rely on."
               : quality.kind === "stale"
-                ? "This case still works, but it is overdue for a refresh."
+                ? "Overdue for refresh."
               : qualityState === "workable"
                   ? "Usable, but still worth sharpening."
                   : "Too fuzzy to trust without tightening.",

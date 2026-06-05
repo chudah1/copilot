@@ -271,15 +271,15 @@ export function getDecisionPrompt(
 
   if (stalePressure) {
     return {
-      eyebrow: "Before you keep holding on autopilot",
+      eyebrow: investorProfile === "hearsay_driven" ? "Stale reason" : "Stale thesis",
       title:
         investorProfile === "hearsay_driven"
-          ? "Would you still buy this today for the same reason?"
-          : "Would you still buy this today for the same thesis?",
+          ? "Still buy this on the same reason?"
+          : "Still buy this on the same thesis?",
       body:
         investorProfile === "hearsay_driven"
-          ? `This reason is ${stalePressure.daysOld} days old and behind its ${stalePressure.cadenceDays}-day cadence. Re-read it before treating it as active conviction.`
-          : `This thesis is ${stalePressure.daysOld} days old and past its ${stalePressure.cadenceDays}-day cadence. Re-read it before treating it as live conviction.`,
+          ? `${stalePressure.daysOld}d old. Your cadence is ${stalePressure.cadenceDays}d. Refresh it before you add or keep sizing on it.`
+          : `${stalePressure.daysOld}d old. Your cadence is ${stalePressure.cadenceDays}d. Refresh it before you add or keep sizing on it.`,
       ctaLabel: "Refresh it →",
       action: "edit" as const,
       tone: "border-amber-500/25 bg-amber-500/8",
