@@ -1205,7 +1205,7 @@ export default function PositionDetailPage() {
                                       Current watch rules
                                     </p>
                                     <p className="font-sans text-sm text-foreground/80 leading-relaxed">
-                                      These are the temporary rules already attached to the thesis. Generate full signals to tie them to claims, entities, and evidence.
+                                      These rules are already attached to the thesis. Generate the full signal map to connect them to claims, entities, and evidence.
                                     </p>
                                   </div>
                                   <div className="grid gap-3">
@@ -1220,11 +1220,11 @@ export default function PositionDetailPage() {
                               )}
                               <div className="py-6 text-center space-y-3">
                                 <p className="font-display italic text-xl text-foreground/50">
-                                  {monitoringPreviewItems.length > 0 ? "No signal map yet." : "No signals defined yet."}
+                                  {monitoringPreviewItems.length > 0 ? "No structured signal map yet." : "No signals defined yet."}
                                 </p>
                                 <p className="font-sans text-sm text-muted-foreground max-w-md mx-auto leading-relaxed">
                                   {monitoringPreviewItems.length > 0
-                                    ? "Generate signals to turn these watch rules into a proper signal map."
+                                    ? "Generate signals to turn these watch rules into the full claim, entity, and signal map."
                                     : "Generate signals from the thesis."}
                                 </p>
                                 <button onClick={handleGenerateDecomposition} className="font-mono text-[10px] uppercase tracking-[0.15em] border border-primary/40 text-primary px-5 py-2.5 hover:border-primary transition-colors">
