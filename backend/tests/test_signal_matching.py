@@ -283,6 +283,26 @@ def test_match_candidates_news_or_earnings_candidate():
     assert result[0]["evidence"]["claim_id"] == str(claims[0].id)
 
 
+def test_match_candidates_edgar_8k_uses_text_overlap():
+    claims = [
+        _make_claim("integration", "Eucalyptus acquisition expands international reach", position=0),
+        _make_claim("margin", "Gross margin holds above 70%", position=1),
+    ]
+    candidates = [
+        {
+            "event_type": "edgar_8k",
+            "description": "Hims amended its credit agreement to facilitate the Eucalyptus acquisition and require foreign subsidiaries to join as guarantors after closing.",
+            "evidence": {
+                "description": "Material Agreement, Other Material Event",
+                "items": ["1.01", "8.01"],
+            },
+        }
+    ]
+
+    result = match_candidates_to_signals(candidates, claims)
+    assert result[0]["evidence"]["claim_id"] == str(claims[0].id)
+
+
 def test_match_candidates_no_claims():
     candidates = [
         {
@@ -401,6 +421,8 @@ def test_build_evidence_summary_tier1_claim_and_signal():
     assert "Customer demand remains strong" in summary
     assert "We were watching:" in summary
     assert "iPhone unit sales trend" in summary
+    assert "What changed:" in summary
+    assert "Why it matters now:" in summary
     assert "Revenue growth slowed to 1.2% YoY" in summary
     assert "directly threatens" in summary.lower() or "thesis" in summary.lower()
     assert "Re-read the thesis" in summary or "review" in summary.lower()

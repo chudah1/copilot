@@ -94,15 +94,36 @@ function reviewLanguage(investorProfile?: "thesis_driven" | "hearsay_driven" | n
 }
 
 function parseNarrative(text: string) {
+  const structuredKeys = new Set([
+    "Your thesis",
+    "You said",
+    "Your reason",
+    "We were watching",
+    "What the app was checking",
+    "We watched",
+    "What changed",
+    "What happened",
+    "Why this matters now",
+    "Why it matters now",
+    "Next step",
+    "Verdict",
+  ]);
   const parsed: Record<string, string> = {};
+  const body: string[] = [];
   for (const line of text.split("\n")) {
     const colonIdx = line.indexOf(":");
     if (colonIdx > 0 && colonIdx < 24) {
       const key = line.slice(0, colonIdx).trim();
       const value = line.slice(colonIdx + 1).trim();
-      if (value) parsed[key] = value;
+      if (value && structuredKeys.has(key)) {
+        parsed[key] = value;
+        continue;
+      }
     }
+    if (line.trim()) body.push(line.trim());
   }
+  if (body[0]) parsed._body0 = body[0];
+  if (body[1]) parsed._body1 = body[1];
   return parsed;
 }
 
@@ -111,8 +132,8 @@ function eventNarrativeFields(event: MonitoringEvent) {
   return {
     youSaid: narrative["Your thesis"] ?? narrative["You said"] ?? narrative["Your reason"] ?? null,
     weWatched: narrative["We were watching"] ?? narrative["What the app was checking"] ?? narrative["We watched"] ?? event.signal_label ?? null,
-    whatChanged: narrative["What changed"] ?? narrative["What happened"] ?? event.summary,
-    whyItMatters: narrative["Why it matters now"] ?? event.ai_analysis ?? null,
+    whatChanged: narrative["What changed"] ?? narrative["What happened"] ?? narrative._body0 ?? event.summary,
+    whyItMatters: narrative["Why it matters now"] ?? narrative["Why this matters now"] ?? narrative._body1 ?? event.ai_analysis ?? null,
     rawNarrative: narrative,
   };
 }

@@ -1,11 +1,14 @@
-"""LLM extraction from 8-K earnings press releases.
+"""8-K enrichment for monitoring candidates.
 
-For 8-K filings with item 2.02 (Earnings Release), fetches the EX-99.1
-press release exhibit and uses Claude Haiku to extract key metrics and
-assess thesis impact. Enriches the monitoring candidate before classification.
+For earnings 8-Ks (item 2.02), fetch the EX-99.1 press release exhibit and use
+Claude Haiku to extract key metrics and thesis impact.
 
-Falls back gracefully — any failure returns the original candidate unchanged
-so the pipeline continues with the basic "8-K filed" event.
+For other material 8-Ks, fetch the filing body itself and extract concise
+item-level summaries from the relevant sections so the monitoring pipeline sees
+actual filing facts rather than only the generic item label.
+
+Falls back gracefully — any failure returns the original candidate unchanged so
+the pipeline continues with the basic "8-K filed" event.
 """
 from __future__ import annotations
 
@@ -29,6 +32,9 @@ _SECTION_RE = re.compile(
     r"outlook|guidance|full[\s\-]year|fourth\s+quarter|third\s+quarter|"
     r"second\s+quarter|first\s+quarter|q[1-4]\s+20\d{2})\b"
 )
+
+_ITEM_HEADING_RE = re.compile(r"(?i)\bitem\s+(\d\.\d{2})\b")
+_ITEM_SUMMARY_SENTENCE_RE = re.compile(r"(?<=[.!?])\s+(?=[A-Z])")
 
 
 def _extract_relevant_sections(text: str) -> str:
@@ -150,6 +156,82 @@ async def _fetch_text(url: str) -> str | None:
         return None
 
 
+def _extract_item_sections(text: str) -> dict[str, str]:
+    """Extract the longest substantive section for each 8-K item heading.
+
+    SEC filings often repeat item headings in a table of contents before the
+    real section. Choosing the longest slice per item is a cheap way to prefer
+    the actual body over the TOC stub.
+    """
+    matches = list(_ITEM_HEADING_RE.finditer(text))
+    if not matches:
+        return {}
+
+    sections: dict[str, str] = {}
+    for index, match in enumerate(matches):
+        item = match.group(1)
+        next_start = matches[index + 1].start() if index + 1 < len(matches) else len(text)
+        section = re.sub(r"\s+", " ", text[match.end():next_start]).strip()
+        if not section:
+            continue
+        current = sections.get(item, "")
+        if len(section) > len(current):
+            sections[item] = section
+    return sections
+
+
+def _summarize_item_section(section: str, *, max_sentences: int = 2, max_chars: int = 320) -> str | None:
+    sentences = [
+        sentence.strip()
+        for sentence in _ITEM_SUMMARY_SENTENCE_RE.split(section)
+        if len(sentence.strip()) > 35
+    ]
+    if not sentences:
+        return None
+
+    summary_parts: list[str] = []
+    for sentence in sentences:
+        lower = sentence.lower()
+        if lower.startswith("the information in item"):
+            continue
+        if lower.startswith("forward-looking statements"):
+            continue
+        if len(sentence.split()) <= 8 and not re.search(r"\d", sentence):
+            continue
+        candidate = " ".join(summary_parts + [sentence]).strip()
+        if len(candidate) > max_chars and summary_parts:
+            break
+        summary_parts.append(sentence)
+        if len(summary_parts) >= max_sentences:
+            break
+
+    if not summary_parts:
+        return None
+    return " ".join(summary_parts).strip()
+
+
+def _summarize_material_items(text: str, items: list[str]) -> tuple[str | None, dict[str, str]]:
+    sections = _extract_item_sections(text)
+    if not sections:
+        return None, {}
+
+    item_summaries: dict[str, str] = {}
+    for item in items:
+        section = sections.get(item)
+        if not section:
+            continue
+        summary = _summarize_item_section(section)
+        if summary:
+            item_summaries[item] = summary
+
+    if not item_summaries:
+        return None, {}
+
+    ordered = [item_summaries[item] for item in items if item in item_summaries]
+    combined = " ".join(ordered[:2]).strip()
+    return combined[:360].rstrip(), item_summaries
+
+
 async def _extract_with_claude(content: str, thesis: Thesis) -> dict[str, Any] | None:
     if not settings.anthropic_api_key:
         return None
@@ -183,19 +265,18 @@ async def enrich_earnings_candidates(
     candidates: list[dict[str, Any]],
     thesis: Thesis,
 ) -> list[dict[str, Any]]:
-    """Enrich 8-K earnings candidates (item 2.02) with LLM-extracted content.
-
-    Other 8-K types and any failures are returned unchanged.
-    """
+    """Enrich 8-K candidates with either earnings or material filing detail."""
     result = []
     for candidate in candidates:
         evidence = candidate.get("evidence", {})
-        is_earnings = (
-            candidate.get("event_type") == "edgar_8k"
-            and "2.02" in evidence.get("items", [])
-        )
-        if is_earnings:
+        if candidate.get("event_type") != "edgar_8k":
+            result.append(candidate)
+            continue
+
+        if "2.02" in evidence.get("items", []):
             candidate = await _enrich_single(candidate, thesis)
+        else:
+            candidate = await _enrich_material_filing(candidate)
         result.append(candidate)
     return result
 
@@ -243,6 +324,33 @@ async def _enrich_single(
             "thesis_verdict": extraction.get("thesis_verdict"),
             "verdict_rationale": rationale,
             "key_quote": extraction.get("key_quote"),
+        },
+    }
+    return enriched
+
+
+async def _enrich_material_filing(candidate: dict[str, Any]) -> dict[str, Any]:
+    evidence = candidate.get("evidence", {})
+    doc_url = evidence.get("url", "")
+    items = evidence.get("items", [])
+    if not doc_url or not isinstance(items, list):
+        return candidate
+
+    text = await _fetch_text(doc_url)
+    if not text or len(text) < 200:
+        return candidate
+
+    summary, item_summaries = _summarize_material_items(text, items)
+    if not summary:
+        return candidate
+
+    enriched = {**candidate}
+    enriched["description"] = summary
+    enriched["evidence"] = {
+        **evidence,
+        "extracted": {
+            "item_summary": summary,
+            "item_summaries": item_summaries,
         },
     }
     return enriched

@@ -30,6 +30,20 @@ const verdictBg: Record<string, string> = {
 };
 
 function parseNarrative(text: string) {
+  const structuredKeys = new Set([
+    "Your thesis",
+    "You said",
+    "Your reason",
+    "We were watching",
+    "What the app was checking",
+    "We watched",
+    "What changed",
+    "What happened",
+    "Why this matters now",
+    "Why it matters now",
+    "Next step",
+    "Verdict",
+  ]);
   const out: Record<string, string> = {};
   const body: string[] = [];
   for (const line of text.split("\n")) {
@@ -37,7 +51,7 @@ function parseNarrative(text: string) {
     if (i > 0 && i < 28) {
       const k = line.slice(0, i).trim();
       const v = line.slice(i + 1).trim().replace(/^"|"$/g, "");
-      if (v) {
+      if (v && structuredKeys.has(k)) {
         out[k] = v;
         continue;
       }
