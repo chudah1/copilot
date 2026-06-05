@@ -56,17 +56,17 @@ export default function ReviewDraftsPage() {
       ? {
           titleLine1: "AI drafted these while",
           titleLine2: "you were setting up.",
-        subtitle: "Review each draft like a working conviction statement. Keep it if the shape is right, or reshape it on the position page before you treat it like real conviction.",
+        subtitle: "Keep it if the shape is right. Fix it on the position page if it is not.",
         emptyTitle: "No drafts ready yet.",
-        emptyBody: "Draft theses are generated in the background after import — check back shortly.",
+        emptyBody: "Draft theses are still generating.",
         pendingTitle: "Drafts are on the way.",
-        pendingBody: "We’re still turning the imported holdings into working thesis drafts. You can keep moving in the dashboard and come back once they are ready.",
+        pendingBody: "We’re still turning imported holdings into draft theses.",
         missingTitle: "Nothing queued for review yet.",
-        missingBody: "Add or import holdings first, then the first draft theses will appear here for review.",
-        connectedMissingBody: "No draft queue is active right now. The fastest next move is to write the first thesis directly from the dashboard.",
+        missingBody: "Add or import holdings first.",
+        connectedMissingBody: "No draft queue is active. Write the first thesis from the dashboard.",
         failedTitle: "Drafting needs a manual pass.",
-        failedBody: "We couldn’t prepare these drafts automatically. The fastest next move is to write the first thesis directly from the dashboard.",
-        doneLine: "Monitoring starts tonight. You’ll get a digest on Sunday.",
+        failedBody: "We couldn’t prepare these drafts automatically. Write the first thesis from the dashboard.",
+        doneLine: "Monitoring starts tonight.",
         accept: "Keep as working thesis →",
         edit: "Reshape on position page",
         dismiss: "Reject this thesis",
@@ -75,17 +75,17 @@ export default function ReviewDraftsPage() {
       ? {
           titleLine1: "We turned the first story",
           titleLine2: "into draft reasons.",
-        subtitle: "Review each one like a working reason for owning the stock. Keep it if it feels broadly true, or reshape it on the position page if the story still feels loose.",
+        subtitle: "Keep it if it feels true. Fix it on the position page if it does not.",
         emptyTitle: "No drafts ready yet.",
-        emptyBody: "Draft reasons are generated in the background after import — check back shortly.",
+        emptyBody: "Draft reasons are still generating.",
         pendingTitle: "Draft reasons are on the way.",
-        pendingBody: "We’re still turning the imported holdings into workable written reasons. You can keep moving in the dashboard and come back once they are ready.",
+        pendingBody: "We’re still turning imported holdings into draft reasons.",
         missingTitle: "Nothing queued for review yet.",
-        missingBody: "Add or import holdings first, then the first draft reasons will appear here for review.",
-        connectedMissingBody: "No draft queue is active right now. The fastest next move is to write the first reason directly from the dashboard.",
+        missingBody: "Add or import holdings first.",
+        connectedMissingBody: "No draft queue is active. Write the first reason from the dashboard.",
         failedTitle: "Drafting needs a manual pass.",
-        failedBody: "We couldn’t prepare these draft reasons automatically. The fastest next move is to write the first reason directly from the dashboard.",
-        doneLine: "Monitoring starts tonight. You’ll get a digest on Sunday.",
+        failedBody: "We couldn’t prepare these draft reasons automatically. Write the first reason from the dashboard.",
+        doneLine: "Monitoring starts tonight.",
         accept: "Keep as working reason →",
         edit: "Reshape on position page",
         dismiss: "Reject this story",
@@ -93,17 +93,17 @@ export default function ReviewDraftsPage() {
       : {
           titleLine1: "AI drafted these while",
           titleLine2: "you were setting up.",
-        subtitle: "Review each one like a working reason for ownership. Keep it if the shape is right, or reshape it on the position page.",
+        subtitle: "Keep it if the shape is right. Fix it on the position page if it is not.",
         emptyTitle: "No drafts ready yet.",
-        emptyBody: "Drafts are generated in the background after import — check back shortly.",
+        emptyBody: "Drafts are still generating.",
         pendingTitle: "Drafts are on the way.",
-        pendingBody: "We’re still preparing the first drafts in the background. You can keep moving in the dashboard and come back once they are ready.",
+        pendingBody: "We’re still preparing the first drafts.",
         missingTitle: "Nothing queued for review yet.",
-        missingBody: "Add or import holdings first, then the first drafts will appear here for review.",
-        connectedMissingBody: "No draft queue is active right now. The fastest next move is to write the first reason directly from the dashboard.",
+        missingBody: "Add or import holdings first.",
+        connectedMissingBody: "No draft queue is active. Write the first reason from the dashboard.",
         failedTitle: "Drafting needs a manual pass.",
-        failedBody: "We couldn’t prepare these drafts automatically. The fastest next move is to write the first one directly from the dashboard.",
-        doneLine: "Monitoring starts tonight. You’ll get a digest on Sunday.",
+        failedBody: "We couldn’t prepare these drafts automatically. Write the first one from the dashboard.",
+        doneLine: "Monitoring starts tonight.",
         accept: "Keep this draft →",
         edit: "Reshape on position page",
         dismiss: "Reject this draft",
@@ -225,7 +225,7 @@ export default function ReviewDraftsPage() {
                     </p>
                     {pendingDraftCount > 0 && (
                       <p className="font-mono text-[10px] uppercase tracking-[0.18em] text-muted-foreground/70">
-                        Refreshes automatically while drafts are generating
+                        Refreshes automatically
                       </p>
                     )}
                     <div className="flex flex-wrap items-center justify-center gap-3 pt-1">
@@ -322,15 +322,15 @@ export default function ReviewDraftsPage() {
                     What you are deciding
                   </p>
                   <p className="mt-2 font-sans text-sm leading-relaxed text-foreground/80">
-                    Keep the draft if the shape is right. If it is close but loose, fix it on the position page before treating it like conviction.
+                    Keep the draft if the shape is right. Fix it on the position page if it is not.
                   </p>
                 </div>
                 <div className="product-panel p-5">
                   <p className="font-mono text-[10px] uppercase tracking-[0.16em] text-muted-foreground">
-                    Next useful move
+                    Goal
                   </p>
                   <p className="mt-2 font-sans text-sm leading-relaxed text-foreground/80">
-                    The goal is not to perfect every sentence here. It is to get each important position to a workable thesis quickly.
+                    Get each important position to a workable thesis quickly.
                   </p>
                 </div>
               </aside>
@@ -377,7 +377,7 @@ function DraftCard({
             Review standard
           </p>
           <p className="mt-1 text-sm text-foreground/80 leading-relaxed">
-            Keep this as a working reason if the shape feels right. If it is directionally right but not sharp enough, reshape it on the position page before treating it like conviction.
+            Keep this if the shape is right. Reshape it on the position page if it is not.
           </p>
         </div>
         {draft.why_own_it ? (
