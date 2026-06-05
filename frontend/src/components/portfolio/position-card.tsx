@@ -3,7 +3,7 @@
 import Link from "next/link";
 import { motion } from "framer-motion";
 import { formatAssumptionLabel } from "@/lib/assumption-label";
-import { normalizeInvestorTerminology } from "@/lib/investor-language";
+import { tightenInvestorCopy } from "@/lib/investor-language";
 import { formatCurrency, formatPercent } from "@/lib/utils";
 import { classifyThesisQuality } from "@/lib/thesis-quality";
 import type { Holding, Thesis, HoldingPulse, LivePrice, UpcomingEarnings } from "@/types";
@@ -32,7 +32,7 @@ function cardStatusCopy(args: {
     sentenceCaseFallback: true,
   });
   const pulseReason = pulse?.reason
-    ? normalizeInvestorTerminology(pulse.reason, investorProfile)
+    ? tightenInvestorCopy(pulse.reason, investorProfile)
     : null;
   const quality = classifyThesisQuality(thesis);
   if (!hasThesis) {
@@ -56,7 +56,7 @@ function cardStatusCopy(args: {
       headline: `${assumptionLabel} needs a call.`,
       detail: pulseReason || "Something meaningful changed.",
       tone: "text-red-600",
-      subLabel: cadencePressure ? "Review cadence missed" : null,
+      subLabel: cadencePressure ? "Cadence missed" : null,
     };
   }
 
@@ -66,7 +66,7 @@ function cardStatusCopy(args: {
       headline: `${assumptionLabel} is under pressure.`,
       detail: pulseReason || "Not broken, but no longer quiet.",
       tone: "text-amber-700",
-      subLabel: cadencePressure ? "Review cadence drifting" : null,
+      subLabel: cadencePressure ? "Cadence drifting" : null,
     };
   }
 

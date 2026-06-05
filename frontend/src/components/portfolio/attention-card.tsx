@@ -3,7 +3,7 @@
 import Link from "next/link";
 import { motion } from "framer-motion";
 import { formatAssumptionLabel } from "@/lib/assumption-label";
-import { normalizeInvestorTerminology } from "@/lib/investor-language";
+import { tightenInvestorCopy } from "@/lib/investor-language";
 import { cleanTicker } from "./position-card";
 import type { Holding, HoldingPulse } from "@/types";
 
@@ -31,7 +31,7 @@ function attentionCopy(
   const isReview = pulse.pulse_status === "review";
   const target = assumptionHeadline(pulse.assumption_label, investorProfile);
   const cadencePressure = pulse.reason.includes("review cadence");
-  const pulseReason = normalizeInvestorTerminology(pulse.reason, investorProfile);
+  const pulseReason = tightenInvestorCopy(pulse.reason, investorProfile);
   if (isReview) {
     return {
       eyebrow: "Review",
@@ -41,7 +41,7 @@ function attentionCopy(
         (investorProfile === "hearsay_driven"
           ? "This story now needs a clear call."
           : "This thesis now needs a clear call."),
-      subLabel: cadencePressure ? "Review cadence missed" : null,
+      subLabel: cadencePressure ? "Cadence missed" : null,
     };
   }
 
@@ -53,7 +53,7 @@ function attentionCopy(
       (investorProfile === "hearsay_driven"
         ? "Nothing looks broken yet, but the story needs a closer look."
         : "Nothing looks broken yet, but this thesis needs a closer look."),
-    subLabel: cadencePressure ? "Review cadence drifting" : null,
+    subLabel: cadencePressure ? "Cadence drifting" : null,
   };
 }
 
@@ -66,9 +66,9 @@ function formatThesisUpdateAge(days: number) {
 export function AttentionCard({ holding, pulse, investorProfile, index }: AttentionCardProps) {
   const isReview = pulse.pulse_status === "review";
   const copy = attentionCopy(pulse, investorProfile);
-  const pulseReason = normalizeInvestorTerminology(pulse.reason, investorProfile);
+  const pulseReason = tightenInvestorCopy(pulse.reason, investorProfile);
   const latestEventSummary = pulse.latest_event_summary
-    ? normalizeInvestorTerminology(pulse.latest_event_summary, investorProfile)
+    ? tightenInvestorCopy(pulse.latest_event_summary, investorProfile)
     : null;
   return (
     <motion.div
@@ -120,11 +120,11 @@ export function AttentionCard({ holding, pulse, investorProfile, index }: Attent
           )}
           {!pulse.recent_event_count && pulse.last_checked_at && (
             <p className="font-mono text-[10px] text-muted-foreground/60">
-              Watched recently
+              Checked recently
             </p>
           )}
           <p className="font-mono text-[10px] uppercase tracking-[0.14em] text-primary/70">
-            Open position →
+            Open →
           </p>
         </div>
       </Link>

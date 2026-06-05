@@ -20,3 +20,25 @@ export function normalizeInvestorTerminology(
     .replace(/\bSupports reason\b/g, "Supports thesis")
     .replace(/\bThreatens reason\b/g, "Threatens thesis");
 }
+
+export function tightenInvestorCopy(
+  value: string,
+  investorProfile: "thesis_driven" | "hearsay_driven" | null | undefined,
+) {
+  return normalizeInvestorTerminology(value, investorProfile)
+    .replace(
+      /This (thesis|reason) is (\d+) days old and (\d+) days past its review cadence\./gi,
+      (_match, noun: string, daysOld: string, daysPast: string) =>
+        `This ${noun.toLowerCase()} is ${daysOld}d old. ${daysPast}d past cadence.`,
+    )
+    .replace(
+      /This (thesis|reason) is (\d+) days old and past its (\d+)-day cadence\./gi,
+      (_match, noun: string, daysOld: string, cadenceDays: string) =>
+        `This ${noun.toLowerCase()} is ${daysOld}d old. Cadence ${cadenceDays}d.`,
+    )
+    .replace(
+      /This (thesis|reason) is (\d+) days old and behind its (\d+)-day cadence\./gi,
+      (_match, noun: string, daysOld: string, cadenceDays: string) =>
+        `This ${noun.toLowerCase()} is ${daysOld}d old. Cadence ${cadenceDays}d.`,
+    );
+}
