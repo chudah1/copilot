@@ -22,7 +22,6 @@ import type {
 
 type Step =
   | "WELCOME"
-  | "POSITION_FOCUS"
   | "QUESTION_1"
   | "QUESTION_2"
   | "SYNTHESISING"
@@ -94,7 +93,7 @@ const STORAGE_KEY = "copilot_onboarding_wizard";
 
 interface WizardState {
   holdingId: string | null;
-  investorProfile: InvestorProfile | null;
+  investorProfile: InvestorProfile;
   answer1: string;
   answer2: string;
   synthesisResult: SynthesisResponse | null;
@@ -102,12 +101,15 @@ interface WizardState {
 
 function loadState(): WizardState {
   if (typeof window === "undefined")
-    return { holdingId: null, investorProfile: null, answer1: "", answer2: "", synthesisResult: null };
+    return { holdingId: null, investorProfile: "thesis_driven", answer1: "", answer2: "", synthesisResult: null };
   try {
     const raw = localStorage.getItem(STORAGE_KEY);
-    if (raw) return JSON.parse(raw);
+    if (raw) {
+      const parsed = JSON.parse(raw);
+      return { ...parsed, investorProfile: parsed.investorProfile ?? "thesis_driven" };
+    }
   } catch {}
-  return { holdingId: null, investorProfile: null, answer1: "", answer2: "", synthesisResult: null };
+  return { holdingId: null, investorProfile: "thesis_driven", answer1: "", answer2: "", synthesisResult: null };
 }
 
 function saveState(s: WizardState) {
@@ -124,7 +126,8 @@ function clearState() {
 
 function inferInitialStep(state: WizardState): Step {
   if (state.synthesisResult) return "REVIEW";
-  if (state.answer2 || state.answer1) return "QUESTION_2";
+  if (state.answer2) return "QUESTION_2";
+  if (state.answer1) return "QUESTION_1";
   return "WELCOME";
 }
 
@@ -134,7 +137,6 @@ function inferInitialStep(state: WizardState): Step {
 
 const STEP_ORDER: Step[] = [
   "WELCOME",
-  "POSITION_FOCUS",
   "QUESTION_1",
   "QUESTION_2",
   "SYNTHESISING",
@@ -142,7 +144,7 @@ const STEP_ORDER: Step[] = [
   "REVIEW",
   "DONE",
 ];
-const VISIBLE_STEPS = ["POSITION_FOCUS", "QUESTION_1", "QUESTION_2"] as const;
+const VISIBLE_STEPS = ["QUESTION_1", "QUESTION_2"] as const;
 
 // ---------------------------------------------------------------------------
 // Transition variants
@@ -177,7 +179,7 @@ function WizardInner() {
   const [selectedSignalIdx, setSelectedSignalIdx] = useState<Set<number>>(new Set());
   const [draftingForMe, setDraftingForMe] = useState(false);
   const profile = wizardState.investorProfile;
-  const profileContent = profile ? PROFILE_CONTENT[profile] : null;
+  const profileContent = PROFILE_CONTENT[profile];
   const holdingValueLabel = holding?.current_value
     ? `£${holding.current_value.toLocaleString("en-GB", { maximumFractionDigits: 0 })}`
     : "Value unavailable";
@@ -354,8 +356,8 @@ function WizardInner() {
       case "WELCOME":
         return [
           {
-            eyebrow: "Time",
-            title: "About two minutes.",
+            eyebrow: "",
+            title: "~2 min",
             body: "One position, two answers, then a working thesis you can actually review later.",
           },
           {
@@ -364,27 +366,12 @@ function WizardInner() {
             body: "The product gets real once an important holding has a written case behind it.",
           },
         ];
-      case "POSITION_FOCUS":
-        return [
-          {
-            eyebrow: "Selected name",
-            title: holding ? `${holding.ticker} · ${holdingValueLabel}` : "Choosing your first holding.",
-            body: holding
-              ? `${holding.name}${holding.sector ? ` · ${holding.sector}` : ""}`
-              : "We start with the largest position that still has no written thesis.",
-          },
-          {
-            eyebrow: "Why this first",
-            title: "Start where missing thinking matters most.",
-            body: "The first thesis should land on a name you already care about, not a throwaway example.",
-          },
-        ];
       case "QUESTION_1":
         return [
           {
-            eyebrow: "Question 1",
+            eyebrow: holding ? `${holding.ticker} · ${holdingValueLabel}` : "Your position",
             title: "Write the positive case in your own words.",
-            body: "This becomes the anchor for reviews, monitoring, and your later decision history.",
+            body: holding ? `${holding.name}${holding.sector ? ` · ${holding.sector}` : ""}` : "",
           },
           {
             eyebrow: "Tip",
@@ -398,11 +385,6 @@ function WizardInner() {
             eyebrow: "Question 2",
             title: "Define what would break the case.",
             body: "This is the part that keeps the thesis honest once the stock starts moving.",
-          },
-          {
-            eyebrow: "What good looks like",
-            title: "Name evidence, not emotion.",
-            body: "Think in terms of demand, guidance, margins, churn, competition, or management behavior.",
           },
         ];
       case "SYNTHESISING":
@@ -503,21 +485,16 @@ function WizardInner() {
         })}
       </div>
 
-      {profileContent && (
-        <div className="space-y-3 border-l-2 border-primary/30 pl-4">
-          {profileContent.welcomeLines.map((line, i) => (
-            <p key={i} className="text-sm text-foreground/70 font-mono">
-              {line}
-            </p>
-          ))}
-        </div>
-      )}
+      <div className="space-y-3 border-l-2 border-primary/30 pl-4">
+        {profileContent.welcomeLines.map((line, i) => (
+          <p key={i} className="text-sm text-foreground/70 font-mono">
+            {line}
+          </p>
+        ))}
+      </div>
 
       <div className="flex items-center gap-4 pt-2">
-        <Button
-          onClick={() => goTo("POSITION_FOCUS")}
-          disabled={!profile}
-        >
+        <Button onClick={() => goTo("QUESTION_1")}>
           Begin
         </Button>
         <button
@@ -530,83 +507,6 @@ function WizardInner() {
     </motion.div>
   );
 
-  const renderPositionFocus = () => (
-    <motion.div
-      key="position"
-      variants={stepVariants}
-      initial="enter"
-      animate="center"
-      exit="exit"
-      transition={{ duration: 0.4, ease: [0.22, 1, 0.36, 1] }}
-      className="space-y-8"
-    >
-      <div className="space-y-2">
-        <span className="font-mono text-[10px] uppercase tracking-[0.3em] text-primary">
-          Position focus
-        </span>
-        <h2 className="font-display italic text-[2rem] leading-tight text-foreground">
-          Let&rsquo;s talk about this position.
-        </h2>
-      </div>
-
-      {loadingHolding ? (
-        <div className="h-24 flex items-center">
-          <span className="font-mono text-xs text-muted-foreground animate-pulse">
-            Loading position…
-          </span>
-        </div>
-      ) : holding ? (
-        <div className="border border-border/70 bg-background/55 p-6 space-y-4">
-          <div className="flex items-baseline gap-3">
-            <span className="font-display text-[2.5rem] font-bold text-foreground leading-none">
-              {holding.ticker}
-            </span>
-            <span className="text-muted-foreground text-sm">{holding.name}</span>
-          </div>
-          <div className="grid grid-cols-3 gap-px border border-border">
-            {[
-              {
-                label: "Value",
-                value: holding.current_value
-                  ? `£${holding.current_value.toLocaleString("en-GB", { maximumFractionDigits: 0 })}`
-                  : "—",
-              },
-              {
-                label: "Shares",
-                value: holding.quantity.toFixed(4),
-              },
-              {
-                label: "Sector",
-                value: holding.sector || "—",
-              },
-            ].map(({ label, value }) => (
-              <div key={label} className="bg-muted/40 p-3">
-                <div className="font-mono text-[9px] uppercase tracking-[0.2em] text-muted-foreground mb-1">
-                  {label}
-                </div>
-                <div className="text-sm font-medium text-foreground">{value}</div>
-              </div>
-            ))}
-          </div>
-        </div>
-      ) : null}
-
-      <div className="flex items-center gap-4">
-        <Button
-          onClick={() => goTo("QUESTION_1")}
-          disabled={!holding}
-        >
-          Continue
-        </Button>
-        <button
-          onClick={handleSkip}
-          className="text-xs text-muted-foreground hover:text-foreground transition-colors font-mono underline underline-offset-4"
-        >
-          Skip
-        </button>
-      </div>
-    </motion.div>
-  );
 
   // Opt-in AI help: only when the user asks for it, and only as a starting point
   // they can edit — never pre-filled before they've had a chance to write their own.
@@ -625,7 +525,7 @@ function WizardInner() {
         answer2: prev.answer2.trim() ? prev.answer2 : (draft.what_would_change_my_mind ?? prev.answer2),
       }));
     } catch (e) {
-      setError(getErrorMessage(e, "Couldn't draft a starting point — try writing a line yourself."));
+      setError(getErrorMessage(e, "Couldn't draft a starting point — write a line yourself to continue."));
     } finally {
       setDraftingForMe(false);
     }
@@ -682,26 +582,29 @@ function WizardInner() {
         <p className="text-sm text-red-600 font-mono">{error}</p>
       )}
 
-      <div className="flex items-center gap-4">
-        <Button
-          onClick={onNext}
-          disabled={wizardState[qKey].trim().length < 5}
-        >
-          {qKey === "answer2" ? "Build thesis" : "Continue"}
-        </Button>
-        <button
-          onClick={handleSkip}
-          className="text-xs text-muted-foreground hover:text-foreground transition-colors font-mono underline underline-offset-4"
-        >
-          Skip for now
-        </button>
-        {qKey === "answer1" && (
+      <div className="space-y-3">
+        <div className="flex items-center gap-4">
+          <Button
+            onClick={onNext}
+            disabled={wizardState[qKey].trim().length < 5}
+          >
+            {qKey === "answer2" ? "Build thesis" : "Continue"}
+          </Button>
+          <button
+            onClick={handleSkip}
+            className="text-xs text-muted-foreground hover:text-foreground transition-colors font-mono underline underline-offset-4"
+          >
+            Skip for now
+          </button>
+        </div>
+        {wizardState[qKey].trim().length < 10 && (
           <button
             onClick={handleDraftForMe}
             disabled={draftingForMe || !holding}
-            className="text-xs text-muted-foreground hover:text-foreground transition-colors font-mono underline underline-offset-4 disabled:opacity-50 ml-auto"
+            className="flex items-center gap-2 text-sm text-primary hover:text-primary/80 transition-colors font-mono disabled:opacity-50"
           >
-            {draftingForMe ? "Drafting…" : "No reason yet? Draft a starting point"}
+            <span className="text-base leading-none">↳</span>
+            {draftingForMe ? "Drafting a starting point…" : "Not sure where to start? Draft one for me"}
           </button>
         )}
       </div>
@@ -806,9 +709,6 @@ function WizardInner() {
             <div className="space-y-1">
               <p className="text-base font-medium text-foreground">
                 Pick what you&rsquo;ll hold this position to.
-              </p>
-              <p className="text-sm text-muted-foreground">
-                We&rsquo;ll watch these and tell you the moment one breaks. Change them anytime.
               </p>
             </div>
             <div className="grid gap-2">
@@ -992,20 +892,19 @@ function WizardInner() {
               <div className="product-panel product-panel-muted p-6 sm:p-8">
                 <AnimatePresence mode="wait">
                   {step === "WELCOME" && renderWelcome()}
-                  {step === "POSITION_FOCUS" && renderPositionFocus()}
                   {step === "QUESTION_1" &&
                     renderQuestion(
                       "answer1",
-                      profileContent?.q1 ?? PROFILE_CONTENT.thesis_driven.q1,
-                      profileContent?.q1Placeholder ?? PROFILE_CONTENT.thesis_driven.q1Placeholder,
+                      profileContent.q1,
+                      profileContent.q1Placeholder,
                       () => goTo("QUESTION_2"),
                       "Question 01"
                     )}
                   {step === "QUESTION_2" &&
                     renderQuestion(
                       "answer2",
-                      profileContent?.q2 ?? PROFILE_CONTENT.thesis_driven.q2,
-                      profileContent?.q2Placeholder ?? PROFILE_CONTENT.thesis_driven.q2Placeholder,
+                      profileContent.q2,
+                      profileContent.q2Placeholder,
                       handleSynthesize,
                       "Question 02"
                     )}
