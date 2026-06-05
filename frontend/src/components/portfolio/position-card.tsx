@@ -53,7 +53,11 @@ function cardStatusCopy(args: {
   if (pulse?.pulse_status === "review") {
     return {
       eyebrow: "Review",
-      headline: `${assumptionLabel} needs a call.`,
+      headline: cadencePressure
+        ? investorProfile === "hearsay_driven"
+          ? "This reason is overdue."
+          : "This thesis is overdue."
+        : `${assumptionLabel} needs a call.`,
       detail: pulseReason || "Something meaningful changed.",
       tone: "text-red-600",
       subLabel: cadencePressure ? "Cadence missed" : null,
@@ -63,7 +67,11 @@ function cardStatusCopy(args: {
   if (pulse?.pulse_status === "watch") {
     return {
       eyebrow: "Watch",
-      headline: `${assumptionLabel} is under pressure.`,
+      headline: cadencePressure
+        ? investorProfile === "hearsay_driven"
+          ? "This reason is stale."
+          : "This thesis is stale."
+        : `${assumptionLabel} is under pressure.`,
       detail: pulseReason || "Not broken, but no longer quiet.",
       tone: "text-amber-700",
       subLabel: cadencePressure ? "Cadence drifting" : null,

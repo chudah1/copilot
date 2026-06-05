@@ -35,7 +35,11 @@ function attentionCopy(
   if (isReview) {
     return {
       eyebrow: "Review",
-      headline: `${target} may have changed.`,
+      headline: cadencePressure
+        ? investorProfile === "hearsay_driven"
+          ? "This reason is overdue."
+          : "This thesis is overdue."
+        : `${target} may have changed.`,
       detail:
         pulseReason ||
         (investorProfile === "hearsay_driven"
@@ -47,7 +51,11 @@ function attentionCopy(
 
   return {
     eyebrow: "Watch",
-    headline: `${target} is under pressure.`,
+    headline: cadencePressure
+      ? investorProfile === "hearsay_driven"
+        ? "This reason is stale."
+        : "This thesis is stale."
+      : `${target} is under pressure.`,
     detail:
       pulseReason ||
       (investorProfile === "hearsay_driven"
