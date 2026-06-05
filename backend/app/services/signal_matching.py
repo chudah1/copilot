@@ -15,6 +15,9 @@ from app.models.thesis_signal import ThesisSignal
 
 EARNINGS_CLAIM_KEYWORDS = {"earnings", "growth", "revenue", "profit", "income", "sales"}
 MANAGEMENT_CLAIM_KEYWORDS = {"management", "governance", "leadership", "ceo", "founder", "insider"}
+EARNINGS_SIGNAL_TYPES = {"revenue_growth", "earnings_growth", "earnings_surprise", "guidance_change"}
+MANAGEMENT_SIGNAL_TYPES = {"insider_transaction"}
+NEWS_SIGNAL_TYPES = {"news_topic", "news_watch"}
 
 
 async def load_active_decomposition(
@@ -42,9 +45,10 @@ def match_candidates_to_signals(
     candidates: list[dict[str, Any]],
     claims: list[ThesisClaim] | None,
 ) -> list[dict[str, Any]]:
-    """Enrich candidates that don't have signal_id with best-match claim_id."""
+    """Enrich candidates with the sharpest available claim/signal attribution."""
     if not claims:
         return candidates
+    active_signals = _collect_active_signals(claims)
 
     for candidate in candidates:
         evidence = candidate.get("evidence")
@@ -55,11 +59,15 @@ def match_candidates_to_signals(
             continue
 
         event_type = candidate.get("event_type", "")
+        matched_signal = _find_best_signal_match(active_signals, candidate)
         matched_claim = None
 
-        if event_type in ("earnings_surprise", "upcoming_earnings", "earnings_call_transcript"):
+        if matched_signal is not None:
+            matched_claim, signal = matched_signal
+            evidence["signal_id"] = str(signal.id)
+        elif event_type in ("earnings_surprise", "upcoming_earnings", "earnings_call_transcript"):
             matched_claim = _find_claim_by_type_keywords(claims, EARNINGS_CLAIM_KEYWORDS)
-        elif event_type == "news_or_earnings_candidate":
+        elif event_type in {"news_or_earnings_candidate", "gemini_news", "news_keyword_match"}:
             headline = evidence.get("headline") or candidate.get("description", "")
             matched_claim = _find_claim_by_text_overlap(claims, headline)
         elif event_type == "insider_transaction":
@@ -74,6 +82,119 @@ def match_candidates_to_signals(
             evidence["claim_id"] = str(matched_claim.id)
 
     return candidates
+
+
+def _collect_active_signals(
+    claims: list[ThesisClaim],
+) -> list[tuple[ThesisClaim, ThesisSignal]]:
+    active_signals: list[tuple[ThesisClaim, ThesisSignal]] = []
+    for claim in claims:
+        for entity in getattr(claim, "entities", []) or []:
+            for signal in getattr(entity, "signals", []) or []:
+                if getattr(signal, "active", False):
+                    active_signals.append((claim, signal))
+    return active_signals
+
+
+def _find_best_signal_match(
+    active_signals: list[tuple[ThesisClaim, ThesisSignal]],
+    candidate: dict[str, Any],
+) -> tuple[ThesisClaim, ThesisSignal] | None:
+    if not active_signals:
+        return None
+
+    evidence = candidate.get("evidence") or {}
+    exact_label_match = _find_signal_by_relevant_labels(active_signals, evidence.get("relevant_signals"))
+    if exact_label_match is not None:
+        return exact_label_match
+
+    event_type = candidate.get("event_type", "")
+    candidate_text = _candidate_match_text(candidate)
+    best: tuple[int, ThesisClaim, ThesisSignal] | None = None
+
+    for claim, signal in active_signals:
+        score = _signal_match_score(event_type, candidate_text, claim, signal)
+        if score <= 0:
+            continue
+        if best is None or score > best[0]:
+            best = (score, claim, signal)
+
+    return (best[1], best[2]) if best is not None else None
+
+
+def _find_signal_by_relevant_labels(
+    active_signals: list[tuple[ThesisClaim, ThesisSignal]],
+    relevant_labels: Any,
+) -> tuple[ThesisClaim, ThesisSignal] | None:
+    if not isinstance(relevant_labels, list):
+        return None
+    wanted = {_normalize_text(str(label)) for label in relevant_labels if str(label).strip()}
+    if not wanted:
+        return None
+    for claim, signal in active_signals:
+        signal_label = getattr(signal, "signal_label", None)
+        if signal_label and _normalize_text(signal_label) in wanted:
+            return (claim, signal)
+    return None
+
+
+def _candidate_match_text(candidate: dict[str, Any]) -> str:
+    evidence = candidate.get("evidence") or {}
+    parts = [
+        evidence.get("headline"),
+        evidence.get("summary"),
+        evidence.get("description"),
+        candidate.get("description"),
+    ]
+    return " ".join(str(part).strip() for part in parts if part).strip()
+
+
+def _signal_match_score(
+    event_type: str,
+    candidate_text: str,
+    claim: ThesisClaim,
+    signal: ThesisSignal,
+) -> int:
+    signal_type = str(getattr(signal, "signal_type", "") or "")
+    signal_words = _words(_signal_match_text(claim, signal))
+    candidate_words = _words(candidate_text)
+    overlap = len(signal_words & candidate_words)
+
+    if event_type in {"earnings_surprise", "upcoming_earnings", "earnings_call_transcript"}:
+        family_bonus = 4 if signal_type in EARNINGS_SIGNAL_TYPES else 1 if overlap > 0 else 0
+        return family_bonus + overlap * 10
+
+    if event_type == "insider_transaction":
+        family_bonus = 4 if signal_type in MANAGEMENT_SIGNAL_TYPES else 2 if _has_management_words(signal_words) else 0
+        return family_bonus + overlap * 10
+
+    if event_type in {"news_or_earnings_candidate", "gemini_news", "news_keyword_match"}:
+        family_bonus = 2 if signal_type in NEWS_SIGNAL_TYPES else 0
+        return family_bonus + overlap * 10
+
+    return 0
+
+
+def _signal_match_text(claim: ThesisClaim, signal: ThesisSignal) -> str:
+    parts = [
+        getattr(signal, "signal_label", None),
+        getattr(signal, "rationale", None),
+        getattr(claim, "claim_text", None),
+        str(getattr(signal, "signal_type", "") or "").replace("_", " "),
+    ]
+    return " ".join(str(part).strip() for part in parts if part).strip()
+
+
+def _words(text: str) -> set[str]:
+    return set(re.findall(r"\w{3,}", text.lower()))
+
+
+def _normalize_text(text: str) -> str:
+    return " ".join(_words(text))
+
+
+def _has_management_words(words: set[str]) -> bool:
+    return bool(words & MANAGEMENT_CLAIM_KEYWORDS)
 
 
 def _find_claim_by_type_keywords(

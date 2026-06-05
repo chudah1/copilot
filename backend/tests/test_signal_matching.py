@@ -10,7 +10,34 @@ def _make_signal(signal_type: str, config: dict | None = None, rationale: str | 
     signal.signal_type = signal_type
     signal.signal_config_json = config
     signal.rationale = rationale
+    signal.signal_label = None
+    signal.active = False
     return signal
+
+
+def _make_active_signal(
+    claim_text: str,
+    *,
+    claim_type: str = "growth",
+    signal_type: str,
+    signal_label: str,
+    rationale: str | None = None,
+    position: int = 0,
+) -> tuple[MagicMock, MagicMock]:
+    signal = _make_signal(signal_type, rationale=rationale)
+    signal.signal_label = signal_label
+    signal.active = True
+
+    entity = MagicMock()
+    entity.signals = [signal]
+
+    claim = MagicMock()
+    claim.id = uuid.uuid4()
+    claim.claim_type = claim_type
+    claim.claim_text = claim_text
+    claim.position = position
+    claim.entities = [entity]
+    return claim, signal
 
 
 def test_watch_hint_from_signal_includes_ids_price_move():
@@ -203,6 +230,7 @@ def _make_claim(claim_type: str, claim_text: str, position: int = 0) -> MagicMoc
     claim.claim_type = claim_type
     claim.claim_text = claim_text
     claim.position = position
+    claim.entities = []
     return claim
 
 
@@ -294,6 +322,69 @@ def test_match_candidates_already_has_signal_id():
     result = match_candidates_to_signals(candidates, claims)
     assert result[0]["evidence"]["signal_id"] == signal_id
     assert result[0]["evidence"]["claim_id"] == claim_id
+
+
+def test_match_candidates_gemini_news_uses_relevant_signal_label():
+    claim, signal = _make_active_signal(
+        "Data center demand stays strong",
+        signal_type="revenue_growth",
+        signal_label="NVDA data center revenue growth",
+    )
+    candidates = [
+        {
+            "event_type": "gemini_news",
+            "description": "NVDA demand stays strong",
+            "evidence": {
+                "headline": "NVIDIA reports strong data center demand",
+                "relevant_signals": ["NVDA data center revenue growth"],
+            },
+        }
+    ]
+
+    result = match_candidates_to_signals(candidates, [claim])
+    assert result[0]["evidence"]["signal_id"] == str(signal.id)
+    assert result[0]["evidence"]["claim_id"] == str(claim.id)
+
+
+def test_match_candidates_earnings_family_prefers_active_signal():
+    claim, signal = _make_active_signal(
+        "Revenue growth must stay strong",
+        signal_type="revenue_growth",
+        signal_label="AAPL revenue growth",
+        rationale="Revenue growth should remain healthy.",
+    )
+    candidates = [
+        {
+            "event_type": "earnings_surprise",
+            "description": "Recent earnings surprise was -8.2%.",
+            "evidence": {"recent_earnings_surprise_pct": -8.2},
+        }
+    ]
+
+    result = match_candidates_to_signals(candidates, [claim])
+    assert result[0]["evidence"]["signal_id"] == str(signal.id)
+    assert result[0]["evidence"]["claim_id"] == str(claim.id)
+
+
+def test_match_candidates_insider_prefers_management_signal():
+    claim, signal = _make_active_signal(
+        "Management discipline matters",
+        claim_type="management",
+        signal_type="insider_transaction",
+        signal_label="AAPL insider selling",
+        rationale="Heavy insider selling can weaken confidence in management.",
+    )
+    candidates = [
+        {
+            "event_type": "insider_transaction",
+            "description": "Apple insider sold shares this week.",
+            "evidence": {"transaction_id": "txn-1"},
+        }
+    ]
+
+    result = match_candidates_to_signals(candidates, [claim])
+    assert result[0]["evidence"]["signal_id"] == str(signal.id)
+    assert result[0]["evidence"]["claim_id"] == str(claim.id)
 
 
 def test_build_evidence_summary_tier1_claim_and_signal():
