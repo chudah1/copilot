@@ -58,9 +58,9 @@ function dashboardCopy(investorProfile: "thesis_driven" | "hearsay_driven" | nul
       emptyBody:
         "The market will test your assumptions. Add your positions below and write down exactly why you own them so you can tell when the thesis changes.",
       draftBanner:
-        "We drafted working thesis notes for {count}. Review them and tighten the assumptions before monitoring does the rest.",
+        "Drafts are ready for {count}. Review them before monitoring takes over.",
       quarterly:
-        "Quarterly review — {count} position{plural} waiting for a fresh underwriting call",
+        "Quarterly review — {count} position{plural} due",
     };
   }
 
@@ -69,9 +69,9 @@ function dashboardCopy(investorProfile: "thesis_driven" | "hearsay_driven" | nul
       emptyBody:
         "The market will test the story. Add your positions below and write down why you own them so you can tell signal from panic when things move fast.",
       draftBanner:
-        "We drafted clearer reasons for {count}. Review them and turn the story into something you can actually monitor.",
+        "Drafts are ready for {count}. Review them before monitoring takes over.",
       quarterly:
-        "Quarterly review — {count} position{plural} waiting to see if the original story still holds",
+        "Quarterly review — {count} position{plural} due",
     };
   }
 
@@ -79,9 +79,9 @@ function dashboardCopy(investorProfile: "thesis_driven" | "hearsay_driven" | nul
     emptyBody:
       "The market will test you. Add your positions below and write down exactly why you own them so you don&rsquo;t panic sell when things get tough.",
     draftBanner:
-      "We drafted working reasons for {count}. Review them so the dashboard watches what actually matters.",
+      "Drafts are ready for {count}. Review them before monitoring takes over.",
     quarterly:
-      "Quarterly review — {count} position{plural} waiting for a fresh decision",
+      "Quarterly review — {count} position{plural} due",
   };
 }
 
@@ -105,8 +105,8 @@ function dashboardStateCopy(
       body:
         topAttention
           ? topAttentionIsCadencePressure
-            ? `${cleanTicker(topAttention.ticker)} is first up. ${topAttentionLabel} is overdue.${recentReview ? ` ${cleanTicker(recentReview.ticker)} was just cleared.` : ""}`
-            : `${cleanTicker(topAttention.ticker)} is first up. ${topAttentionLabel} is closest to a call.${recentReview ? ` ${cleanTicker(recentReview.ticker)} was just cleared.` : ""}`
+            ? `${cleanTicker(topAttention.ticker)} first. ${topAttentionLabel} is overdue.${recentReview ? ` ${cleanTicker(recentReview.ticker)} cleared.` : ""}`
+            : `${cleanTicker(topAttention.ticker)} first. ${topAttentionLabel} is closest to a call.${recentReview ? ` ${cleanTicker(recentReview.ticker)} cleared.` : ""}`
           : counts.watch > 0
             ? `${counts.watch} more position${counts.watch > 1 ? "s are" : " is"} on watch behind it.`
             : "Start with the review items.",
@@ -123,9 +123,9 @@ function dashboardStateCopy(
           : `${counts.watch} position${counts.watch > 1 ? "s need" : " needs"} a look.`,
       body: topAttention
         ? topAttentionIsCadencePressure
-          ? `${cleanTicker(topAttention.ticker)} leads the list because ${topAttentionLabel} is overdue.${recentReview ? ` ${cleanTicker(recentReview.ticker)} was already cleared.` : ""}`
-          : `${cleanTicker(topAttention.ticker)} leads the list because ${topAttentionLabel} has the freshest pressure.${recentReview ? ` ${cleanTicker(recentReview.ticker)} was already cleared.` : ""}`
-        : "Nothing looks broken yet, but these names deserve a look.",
+          ? `${cleanTicker(topAttention.ticker)} first. ${topAttentionLabel} is overdue.${recentReview ? ` ${cleanTicker(recentReview.ticker)} cleared.` : ""}`
+          : `${cleanTicker(topAttention.ticker)} first. ${topAttentionLabel} has the freshest pressure.${recentReview ? ` ${cleanTicker(recentReview.ticker)} cleared.` : ""}`
+        : "Nothing looks broken. These names still need a look.",
     };
   }
 
@@ -135,12 +135,12 @@ function dashboardStateCopy(
       eyebrow: "Missing thesis",
       title:
         investorProfile === "hearsay_driven"
-          ? `${counts.missing} position${counts.missing > 1 ? "s still need" : " still needs"} a written reason.`
-          : `${counts.missing} position${counts.missing > 1 ? "s still need" : " still needs"} a written thesis.`,
+          ? `${counts.missing} position${counts.missing > 1 ? "s need" : " needs"} a reason.`
+          : `${counts.missing} position${counts.missing > 1 ? "s need" : " needs"} a thesis.`,
       body:
         investorProfile === "hearsay_driven"
-          ? "The app can see price and news, but not what matters to your story yet."
-          : "The app can see price and news, but not what matters to your thesis yet.",
+          ? "Price and news are visible. Your reason is not."
+          : "Price and news are visible. Your thesis is not.",
     };
   }
 
@@ -152,7 +152,7 @@ function dashboardStateCopy(
       ? `${cleanTicker(nextEarnings.ticker)} is the next likely decision point in ${nextEarnings.days_until === 0 ? "today" : nextEarnings.days_until === 1 ? "1 day" : `${nextEarnings.days_until} days`}.${recentReview ? ` ${cleanTicker(recentReview.ticker)} was just resolved.` : ""}`
       : recentReview
         ? `${cleanTicker(recentReview.ticker)} was just resolved. Nothing else needs attention right now.`
-        : "No live pressure right now. The next useful pass is tightening stale or weak theses.",
+        : "No live pressure. Tighten stale or weak theses next.",
   };
 }
 
@@ -495,10 +495,10 @@ export default function DashboardPage() {
   }, [holdings, thesesByHolding]);
   const thesisQualityHeadline =
     thesisQualityStats.missing > 0
-      ? `${thesisQualityStats.missing} ${thesisQualityStats.missing === 1 ? "position still runs" : "positions still run"} without a written thesis.`
+      ? `${thesisQualityStats.missing} ${thesisQualityStats.missing === 1 ? "position has" : "positions have"} no thesis yet.`
       : thesisQualityStats.review > 0
         ? `${thesisQualityStats.review} ${thesisQualityStats.review === 1 ? "thesis needs" : "theses need"} a fresh decision.`
-        : thesisQualityStats.weak > 0
+      : thesisQualityStats.weak > 0
         ? `${thesisQualityStats.weak} ${thesisQualityStats.weak === 1 ? "thesis is" : "theses are"} still too fuzzy.`
         : thesisQualityStats.stale > 0
           ? `${thesisQualityStats.stale} ${thesisQualityStats.stale === 1 ? "thesis is" : "theses are"} drifting stale.`
@@ -507,7 +507,7 @@ export default function DashboardPage() {
             : "Your written thinking looks sharp across the portfolio.";
   const thesisQualityDetail =
     thesisQualityStats.missing > 0
-      ? "Monitoring has nothing explicit to defend there yet."
+      ? "Monitoring cannot judge what is not written down."
       : thesisQualityStats.review > 0
         ? "These positions were tested and still need a verdict."
       : thesisQualityStats.weak > 0
@@ -869,7 +869,7 @@ export default function DashboardPage() {
                     <div className="space-y-1">
                       <p className="font-sans text-sm leading-relaxed text-foreground/85">
                         {missingThesisCount > 0
-                          ? `${missingThesisCount} ${missingThesisCount === 1 ? "position still needs" : "positions still need"} a written thesis.`
+                          ? `${missingThesisCount} ${missingThesisCount === 1 ? "position needs" : "positions need"} a thesis.`
                           : nearTermEarnings
                             ? `${cleanTicker(nearTermEarnings.ticker)} reports ${daysUntilLabel(nearTermEarnings.days_until)}.`
                             : "The near-term calendar is quiet."}
@@ -1045,7 +1045,7 @@ export default function DashboardPage() {
                     Live pressure
                   </p>
                   <p className="mt-1 font-sans text-sm text-foreground/80">
-                    Fresh evidence touching a written thesis.
+                    Fresh evidence on live theses.
                   </p>
                 </div>
                 <span className="border border-primary/20 bg-primary/6 px-2 py-1 font-mono text-[10px] uppercase tracking-[0.14em] text-primary/75">
