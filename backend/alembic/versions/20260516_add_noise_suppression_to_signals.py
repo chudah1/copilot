@@ -14,11 +14,23 @@ branch_labels = None
 depends_on = None
 
 
+def _column_names(table_name: str) -> set[str]:
+    bind = op.get_bind()
+    inspector = sa.inspect(bind)
+    return {column["name"] for column in inspector.get_columns(table_name)}
+
+
 def upgrade() -> None:
-    op.add_column("thesis_signals", sa.Column("last_fired_at", sa.DateTime(timezone=True), nullable=True))
-    op.add_column("thesis_signals", sa.Column("consecutive_ignores", sa.Integer(), nullable=False, server_default="0"))
+    columns = _column_names("thesis_signals")
+    if "last_fired_at" not in columns:
+        op.add_column("thesis_signals", sa.Column("last_fired_at", sa.DateTime(timezone=True), nullable=True))
+    if "consecutive_ignores" not in columns:
+        op.add_column("thesis_signals", sa.Column("consecutive_ignores", sa.Integer(), nullable=False, server_default="0"))
 
 
 def downgrade() -> None:
-    op.drop_column("thesis_signals", "consecutive_ignores")
-    op.drop_column("thesis_signals", "last_fired_at")
+    columns = _column_names("thesis_signals")
+    if "consecutive_ignores" in columns:
+        op.drop_column("thesis_signals", "consecutive_ignores")
+    if "last_fired_at" in columns:
+        op.drop_column("thesis_signals", "last_fired_at")
