@@ -17,6 +17,7 @@ from app.services.auth import hash_password
 from app.services.market_data import CompanyData, InsiderTransaction, NewsItem, TranscriptSignal, shortlist_qualitative_candidates
 from app.services.monitoring import (
     DEFAULT_PRICE_THRESHOLD_PCT,
+    MIN_PRICE_MOVE_ALERT_PCT,
     check_metric_watch_hints,
     check_price_move,
     generate_monitoring_candidates,
@@ -52,6 +53,7 @@ def test_metric_breach_accepts_string_thresholds():
 def test_price_move_detection():
     assert check_price_move(current_price=110.0, previous_price=100.0, threshold_pct=10.0) is True
     assert check_price_move(current_price=105.0, previous_price=100.0, threshold_pct=10.0) is False
+    assert check_price_move(current_price=100.4, previous_price=100.0, threshold_pct=0.0) is False
 
 
 def test_price_threshold_defaults_when_no_interpretation():
@@ -64,6 +66,11 @@ def test_price_threshold_defaults_when_no_interpretation():
 def test_price_threshold_accepts_string_threshold():
     interpretation = {"watch_hints": [{"kind": "price_move_pct", "threshold": "7.5"}]}
     assert get_price_watch_threshold(interpretation) == 7.5
+
+
+def test_price_threshold_ignores_non_meaningful_thresholds():
+    interpretation = {"watch_hints": [{"kind": "price_move_pct", "threshold": "0"}]}
+    assert get_price_watch_threshold(interpretation) == DEFAULT_PRICE_THRESHOLD_PCT
 
 
 def test_generate_monitoring_candidates_combines_quant_and_qualitative_signals():
@@ -169,6 +176,35 @@ def test_generate_monitoring_candidates_accepts_decimal_previous_price():
     assert len(candidates) == 1
     assert candidates[0]["event_type"] == "price_move"
     assert candidates[0]["evidence"]["previous_price"] == 100.0
+
+
+def test_generate_monitoring_candidates_skips_sub_one_percent_price_noise():
+    company_data = CompanyData(
+        ticker="AAPL",
+        name="Apple",
+        sector="Technology",
+        industry="Consumer Electronics",
+        current_price=100.4,
+        market_cap=None,
+        pe_ratio=None,
+        revenue_growth_yoy=None,
+        earnings_growth_yoy=None,
+        dividend_yield=None,
+        description="",
+        recent_news=[],
+        upcoming_earnings_date=None,
+        recent_earnings_surprise_pct=None,
+        news_items=[],
+        provider_payload={},
+    )
+
+    candidates = generate_monitoring_candidates(
+        {"watch_hints": [{"kind": "price_move_pct", "threshold": MIN_PRICE_MOVE_ALERT_PCT - 0.5}]},
+        company_data,
+        previous_price=100.0,
+    )
+
+    assert not any(candidate["event_type"] == "price_move" for candidate in candidates)
 
 
 def test_generate_monitoring_candidates_ignores_irrelevant_news():

@@ -82,6 +82,7 @@ def check_metric_watch_hints(
 
 
 DEFAULT_PRICE_THRESHOLD_PCT = 5.0
+MIN_PRICE_MOVE_ALERT_PCT = 1.0
 
 DEFAULT_WATCH_HINTS: list[dict[str, Any]] = [
     {
@@ -104,7 +105,7 @@ def get_price_watch_info(interpretation: dict[str, Any] | None, default: float =
     for hint in hints:
         if hint.get("kind") == "price_move_pct":
             threshold = _coerce_float(hint.get("threshold"))
-            if threshold is not None:
+            if threshold is not None and threshold >= MIN_PRICE_MOVE_ALERT_PCT:
                 return PriceWatchInfo(
                     threshold=threshold,
                     signal_id=hint.get("signal_id"),
@@ -118,7 +119,7 @@ def get_price_watch_threshold(interpretation: dict[str, Any] | None, default: fl
 
 
 def check_price_move(current_price: float, previous_price: float, threshold_pct: float = 10.0) -> bool:
-    if previous_price == 0:
+    if previous_price == 0 or threshold_pct < MIN_PRICE_MOVE_ALERT_PCT:
         return False
     pct_change = abs((current_price - float(previous_price)) / float(previous_price)) * 100
     return pct_change >= threshold_pct

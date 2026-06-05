@@ -24,7 +24,7 @@ export default function ResearchLandingPage() {
         transition={{ duration: 0.3 }}
         className="mx-auto w-full max-w-4xl space-y-6"
       >
-        <div className="product-panel product-panel-muted p-6 sm:p-8">
+        <div className="product-panel product-panel-muted relative z-20 overflow-visible p-6 sm:p-8">
           <div className="grid gap-6 lg:grid-cols-[minmax(0,1.3fr)_minmax(18rem,22rem)]">
             <div className="space-y-4">
               <div className="space-y-2">
@@ -39,11 +39,13 @@ export default function ResearchLandingPage() {
                 </p>
               </div>
 
-              <TickerSearch
-                value={query}
-                onChange={setQuery}
-                onSelect={(ticker) => router.push(`/research/${ticker}`)}
-              />
+              <div className="relative z-30">
+                <TickerSearch
+                  value={query}
+                  onChange={setQuery}
+                  onSelect={(ticker) => router.push(`/research/${ticker}`)}
+                />
+              </div>
             </div>
 
             <aside className="grid gap-3">
@@ -67,7 +69,7 @@ export default function ResearchLandingPage() {
           </div>
         </div>
 
-        <div className="grid gap-3 sm:grid-cols-2">
+        <div className="relative z-0 grid gap-3 sm:grid-cols-2">
           {BULLETS.map((bullet, i) => (
             <motion.div
               key={i}
