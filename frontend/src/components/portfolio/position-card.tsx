@@ -40,12 +40,12 @@ function cardStatusCopy(args: {
       eyebrow: "Missing",
       headline:
         investorProfile === "hearsay_driven"
-          ? "No written reason yet."
-          : "No written thesis yet.",
+          ? "No reason yet."
+          : "No thesis yet.",
       detail:
         investorProfile === "hearsay_driven"
-          ? "Add one so the story can actually be tracked."
-          : "Add one so the thesis can actually be tracked.",
+          ? "Write it so it can be tracked."
+          : "Write it so it can be tracked.",
       tone: "text-muted-foreground/70",
     };
   }
@@ -64,7 +64,7 @@ function cardStatusCopy(args: {
     return {
       eyebrow: "Watch",
       headline: `${assumptionLabel} is under pressure.`,
-      detail: pulseReason || "Nothing looks broken yet, but this position is no longer quiet.",
+      detail: pulseReason || "Not broken, but no longer quiet.",
       tone: "text-amber-700",
       subLabel: cadencePressure ? "Review cadence drifting" : null,
     };
@@ -75,9 +75,9 @@ function cardStatusCopy(args: {
       eyebrow: "Weak",
       headline:
         investorProfile === "hearsay_driven"
-          ? "The written reason is still too soft."
-          : "The written thesis is still too soft.",
-      detail: "It is still too fuzzy to trust under pressure.",
+          ? "This reason is too soft."
+          : "This thesis is too soft.",
+      detail: "Too vague to trust.",
       tone: "text-amber-700",
       subLabel: null,
     };
@@ -88,11 +88,11 @@ function cardStatusCopy(args: {
       eyebrow: "Stale",
       headline:
         investorProfile === "hearsay_driven"
-          ? "This reason is out of date."
-          : "This thesis is out of date.",
-      detail: `Last refreshed ${quality.daysOld}d ago, outside its ${quality.cadenceDays}d cadence.`,
+          ? "This reason is stale."
+          : "This thesis is stale.",
+      detail: `${quality.daysOld}d old. Cadence ${quality.cadenceDays}d.`,
       tone: "text-amber-700",
-      subLabel: "Review cadence drifting",
+      subLabel: "Cadence missed",
     };
   }
 
@@ -101,9 +101,9 @@ function cardStatusCopy(args: {
       eyebrow: "Workable",
       headline:
         investorProfile === "hearsay_driven"
-          ? "The written reason works, but still has soft edges."
-          : "The written thesis works, but still has soft edges.",
-      detail: "Usable now, but not yet crisp.",
+          ? "The reason works, but it is not sharp yet."
+          : "The thesis works, but it is not sharp yet.",
+      detail: "Usable now. Still needs tightening.",
       tone: "text-amber-700",
       subLabel: null,
     };
