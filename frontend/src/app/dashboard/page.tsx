@@ -355,7 +355,8 @@ export default function DashboardPage() {
   const { data: quarterlyReview = null } = useSWR<QuarterlyReviewCurrent>("/api/quarterly-review/current", fetcher);
   const { data: draftStatus = null, mutate: mutateDraftStatus } = useSWR<DraftStatus>("/api/portfolio/draft-status", fetcher);
   const { data: onboardingState = null } = useSWR<OnboardingState>("/api/onboarding/state", fetcher);
-  const copy = dashboardCopy(onboardingState?.investor_profile ?? null);
+  const investorProfile = onboardingState?.investor_profile ?? null;
+  const copy = dashboardCopy(investorProfile);
 
   // Live prices (updates in background every 60s)
   const { data: livePricesRaw } = useSWR<LivePrice[]>("/api/portfolio/live-prices", fetcher, {
@@ -495,7 +496,13 @@ export default function DashboardPage() {
   }, [holdings, thesesByHolding]);
   const thesisQualityHeadline =
     thesisQualityStats.missing > 0
-      ? `${thesisQualityStats.missing} ${thesisQualityStats.missing === 1 ? "position has" : "positions have"} no thesis yet.`
+      ? weakestHolding
+        ? investorProfile === "hearsay_driven"
+          ? `${cleanTicker(weakestHolding.ticker)} has no reason yet.`
+          : `${cleanTicker(weakestHolding.ticker)} has no thesis yet.`
+        : investorProfile === "hearsay_driven"
+          ? `${thesisQualityStats.missing} ${thesisQualityStats.missing === 1 ? "position has" : "positions have"} no reason yet.`
+          : `${thesisQualityStats.missing} ${thesisQualityStats.missing === 1 ? "position has" : "positions have"} no thesis yet.`
       : thesisQualityStats.review > 0
         ? `${thesisQualityStats.review} ${thesisQualityStats.review === 1 ? "thesis needs" : "theses need"} a fresh decision.`
       : thesisQualityStats.weak > 0
@@ -507,7 +514,9 @@ export default function DashboardPage() {
             : "Your written thinking looks sharp across the portfolio.";
   const thesisQualityDetail =
     thesisQualityStats.missing > 0
-      ? "Monitoring cannot judge what is not written down."
+      ? investorProfile === "hearsay_driven"
+        ? "Write the reason, then monitoring can judge it."
+        : "Write the thesis, then monitoring can judge it."
       : thesisQualityStats.review > 0
         ? "These positions were tested and still need a verdict."
       : thesisQualityStats.weak > 0
