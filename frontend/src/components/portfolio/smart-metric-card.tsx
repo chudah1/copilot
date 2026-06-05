@@ -33,6 +33,10 @@ const COLOR_MAP = {
 
 export function SmartMetricCard({ label, value, verdict, color, trend }: SmartMetricCardProps) {
   const c = COLOR_MAP[color];
+  const currentValue = Number.parseFloat(value.replace(/[^0-9.-]/g, ""));
+  const previousValue = trend ? Number.parseFloat(trend.previous.replace(/[^0-9.-]/g, "")) : Number.NaN;
+  const hasNumericTrend = Number.isFinite(currentValue) && Number.isFinite(previousValue);
+  const trendArrow = !hasNumericTrend ? null : currentValue > previousValue ? "↑" : currentValue < previousValue ? "↓" : "→";
 
   return (
     <Card className={c.border}>
@@ -40,9 +44,9 @@ export function SmartMetricCard({ label, value, verdict, color, trend }: SmartMe
         <p className={`text-[11px] font-semibold uppercase tracking-wide ${c.label}`}>{label}</p>
         <p className={`text-2xl font-bold mt-1 ${c.value}`}>{value}</p>
         <p className={`text-xs mt-1 ${c.verdict}`}>{verdict}</p>
-        {trend && (
+        {trend && trend.previous !== value && (
           <p className={`text-[11px] mt-1.5 ${trend.improving ? "text-emerald-700" : "text-red-600"}`}>
-            {trend.improving ? "↓" : "↑"} was {trend.previous} last week
+            {trendArrow ?? (trend.improving ? "↑" : "↓")} from {trend.previous} last week
           </p>
         )}
       </CardContent>

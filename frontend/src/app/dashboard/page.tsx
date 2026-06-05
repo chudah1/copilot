@@ -20,6 +20,8 @@ import { classifyThesisQuality } from "@/lib/thesis-quality";
 import { formatCurrency, formatPercent } from "@/lib/utils";
 import { OnboardingBanner } from "@/components/onboarding/onboarding-banner";
 import { QuickAddHolding } from "@/components/portfolio/quick-add-holding";
+import { SmartMetricCard } from "@/components/portfolio/smart-metric-card";
+import { SinceLastVisit } from "@/components/portfolio/since-last-visit";
 import { DigestCountdown } from "@/components/portfolio/digest-countdown";
 import { PositionCard, cleanTicker } from "@/components/portfolio/position-card";
 import { AttentionCard } from "@/components/portfolio/attention-card";
@@ -32,6 +34,7 @@ import type {
   LivePrice,
   OnboardingState,
   PortfolioSummary,
+  PortfolioTrend,
   Thesis,
   PortfolioPulse,
   QuarterlyReviewCurrent,
@@ -203,6 +206,19 @@ function dashboardStateCta(args: {
   return null;
 }
 
+function decisionDebtVerdict(args: {
+  missing: number;
+  weak: number;
+  unmonitored: number;
+}) {
+  const { missing, weak, unmonitored } = args;
+  if (unmonitored === 0) return "Everything watchable";
+  if (missing > 0 && weak > 0) return `${missing} missing · ${weak} weak`;
+  if (missing > 0) return `${missing} missing thesis${missing === 1 ? "" : "es"}`;
+  if (weak > 0) return `${weak} thesis${weak === 1 ? "" : "es"} too vague`;
+  return `${unmonitored} not watchable yet`;
+}
+
 function isRecentIsoDate(value: string | null | undefined, days: number) {
   if (!value) return false;
   const ts = new Date(value).getTime();
@@ -332,6 +348,7 @@ export default function DashboardPage() {
   // SWR queries
   const { data: holdings, error: holdingsError, mutate: mutateHoldings } = useSWR<Holding[]>("/api/portfolio/holdings", fetcher);
   const { data: summary, error: summaryError, mutate: mutateSummary } = useSWR<PortfolioSummary>("/api/portfolio/summary", fetcher);
+  const { data: trend = null } = useSWR<PortfolioTrend>("/api/portfolio/summary/trend", fetcher);
   const { data: currentTheses, error: thesesError, mutate: mutateTheses } = useSWR<Thesis[]>("/api/theses/current", fetcher);
   const { data: pulse, error: pulseError, mutate: mutatePulse } = useSWR<PortfolioPulse>("/api/portfolio/pulse", fetcher);
   const { data: upcomingEarnings = [] } = useSWR<UpcomingEarnings[]>("/api/portfolio/upcoming-earnings", fetcher, { fallbackData: [] });
@@ -397,7 +414,7 @@ export default function DashboardPage() {
   const displayTotalValue = liveTotalValue ?? summary?.total_value ?? 0;
   const livePnl = liveTotalValue != null && summary ? liveTotalValue - summary.total_cost : null;
   const livePnlPct = livePnl != null && summary && summary.total_cost > 0 ? (livePnl / summary.total_cost) * 100 : null;
-  
+
   const pulseByHolding = useMemo(() => {
     if (!pulse?.pulses) return {};
     return Object.fromEntries(pulse.pulses.map((p) => [p.holding_id, p]));
@@ -563,22 +580,10 @@ export default function DashboardPage() {
     ? recentReviewBannerCopy(recentReviewBanner, onboardingState?.investor_profile ?? null)
     : null;
   const shouldRenderOnboardingBanner = missingThesisCount === 0;
-  const holdingsCount = holdings?.length ?? 0;
-  const monitoredCount = summary?.theses_active ?? 0;
-  const monitoredCoverage =
-    holdingsCount > 0 ? Math.round((monitoredCount / holdingsCount) * 100) : 0;
-  const quietCount = useMemo(() => {
-    if (!holdings) return 0;
-    return holdings.filter((holding) => {
-      const thesis = thesesByHolding[holding.id];
-      if (!thesis) return false;
-      const pulse = pulseByHolding[holding.id];
-      if (pulse?.pulse_status === "review" || pulse?.pulse_status === "watch") return false;
-      const quality = classifyThesisQuality(thesis);
-      return quality.kind === "sharp" || quality.kind === "workable";
-    }).length;
-  }, [holdings, thesesByHolding, pulseByHolding]);
-  const totalAlertCount = needsAttention.length;
+  const recentEventCount = useMemo(
+    () => pulse?.pulses.reduce((s, p) => s + p.recent_event_count, 0) ?? 0,
+    [pulse],
+  );
 
   // Loading state
   const loading = !holdings && !holdingsError;
@@ -644,7 +649,9 @@ export default function DashboardPage() {
         </motion.div>
         {showAddForm && (
           <div className="w-full max-w-md text-left">
-            <QuickAddHolding onAdd={() => { setShowAddForm(false); void refresh(); }} />
+            <p className="font-sans text-sm text-muted-foreground mb-3">
+              Add your first position using the form in the positions list once you connect your broker, or connect a broker above to import automatically.
+            </p>
           </div>
         )}
       </div>
@@ -705,7 +712,7 @@ export default function DashboardPage() {
                   href="/dashboard/simulate"
                   className="border border-border/80 px-3 py-2 font-mono text-[10px] uppercase tracking-[0.16em] text-muted-foreground transition-colors hover:border-foreground/20 hover:text-foreground"
                 >
-                  Stress test
+                  Simulate trade
                 </Link>
                 <Link
                   href="/connect?return=dashboard"
@@ -713,18 +720,14 @@ export default function DashboardPage() {
                 >
                   Import data
                 </Link>
-                <button
-                  onClick={() => setShowAddForm((v) => !v)}
-                  className={`border px-3 py-2 font-mono text-[10px] uppercase tracking-[0.16em] transition-colors ${
-                    showAddForm
-                      ? "border-border/80 text-muted-foreground"
-                      : "border-primary/30 bg-primary/5 text-primary hover:border-primary/60"
-                  }`}
-                >
-                  {showAddForm ? "Cancel add" : "New position"}
-                </button>
               </div>
             </div>
+
+            {summary && (
+              <div className="mt-4">
+                <SinceLastVisit summary={summary} trend={trend} recentEventCount={recentEventCount} />
+              </div>
+            )}
 
             <div className="mt-6 grid gap-5 lg:grid-cols-[minmax(0,1fr)_minmax(17rem,22rem)]">
               <div className="space-y-3">
@@ -749,44 +752,67 @@ export default function DashboardPage() {
                   )}
                 </div>
 
-                <div className="grid gap-3 sm:grid-cols-3">
-                  <div className="border border-border/80 bg-background/75 p-4">
-                    <p className="font-mono text-[10px] uppercase tracking-[0.16em] text-muted-foreground">
-                      Written
-                    </p>
-                    <p className="mt-2 font-display text-[1.6rem] italic leading-none text-foreground">
-                      {monitoredCoverage}%
-                    </p>
-                    <p className="mt-2 font-sans text-xs leading-relaxed text-muted-foreground">
-                      {monitoredCount} of {holdingsCount} positions have a thesis on file.
-                    </p>
-                  </div>
-                  <div className="border border-border/80 bg-background/75 p-4">
-                    <p className="font-mono text-[10px] uppercase tracking-[0.16em] text-muted-foreground">
-                      Review
-                    </p>
-                    <p className="mt-2 font-display text-[1.6rem] italic leading-none text-foreground">
-                      {reviewCount > 0 ? reviewCount : totalAlertCount}
-                    </p>
-                    <p className="mt-2 font-sans text-xs leading-relaxed text-muted-foreground">
-                      {reviewCount > 0
-                        ? `${reviewCount} ${reviewCount === 1 ? "position needs" : "positions need"} a verdict.`
-                        : totalAlertCount > 0
-                          ? `${totalAlertCount} monitored positions are under watch.`
-                          : "No active pressure right now."}
-                    </p>
-                  </div>
-                  <div className="border border-border/80 bg-background/75 p-4">
-                    <p className="font-mono text-[10px] uppercase tracking-[0.16em] text-muted-foreground">
-                      Stable
-                    </p>
-                    <p className="mt-2 font-display text-[1.6rem] italic leading-none text-foreground">
-                      {quietCount}
-                    </p>
-                    <p className="mt-2 font-sans text-xs leading-relaxed text-muted-foreground">
-                      Positions with a usable thesis and no active pressure.
-                    </p>
-                  </div>
+                <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
+                  <SmartMetricCard
+                    label="Concentration"
+                    value={summary ? `${Math.round(summary.top_3_concentration_pct)}%` : "—"}
+                    verdict={summary && summary.top_3_concentration_pct >= 50 ? "Top 3 dominate" : "Spread looks fine"}
+                    color={summary && summary.top_3_concentration_pct >= 50 ? "amber" : "green"}
+                    trend={
+                      trend?.top_3_concentration_pct != null && summary
+                        ? {
+                            previous: `${Math.round(trend.top_3_concentration_pct)}%`,
+                            improving: summary.top_3_concentration_pct < trend.top_3_concentration_pct,
+                          }
+                        : null
+                    }
+                  />
+                  <SmartMetricCard
+                    label="Thesis coverage"
+                    value={summary ? `${Math.round(summary.thesis_coverage_pct)}%` : "—"}
+                    verdict={summary && summary.thesis_coverage_pct < 80 ? "Coverage incomplete" : "Coverage in place"}
+                    color={summary && summary.thesis_coverage_pct < 80 ? "amber" : "green"}
+                    trend={
+                      trend?.thesis_coverage_pct != null && summary
+                        ? {
+                            previous: `${Math.round(trend.thesis_coverage_pct)}%`,
+                            improving: summary.thesis_coverage_pct > trend.thesis_coverage_pct,
+                          }
+                        : null
+                    }
+                  />
+                  <SmartMetricCard
+                    label="Monitorable"
+                    value={summary ? `${Math.round(summary.monitorable_thesis_coverage_pct)}%` : "—"}
+                    verdict={summary && summary.monitorable_thesis_coverage_pct < 50 ? "Needs sharpening" : "Mostly watchable"}
+                    color={summary && summary.monitorable_thesis_coverage_pct >= 50 ? "green" : "amber"}
+                    trend={
+                      trend?.monitorable_pct != null && summary
+                        ? {
+                            previous: `${Math.round(trend.monitorable_pct)}%`,
+                            improving: summary.monitorable_thesis_coverage_pct > trend.monitorable_pct,
+                          }
+                        : null
+                    }
+                  />
+                  <SmartMetricCard
+                    label="Decision debt"
+                    value={summary ? String(summary.unmonitored_holdings_count) : "—"}
+                    verdict={summary ? decisionDebtVerdict({
+                      missing: thesisQualityStats.missing,
+                      weak: thesisQualityStats.weak,
+                      unmonitored: summary.unmonitored_holdings_count,
+                    }) : "—"}
+                    color="neutral"
+                    trend={
+                      trend?.unmonitored_count != null && summary
+                        ? {
+                            previous: String(trend.unmonitored_count),
+                            improving: summary.unmonitored_holdings_count < trend.unmonitored_count,
+                          }
+                        : null
+                    }
+                  />
                 </div>
               </div>
 
@@ -820,18 +846,14 @@ export default function DashboardPage() {
                 <div className="border border-border/80 bg-background/75 p-4">
                   <div className="flex items-start gap-3">
                     <BellRing className="mt-0.5 h-4 w-4 text-primary" />
-                    <div className="space-y-2">
-                      <p className="font-mono text-[10px] uppercase tracking-[0.16em] text-muted-foreground">
-                        Digest
-                      </p>
-                      {pulse?.next_digest_at ? (
-                        <DigestCountdown nextDigestAt={pulse.next_digest_at} />
-                      ) : (
-                        <p className="font-sans text-sm leading-relaxed text-foreground/80">
-                          Digest timing appears once monitoring is active.
+                    {pulse?.next_digest_at && (
+                      <div className="space-y-2">
+                        <p className="font-mono text-[10px] uppercase tracking-[0.16em] text-muted-foreground">
+                          Digest
                         </p>
-                      )}
-                    </div>
+                        <DigestCountdown nextDigestAt={pulse.next_digest_at} />
+                      </div>
+                    )}
                   </div>
                 </div>
 
@@ -845,9 +867,6 @@ export default function DashboardPage() {
                       <ShieldCheck className="mt-0.5 h-4 w-4 text-primary" />
                     )}
                     <div className="space-y-1">
-                      <p className="font-mono text-[10px] uppercase tracking-[0.16em] text-muted-foreground">
-                        Next up
-                      </p>
                       <p className="font-sans text-sm leading-relaxed text-foreground/85">
                         {missingThesisCount > 0
                           ? `${missingThesisCount} ${missingThesisCount === 1 ? "position still needs" : "positions still need"} a written thesis.`
@@ -861,9 +880,6 @@ export default function DashboardPage() {
 
                 <div className="border border-border/80 bg-background/75 p-4">
                   <div className="space-y-2">
-                      <p className="font-mono text-[10px] uppercase tracking-[0.16em] text-muted-foreground">
-                        Quality mix
-                      </p>
                     <div className="grid gap-2 sm:grid-cols-2">
                       <div className="flex items-center justify-between border border-border/60 bg-background/70 px-3 py-2">
                         <span className="font-sans text-xs text-foreground/80">Sharp</span>
@@ -1012,22 +1028,6 @@ export default function DashboardPage() {
         })()}
       </div>
 
-      {/* ── Quick add form ───────────────────────────────────────────── */}
-      <AnimatePresence>
-        {showAddForm && (
-          <motion.div
-            initial={{ opacity: 0, height: 0 }}
-            animate={{ opacity: 1, height: "auto" }}
-            exit={{ opacity: 0, height: 0 }}
-            transition={{ duration: 0.2 }}
-            className="overflow-hidden px-4 sm:px-8 pt-3"
-          >
-            <div className="product-panel p-5">
-              <QuickAddHolding onAdd={() => { setShowAddForm(false); void refresh(); }} />
-            </div>
-          </motion.div>
-        )}
-      </AnimatePresence>
 
       <AnimatePresence>
         {needsAttention.length > 0 && (
@@ -1085,14 +1085,34 @@ export default function DashboardPage() {
                 </p>
                 <span className="font-mono text-[10px] text-primary/50">({holdings.length})</span>
               </div>
-              <p className="mt-1 font-sans text-sm text-foreground/80">
-                Sorted by urgency, then value.
-              </p>
             </div>
-            <p className="hidden font-mono text-[10px] uppercase tracking-[0.12em] text-muted-foreground/40 sm:block">
-              Urgency first
-            </p>
+            <div className="flex flex-wrap items-center gap-3">
+              <button
+                onClick={() => setShowAddForm((v) => !v)}
+                className={`border px-3 py-2 font-mono text-[10px] uppercase tracking-[0.16em] transition-colors ${
+                  showAddForm
+                    ? "border-border/80 text-muted-foreground"
+                    : "border-primary/30 bg-primary/5 text-primary hover:border-primary/60"
+                }`}
+              >
+                {showAddForm ? "Cancel" : "+ Add"}
+              </button>
+            </div>
           </div>
+
+          <AnimatePresence>
+            {showAddForm && (
+              <motion.div
+                initial={{ opacity: 0, height: 0 }}
+                animate={{ opacity: 1, height: "auto" }}
+                exit={{ opacity: 0, height: 0 }}
+                transition={{ duration: 0.2 }}
+                className="overflow-hidden mb-4"
+              >
+                <QuickAddHolding onAdd={() => { setShowAddForm(false); void refresh(); }} />
+              </motion.div>
+            )}
+          </AnimatePresence>
 
           <div className="grid grid-cols-1 gap-3 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 2xl:grid-cols-5">
             {sortedHoldings.map((h, i) => (
