@@ -807,7 +807,7 @@ export default function DashboardPage() {
                     }
                   />
                   <SmartMetricCard
-                    label="Monitorable"
+                    label="Watchable"
                     value={summary ? `${Math.round(summary.monitorable_thesis_coverage_pct)}%` : "—"}
                     verdict={summary && summary.monitorable_thesis_coverage_pct < 50 ? "Needs sharpening" : "Mostly watchable"}
                     color={summary && summary.monitorable_thesis_coverage_pct >= 50 ? "green" : "amber"}
@@ -821,7 +821,7 @@ export default function DashboardPage() {
                     }
                   />
                   <SmartMetricCard
-                    label="Decision debt"
+                    label="Blind spots"
                     value={summary ? String(summary.unmonitored_holdings_count) : "—"}
                     verdict={summary ? decisionDebtVerdict({
                       missing: thesisQualityStats.missing,
