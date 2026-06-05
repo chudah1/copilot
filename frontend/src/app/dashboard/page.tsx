@@ -9,7 +9,6 @@ import {
   BellRing,
   CalendarClock,
   CircleAlert,
-  FilePenLine,
   ShieldCheck,
 } from "lucide-react";
 import useSWR from "swr";
@@ -885,20 +884,16 @@ export default function DashboardPage() {
 
                 <div className="border border-border/80 bg-background/75 p-4">
                   <div className="flex items-start gap-3">
-                    {missingThesisCount > 0 ? (
-                      <FilePenLine className="mt-0.5 h-4 w-4 text-primary" />
-                    ) : nearTermEarnings ? (
+                    {nearTermEarnings ? (
                       <CalendarClock className="mt-0.5 h-4 w-4 text-primary" />
                     ) : (
                       <ShieldCheck className="mt-0.5 h-4 w-4 text-primary" />
                     )}
                     <div className="space-y-1">
                       <p className="font-sans text-sm leading-relaxed text-foreground/85">
-                        {missingThesisCount > 0
-                          ? `${missingThesisCount} ${missingThesisCount === 1 ? "position needs" : "positions need"} a thesis.`
-                          : nearTermEarnings
-                            ? `${cleanTicker(nearTermEarnings.ticker)} reports ${daysUntilLabel(nearTermEarnings.days_until)}.`
-                            : "The near-term calendar is quiet."}
+                        {nearTermEarnings
+                          ? `${cleanTicker(nearTermEarnings.ticker)} reports ${daysUntilLabel(nearTermEarnings.days_until)}.`
+                          : "The near-term calendar is quiet."}
                       </p>
                     </div>
                   </div>
