@@ -260,18 +260,18 @@ export default function ResearchPage() {
               <div className="grid gap-3 sm:grid-cols-3">
                 <div className="product-panel p-4">
                   <p className="font-mono text-[9px] uppercase tracking-[0.18em] text-muted-foreground/60">
-                    Risks flagged
+                    Risk groups
                   </p>
                   <p className="mt-2 font-display text-[1.5rem] italic leading-none text-foreground">
-                    {result.key_risks.length}
+                    {result.risk_groups.length}
                   </p>
                 </div>
                 <div className="product-panel p-4">
                   <p className="font-mono text-[9px] uppercase tracking-[0.18em] text-muted-foreground/60">
-                    Blind spots
+                    Source notes
                   </p>
                   <p className="mt-2 font-display text-[1.5rem] italic leading-none text-foreground">
-                    {result.blind_spots.length > 0 ? result.blind_spots.length : "None flagged"}
+                    {result.source_notes.length}
                   </p>
                 </div>
                 <div className="product-panel p-4">
@@ -298,23 +298,32 @@ export default function ResearchPage() {
               </div>
             </motion.div>
 
-            {/* Key risks */}
+            {/* Risk groups */}
             <motion.div initial={{ opacity: 0, y: 6 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: 0.12 }}>
               <div className="product-panel p-5">
                 <p className="font-mono text-[9px] uppercase tracking-[0.25em] text-muted-foreground/60 mb-3 flex items-center gap-2">
                   <AlertTriangle className="w-3 h-3" />
-                  Key Risks
+                  Risk Map
                 </p>
-                <ul className="space-y-3">
-                  {result.key_risks.map((risk, i) => (
-                    <li key={i} className="flex gap-3">
-                      <span className="font-mono text-[10px] text-muted-foreground/40 tabular-nums shrink-0 mt-0.5 w-4">
-                        {String(i + 1).padStart(2, "0")}
-                      </span>
-                      <span className="font-sans text-sm text-foreground/85 leading-relaxed">{risk}</span>
-                    </li>
+                <div className="grid gap-3 md:grid-cols-2">
+                  {result.risk_groups.map((group) => (
+                    <div key={group.category} className="border border-border/60 bg-background/70 p-4 space-y-3">
+                      <p className="font-mono text-[10px] uppercase tracking-[0.16em] text-muted-foreground">
+                        {group.category}
+                      </p>
+                      <ul className="space-y-2.5">
+                        {group.items.map((risk, i) => (
+                          <li key={`${group.category}:${i}`} className="flex gap-3">
+                            <span className="font-mono text-[10px] text-muted-foreground/40 tabular-nums shrink-0 mt-0.5 w-4">
+                              {String(i + 1).padStart(2, "0")}
+                            </span>
+                            <span className="font-sans text-sm text-foreground/85 leading-relaxed">{risk}</span>
+                          </li>
+                        ))}
+                      </ul>
+                    </div>
                   ))}
-                </ul>
+                </div>
               </div>
             </motion.div>
 
@@ -339,6 +348,42 @@ export default function ResearchPage() {
                     No clear blind spot flagged. Add your own case next time for a sharper read.
                   </p>
                 )}
+              </div>
+            </motion.div>
+
+            {/* Source notes */}
+            <motion.div initial={{ opacity: 0, y: 6 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: 0.23 }}>
+              <div className="product-panel p-5">
+                <p className="font-mono text-[9px] uppercase tracking-[0.25em] text-muted-foreground/60 mb-3">
+                  Source Notes
+                </p>
+                <div className="space-y-3">
+                  {result.source_notes.map((note, i) => (
+                    <div key={`${note.label}:${i}`} className="border border-border/60 bg-background/70 p-3">
+                      <div className="flex flex-wrap items-center gap-2">
+                        <p className="font-mono text-[10px] uppercase tracking-[0.16em] text-foreground/75">
+                          {note.label}
+                        </p>
+                        <span className="font-mono text-[9px] uppercase tracking-[0.14em] text-muted-foreground/70">
+                          {note.source}
+                        </span>
+                      </div>
+                      <p className="mt-2 font-sans text-sm text-foreground/85 leading-relaxed">
+                        {note.detail}
+                      </p>
+                      {note.url && (
+                        <a
+                          href={note.url}
+                          target="_blank"
+                          rel="noreferrer"
+                          className="mt-2 inline-block font-mono text-[10px] uppercase tracking-[0.14em] text-primary/70 underline underline-offset-2"
+                        >
+                          Open source ↗
+                        </a>
+                      )}
+                    </div>
+                  ))}
+                </div>
               </div>
             </motion.div>
 
@@ -372,14 +417,28 @@ export default function ResearchPage() {
                   Next step
                 </p>
                 <p className="font-display italic text-[1.3rem] text-foreground leading-snug">
-                  {isAuthenticated ? `If you buy ${ticker}, track it in the dashboard` : `Monitor ${ticker} once you buy`}
+                  {isAuthenticated
+                    ? `You've seen the bear case. If you buy ${ticker}, we watch these signals for you.`
+                    : `You've seen the bear case. If you buy ${ticker}, we watch these signals for you.`}
                 </p>
               </div>
               <p className="font-sans text-sm text-muted-foreground leading-relaxed">
                 {isAuthenticated
-                  ? "Write the thesis once it becomes a position."
-                  : "We&apos;ll alert you when something threatens or confirms the thesis."}
+                  ? "Turn the idea into a position, write the thesis, and the monitoring loop takes over."
+                  : "penKeep is strongest after the buy: thesis written, signals armed, alerts only when the case actually moves."}
               </p>
+              {result.candidate_signals.length > 0 && (
+                <div className="grid gap-2 sm:grid-cols-2">
+                  {result.candidate_signals.slice(0, 4).map((signal, i) => (
+                    <div key={`${signal.label}:${i}`} className="border border-primary/20 bg-background/75 px-3 py-2.5">
+                      <p className="font-sans text-sm text-foreground">{signal.label}</p>
+                      <p className="mt-1 font-sans text-xs leading-relaxed text-muted-foreground">
+                        {signal.rationale || (signal.signal_type === "news_watch" ? "Qualitative watch." : "Numeric watch.")}
+                      </p>
+                    </div>
+                  ))}
+                </div>
+              )}
               <div className="flex gap-2 pt-1">
                 {isAuthenticated ? (
                   <Button onClick={() => router.push("/dashboard")} className="flex-1">

@@ -128,6 +128,42 @@ async def test_market_context_passed_to_generator():
     assert call_kwargs.kwargs.get("company_data") is mock_company_data
 
 
+@pytest.mark.asyncio
+async def test_result_derives_risk_groups_and_source_notes_from_context():
+    from types import SimpleNamespace
+
+    mock_result = _make_counter_output(
+        key_risks=[
+            "Valuation leaves no margin of safety",
+            "Competition could pressure margins",
+            "Tariff exposure could hit demand",
+        ]
+    )
+    mock_company_data = SimpleNamespace(
+        current_price=420.0,
+        pe_ratio=32.5,
+        revenue_growth_yoy=0.18,
+        earnings_growth_yoy=0.22,
+        recent_earnings_surprise_pct=7.0,
+        news_items=[],
+        earnings_call=None,
+    )
+
+    with patch("app.services.stress_test._generate", new_callable=AsyncMock, return_value=mock_result):
+        result = await run_stress_test(
+            ticker="MSFT",
+            draft_thesis="AI adoption keeps demand high.",
+            company_data=mock_company_data,
+        )
+
+    assert result.risk_groups
+    assert any(group.category == "Financial risk" for group in result.risk_groups)
+    assert any(group.category == "Competitive risk" for group in result.risk_groups)
+    assert result.source_notes
+    assert any(note.label == "Valuation" for note in result.source_notes)
+    assert any(note.label == "Revenue growth" for note in result.source_notes)
+
+
 # --- helpers ---
 
 def _make_counter_output(

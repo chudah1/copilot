@@ -46,11 +46,22 @@ export interface StressTestResult {
   ticker: string;
   bear_case: string;
   key_risks: string[];
+  risk_groups: Array<{
+    category: string;
+    items: string[];
+  }>;
   blind_spots: string[];
   what_to_watch: string[];
   current_price: number | null;
   currency: string;
   cached: boolean;
+  source_notes: Array<{
+    label: string;
+    detail: string;
+    source: string;
+    url: string | null;
+  }>;
+  candidate_signals: CandidateSignal[];
 }
 
 export interface ThesisAssistResponse {

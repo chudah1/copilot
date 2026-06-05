@@ -1675,6 +1675,10 @@ Output valid JSON with this exact structure:
 {{
     "bear_case": "2-3 sentences — the strongest argument against buying {ticker} right now.",
     "key_risks": ["risk1", "risk2", "risk3"],
+    "risk_groups": [
+        {{"category": "Business risk", "items": ["risk1", "risk2"]}},
+        {{"category": "Financial risk", "items": ["risk3"]}}
+    ],
     "blind_spots": ["blind_spot1", "blind_spot2"],
     "what_to_watch": ["signal1", "signal2", "signal3"],
     "candidate_signals": [
@@ -1686,6 +1690,7 @@ Output valid JSON with this exact structure:
 Requirements:
 - bear_case: specific, grounded in the context provided — reference valuation, growth rates, or news where available
 - key_risks: 3-5 concrete, falsifiable risks — reference actual metrics from the context where possible
+- risk_groups: group the risks into 2-4 clear buckets such as Business risk, Competitive risk, Financial risk, Macro risk, or Management risk
 - blind_spots: 2-3 assumptions the thesis makes or ignores (omit if no thesis provided)
 - what_to_watch: 2-4 prose signals — each must name the metric, the threshold that signals a problem, and when to check it (use actual dates where available). Example: "If revenue growth falls below 8% at next earnings (~2025-07-24), thesis is at risk."
 - candidate_signals: 2-4 STRUCTURED, monitorable versions of what_to_watch. signal_type MUST be one of: "price_move", "revenue_growth", "earnings_growth" (NUMERIC), or "news_watch" (QUALITATIVE).
@@ -1757,12 +1762,21 @@ def _coalesce_float(value: Any) -> float | None:
 
 
 def _parse_stress_test_output(data: dict) -> "StressTestOutput":
-    from app.services.stress_test import StressTestOutput
+    from app.services.stress_test import StressTestOutput, StressTestRiskGroup
 
     bear_case = data.get("bear_case") or "Valuation risk not addressed."
+    risk_groups: list[StressTestRiskGroup] = []
+    for group in (data.get("risk_groups") or [])[:4]:
+        if not isinstance(group, dict):
+            continue
+        category = str(group.get("category") or "").strip()
+        items = [str(item) for item in (group.get("items") or []) if str(item).strip()][:4]
+        if category and items:
+            risk_groups.append(StressTestRiskGroup(category=category, items=items))
     return StressTestOutput(
         bear_case=bear_case,
         key_risks=[str(r) for r in (data.get("key_risks") or []) if str(r).strip()][:5],
+        risk_groups=risk_groups,
         blind_spots=[str(b) for b in (data.get("blind_spots") or []) if str(b).strip()][:3],
         what_to_watch=[str(w) for w in (data.get("what_to_watch") or []) if str(w).strip()][:4],
         candidate_signals=_parse_candidate_signals(data.get("candidate_signals")),
@@ -1770,7 +1784,7 @@ def _parse_stress_test_output(data: dict) -> "StressTestOutput":
 
 
 def _fallback_stress_test(ticker: str, draft_thesis: str | None) -> "StressTestOutput":
-    from app.services.stress_test import CandidateSignal, StressTestOutput
+    from app.services.stress_test import CandidateSignal, StressTestOutput, StressTestRiskGroup
 
     return StressTestOutput(
         bear_case=(
@@ -1781,6 +1795,11 @@ def _fallback_stress_test(ticker: str, draft_thesis: str | None) -> "StressTestO
             "Valuation may leave little margin of safety",
             "Macro headwinds could hit the sector",
             "Execution risk if growth thesis is unproven",
+        ],
+        risk_groups=[
+            StressTestRiskGroup(category="Financial risk", items=["Valuation may leave little margin of safety"]),
+            StressTestRiskGroup(category="Macro risk", items=["Macro headwinds could hit the sector"]),
+            StressTestRiskGroup(category="Business risk", items=["Execution risk if growth thesis is unproven"]),
         ],
         blind_spots=(
             ["The thesis doesn't specify what would make you sell"]

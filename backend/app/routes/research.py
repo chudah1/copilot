@@ -28,9 +28,12 @@ async def stress_test(request: Request, body: StressTestRequest):
         ticker=result.ticker,
         bear_case=result.bear_case,
         key_risks=result.key_risks,
+        risk_groups=result.risk_groups,
         blind_spots=result.blind_spots,
         what_to_watch=result.what_to_watch,
         current_price=result.current_price,
         currency=currency,
         cached=result.cached,
+        source_notes=result.source_notes,
+        candidate_signals=result.candidate_signals,
     )

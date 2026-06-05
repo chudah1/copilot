@@ -201,15 +201,43 @@ class StressTestRequest(BaseModel):
     draft_thesis: str | None = None
 
 
+class StressTestRiskGroupResponse(BaseModel):
+    category: str
+    items: list[str]
+    model_config = {"from_attributes": True}
+
+
+class StressTestSourceNoteResponse(BaseModel):
+    label: str
+    detail: str
+    source: str
+    url: str | None = None
+    model_config = {"from_attributes": True}
+
+
+class StressTestCandidateSignalResponse(BaseModel):
+    signal_type: str
+    label: str
+    threshold_pct: float = 0.0
+    rationale: str = ""
+    operator: str | None = None
+    watch_for: str | None = None
+    direction: str | None = None
+    model_config = {"from_attributes": True}
+
+
 class StressTestResponse(BaseModel):
     ticker: str
     bear_case: str
     key_risks: list[str]
+    risk_groups: list[StressTestRiskGroupResponse] = []
     blind_spots: list[str]
     what_to_watch: list[str]
     current_price: float | None
     currency: str = "USD"
     cached: bool
+    source_notes: list[StressTestSourceNoteResponse] = []
+    candidate_signals: list[StressTestCandidateSignalResponse] = []
 
 
 class InvalidateThesisRequest(BaseModel):
