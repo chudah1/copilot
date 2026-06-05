@@ -123,9 +123,6 @@ export function AttentionCard({ holding, pulse, investorProfile, index }: Attent
               Checked recently
             </p>
           )}
-          <p className="font-mono text-[10px] uppercase tracking-[0.14em] text-primary/70">
-            Open →
-          </p>
         </div>
       </Link>
     </motion.div>
