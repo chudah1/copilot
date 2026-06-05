@@ -197,7 +197,11 @@ export function PositionCard({
     thesis,
     investorProfile,
   });
-  const showQualityChip = hasThesis && qualityChipLabel.toLowerCase() !== statusCopy.eyebrow.toLowerCase();
+  const hasLivePulse = pulse?.pulse_status === "review" || pulse?.pulse_status === "watch";
+  const showQualityChip =
+    hasThesis &&
+    !hasLivePulse &&
+    qualityChipLabel.toLowerCase() !== statusCopy.eyebrow.toLowerCase();
 
   return (
     <motion.div
