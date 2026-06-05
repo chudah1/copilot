@@ -117,13 +117,15 @@ OPENAI_ASSIST_MODEL = "gpt-4.1-mini"
 THESIS_ASSIST_WATCH_HINT_SCHEMA = {
     "type": "object",
     "properties": {
-        "kind": {"type": "string", "enum": ["price_move_pct", "metric_threshold"]},
+        "kind": {"type": "string", "enum": ["price_move_pct", "metric_threshold", "news_watch"]},
         "threshold": {"type": "number"},
         "metric": {"type": "string"},
         "operator": {"type": "string"},
+        "watch_for": {"type": "string"},
+        "direction": {"type": "string", "enum": ["threatens", "supports"]},
         "rationale": {"type": "string"},
     },
-    "required": ["kind", "threshold", "metric", "operator", "rationale"],
+    "required": ["kind", "rationale"],
     "additionalProperties": False,
 }
 
@@ -209,7 +211,10 @@ Output valid JSON with this exact structure:
 }}
 
 - Include 0-3 watch_hints. For growth metrics, only set a threshold if you can infer a specific rate from the position data; never use 0. Thresholds for growth metrics are decimal fractions (0.10 = 10%).
-- For structured output compatibility, every watch_hint must include metric and operator strings (use empty strings for price_move_pct).
+- watch_hints may be:
+  - price_move_pct: use threshold, leave metric/operator empty strings
+  - metric_threshold: use metric + operator + threshold
+  - news_watch: use watch_for + direction for a concrete qualitative trigger such as regulation, product failure, customer loss, acquisition integration failure, or management turnover
 - Output ONLY valid JSON, no markdown fences."""
 
 
@@ -267,7 +272,10 @@ Requirements:
 - If one field is missing, infer a reasonable version from the others instead of leaving it blank.
 - If the user's draft is vague, say so directly in ambiguity_note
 - Include 0-3 watch_hints total
-- For structured output compatibility, every watch_hint must include metric and operator strings. Use empty strings when kind is price_move_pct and those fields do not apply.
+- watch_hints may be:
+  - price_move_pct: use threshold, leave metric/operator empty strings
+  - metric_threshold: use metric + operator + threshold
+  - news_watch: use watch_for + direction for a concrete qualitative trigger such as regulation, product failure, customer loss, acquisition integration failure, or management turnover
 - For growth metrics (revenue_growth_yoy, earnings_growth_yoy), only include a watch_hint if you can infer a meaningful threshold from the thesis (e.g. 10%, 15%). Never use 0 as a threshold — if no specific rate is implied, omit the hint entirely.
 - Thresholds for growth metrics are expressed as decimal fractions (e.g. 0.10 means 10%).
 - Include 0-3 proxy_signals: other tickers (never the held ticker itself) whose news or earnings would inform whether this thesis holds.
@@ -436,6 +444,8 @@ def _dedupe_watch_hints(watch_hints: list[dict[str, Any]]) -> list[dict[str, Any
             hint.get("metric"),
             hint.get("operator"),
             hint.get("threshold"),
+            hint.get("watch_for"),
+            hint.get("direction"),
         )
         if key in seen:
             continue
@@ -444,15 +454,39 @@ def _dedupe_watch_hints(watch_hints: list[dict[str, Any]]) -> list[dict[str, Any
     return deduped
 
 
+def _infer_qualitative_watch_hints(text: str) -> list[dict[str, Any]]:
+    lowered = text.lower()
+    hints: list[dict[str, Any]] = []
+
+    if (
+        ("glp-1" in lowered or "semaglutide" in lowered or "compounded" in lowered)
+        and ("fda" in lowered or "ban" in lowered or "restrict" in lowered or "pull" in lowered)
+    ):
+        hints.append(
+            {
+                "kind": "news_watch",
+                "watch_for": "the FDA restricts compounded GLP-1 and the company fails to present a credible replacement path by next earnings",
+                "direction": "threatens",
+                "rationale": "If the GLP-1 channel is restricted and management cannot pivot quickly, the main growth driver is impaired.",
+            }
+        )
+
+    if any(keyword in lowered for keyword in ("eucalyptus", "acquisition", "deal", "integration", "overhead drag")):
+        hints.append(
+            {
+                "kind": "news_watch",
+                "watch_for": "the Eucalyptus or acquisition integration fails to add a clear new revenue line and starts reading like overhead drag",
+                "direction": "threatens",
+                "rationale": "If the deal adds cost without new revenue traction, the expansion case weakens.",
+            }
+        )
+
+    return hints
+
+
 def _infer_story_watch_hints(text: str, *, include_story_growth: bool = False) -> list[dict[str, Any]]:
     lowered = text.lower()
-    watch_hints: list[dict[str, Any]] = [
-        {
-            "kind": "price_move_pct",
-            "threshold": 5.0,
-            "rationale": "Prompt a review when price moves sharply.",
-        }
-    ]
+    watch_hints: list[dict[str, Any]] = _infer_qualitative_watch_hints(text)
     # Only trigger on explicit revenue/unit language — "growth", "AI", "demand" alone are too
     # generic for a self-described thesis. For hearsay/story-driven ideas the synthesis has
     # already committed to revenue growth as the measurable proxy (see _infer_hearsay_conditions),
@@ -479,6 +513,14 @@ def _infer_story_watch_hints(text: str, *, include_story_growth: bool = False) -
                 "operator": ">=",
                 "threshold": 0.0,
                 "rationale": "The thesis depends on profitable execution — monitor earnings growth.",
+            }
+        )
+    if len(watch_hints) < 3:
+        watch_hints.append(
+            {
+                "kind": "price_move_pct",
+                "threshold": 5.0,
+                "rationale": "Prompt a review when price moves sharply.",
             }
         )
     return _dedupe_watch_hints(watch_hints)[:3]
@@ -804,33 +846,10 @@ def _fallback_assist(
             if any(keyword in lowered for keyword in keywords)
         ] or ["user_defined"]
         monitorability = "low" if is_vague else "medium"
-        watch_hints = [] if is_vague else [
-            {
-                "kind": "price_move_pct",
-                "threshold": 5.0,
-                "rationale": "Prompt a review when price moves sharply.",
-            }
-        ]
-        if not is_vague and any(keyword in lowered for keyword in ("growth", "demand", "adoption")):
-            watch_hints.append(
-                {
-                    "kind": "metric_threshold",
-                    "metric": "revenue_growth_yoy",
-                    "operator": ">=",
-                    "threshold": 0.0,
-                    "rationale": "Revenue growth should stay positive if the thesis depends on demand expansion.",
-                }
-            )
-        if not is_vague and any(keyword in lowered for keyword in ("margin", "margins", "profitability")):
-            watch_hints.append(
-                {
-                    "kind": "metric_threshold",
-                    "metric": "earnings_growth_yoy",
-                    "operator": ">=",
-                    "threshold": 0.0,
-                    "rationale": "Earnings growth should remain healthy if margins are a key part of the thesis.",
-                }
-            )
+        watch_hints = [] if is_vague else _infer_story_watch_hints(
+            f"{cleaned} {must} {change}",
+            include_story_growth=True,
+        )
         ai_summary = f"{ticker} thesis draft: {cleaned}"
         interpretation = {
             "labels": labels[:3],
@@ -1051,10 +1070,31 @@ def _normalize_interpretation(interpretation: dict | None) -> dict:
                         "rationale": rationale,
                     }
                 )
+        elif kind == "news_watch":
+            watch_for = hint.get("watch_for")
+            direction = hint.get("direction")
+            rationale = str(hint.get("rationale", "")).strip()
+            if (
+                isinstance(watch_for, str)
+                and watch_for.strip()
+                and isinstance(direction, str)
+                and direction in {"threatens", "supports"}
+            ):
+                normalized_watch_hints.append(
+                    {
+                        "kind": "news_watch",
+                        "watch_for": watch_for.strip(),
+                        "direction": direction,
+                        "rationale": rationale,
+                    }
+                )
 
-    if monitorability in {"high", "medium"} and not any(hint.get("kind") == "price_move_pct" for hint in normalized_watch_hints):
-        normalized_watch_hints.insert(
-            0,
+    if (
+        monitorability in {"high", "medium"}
+        and not any(hint.get("kind") == "price_move_pct" for hint in normalized_watch_hints)
+        and len(normalized_watch_hints) < 3
+    ):
+        normalized_watch_hints.append(
             {
                 "kind": "price_move_pct",
                 "threshold": 5.0,

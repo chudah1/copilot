@@ -77,5 +77,14 @@ export function describeWatchHint(
     return `Review if ${label} drifts away from ${thresholdText}.`;
   }
 
+  if (
+    hint.kind === "news_watch" &&
+    typeof hint.watch_for === "string" &&
+    hint.watch_for.trim()
+  ) {
+    const watchFor = hint.watch_for.trim().replace(/[.]+$/, "");
+    return `Review if ${watchFor}.`;
+  }
+
   return null;
 }

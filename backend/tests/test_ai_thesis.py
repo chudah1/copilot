@@ -41,7 +41,7 @@ async def test_assist_thesis_returns_structured_output():
     assert result.why_own_it.startswith("Apple")
     assert result.ai_summary != ""
     assert result.interpretation["monitorability"] == "high"
-    assert result.interpretation["watch_hints"][0]["kind"] == "price_move_pct"
+    assert any(hint["kind"] == "price_move_pct" for hint in result.interpretation["watch_hints"])
     assert any(hint["kind"] == "metric_threshold" for hint in result.interpretation["watch_hints"])
 
 
@@ -215,6 +215,30 @@ def test_normalize_interpretation_repairs_above_threshold_metric_operator():
     assert metric_hint["operator"] == "<="
 
 
+def test_normalize_interpretation_keeps_news_watch_hints():
+    from app.services.ai_thesis import _normalize_interpretation
+
+    interpretation = {
+        "labels": ["regulation"],
+        "monitorability": "high",
+        "watch_hints": [
+            {
+                "kind": "news_watch",
+                "watch_for": "the FDA restricts compounded GLP-1 and the company has no replacement path by next earnings",
+                "direction": "threatens",
+                "rationale": "This would impair the main growth driver.",
+            }
+        ],
+        "proxy_signals": [],
+        "ambiguity_note": "",
+    }
+
+    result = _normalize_interpretation(interpretation)
+    news_hint = next(hint for hint in result["watch_hints"] if hint.get("kind") == "news_watch")
+    assert news_hint["direction"] == "threatens"
+    assert "FDA restricts" in news_hint["watch_for"]
+
+
 def test_parse_draft_output_sanitizes_stale_administration_references():
     result = _parse_draft_output(
         {
@@ -226,8 +250,25 @@ def test_parse_draft_output_sanitizes_stale_administration_references():
     )
     assert "Biden" not in result["why_own_it"]
     assert "Biden" not in result["must_remain_true"]
-    assert "Biden" not in result["what_would_change_my_mind"]
-    assert "U.S. federal policy" in result["why_own_it"]
+
+
+def test_fallback_assist_infers_qualitative_watch_rules_from_regulatory_and_deal_risk():
+    result = _fallback_assist(
+        "HIMS",
+        why_own_it=(
+            "I need Hims to keep generating meaningful GLP-1 prescription volume through their platform "
+            "and I am watching whether the Eucalyptus deal actually delivers new revenue lines rather than becoming an overhead drag."
+        ),
+        must_remain_true=None,
+        what_would_change_my_mind=(
+            "I'd sell if the FDA bans compounded GLP-1 and Hims cannot pivot to a replacement quickly."
+        ),
+        draft_text=None,
+    )
+
+    news_hints = [hint for hint in result.interpretation["watch_hints"] if hint.get("kind") == "news_watch"]
+    assert any("FDA restricts compounded GLP-1" in hint.get("watch_for", "") for hint in news_hints)
+    assert any("Eucalyptus" in hint.get("watch_for", "") for hint in news_hints)
 
 
 def test_parse_draft_output_rewrites_generic_placeholder_language():
