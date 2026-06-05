@@ -494,6 +494,9 @@ export default function DashboardPage() {
         return (b.current_value ?? 0) - (a.current_value ?? 0);
       })[0] ?? null;
   }, [holdings, thesesByHolding]);
+  const weakestQuality = weakestHolding
+    ? classifyThesisQuality(thesesByHolding[weakestHolding.id])
+    : null;
   const thesisQualityHeadline =
     thesisQualityStats.missing > 0
       ? weakestHolding
@@ -527,7 +530,21 @@ export default function DashboardPage() {
           ? "Usable, but still not crisp enough to trust fully under pressure."
           : "Most positions now have explicit, current thinking behind them."
   const thesisQualityCta = weakestHolding
-    ? `/dashboard/positions/${weakestHolding.ticker}`
+    ? {
+        href: `/dashboard/positions/${weakestHolding.ticker}`,
+        label:
+          weakestQuality?.kind === "missing"
+            ? investorProfile === "hearsay_driven"
+              ? `Write ${cleanTicker(weakestHolding.ticker)} →`
+              : `Write ${cleanTicker(weakestHolding.ticker)} →`
+            : weakestQuality?.kind === "review"
+              ? `Review ${cleanTicker(weakestHolding.ticker)} →`
+            : weakestQuality?.kind === "stale"
+              ? `Refresh ${cleanTicker(weakestHolding.ticker)} →`
+            : weakestQuality?.kind === "weak" || weakestQuality?.kind === "workable"
+              ? `Tighten ${cleanTicker(weakestHolding.ticker)} →`
+              : `Open ${cleanTicker(weakestHolding.ticker)} →`,
+      }
     : null;
 
   const sortedHoldings = useMemo(() => {
@@ -841,10 +858,10 @@ export default function DashboardPage() {
                       </p>
                       {thesisQualityCta && (
                         <Link
-                          href={thesisQualityCta}
+                          href={thesisQualityCta.href}
                           className="inline-flex items-center gap-2 font-mono text-[10px] uppercase tracking-[0.15em] text-primary transition-colors hover:text-primary/75"
                         >
-                          Open weakest position
+                          {thesisQualityCta.label.replace(" →", "")}
                           <ArrowRight className="h-3.5 w-3.5" />
                         </Link>
                       )}
