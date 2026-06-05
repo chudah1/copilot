@@ -238,63 +238,8 @@ export default function DigestsPage() {
                   </p>
                 </div>
 
-                <div className="grid gap-3 sm:grid-cols-3">
-                  <div className="border border-border/60 bg-background/70 p-4">
-                    <p className="font-mono text-[10px] uppercase tracking-[0.14em] text-muted-foreground">
-                      What it covers
-                    </p>
-                    <p className="mt-2 font-sans text-sm leading-relaxed text-foreground/85">
-                      What moved, what stayed quiet, and where a decision may be needed.
-                    </p>
-                  </div>
-                  <div className="border border-border/60 bg-background/70 p-4">
-                    <p className="font-mono text-[10px] uppercase tracking-[0.14em] text-muted-foreground">
-                      Best used for
-                    </p>
-                    <p className="mt-2 font-sans text-sm leading-relaxed text-foreground/85">
-                      A weekly portfolio pass without reopening every position one by one.
-                    </p>
-                  </div>
-                  <div className="border border-border/60 bg-background/70 p-4">
-                    <p className="font-mono text-[10px] uppercase tracking-[0.14em] text-muted-foreground">
-                      Right now
-                    </p>
-                    <p className="mt-2 font-sans text-sm leading-relaxed text-foreground/85">
-                      Generate one now, or wait for the next scheduled run.
-                    </p>
-                  </div>
-                </div>
               </div>
 
-              <aside className="product-panel product-panel-muted p-5 sm:p-6">
-                <p className="font-mono text-[10px] uppercase tracking-[0.18em] text-muted-foreground">
-                  Start here
-                </p>
-                <div className="mt-4 space-y-3">
-                  <div className="border-l-2 border-primary/20 pl-3">
-                    <p className="font-sans text-sm leading-relaxed text-foreground/85">
-                      Keep at least one position written and monitored.
-                    </p>
-                  </div>
-                  <div className="border-l-2 border-primary/20 pl-3">
-                    <p className="font-sans text-sm leading-relaxed text-foreground/85">
-                      Let the digest pull the important changes into one review pass.
-                    </p>
-                  </div>
-                  <div className="border-l-2 border-primary/20 pl-3">
-                    <p className="font-sans text-sm leading-relaxed text-foreground/85">
-                      Use it as a weekly memo, not a replacement for live alerts.
-                    </p>
-                  </div>
-                </div>
-                <button
-                  onClick={generateNow}
-                  disabled={generating}
-                  className="mt-5 font-mono text-[10px] uppercase tracking-[0.15em] text-primary border border-primary/30 px-4 py-2 hover:bg-primary/5 transition-colors disabled:opacity-50"
-                >
-                  {generating ? "Building…" : "Generate"}
-                </button>
-              </aside>
             </div>
           </div>
         ) : (

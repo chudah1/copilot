@@ -48,33 +48,20 @@ export function QuickAddHolding({ onAdd }: QuickAddHoldingProps) {
   };
 
   return (
-    <div className="rounded-lg border border-primary/20 bg-muted/30 p-4">
-      <p className="text-sm font-medium mb-3">Add a position</p>
-      <div className="grid grid-cols-[1fr_1fr_1fr_auto] gap-2 items-end">
-        <div>
-          <p className="text-[11px] text-muted-foreground mb-1">Ticker</p>
-          <TickerSearch
-            value={ticker}
-            onChange={(nextTicker) => {
-              setTicker(nextTicker);
-              setName("");
-            }}
-            onSelect={handleSelect}
-          />
-        </div>
-        <div>
-          <p className="text-[11px] text-muted-foreground mb-1">Shares</p>
-          <Input type="number" placeholder="10" min="0.000001" step="any" value={quantity} onChange={(e) => setQuantity(e.target.value)} className="h-8 text-sm" />
-        </div>
-        <div>
-          <p className="text-[11px] text-muted-foreground mb-1">Avg cost</p>
-          <Input type="number" step="0.01" min="0.000001" placeholder="135.00" value={avgCost} onChange={(e) => setAvgCost(e.target.value)} className="h-8 text-sm" />
-        </div>
-        <Button size="sm" onClick={handleSubmit} disabled={loading || !ticker || !quantity || !avgCost}>
-          {loading ? "..." : "Add"}
-        </Button>
+    <div className="flex flex-nowrap items-center gap-2">
+      <div className="w-40 shrink-0">
+        <TickerSearch
+          value={ticker}
+          onChange={(nextTicker) => { setTicker(nextTicker); setName(""); }}
+          onSelect={handleSelect}
+        />
       </div>
-      {error && <p className="text-xs text-red-600 mt-2">{error}</p>}
+      <Input type="number" placeholder="Shares" min="0.000001" step="any" value={quantity} onChange={(e) => setQuantity(e.target.value)} className="h-8 text-sm w-24" />
+      <Input type="number" step="0.01" min="0.000001" placeholder="Avg cost" value={avgCost} onChange={(e) => setAvgCost(e.target.value)} className="h-8 text-sm w-24" />
+      <Button size="sm" onClick={handleSubmit} disabled={loading || !ticker || !quantity || !avgCost}>
+        {loading ? "…" : "Add"}
+      </Button>
+      {error && <p className="text-xs text-red-600">{error}</p>}
     </div>
   );
 }

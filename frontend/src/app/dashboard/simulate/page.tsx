@@ -307,9 +307,6 @@ export default function SimulatePage() {
       <div className="product-panel product-panel-muted p-6 sm:p-7">
         <div className="grid gap-5 lg:grid-cols-[minmax(0,1fr)_18rem]">
           <div className="space-y-3">
-            <p className="font-mono text-[10px] uppercase tracking-[0.22em] text-muted-foreground">
-              Simulation
-            </p>
             <h1 className="font-display italic text-[2.7rem] leading-[1.02] text-foreground">
               Simulate an add before you size up.
             </h1>
@@ -318,48 +315,23 @@ export default function SimulatePage() {
             </p>
           </div>
 
-          <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-1">
+          {summary && (
             <div className="border border-border/60 bg-background/70 p-4">
-              <p className="font-mono text-[10px] uppercase tracking-[0.16em] text-muted-foreground">
-                Best used for
+              <p className="font-display text-[1.35rem] italic leading-tight text-foreground">
+                {formatCurrency(summary.total_value)}
               </p>
-              <p className="mt-2 font-sans text-sm leading-relaxed text-foreground/80">
-                New buys and adds to existing names.
+              <p className="mt-1 font-sans text-sm leading-relaxed text-muted-foreground">
+                {summary.holdings_count} holdings · top 3 at {pct(summary.top_3_concentration_pct)}
               </p>
             </div>
-            {summary && (
-              <div className="border border-border/60 bg-background/70 p-4">
-                <p className="font-mono text-[10px] uppercase tracking-[0.16em] text-muted-foreground">
-                  Portfolio now
-                </p>
-                <p className="mt-2 font-display text-[1.35rem] italic leading-tight text-foreground">
-                  {formatCurrency(summary.total_value)}
-                </p>
-                <p className="mt-2 font-sans text-sm leading-relaxed text-muted-foreground">
-                  {summary.holdings_count} holdings · top 3 at {pct(summary.top_3_concentration_pct)}
-                </p>
-              </div>
-            )}
-          </div>
+          )}
         </div>
       </div>
 
       <div className="product-panel p-5 sm:p-6 space-y-5">
         <div className="space-y-3">
-          <div>
-            <p className="font-mono text-[10px] uppercase tracking-[0.16em] text-muted-foreground">
-              Trade to test
-            </p>
-            <p className="mt-2 font-sans text-sm leading-relaxed text-muted-foreground">
-              Enter the add you are considering, then run the portfolio check.
-            </p>
-          </div>
-
           <div className="grid gap-3 sm:grid-cols-3">
-            <label className="space-y-2">
-              <span className="font-mono text-[10px] uppercase tracking-[0.15em] text-muted-foreground/70">
-                Shares
-              </span>
+            <label>
               <input
                 type="number"
                 inputMode="decimal"
@@ -369,10 +341,7 @@ export default function SimulatePage() {
                 className="flex h-11 w-full border border-input bg-background px-3 py-2 text-sm text-foreground outline-none transition-colors focus-visible:ring-2 focus-visible:ring-ring"
               />
             </label>
-            <label className="space-y-2">
-              <span className="font-mono text-[10px] uppercase tracking-[0.15em] text-muted-foreground/70">
-                Ticker
-              </span>
+            <label>
               <TickerSearch
                 value={ticker}
                 onChange={setTicker}
@@ -380,10 +349,7 @@ export default function SimulatePage() {
                 placeholder="NVDA or Nvidia"
               />
             </label>
-            <label className="space-y-2">
-              <span className="font-mono text-[10px] uppercase tracking-[0.15em] text-muted-foreground/70">
-                Price per share
-              </span>
+            <label>
               <input
                 type="number"
                 inputMode="decimal"
@@ -484,25 +450,11 @@ export default function SimulatePage() {
 
             <aside className="space-y-4">
               <div className="product-panel p-5">
-                <p className="font-mono text-[10px] uppercase tracking-[0.16em] text-muted-foreground">
-                  What this is for
-                </p>
-                <p className="mt-2 font-display text-[1.3rem] italic leading-tight text-foreground">
+                <p className="font-display text-[1.3rem] italic leading-tight text-foreground">
                   Check the add before the impulse turns into size.
                 </p>
                 <p className="mt-2 font-sans text-sm leading-relaxed text-muted-foreground">
-                  Use it when you already like the idea and want to see whether the sizing still looks disciplined.
-                </p>
-              </div>
-              <div className="product-panel p-5">
-                <p className="font-mono text-[10px] uppercase tracking-[0.16em] text-muted-foreground">
-                  Read it as
-                </p>
-                <p className="mt-2 font-display text-[1.3rem] italic leading-tight text-foreground">
-                  Portfolio impact first.
-                </p>
-                <p className="mt-2 font-sans text-sm leading-relaxed text-muted-foreground">
-                  It tells you what the add does to the portfolio and whether the written thesis work is strong enough for more size.
+                  See what the add does to the portfolio and whether the written thesis is strong enough for more size.
                 </p>
               </div>
             </aside>
@@ -533,27 +485,18 @@ export default function SimulatePage() {
               </div>
 
               <div className="product-panel p-5 space-y-1.5">
-                <p className="font-mono text-[9px] uppercase tracking-[0.25em] text-muted-foreground">
-                  What changes
-                </p>
                 {narrative.map((line, i) => (
                   <p key={i} className="font-sans text-sm text-muted-foreground leading-relaxed">{line}</p>
                 ))}
               </div>
 
-              {result.warnings.length > 0 && (
+              {result.warnings.filter((w) => !(w.warning_type === "missing_thesis" && intervention)).length > 0 && (
                 <div className="space-y-2">
-                  {result.warnings.map((w, i) => (
-                    <div key={i} className={`product-panel border-l-2 p-4 ${
-                      w.warning_type === "missing_thesis"
-                        ? "border-l-sky-400 bg-sky-500/5"
-                        : "border-l-amber-400 bg-amber-500/5"
-                    }`}>
-                      <p className={`font-sans text-sm leading-relaxed ${
-                        w.warning_type === "missing_thesis" ? "text-sky-700" : "text-amber-700"
-                      }`}>
-                        {w.message}
-                      </p>
+                  {result.warnings
+                    .filter((w) => !(w.warning_type === "missing_thesis" && intervention))
+                    .map((w, i) => (
+                    <div key={i} className="product-panel border-l-2 border-l-amber-400 bg-amber-500/5 p-4">
+                      <p className="font-sans text-sm leading-relaxed text-amber-700">{w.message}</p>
                     </div>
                   ))}
                 </div>
@@ -611,48 +554,55 @@ export default function SimulatePage() {
               {(Object.keys(result.before.sector_breakdown).length > 0 || Object.keys(result.after.sector_breakdown).length > 0) && (
                 <div className="product-panel px-5 py-5 space-y-4">
                   <p className="font-mono text-[9px] uppercase tracking-[0.3em] text-muted-foreground">
-                    Sector allocation shift
+                    Sector shift
                   </p>
-                  <div className="grid grid-cols-2 gap-6">
-                    <DonutChart breakdown={result.before.sector_breakdown} label="Before" size={88} />
-                    <DonutChart breakdown={result.after.sector_breakdown} label={`After +${cleanTicker(result.ticker)}`} size={88} />
-                  </div>
+                  {([
+                    { breakdown: result.before.sector_breakdown, label: "Before" },
+                    { breakdown: result.after.sector_breakdown, label: `After +${cleanTicker(result.ticker)}` },
+                  ] as const).map(({ breakdown, label }) => {
+                    const sorted = Object.entries(breakdown).sort(([, a], [, b]) => b - a);
+                    if (sorted.length === 0) return null;
+                    return (
+                      <div key={label} className="space-y-1.5">
+                        <p className="font-mono text-[9px] uppercase tracking-[0.2em] text-muted-foreground/60">{label}</p>
+                        <div className="flex h-4 w-full overflow-hidden">
+                          {sorted.map(([name, val], i) => (
+                            <div
+                              key={name}
+                              style={{ width: `${val}%`, backgroundColor: PALETTE[i % PALETTE.length] }}
+                              title={`${name} ${pct(val)}`}
+                            />
+                          ))}
+                        </div>
+                        <div className="flex flex-wrap gap-x-3 gap-y-0.5">
+                          {sorted.map(([name, val], i) => (
+                            <span key={name} className="flex items-center gap-1.5 font-mono text-[9px] text-muted-foreground">
+                              <span className="h-1.5 w-1.5 rounded-full shrink-0" style={{ backgroundColor: PALETTE[i % PALETTE.length] }} />
+                              {name} {pct(val)}
+                            </span>
+                          ))}
+                        </div>
+                      </div>
+                    );
+                  })}
                 </div>
               )}
 
-              <div className="product-panel p-5 space-y-3">
-                <p className="font-mono text-[9px] uppercase tracking-[0.25em] text-muted-foreground">
-                  Ready to commit?
-                </p>
+              <div className="product-panel p-5">
                 <div className="flex flex-col gap-2 sm:flex-row">
-                  {intervention?.ctaHref ? (
-                    <Button
-                      onClick={() => router.push(intervention.ctaHref!)}
-                      className="flex-1"
-                    >
-                      {intervention.ctaLabel.replace(" →", "")}
-                    </Button>
-                  ) : (
-                    <Button
-                      onClick={() => addHolding("thesis")}
-                      disabled={adding}
-                      className="flex-1"
-                    >
-                      {adding
-                        ? "Adding…"
-                        : intervention?.ctaLabel ?? `Add ${cleanTicker(result.ticker)} & write thesis`}
-                    </Button>
-                  )}
-                  <button
+                  <Button
                     onClick={() => addHolding("dashboard")}
                     disabled={adding}
-                    className={`flex-1 font-mono text-[10px] uppercase tracking-[0.15em] border px-4 py-3 transition-colors disabled:opacity-40 ${
-                      intervention?.softenSecondary
-                        ? "border-border text-foreground/45 hover:text-foreground/60 hover:border-foreground/25"
-                        : "border-border text-foreground/70 hover:text-foreground hover:border-foreground/40"
-                    }`}
+                    className="flex-1"
                   >
-                    Just add it
+                    {adding ? "Adding…" : `Add ${cleanTicker(result.ticker)} to portfolio`}
+                  </Button>
+                  <button
+                    onClick={() => addHolding("thesis")}
+                    disabled={adding}
+                    className="flex-1 font-mono text-[10px] uppercase tracking-[0.15em] border border-border px-4 py-3 text-foreground/70 transition-colors hover:text-foreground hover:border-foreground/40 disabled:opacity-40"
+                  >
+                    Write thesis first
                   </button>
                 </div>
               </div>
@@ -678,17 +628,6 @@ export default function SimulatePage() {
                   )}
                 </div>
               )}
-              <div className="product-panel p-5">
-                <p className="font-mono text-[10px] uppercase tracking-[0.16em] text-muted-foreground">
-                  Read the result as
-                </p>
-                <p className="mt-2 font-display text-[1.3rem] italic leading-tight text-foreground">
-                  A portfolio decision check.
-                </p>
-                <p className="mt-2 font-sans text-sm leading-relaxed text-muted-foreground">
-                  The point is not whether you like the company. It is whether this add still looks disciplined once size, concentration, and thesis quality are visible.
-                </p>
-              </div>
               <p className="text-center">
                 <Link href="/dashboard" className="font-mono text-[9px] uppercase tracking-[0.2em] text-muted-foreground/50 hover:text-primary transition-colors">
                   ← Back to portfolio

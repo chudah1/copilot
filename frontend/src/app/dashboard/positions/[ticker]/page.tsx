@@ -713,8 +713,8 @@ export default function PositionDetailPage() {
         eyebrow: onboardingState?.investor_profile === "hearsay_driven" ? "Turn the story into a system" : "Turn the position into a system",
         title:
           onboardingState?.investor_profile === "hearsay_driven"
-            ? "Write the case that tells penKeep what to watch."
-            : "Write the thesis that tells penKeep what to watch.",
+            ? "Write the case that tells Copilot Investor what to watch."
+            : "Write the thesis that tells Copilot Investor what to watch.",
         body:
           onboardingState?.investor_profile === "hearsay_driven"
             ? "Once the reason is explicit, this page becomes a real review surface."
@@ -1142,9 +1142,6 @@ export default function PositionDetailPage() {
                                 <p className="font-mono text-[10px] uppercase tracking-[0.18em] text-muted-foreground">
                                   Review tools
                                 </p>
-                                <p className="font-sans text-sm leading-relaxed text-foreground/80">
-                                  Pressure-test the case against live data and the opposite view.
-                                </p>
                               </div>
                               <button onClick={() => setShowAnalysis((s) => !s)} className="font-mono text-[10px] uppercase tracking-[0.2em] text-muted-foreground hover:text-foreground transition-colors shrink-0">
                                 {showAnalysis ? "Hide" : "Show"}
@@ -1203,7 +1200,7 @@ export default function PositionDetailPage() {
                             <div className="py-10 text-center space-y-3">
                               <p className="font-display italic text-xl text-foreground/50">No signals defined yet.</p>
                               <p className="font-sans text-sm text-muted-foreground max-w-xs mx-auto leading-relaxed">
-                                Generate signals from the thesis and confirm what should count as evidence.
+                                Generate from thesis.
                               </p>
                               <button onClick={handleGenerateDecomposition} className="font-mono text-[10px] uppercase tracking-[0.15em] border border-primary/40 text-primary px-5 py-2.5 hover:border-primary transition-colors">
                                 Generate signals

@@ -781,10 +781,16 @@ export default function DashboardPage() {
                   <SmartMetricCard
                     label="Concentration"
                     value={summary ? `${Math.round(summary.top_3_concentration_pct)}%` : "—"}
-                    verdict={summary && summary.top_3_concentration_pct >= 50 ? "Top 3 dominate" : "Spread looks fine"}
-                    color={summary && summary.top_3_concentration_pct >= 50 ? "amber" : "green"}
+                    verdict={
+                      summary && summary.holdings_count < 4
+                        ? "Add more positions to read this"
+                        : summary && summary.top_3_concentration_pct >= 50
+                          ? "Top 3 dominate"
+                          : "Spread looks fine"
+                    }
+                    color={summary && summary.holdings_count >= 4 && summary.top_3_concentration_pct >= 50 ? "amber" : "neutral"}
                     trend={
-                      trend?.top_3_concentration_pct != null && summary
+                      trend?.top_3_concentration_pct != null && summary && summary.holdings_count >= 4
                         ? {
                             previous: `${Math.round(trend.top_3_concentration_pct)}%`,
                             improving: summary.top_3_concentration_pct < trend.top_3_concentration_pct,

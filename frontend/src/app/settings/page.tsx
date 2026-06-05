@@ -129,6 +129,11 @@ export default function SettingsPage() {
                   : "border-amber-500/20 bg-amber-500/10 text-amber-700/90"
               }`}>
                 {summary.monitoring_message}
+                {!summary.monitoring_ready && (
+                  <Link href="/onboarding" className="mt-2 block font-mono text-[10px] uppercase tracking-[0.14em] underline underline-offset-4 opacity-80 hover:opacity-100">
+                    Write your first thesis →
+                  </Link>
+                )}
               </div>
             </div>
           )}
@@ -142,7 +147,7 @@ export default function SettingsPage() {
                 {summary ? `${summary.holdings_count} position${summary.holdings_count === 1 ? "" : "s"} tracked` : "Your holdings"}
               </p>
               <p className="font-sans text-xs text-muted-foreground mt-1 leading-relaxed">
-                Add another source without replacing current holdings.
+                Link another broker.
               </p>
             </div>
             <Link href="/connect?return=settings" className="shrink-0">
@@ -251,9 +256,6 @@ export default function SettingsPage() {
                 <SelectItem value="thesis_breaking_only">Thesis-breaking only</SelectItem>
               </SelectContent>
             </Select>
-            <p className="font-sans text-xs text-muted-foreground leading-relaxed">
-              Use &ldquo;Thesis-breaking only&rdquo; for the quietest feed.
-            </p>
           </div>
         </Section>
 
