@@ -276,10 +276,10 @@ export default function ResearchPage() {
                 </div>
                 <div className="product-panel p-4">
                   <p className="font-mono text-[9px] uppercase tracking-[0.18em] text-muted-foreground/60">
-                    Read it as
+                    Read
                   </p>
                   <p className="mt-2 font-sans text-sm leading-relaxed text-foreground/80">
-                    {hasDraftContext ? "A counter-case against your draft." : "A fast bear-case memo."}
+                    {hasDraftContext ? "Counter-case against your draft." : "Fast bear-case memo."}
                   </p>
                 </div>
               </div>
@@ -336,7 +336,7 @@ export default function ResearchPage() {
                   </ul>
                 ) : (
                   <p className="font-sans text-sm text-foreground/80 leading-relaxed">
-                    No blind spot was flagged from this input. Add your own draft next time for a sharper check.
+                    No clear blind spot flagged. Add your own case next time for a sharper read.
                   </p>
                 )}
               </div>
@@ -372,12 +372,12 @@ export default function ResearchPage() {
                   Next step
                 </p>
                 <p className="font-display italic text-[1.3rem] text-foreground leading-snug">
-                  {isAuthenticated ? `If you buy ${ticker}, track it from the dashboard` : `Monitor ${ticker} once you buy`}
+                  {isAuthenticated ? `If you buy ${ticker}, track it in the dashboard` : `Monitor ${ticker} once you buy`}
                 </p>
               </div>
               <p className="font-sans text-sm text-muted-foreground leading-relaxed">
                 {isAuthenticated
-                  ? "Write the thesis and monitor it once it becomes a position."
+                  ? "Write the thesis once it becomes a position."
                   : "We&apos;ll alert you when something threatens or confirms the thesis."}
               </p>
               <div className="flex gap-2 pt-1">
@@ -402,7 +402,7 @@ export default function ResearchPage() {
                 onClick={() => setResult(null)}
                 className="w-full font-mono text-[10px] uppercase tracking-[0.15em] text-muted-foreground/60 hover:text-muted-foreground transition-colors pt-1"
               >
-                Run another test →
+                Test another ticker →
               </button>
             </motion.div>
           </motion.div>
