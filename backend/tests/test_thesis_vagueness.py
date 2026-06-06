@@ -38,6 +38,30 @@ def test_terse_but_precise_thesis_with_driver_is_not_vague():
     assert "quality" in a.detected_drivers
 
 
+def test_generic_boilerplate_with_a_driver_is_not_vague():
+    # Regression: AI-drafted/sharpened theses naturally use boilerplate like
+    # "business model" / "market position", which used to flag the help branch as
+    # weak on its own. "generic" is now a SOFT signal — when a monitorable driver
+    # is also present, the thesis stays watchable.
+    a = assess_thesis_vagueness(
+        "I own this for its durable business model and strong market position, "
+        "driven by AI demand and expanding margins.",
+    )
+    assert "generic" in a.reasons          # boilerplate still detected/recorded
+    assert a.detected_drivers              # but a real driver is present
+    assert a.is_vague is False             # so it is NOT flagged vague
+
+
+def test_generic_boilerplate_without_a_driver_is_still_vague():
+    # The other side of the guard: pure boilerplate with no monitorable driver
+    # remains vague.
+    a = assess_thesis_vagueness(
+        "I own this because of its strong market position and solid business model.",
+    )
+    assert "generic" in a.reasons
+    assert a.is_vague is True
+
+
 def test_cashflow_synonyms_detected_as_quality():
     # M5: retail users write "cashflow"/"FCF", not just "cash flow".
     assert "quality" in _detect_monitorable_drivers("strong cashflow and FCF growth")

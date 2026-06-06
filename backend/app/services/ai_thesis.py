@@ -184,7 +184,8 @@ Rules:
 - must_remain_true: a specific, observable condition — not "maintains competitive advantage" or "continues to grow".
 - what_would_change_my_mind: a specific event or scenario, not a vague "if the business deteriorates".
 - Sound like a thoughtful individual investor, not a sell-side analyst.
-- Do NOT use phrases like "long-term potential", "solid fundamentals", or "maintains market position".
+- Anchor the thesis in at least one MONITORABLE driver — a metric, growth rate, margin, demand trend, or named catalyst (e.g. "AI inference demand", "gross margin above 60%", "FCF growth"). A reader must be able to check later whether it still holds.
+- Do NOT lean on unmonitorable boilerplate: "long-term potential", "solid fundamentals", "market position", "business model", "core investment thesis", "remains intact", or "fundamental change" — name the actual driver instead.
 - Ground the draft in the recent news headlines provided above — reference what is actually happening now, not generic statements from your training data. If recent news is not provided, use what you know but keep claims conservative.
 
 Output valid JSON with this exact structure:
@@ -224,6 +225,8 @@ Given the position, the user's current thesis draft, and any available market da
 - refined thesis text that preserves the investor's meaning while making it clearer and more monitorable
 - a concise summary of the likely thesis in plain English
 - a lightweight interpretation object that helps the product monitor or review the thesis
+
+When refining, anchor the text in at least one monitorable driver the investor already implied (a metric, growth rate, margin, demand trend, or named catalyst). Do NOT swap their words for unmonitorable boilerplate like "market position", "business model", "long-term potential", "solid fundamentals", "remains intact", or "core investment thesis".
 
 Position:
 - Ticker: {ticker}
@@ -416,12 +419,16 @@ def assess_thesis_vagueness(
     if not drivers:
         reasons.append("no_monitorable_driver")
 
-    # Strong signals mark a thesis vague on their own. Shortness is only a
-    # vagueness signal when there is ALSO no monitorable driver — a terse but
-    # precise thesis ("Margins above 60%, FCF growing 20%") must not be flagged.
-    strong_signals = {"hearsay", "vague_language", "generic"}.intersection(reasons)
-    short_and_undriven = is_short and not drivers
-    is_vague = bool(strong_signals) or short_and_undriven or (
+    # Strong signals mark a thesis vague on their own. "generic" boilerplate and
+    # shortness are SOFT — they only count when the thesis ALSO lacks a monitorable
+    # driver. A thesis that says "durable business model" but also names a
+    # measurable driver (margins, growth, AI demand) is still watchable, and our
+    # own AI draft/sharpen prose naturally leans on phrases like "market position"
+    # / "long-term potential" — flagging those on their own made the help branch
+    # look weak the moment it was offered.
+    strong_signals = {"hearsay", "vague_language"}.intersection(reasons)
+    weak_prose_undriven = (is_short or "generic" in reasons) and not drivers
+    is_vague = bool(strong_signals) or weak_prose_undriven or (
         investor_profile == "hearsay_driven" and not drivers
     )
 
@@ -1398,10 +1405,10 @@ DRAFT_THESIS_PROMPT = """Draft a first-pass reason for holding a specific stock,
 
 Rules:
 - Write in first person: "I own this because...", "I need to see...", "I'd sell if..."
-- Name the specific business driver (e.g. AI inference demand, government contract backlog, network effects, regulatory moat) rather than describing it vaguely.
+- Name the specific business driver (e.g. AI inference demand, government contract backlog, network effects, regulatory moat) rather than describing it vaguely. Anchor it in something monitorable — a metric, growth rate, margin, demand trend, or catalyst a reader could check later.
 - must_remain_true must state a specific, observable condition — not platitudes like "maintains competitive advantage" or "continues to grow".
 - what_would_change_my_mind must name a specific event or scenario that would signal the thesis is broken.
-- Do NOT use phrases like "long-term potential", "solid fundamentals", or "maintains market position" — these cannot be monitored.
+- Do NOT lean on unmonitorable boilerplate: "long-term potential", "solid fundamentals", "market position", "business model", "core investment thesis", "remains intact", or "fundamental change" — name the actual driver instead.
 - Avoid named politicians or named administrations unless the user explicitly mentioned them. Prefer neutral wording like "U.S. federal policy", "regulatory standards", or "government incentives".
 - Sound like a thoughtful individual investor, not a sell-side analyst.
 
