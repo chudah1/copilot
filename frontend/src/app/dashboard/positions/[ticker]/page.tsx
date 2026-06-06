@@ -713,8 +713,8 @@ export default function PositionDetailPage() {
         eyebrow: onboardingState?.investor_profile === "hearsay_driven" ? "Turn the story into a system" : "Turn the position into a system",
         title:
           onboardingState?.investor_profile === "hearsay_driven"
-            ? "Write the case that tells Copilot Investor what to watch."
-            : "Write the thesis that tells Copilot Investor what to watch.",
+            ? "Write the case that tells penKeep what to watch."
+            : "Write the thesis that tells penKeep what to watch.",
         body:
           onboardingState?.investor_profile === "hearsay_driven"
             ? "Once the reason is explicit, this page becomes a real review surface."
