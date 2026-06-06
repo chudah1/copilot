@@ -6,6 +6,7 @@ from app.services.ai_thesis import (
     _fallback_assist,
     _fallback_initial_draft,
     _fallback_synthesize,
+    _parse_assist_output,
     _parse_synthesis_output,
     _parse_draft_output,
     assist_thesis,
@@ -270,6 +271,53 @@ def test_fallback_assist_infers_qualitative_watch_rules_from_regulatory_and_deal
     assert any("compounded GLP-1" in hint.get("watch_for", "") for hint in news_hints)
     assert any("replacement or mitigation path by next earnings" in hint.get("watch_for", "") for hint in news_hints)
     assert any("Eucalyptus" in hint.get("watch_for", "") for hint in news_hints)
+
+
+def test_parse_assist_output_merges_qualitative_story_hints_ahead_of_generic_price_rule():
+    raw = ThesisAssistOutput(
+        why_own_it=(
+            "I need Hims to keep generating meaningful GLP-1 prescription volume through their platform. "
+            "I am also watching whether the Eucalyptus deal actually delivers new revenue lines rather than becoming an overhead drag."
+        ),
+        must_remain_true=(
+            "Compounded semaglutide must stay available long enough for Hims to pivot quickly if the FDA restricts it."
+        ),
+        what_would_change_my_mind=(
+            "I would sell if the FDA bans compounded GLP-1 medications and Hims has no credible replacement pipeline within one earnings cycle."
+        ),
+        ai_summary="HIMS thesis.",
+        interpretation={
+            "labels": ["regulatory_risk", "M&A_execution"],
+            "monitorability": "high",
+            "watch_hints": [
+                {
+                    "kind": "metric_threshold",
+                    "metric": "gross_margin_qoq",
+                    "operator": "<",
+                    "threshold": -0.05,
+                    "rationale": "Gross margin compressing would signal the GLP-1 profit risk is real.",
+                },
+                {
+                    "kind": "price_move_pct",
+                    "threshold": 15.0,
+                    "rationale": "A sharp price decline warrants review.",
+                },
+            ],
+            "proxy_signals": [],
+            "ambiguity_note": "",
+        },
+    )
+
+    result = _parse_assist_output(raw)
+
+    assert [hint["kind"] for hint in result.interpretation["watch_hints"]] == [
+        "news_watch",
+        "news_watch",
+        "metric_threshold",
+    ]
+    assert any("replacement or mitigation path by next earnings" in hint.get("watch_for", "") for hint in result.interpretation["watch_hints"])
+    assert any("Eucalyptus" in hint.get("watch_for", "") for hint in result.interpretation["watch_hints"])
+    assert not any(hint.get("kind") == "price_move_pct" for hint in result.interpretation["watch_hints"])
 
 
 def test_parse_draft_output_rewrites_generic_placeholder_language():

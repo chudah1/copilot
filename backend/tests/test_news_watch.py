@@ -10,6 +10,7 @@ from app.services.news_watch import (
     judge_news_watch,
     match_news_watches,
 )
+from app.services.monitoring_pipeline import extract_provisional_news_watches
 
 
 def _kw_similarity(a: str, b: str) -> float:
@@ -51,6 +52,24 @@ async def test_match_links_candidate_on_confirmed_match():
     assert cand["evidence"]["claim_id"] == "cl1"
     # threatens judge=thesis_breaking is capped to warning (no auto status flip)
     assert matched[id(cand)][1] == "warning"
+
+
+@pytest.mark.asyncio
+async def test_provisional_match_tags_claim_only_without_fake_signal_id():
+    cand = _news("Regulators restrict compounded GLP-1 access")
+    watch = NewsWatch(
+        signal_id=None,
+        claim_id="cl1",
+        watch_for="the FDA restricts compounded GLP-1 and the company has no replacement path",
+        direction="threatens",
+    )
+
+    matched = await match_news_watches([cand], [watch], similarity=lambda a, b: 1.0, judge=_judge_yes)
+
+    assert id(cand) in matched
+    assert "signal_id" not in cand["evidence"]
+    assert cand["evidence"]["claim_id"] == "cl1"
+    assert cand["evidence"]["news_watch_direction"] == "threatens"
 
 
 @pytest.mark.asyncio
@@ -204,3 +223,23 @@ async def test_match_thesis_news_watches_tags_before_filtering(monkeypatch):
 
     assert id(cand) in result
     assert cand["evidence"]["signal_id"] == "sig1"
+
+
+def test_extract_provisional_news_watches_from_interpretation():
+    watches = extract_provisional_news_watches(
+        {
+            "watch_hints": [
+                {
+                    "kind": "news_watch",
+                    "watch_for": "a regulatory restriction hits compounded GLP-1 and management has no replacement path by next earnings",
+                    "direction": "threatens",
+                    "rationale": "This would hit the main growth driver.",
+                }
+            ]
+        }
+    )
+
+    assert len(watches) == 1
+    assert watches[0].signal_id is None
+    assert watches[0].claim_id is None
+    assert "compounded GLP-1" in watches[0].watch_for

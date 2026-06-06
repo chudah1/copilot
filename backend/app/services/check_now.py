@@ -23,6 +23,7 @@ from app.services.monitoring_pipeline import (
     build_claim_signal_lookup,
     classify_candidates_for_thesis,
     extract_news_watches,
+    extract_provisional_news_watches,
     load_investor_profile,
     match_thesis_news_watches,
     persist_classified_candidates,
@@ -228,7 +229,10 @@ async def run_check_now(
 
     # Qualitative news_watch matching — BEFORE noise filtering, so a matched
     # news item is tagged (and survives minimum-relevance) and gets cooldown.
-    nw_matched = await match_thesis_news_watches(candidates, extract_news_watches(claims))
+    news_watches = extract_news_watches(claims)
+    if not news_watches:
+        news_watches = extract_provisional_news_watches(thesis.interpretation)
+    nw_matched = await match_thesis_news_watches(candidates, news_watches)
 
     # Noise suppression: filter before classification (rules 1, 2, 4)
     candidates = await filter_candidates(candidates, holding.id, signals_by_id, db, now=now)

@@ -228,3 +228,89 @@ async def test_run_check_now_returns_created_event_ids(db, test_user):
     assert result.events_created == len(result.created_event_ids)
     assert result.created_event_ids
     assert all(event_id is not None for event_id in result.created_event_ids)
+
+
+async def test_run_check_now_uses_provisional_news_watches_without_decomposition(db, test_user):
+    holding = Holding(
+        user_id=test_user.id,
+        ticker="HIMS",
+        name="Hims & Hers Health",
+        quantity=10,
+        average_cost_basis=20,
+        current_price=20,
+        current_value=200,
+    )
+    db.add(holding)
+    await db.flush()
+
+    thesis = Thesis(
+        user_id=test_user.id,
+        holding_id=holding.id,
+        status="active",
+        thesis_kind="company",
+        why_own_it="GLP-1 growth remains intact.",
+        must_remain_true="Compounded GLP-1 stays available long enough for a replacement path.",
+        what_would_change_my_mind="FDA restricts compounded GLP-1 without a replacement path.",
+        confidence="high",
+        review_cadence_days=7,
+        interpretation={
+            "watch_hints": [
+                {
+                    "kind": "news_watch",
+                    "watch_for": "the FDA restricts compounded GLP-1 and the company fails to present a credible replacement path by next earnings",
+                    "direction": "threatens",
+                    "rationale": "This would hit the main growth driver.",
+                }
+            ]
+        },
+        source="ai_assisted",
+    )
+    db.add(thesis)
+    await db.commit()
+
+    company_data = _make_company_data(ticker="HIMS", current_price=20.0)
+    news_candidate = {
+        "event_type": "news_or_earnings_candidate",
+        "description": "FDA restricts compounded GLP-1 access",
+        "evidence": {"headline": "FDA restricts compounded GLP-1 access", "summary": "Company has not outlined a replacement path."},
+    }
+    captured = {}
+
+    async def _capture_news_watches(candidates, news_watches):
+        captured["watches"] = news_watches
+        return {}
+
+    with patch(
+        "app.services.check_now.fetch_company_data",
+        new_callable=AsyncMock,
+        return_value=company_data,
+    ), patch(
+        "app.services.check_now.load_active_decomposition",
+        new_callable=AsyncMock,
+        return_value=None,
+    ), patch(
+        "app.services.check_now.collect_news_evidence",
+        new_callable=AsyncMock,
+        return_value=[news_candidate],
+    ), patch(
+        "app.services.check_now.match_thesis_news_watches",
+        new=_capture_news_watches,
+    ), patch(
+        "app.services.check_now.filter_candidates",
+        new_callable=AsyncMock,
+        side_effect=lambda candidates, *args, **kwargs: candidates,
+    ), patch(
+        "app.services.check_now.classify_candidates_for_thesis",
+        new_callable=AsyncMock,
+        return_value=[],
+    ), patch(
+        "app.services.check_now.persist_classified_candidates",
+        new_callable=AsyncMock,
+        return_value=[],
+    ):
+        result = await run_check_now(holding, thesis, db)
+
+    assert result.status == "completed"
+    assert len(captured["watches"]) == 1
+    assert captured["watches"][0].signal_id is None
+    assert "compounded GLP-1" in captured["watches"][0].watch_for

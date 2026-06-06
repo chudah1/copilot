@@ -192,6 +192,38 @@ def extract_news_watches(claims: list[Any] | None) -> list[NewsWatch]:
     return watches
 
 
+def extract_provisional_news_watches(interpretation: dict[str, Any] | None) -> list[NewsWatch]:
+    """Collect qualitative watch rules from thesis interpretation before a full
+    decomposition exists."""
+    if not interpretation:
+        return []
+
+    hints = interpretation.get("watch_hints")
+    if not isinstance(hints, list):
+        return []
+
+    watches: list[NewsWatch] = []
+    for hint in hints:
+        if not isinstance(hint, dict) or hint.get("kind") != "news_watch":
+            continue
+        watch_for = str(hint.get("watch_for") or "").strip()
+        if not watch_for:
+            continue
+        direction = str(hint.get("direction") or "threatens").strip().lower()
+        if direction not in {"threatens", "supports"}:
+            direction = "threatens"
+        watches.append(
+            NewsWatch(
+                signal_id=str(hint.get("signal_id")) if hint.get("signal_id") else None,
+                claim_id=str(hint.get("claim_id")) if hint.get("claim_id") else None,
+                watch_for=watch_for,
+                direction=direction,
+                label=str(hint.get("label")).strip() if hint.get("label") else None,
+            )
+        )
+    return watches
+
+
 async def match_thesis_news_watches(
     candidates: list[dict[str, Any]],
     news_watches: list[NewsWatch] | None,

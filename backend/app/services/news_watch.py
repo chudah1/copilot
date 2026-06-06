@@ -46,7 +46,7 @@ _EMBED_MODEL = "text-embedding-3-small"
 
 @dataclass
 class NewsWatch:
-    signal_id: str
+    signal_id: str | None
     claim_id: str | None
     watch_for: str
     direction: str  # "threatens" | "supports"
@@ -226,7 +226,8 @@ async def match_news_watches(
             severity = "warning" if verdict.severity == "thesis_breaking" else verdict.severity
 
         evidence = candidate.setdefault("evidence", {})
-        evidence["signal_id"] = str(watch.signal_id)
+        if watch.signal_id:
+            evidence["signal_id"] = str(watch.signal_id)
         if watch.claim_id:
             evidence["claim_id"] = str(watch.claim_id)
         evidence["news_watch_direction"] = watch.direction

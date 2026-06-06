@@ -454,6 +454,26 @@ def _dedupe_watch_hints(watch_hints: list[dict[str, Any]]) -> list[dict[str, Any
     return deduped
 
 
+def _prioritize_watch_hints(watch_hints: list[dict[str, Any]]) -> list[dict[str, Any]]:
+    ordered: list[dict[str, Any]] = []
+    for kind in ("news_watch", "metric_threshold", "price_move_pct"):
+        ordered.extend(hint for hint in watch_hints if hint.get("kind") == kind)
+    return _dedupe_watch_hints(ordered)[:3]
+
+
+def _merge_story_watch_hints(
+    existing_watch_hints: list[dict[str, Any]],
+    *,
+    text: str,
+    include_story_growth: bool = False,
+) -> list[dict[str, Any]]:
+    inferred_watch_hints = _infer_story_watch_hints(
+        text,
+        include_story_growth=include_story_growth,
+    )
+    return _prioritize_watch_hints([*existing_watch_hints, *inferred_watch_hints])
+
+
 def _infer_qualitative_watch_hints(text: str) -> list[dict[str, Any]]:
     lowered = text.lower()
     hints: list[dict[str, Any]] = []
@@ -540,7 +560,7 @@ def _infer_story_watch_hints(text: str, *, include_story_growth: bool = False) -
                 "rationale": "Prompt a review when price moves sharply.",
             }
         )
-    return _dedupe_watch_hints(watch_hints)[:3]
+    return _prioritize_watch_hints(watch_hints)
 
 
 def _infer_hearsay_conditions(ticker: str, answer1: str, answer2: str) -> tuple[str, str, str]:
@@ -713,10 +733,10 @@ def _apply_synthesis_guardrails(
             what_would_change_my_mind = inferred_change
         if not interpretation.get("ambiguity_note") and inferred_ambiguity:
             interpretation["ambiguity_note"] = inferred_ambiguity
-        if not any(hint.get("kind") == "metric_threshold" for hint in interpretation["watch_hints"]):
-            interpretation["watch_hints"] = _dedupe_watch_hints(
-                [*interpretation["watch_hints"], *_infer_story_watch_hints(f"{why_own_it} {answer1} {answer2}")]
-            )[:3]
+        interpretation["watch_hints"] = _merge_story_watch_hints(
+            interpretation["watch_hints"],
+            text=f"{why_own_it} {answer1} {answer2}",
+        )
         if interpretation["monitorability"] == "low" and any(
             hint.get("kind") == "metric_threshold" for hint in interpretation["watch_hints"]
         ):
@@ -745,11 +765,11 @@ def _apply_synthesis_guardrails(
     if not ai_summary:
         ai_summary = f"{ticker}: this started as a story-driven idea and only holds if the operating results validate it."
 
-    inferred_watch_hints = _infer_story_watch_hints(combined_story_text, include_story_growth=True)
-    if not any(hint.get("kind") == "metric_threshold" for hint in interpretation["watch_hints"]):
-        interpretation["watch_hints"] = _dedupe_watch_hints(
-            [*interpretation["watch_hints"], *inferred_watch_hints]
-        )[:3]
+    interpretation["watch_hints"] = _merge_story_watch_hints(
+        interpretation["watch_hints"],
+        text=combined_story_text,
+        include_story_growth=True,
+    )
     if not interpretation.get("ambiguity_note") and inferred_ambiguity:
         interpretation["ambiguity_note"] = inferred_ambiguity
     if interpretation["monitorability"] == "low" and any(
@@ -945,12 +965,20 @@ def _parse_assist_output(result: ThesisAssistOutput) -> ThesisAssistOutput:
         or not isinstance(result.interpretation, dict)
     ):
         raise ValueError("Incomplete thesis output")
+    interpretation = _merge_story_watch_hints(
+        _normalize_interpretation(result.interpretation)["watch_hints"],
+        text=f"{result.why_own_it} {result.must_remain_true} {result.what_would_change_my_mind}",
+        include_story_growth=True,
+    )
+    normalized_interpretation = _normalize_interpretation(result.interpretation)
+    normalized_interpretation["watch_hints"] = interpretation
+
     return ThesisAssistOutput(
         why_own_it=result.why_own_it.strip(),
         must_remain_true=result.must_remain_true.strip(),
         what_would_change_my_mind=result.what_would_change_my_mind.strip(),
         ai_summary=result.ai_summary,
-        interpretation=_normalize_interpretation(result.interpretation),
+        interpretation=normalized_interpretation,
     )
 
 
@@ -1150,7 +1178,7 @@ def _normalize_interpretation(interpretation: dict | None) -> dict:
     return {
         "labels": normalized_labels or ["user_defined"],
         "monitorability": monitorability,
-        "watch_hints": normalized_watch_hints[:3],
+        "watch_hints": _prioritize_watch_hints(normalized_watch_hints),
         "proxy_signals": normalized_proxy_signals[:3],
         "ambiguity_note": ambiguity_note,
     }
