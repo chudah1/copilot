@@ -211,7 +211,9 @@ export function ThesisEditor({ thesis, investorProfile, mode = "write", onSave, 
       });
       setWhyOwnIt(asText(result.why_own_it) || whyOwnIt);
       setMustRemainTrue(asText(result.must_remain_true) || mustRemainTrue);
-      setChangeMind(asText(result.what_would_change_my_mind) || changeMind);
+      const newChangeMind = asText(result.what_would_change_my_mind) || changeMind;
+      setChangeMind(newChangeMind);
+      if (newChangeMind.trim()) setChangeMindError("");
       setAiSummary(asText(result.ai_summary));
       setInterpretation(result.interpretation);
     } catch (error: unknown) {
@@ -270,7 +272,9 @@ export function ThesisEditor({ thesis, investorProfile, mode = "write", onSave, 
                 onClick={() => {
                   setWhyOwnIt(asText(thesis?.why_own_it));
                   setMustRemainTrue(asText(thesis?.must_remain_true));
-                  setChangeMind(asText(thesis?.what_would_change_my_mind));
+                  const loaded = asText(thesis?.what_would_change_my_mind);
+                  setChangeMind(loaded);
+                  if (loaded.trim()) setChangeMindError("");
                 }}
                 className="font-mono text-[10px] uppercase tracking-[0.15em] whitespace-nowrap text-primary hover:text-primary/80 transition-colors"
               >

@@ -17,6 +17,13 @@ class CreateThesisRequest(BaseModel):
     source: str = "user"
     status: str = "draft"
 
+    @field_validator("what_would_change_my_mind")
+    @classmethod
+    def exit_condition_not_empty(cls, v: str) -> str:
+        if not v.strip():
+            raise ValueError("Exit condition cannot be empty — it controls when red alerts fire")
+        return v
+
 
 class AssistThesisRequest(BaseModel):
     holding_id: uuid.UUID
