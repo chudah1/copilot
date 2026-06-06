@@ -4,11 +4,14 @@ import re
 import pytest
 
 from app.services.news_watch import (
+    EVENT_TYPE_SIMILARITY_THRESHOLDS,
     NewsWatch,
     NewsWatchVerdict,
+    _JUDGE_SYSTEM,
     candidate_text,
     judge_news_watch,
     match_news_watches,
+    similarity_threshold_for_candidate,
 )
 from app.services.monitoring_pipeline import extract_provisional_news_watches
 
@@ -78,6 +81,45 @@ async def test_match_skips_below_similarity_threshold():
     matched = await match_news_watches([cand], [_WATCH], similarity=_kw_similarity, judge=_judge_yes)
     assert matched == {}
     assert "signal_id" not in cand["evidence"]
+
+
+def test_similarity_threshold_uses_event_type_mapping():
+    assert similarity_threshold_for_candidate({"event_type": "edgar_8k"}) == EVENT_TYPE_SIMILARITY_THRESHOLDS["edgar_8k"]
+    assert similarity_threshold_for_candidate({"event_type": "news_keyword_match"}) == EVENT_TYPE_SIMILARITY_THRESHOLDS["news_keyword_match"]
+
+
+@pytest.mark.asyncio
+async def test_match_uses_lower_threshold_for_edgar_8k():
+    cand = _news(
+        "Company amends credit agreement for acquisition financing",
+        event_type="edgar_8k",
+    )
+
+    matched = await match_news_watches(
+        [cand],
+        [NewsWatch(signal_id="sig1", claim_id="cl1", watch_for="credit agreement amended for acquisition financing", direction="threatens")],
+        similarity=lambda a, b: 0.40,
+        judge=_judge_yes,
+    )
+
+    assert id(cand) in matched
+
+
+@pytest.mark.asyncio
+async def test_match_uses_stricter_threshold_for_keyword_news():
+    cand = _news(
+        "Blog speculates on a possible partnership",
+        event_type="news_keyword_match",
+    )
+
+    matched = await match_news_watches(
+        [cand],
+        [NewsWatch(signal_id="sig1", claim_id="cl1", watch_for="company announces a major strategic partnership", direction="supports")],
+        similarity=lambda a, b: 0.50,
+        judge=_judge_yes,
+    )
+
+    assert matched == {}
 
 
 @pytest.mark.asyncio
@@ -178,6 +220,14 @@ async def test_judge_returns_no_match_without_api_key(monkeypatch):
     monkeypatch.setattr(nw.settings, "anthropic_api_key", "", raising=False)
     verdict = await judge_news_watch("some news", "AMD design win", "threatens")
     assert verdict.matches is False
+
+
+def test_judge_prompt_calls_out_negation_and_rumors():
+    lowered = _JUDGE_SYSTEM.lower()
+    assert "denied" in lowered
+    assert "rumoured" in lowered or "rumored" in lowered
+    assert "speculative" in lowered
+    assert "negation" in lowered
 
 
 class _FakeThesis:

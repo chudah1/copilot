@@ -35,9 +35,18 @@ NEWS_LIKE_EVENT_TYPES = {
 }
 
 # Cosine similarity floor for the embedding pre-filter (unit vectors → dot = cos).
-# Deliberately tight: a loose threshold sends nearly every same-ticker headline
-# to the (paid) judge and dilutes precision.
+# We do not use one flat threshold:
+# - structured filing text can clear a slightly lower bar because it is rarer
+#   and more information-dense;
+# - noisy keyword/news candidates need a stricter bar so they do not fan out
+#   into unnecessary judge calls.
 DEFAULT_SIMILARITY_THRESHOLD = 0.45
+EVENT_TYPE_SIMILARITY_THRESHOLDS = {
+    "edgar_8k": 0.38,
+    "news_or_earnings_candidate": 0.45,
+    "gemini_news": 0.50,
+    "news_keyword_match": 0.58,
+}
 # Hard cap on judge LLM calls per thesis per run, so a busy news day can't fan
 # out into an unbounded number of paid calls.
 MAX_JUDGE_CALLS = 12
@@ -119,6 +128,11 @@ _JUDGE_SYSTEM = """You decide whether a news item satisfies a specific condition
 
 The investor is watching for a discrete, recognisable event. Be strict: only say it matches if the news clearly reports that the specific event has actually occurred (or is officially confirmed) — not merely that it is related, rumoured, or could happen.
 
+Important disqualifiers:
+- If the article says the event was denied, did NOT happen, was only rumoured, was speculative, is merely being considered, is in talks, could happen, may happen, or lacks official confirmation, then matches=false.
+- Pay close attention to negation and inversion. "denies partnership", "rules out acquisition", "no formal agreement", and "rumors of a ban" are NOT matches for the positive event.
+- Related context is not enough. The article must report the watched event itself, not just discuss the same topic.
+
 Output valid JSON: {"matches": true|false, "severity": "info|warning|thesis_breaking", "reason": "one short sentence"}
 - matches=false → severity "info", reason explains why it doesn't satisfy the condition.
 - matches=true → severity is "thesis_breaking" if the event clearly and fully occurred, "warning" if it is occurring/partial/early. Never "info" when matches=true.
@@ -167,13 +181,30 @@ SimilarityFn = Callable[[str, str], float]
 JudgeFn = Callable[[str, str, str], Awaitable[NewsWatchVerdict]]
 
 
+def similarity_threshold_for_candidate(
+    candidate: dict[str, Any],
+    *,
+    threshold: float | None = None,
+) -> float:
+    """Return the cosine floor for this candidate.
+
+    A custom threshold overrides the adaptive mapping and is used verbatim.
+    """
+    if threshold is not None:
+        return threshold
+    return EVENT_TYPE_SIMILARITY_THRESHOLDS.get(
+        str(candidate.get("event_type") or ""),
+        DEFAULT_SIMILARITY_THRESHOLD,
+    )
+
+
 async def match_news_watches(
     candidates: list[dict[str, Any]],
     watches: list[NewsWatch],
     *,
     similarity: SimilarityFn,
     judge: JudgeFn,
-    threshold: float = DEFAULT_SIMILARITY_THRESHOLD,
+    threshold: float | None = None,
 ) -> dict[int, tuple[NewsWatch, str, str]]:
     """Tag news/filing candidates that satisfy a watch condition.
 
@@ -197,11 +228,12 @@ async def match_news_watches(
         text = candidate_text(candidate)
         if not text:
             continue
+        candidate_threshold = similarity_threshold_for_candidate(candidate, threshold=threshold)
 
         best: tuple[float, NewsWatch] | None = None
         for watch in watches:
             sim = similarity(text, watch.watch_for)
-            if sim >= threshold and (best is None or sim > best[0]):
+            if sim >= candidate_threshold and (best is None or sim > best[0]):
                 best = (sim, watch)
         if best is None:
             continue
