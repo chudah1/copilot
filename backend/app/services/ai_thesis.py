@@ -74,6 +74,18 @@ HEARSAY_PATTERNS = (
     r"\bstory\b",
     r"\bmomentum\b",
 )
+# Explicit "I bought because of chatter" FRAMING — a strong vagueness signal on
+# its own. The rest of HEARSAY_PATTERNS are bare nouns ("hype", "story",
+# "momentum", "heard") that also show up in substantive theses — often while
+# *rebutting* the hype ("this isn't just hype, revenue grew 85%"). Those are
+# treated as soft: they only signal vagueness when no monitorable driver is
+# present, so a real thesis that merely uses the word stays watchable.
+HEARSAY_FRAMING_PATTERNS = (
+    r"\bhearsay\b",
+    r"\beveryone was talking about\b",
+    r"\bpeople kept talking about\b",
+    r"\bseemed like the one to own\b",
+)
 GENERIC_OUTPUT_PATTERNS = (
     r"\bcore investment thesis\b",
     r"\blong[- ]term potential\b",
@@ -186,6 +198,7 @@ Rules:
 - Sound like a thoughtful individual investor, not a sell-side analyst.
 - Anchor the thesis in at least one MONITORABLE driver — a metric, growth rate, margin, demand trend, or named catalyst (e.g. "AI inference demand", "gross margin above 60%", "FCF growth"). A reader must be able to check later whether it still holds.
 - Do NOT lean on unmonitorable boilerplate: "long-term potential", "solid fundamentals", "market position", "business model", "core investment thesis", "remains intact", or "fundamental change" — name the actual driver instead.
+- Do NOT invoke "hype", "buzz", "chatter", "momentum", or "the story" — even to dismiss them ("this isn't just hype"). State the underlying evidence directly (the numbers, contracts, demand).
 - Ground the draft in the recent news headlines provided above — reference what is actually happening now, not generic statements from your training data. If recent news is not provided, use what you know but keep claims conservative.
 
 Output valid JSON with this exact structure:
@@ -226,7 +239,7 @@ Given the position, the user's current thesis draft, and any available market da
 - a concise summary of the likely thesis in plain English
 - a lightweight interpretation object that helps the product monitor or review the thesis
 
-When refining, anchor the text in at least one monitorable driver the investor already implied (a metric, growth rate, margin, demand trend, or named catalyst). Do NOT swap their words for unmonitorable boilerplate like "market position", "business model", "long-term potential", "solid fundamentals", "remains intact", or "core investment thesis".
+When refining, anchor the text in at least one monitorable driver the investor already implied (a metric, growth rate, margin, demand trend, or named catalyst). Do NOT swap their words for unmonitorable boilerplate like "market position", "business model", "long-term potential", "solid fundamentals", "remains intact", or "core investment thesis". Do NOT introduce "hype", "buzz", "chatter", "momentum", or "the story" — even to dismiss them; state the underlying evidence directly.
 
 Position:
 - Ticker: {ticker}
@@ -410,7 +423,9 @@ def assess_thesis_vagueness(
     is_short = len(why_text.split()) < MIN_SPECIFIC_WORDS
     if is_short:
         reasons.append("too_short")
-    if _text_matches_patterns(combined, HEARSAY_PATTERNS):
+    has_hearsay = _text_matches_patterns(combined, HEARSAY_PATTERNS)
+    hearsay_is_framing = _text_matches_patterns(combined, HEARSAY_FRAMING_PATTERNS)
+    if has_hearsay:
         reasons.append("hearsay")
     if _text_matches_patterns(combined, VAGUE_PATTERNS):
         reasons.append("vague_language")
@@ -419,16 +434,22 @@ def assess_thesis_vagueness(
     if not drivers:
         reasons.append("no_monitorable_driver")
 
-    # Strong signals mark a thesis vague on their own. "generic" boilerplate and
-    # shortness are SOFT — they only count when the thesis ALSO lacks a monitorable
-    # driver. A thesis that says "durable business model" but also names a
-    # measurable driver (margins, growth, AI demand) is still watchable, and our
-    # own AI draft/sharpen prose naturally leans on phrases like "market position"
-    # / "long-term potential" — flagging those on their own made the help branch
-    # look weak the moment it was offered.
-    strong_signals = {"hearsay", "vague_language"}.intersection(reasons)
-    weak_prose_undriven = (is_short or "generic" in reasons) and not drivers
-    is_vague = bool(strong_signals) or weak_prose_undriven or (
+    # Strong signals mark a thesis vague on their own: explicit chatter FRAMING
+    # ("everyone was talking about it") and vague/tip language. The rest are SOFT —
+    # they only count when the thesis ALSO lacks a monitorable driver: shortness,
+    # "generic" boilerplate, and a bare hearsay NOUN used in passing ("this isn't
+    # just hype", "the AI story", "strong momentum"). Our own AI draft/sharpen
+    # prose naturally leans on both "market position"-style boilerplate and on
+    # rebutting hype, so flagging those on their own made the help branch look weak
+    # the moment it was offered.
+    strong_signals: set[str] = set()
+    if hearsay_is_framing:
+        strong_signals.add("hearsay")
+    if "vague_language" in reasons:
+        strong_signals.add("vague_language")
+    bare_hearsay = has_hearsay and not hearsay_is_framing
+    weak_prose = is_short or "generic" in reasons or bare_hearsay
+    is_vague = bool(strong_signals) or (weak_prose and not drivers) or (
         investor_profile == "hearsay_driven" and not drivers
     )
 
@@ -1409,6 +1430,7 @@ Rules:
 - must_remain_true must state a specific, observable condition — not platitudes like "maintains competitive advantage" or "continues to grow".
 - what_would_change_my_mind must name a specific event or scenario that would signal the thesis is broken.
 - Do NOT lean on unmonitorable boilerplate: "long-term potential", "solid fundamentals", "market position", "business model", "core investment thesis", "remains intact", or "fundamental change" — name the actual driver instead.
+- Do NOT invoke "hype", "buzz", "chatter", "momentum", or "the story" — even to dismiss them ("this isn't just hype"). State the underlying evidence directly.
 - Avoid named politicians or named administrations unless the user explicitly mentioned them. Prefer neutral wording like "U.S. federal policy", "regulatory standards", or "government incentives".
 - Sound like a thoughtful individual investor, not a sell-side analyst.
 

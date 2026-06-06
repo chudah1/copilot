@@ -62,6 +62,36 @@ def test_generic_boilerplate_without_a_driver_is_still_vague():
     assert a.is_vague is True
 
 
+def test_rebutting_hype_with_a_driver_is_not_vague():
+    # Regression: AI drafts often *rebut* hype ("this isn't just hype, revenue
+    # grew 85%"). A bare hearsay noun used in passing is now soft — with a real
+    # driver present, the thesis stays watchable.
+    a = assess_thesis_vagueness(
+        "This isn't just hype — AI inference demand drove 85% revenue growth and "
+        "margins expanded to 70%.",
+    )
+    assert "hearsay" in a.reasons       # the word "hype" is still detected
+    assert a.detected_drivers           # but real drivers are present
+    assert a.is_vague is False          # so it is NOT flagged
+
+
+def test_explicit_chatter_framing_stays_vague_even_with_metrics():
+    # The framing "everyone was talking about" is genuine chatter-as-reason and
+    # stays a strong signal even when metrics are mentioned in passing.
+    a = assess_thesis_vagueness(
+        "Everyone was talking about its revenue growth and margins.",
+    )
+    assert a.is_vague is True
+
+
+def test_bare_hearsay_noun_without_driver_is_still_vague():
+    a = assess_thesis_vagueness(
+        "I bought it for the momentum and the buzz around the name.",
+    )
+    assert "hearsay" in a.reasons
+    assert a.is_vague is True
+
+
 def test_cashflow_synonyms_detected_as_quality():
     # M5: retail users write "cashflow"/"FCF", not just "cash flow".
     assert "quality" in _detect_monitorable_drivers("strong cashflow and FCF growth")
