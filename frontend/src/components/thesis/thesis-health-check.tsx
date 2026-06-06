@@ -73,6 +73,7 @@ export function ThesisHealthCheck({
 
   if (!result) return null;
 
+  const checksOnly = result.candidates.length === 0 && result.watch_hints_status.length > 0;
   const assessment = ASSESSMENT_CONFIG[result.thesis_assessment] ?? ASSESSMENT_CONFIG.all_clear;
   const breachedHints = result.watch_hints_status.filter((w) => w.breached);
   const healthyHints = result.watch_hints_status.filter((w) => !w.breached);
@@ -87,10 +88,14 @@ export function ThesisHealthCheck({
                 {copy.title}
               </p>
               <p className="font-sans text-sm leading-relaxed text-foreground/80">
-                Live data checked against the written case.
+                {checksOnly
+                  ? "Baseline market conditions checked against the written case."
+                  : "Live data checked against the written case."}
               </p>
             </div>
-            <Badge className={assessment.className}>{assessment.label}</Badge>
+            <Badge className={assessment.className}>
+              {checksOnly ? "Conditions hold" : assessment.label}
+            </Badge>
           </div>
         </div>
         <aside className="border-t border-border/40 bg-muted/15 p-5 sm:p-6 lg:border-l lg:border-t-0">
@@ -101,7 +106,7 @@ export function ThesisHealthCheck({
             {result.watch_hints_status.length + result.candidates.length}
           </p>
           <p className="mt-2 font-sans text-xs leading-relaxed text-muted-foreground">
-            Checks and findings in this pass.
+            {checksOnly ? "Checks in this pass." : "Checks and findings in this pass."}
           </p>
         </aside>
       </div>
@@ -199,6 +204,12 @@ export function ThesisHealthCheck({
         {result.candidates.length === 0 && result.watch_hints_status.length === 0 && (
           <p className="text-sm text-muted-foreground">
             {copy.empty}
+          </p>
+        )}
+
+        {checksOnly && (
+          <p className="text-sm text-muted-foreground">
+            No fresh event, filing, or earnings signal was flagged in this pass. This only confirms the written numeric conditions we could test today.
           </p>
         )}
 

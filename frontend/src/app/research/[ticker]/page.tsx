@@ -51,6 +51,11 @@ export default function ResearchPage() {
   const [result, setResult] = useState<StressTestResult | null>(null);
   const [loading, setLoading] = useState(false);
   const hasDraftContext = draftThesis.trim().length > 0;
+  const riskGroups = result?.risk_groups ?? [];
+  const sourceNotes = result?.source_notes ?? [];
+  const blindSpots = result?.blind_spots ?? [];
+  const watchItems = result?.what_to_watch ?? [];
+  const candidateSignals = result?.candidate_signals ?? [];
 
   const showGate = !authLoading && !isAuthenticated && hasUsedSessionTest;
 
@@ -263,7 +268,7 @@ export default function ResearchPage() {
                     Risk groups
                   </p>
                   <p className="mt-2 font-display text-[1.5rem] italic leading-none text-foreground">
-                    {result.risk_groups.length}
+                    {riskGroups.length}
                   </p>
                 </div>
                 <div className="product-panel p-4">
@@ -271,7 +276,7 @@ export default function ResearchPage() {
                     Source notes
                   </p>
                   <p className="mt-2 font-display text-[1.5rem] italic leading-none text-foreground">
-                    {result.source_notes.length}
+                    {sourceNotes.length}
                   </p>
                 </div>
                 <div className="product-panel p-4">
@@ -305,25 +310,31 @@ export default function ResearchPage() {
                   <AlertTriangle className="w-3 h-3" />
                   Risk Map
                 </p>
-                <div className="grid gap-3 md:grid-cols-2">
-                  {result.risk_groups.map((group) => (
-                    <div key={group.category} className="border border-border/60 bg-background/70 p-4 space-y-3">
-                      <p className="font-mono text-[10px] uppercase tracking-[0.16em] text-muted-foreground">
-                        {group.category}
-                      </p>
-                      <ul className="space-y-2.5">
-                        {group.items.map((risk, i) => (
-                          <li key={`${group.category}:${i}`} className="flex gap-3">
-                            <span className="font-mono text-[10px] text-muted-foreground/40 tabular-nums shrink-0 mt-0.5 w-4">
-                              {String(i + 1).padStart(2, "0")}
-                            </span>
-                            <span className="font-sans text-sm text-foreground/85 leading-relaxed">{risk}</span>
-                          </li>
-                        ))}
-                      </ul>
-                    </div>
-                  ))}
-                </div>
+                {riskGroups.length > 0 ? (
+                  <div className="grid gap-3 md:grid-cols-2">
+                    {riskGroups.map((group) => (
+                      <div key={group.category} className="border border-border/60 bg-background/70 p-4 space-y-3">
+                        <p className="font-mono text-[10px] uppercase tracking-[0.16em] text-muted-foreground">
+                          {group.category}
+                        </p>
+                        <ul className="space-y-2.5">
+                          {group.items.map((risk, i) => (
+                            <li key={`${group.category}:${i}`} className="flex gap-3">
+                              <span className="font-mono text-[10px] text-muted-foreground/40 tabular-nums shrink-0 mt-0.5 w-4">
+                                {String(i + 1).padStart(2, "0")}
+                              </span>
+                              <span className="font-sans text-sm text-foreground/85 leading-relaxed">{risk}</span>
+                            </li>
+                          ))}
+                        </ul>
+                      </div>
+                    ))}
+                  </div>
+                ) : (
+                  <p className="font-sans text-sm text-foreground/80 leading-relaxed">
+                    No grouped risk map on this result. The bear case still applies.
+                  </p>
+                )}
               </div>
             </motion.div>
 
@@ -334,9 +345,9 @@ export default function ResearchPage() {
                   <Eye className="w-3 h-3" />
                   Blind Spots
                 </p>
-                {result.blind_spots.length > 0 ? (
+                {blindSpots.length > 0 ? (
                   <ul className="space-y-3">
-                    {result.blind_spots.map((spot, i) => (
+                    {blindSpots.map((spot, i) => (
                       <li key={i} className="flex gap-3">
                         <span className="text-amber-600/70 shrink-0 mt-0.5 font-mono text-[10px]">→</span>
                         <span className="font-sans text-sm text-foreground/85 leading-relaxed">{spot}</span>
@@ -357,33 +368,39 @@ export default function ResearchPage() {
                 <p className="font-mono text-[9px] uppercase tracking-[0.25em] text-muted-foreground/60 mb-3">
                   Source Notes
                 </p>
-                <div className="space-y-3">
-                  {result.source_notes.map((note, i) => (
-                    <div key={`${note.label}:${i}`} className="border border-border/60 bg-background/70 p-3">
-                      <div className="flex flex-wrap items-center gap-2">
-                        <p className="font-mono text-[10px] uppercase tracking-[0.16em] text-foreground/75">
-                          {note.label}
+                {sourceNotes.length > 0 ? (
+                  <div className="space-y-3">
+                    {sourceNotes.map((note, i) => (
+                      <div key={`${note.label}:${i}`} className="border border-border/60 bg-background/70 p-3">
+                        <div className="flex flex-wrap items-center gap-2">
+                          <p className="font-mono text-[10px] uppercase tracking-[0.16em] text-foreground/75">
+                            {note.label}
+                          </p>
+                          <span className="font-mono text-[9px] uppercase tracking-[0.14em] text-muted-foreground/70">
+                            {note.source}
+                          </span>
+                        </div>
+                        <p className="mt-2 font-sans text-sm text-foreground/85 leading-relaxed">
+                          {note.detail}
                         </p>
-                        <span className="font-mono text-[9px] uppercase tracking-[0.14em] text-muted-foreground/70">
-                          {note.source}
-                        </span>
+                        {note.url && (
+                          <a
+                            href={note.url}
+                            target="_blank"
+                            rel="noreferrer"
+                            className="mt-2 inline-block font-mono text-[10px] uppercase tracking-[0.14em] text-primary/70 underline underline-offset-2"
+                          >
+                            Open source ↗
+                          </a>
+                        )}
                       </div>
-                      <p className="mt-2 font-sans text-sm text-foreground/85 leading-relaxed">
-                        {note.detail}
-                      </p>
-                      {note.url && (
-                        <a
-                          href={note.url}
-                          target="_blank"
-                          rel="noreferrer"
-                          className="mt-2 inline-block font-mono text-[10px] uppercase tracking-[0.14em] text-primary/70 underline underline-offset-2"
-                        >
-                          Open source ↗
-                        </a>
-                      )}
-                    </div>
-                  ))}
-                </div>
+                    ))}
+                  </div>
+                ) : (
+                  <p className="font-sans text-sm text-foreground/80 leading-relaxed">
+                    No source notes were attached to this result.
+                  </p>
+                )}
               </div>
             </motion.div>
 
@@ -394,14 +411,20 @@ export default function ResearchPage() {
                   <Shield className="w-3 h-3" />
                   What to Watch
                 </p>
-                <ul className="space-y-3">
-                  {result.what_to_watch.map((signal, i) => (
-                    <li key={i} className="flex gap-3">
-                      <CheckCircle className="w-3.5 h-3.5 text-emerald-600 shrink-0 mt-0.5" />
-                      <span className="font-sans text-sm text-foreground/85 leading-relaxed">{signal}</span>
-                    </li>
-                  ))}
-                </ul>
+                {watchItems.length > 0 ? (
+                  <ul className="space-y-3">
+                    {watchItems.map((signal, i) => (
+                      <li key={i} className="flex gap-3">
+                        <CheckCircle className="w-3.5 h-3.5 text-emerald-600 shrink-0 mt-0.5" />
+                        <span className="font-sans text-sm text-foreground/85 leading-relaxed">{signal}</span>
+                      </li>
+                    ))}
+                  </ul>
+                ) : (
+                  <p className="font-sans text-sm text-foreground/80 leading-relaxed">
+                    No explicit watch list was attached to this result.
+                  </p>
+                )}
               </div>
             </motion.div>
 
@@ -427,9 +450,9 @@ export default function ResearchPage() {
                   ? "Turn the idea into a position, write the thesis, and the monitoring loop takes over."
                   : "penKeep is strongest after the buy: thesis written, signals armed, alerts only when the case actually moves."}
               </p>
-              {result.candidate_signals.length > 0 && (
+              {candidateSignals.length > 0 && (
                 <div className="grid gap-2 sm:grid-cols-2">
-                  {result.candidate_signals.slice(0, 4).map((signal, i) => (
+                  {candidateSignals.slice(0, 4).map((signal, i) => (
                     <div key={`${signal.label}:${i}`} className="border border-primary/20 bg-background/75 px-3 py-2.5">
                       <p className="font-sans text-sm text-foreground">{signal.label}</p>
                       <p className="mt-1 font-sans text-xs leading-relaxed text-muted-foreground">

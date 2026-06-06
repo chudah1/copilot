@@ -2,6 +2,7 @@ from datetime import datetime, timedelta, timezone
 
 from app.services.market_data import _TTLCache, QUALITATIVE_KEYWORDS
 from app.services.market_data import (
+    _build_company_data_from_alpha_vantage,
     _parse_alpha_vantage_earnings,
     _parse_alpha_vantage_earnings_calendar,
     _parse_alpha_vantage_insider_transactions,
@@ -9,6 +10,7 @@ from app.services.market_data import (
     _parse_alpha_vantage_overview,
     _parse_alpha_vantage_quote,
     _parse_alpha_vantage_transcript,
+    is_current_earnings_call,
     shortlist_qualitative_candidates,
 )
 
@@ -99,6 +101,66 @@ def test_parse_alpha_vantage_transcript():
     assert transcript.sentiment == -0.22
     assert transcript.sentiment_label == "Negative"
     assert any("demand headwinds" in highlight.lower() for highlight in transcript.highlights)
+
+
+def test_is_current_earnings_call_rejects_stale_dated_transcript():
+    transcript = _parse_alpha_vantage_transcript(
+        {
+            "quarter": "2026Q1",
+            "date": "2026-01-30",
+            "overall_sentiment_score": "-0.22",
+            "overall_sentiment_label": "Negative",
+            "transcript": [{"speaker": "CEO", "content": "We are seeing some demand headwinds in China."}],
+        }
+    )
+
+    assert transcript is not None
+    assert is_current_earnings_call(
+        transcript,
+        now=datetime(2026, 6, 6, tzinfo=timezone.utc),
+        recent_fiscal_quarter="2026Q2",
+    ) is False
+
+
+def test_build_company_data_drops_stale_transcript_from_live_payload():
+    data = _build_company_data_from_alpha_vantage(
+        "AAPL",
+        {
+            "quote": {"Global Quote": {"05. price": "210.15"}},
+            "overview": {
+                "Name": "Apple Inc",
+                "Sector": "Technology",
+                "Industry": "Consumer Electronics",
+                "Description": "Makes devices",
+                "MarketCapitalization": "4500000000000",
+                "PERatio": "37.2",
+                "QuarterlyRevenueGrowthYOY": "0.17",
+                "QuarterlyEarningsGrowthYOY": "0.22",
+            },
+            "earnings": {
+                "quarterlyEarnings": [
+                    {
+                        "reportedDate": "2026-05-01",
+                        "fiscalDateEnding": "2026-03-31",
+                        "surprisePercentage": "4.5",
+                    }
+                ]
+            },
+            "earnings_calendar": "",
+            "news": {"feed": []},
+            "earnings_call_transcript": {
+                "quarter": "2026Q1",
+                "date": "2026-01-30",
+                "overall_sentiment_score": "-0.22",
+                "overall_sentiment_label": "Negative",
+                "transcript": "Services demand was solid but China was softer.",
+            },
+            "insider_transactions": {"data": []},
+        },
+    )
+
+    assert data.recent_fiscal_quarter == "2026Q1"
+    assert data.earnings_call is None
 
 
 def test_parse_alpha_vantage_insider_transactions():

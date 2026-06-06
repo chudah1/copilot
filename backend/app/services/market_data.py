@@ -363,6 +363,9 @@ class TranscriptSignal:
     full_text: str | None = None
 
 
+MAX_CURRENT_TRANSCRIPT_AGE_DAYS = 120
+
+
 @dataclass
 class InsiderTransaction:
     id: str
@@ -399,6 +402,30 @@ class CompanyData:
     insider_transactions: list[InsiderTransaction] = field(default_factory=list)
     country: str = "Unknown"
     currency: str | None = None  # ISO 4217 as reported by the data provider (authoritative)
+
+
+def is_current_earnings_call(
+    earnings_call: TranscriptSignal | None,
+    *,
+    now: datetime | None = None,
+    recent_fiscal_quarter: str | None = None,
+) -> bool:
+    """Whether a transcript is current enough to use as live evidence.
+
+    If we have a call date, trust recency. If we do not, only keep the
+    transcript when it matches the most recent reported fiscal quarter.
+    """
+    if earnings_call is None:
+        return False
+
+    reference_now = now or datetime.now(timezone.utc)
+    if earnings_call.call_date is not None:
+        return earnings_call.call_date >= (reference_now - timedelta(days=MAX_CURRENT_TRANSCRIPT_AGE_DAYS))
+
+    if recent_fiscal_quarter and earnings_call.quarter:
+        return earnings_call.quarter == recent_fiscal_quarter
+
+    return False
 
 
 def _to_float(value: Any) -> float | None:
@@ -758,7 +785,8 @@ def _build_transcript_candidate(
     transcript_cutoff = now - timedelta(days=14)
     negative_sentiment = earnings_call.sentiment is not None and earnings_call.sentiment <= -0.15
     if (
-        (earnings_call.call_date is not None and earnings_call.call_date < transcript_cutoff)
+        earnings_call.call_date is None
+        or earnings_call.call_date < transcript_cutoff
         or (not earnings_call.highlights and not negative_sentiment)
     ):
         return None
@@ -1270,6 +1298,12 @@ def _build_company_data_from_alpha_vantage(ticker: str, provider_payload: dict[s
     transcript = _parse_alpha_vantage_transcript(
         transcript_payload if isinstance(transcript_payload, dict) else {}
     )
+    if not is_current_earnings_call(
+        transcript,
+        now=datetime.now(timezone.utc),
+        recent_fiscal_quarter=earnings["recent_fiscal_quarter"],
+    ):
+        transcript = None
     insider_transactions = _parse_alpha_vantage_insider_transactions(
         insiders_payload if isinstance(insiders_payload, dict) else {"data": []}
     )
