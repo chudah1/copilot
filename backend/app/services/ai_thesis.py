@@ -825,6 +825,8 @@ async def _call_openai_json(
     prompt: str,
     model: str,
     max_tokens: int,
+    schema_name: str = "thesis_assist",
+    schema: dict[str, Any] = THESIS_ASSIST_JSON_SCHEMA,
 ) -> dict[str, Any]:
     from openai import AsyncOpenAI
 
@@ -834,9 +836,9 @@ async def _call_openai_json(
         response_format={
             "type": "json_schema",
             "json_schema": {
-                "name": "thesis_assist",
+                "name": schema_name,
                 "strict": True,
-                "schema": THESIS_ASSIST_JSON_SCHEMA,
+                "schema": schema,
             },
         },
         messages=[{"role": "user", "content": prompt}],
@@ -946,6 +948,8 @@ async def _call_openai_assist(prompt: str) -> ThesisAssistOutput:
         prompt=prompt,
         model=OPENAI_ASSIST_MODEL,
         max_tokens=1500,
+        schema_name="thesis_assist",
+        schema=THESIS_ASSIST_JSON_SCHEMA,
     )
     return ThesisAssistOutput(
         why_own_it=str(data["why_own_it"]),
@@ -1790,10 +1794,93 @@ Requirements:
 - blind_spots: 2-3 assumptions the thesis makes or ignores (omit if no thesis provided)
 - what_to_watch: 2-4 prose signals — each must name the metric, the threshold that signals a problem, and when to check it (use actual dates where available). Example: "If revenue growth falls below 8% at next earnings (~2025-07-24), thesis is at risk."
 - candidate_signals: 2-4 STRUCTURED, monitorable versions of what_to_watch. signal_type MUST be one of: "price_move", "revenue_growth", "earnings_growth" (NUMERIC), or "news_watch" (QUALITATIVE).
-    - NUMERIC: for growth metrics, operator is the condition that must STAY TRUE for the thesis to hold (usually ">=", i.e. growth must remain at/above threshold_pct; a breach fires when it drops below). For "price_move", set operator to null and threshold_pct to the percent move that warrants a review. threshold_pct is a plain percentage number (8 = 8%).
-    - QUALITATIVE ("news_watch"): for risks no number captures — competitor moves, regulation, management changes, customer loss, legal/safety events. Provide "watch_for" (a specific, recognisable event to look for in news) and "direction" ("threatens" or "supports"). Omit threshold_pct/operator.
-    - Prefer a MIX: at least one numeric watch tied to the financials AND one news_watch for the biggest qualitative risk in the bear case.
+    - Return ALL candidate_signals keys every time: signal_type, operator, threshold_pct, label, rationale, watch_for, direction.
+    - Use null for fields that do not apply.
+    - NUMERIC: for growth metrics, operator is the condition that must STAY TRUE for the thesis to hold (usually ">=", i.e. growth must remain at/above threshold_pct; a breach fires when it drops below). threshold_pct is a plain percentage number (8 = 8%). Set watch_for and direction to null.
+    - For "price_move", set operator to null, threshold_pct to the percent move that warrants a review, and watch_for/direction to null.
+    - QUALITATIVE ("news_watch"): for risks no number captures — competitor moves, regulation, management changes, customer loss, legal/safety events. Provide "watch_for" (a specific, recognisable event to look for in news) and "direction" ("threatens" or "supports"). Set operator and threshold_pct to null.
+- Prefer a MIX: at least one numeric watch tied to the financials AND one news_watch for the biggest qualitative risk in the bear case.
 - Output ONLY valid JSON, no markdown fences"""
+
+
+STRESS_TEST_JSON_SCHEMA = {
+    "type": "object",
+    "properties": {
+        "bear_case": {"type": "string"},
+        "key_risks": {"type": "array", "items": {"type": "string"}},
+        "risk_groups": {
+            "type": "array",
+            "items": {
+                "type": "object",
+                "properties": {
+                    "category": {"type": "string"},
+                    "items": {"type": "array", "items": {"type": "string"}},
+                },
+                "required": ["category", "items"],
+                "additionalProperties": False,
+            },
+        },
+        "blind_spots": {"type": "array", "items": {"type": "string"}},
+        "what_to_watch": {"type": "array", "items": {"type": "string"}},
+        "candidate_signals": {
+            "type": "array",
+            "items": {
+                "type": "object",
+                "properties": {
+                    "signal_type": {
+                        "type": "string",
+                        "enum": ["price_move", "revenue_growth", "earnings_growth", "news_watch"],
+                    },
+                    "operator": {
+                        "anyOf": [
+                            {"type": "string", "enum": [">=", "<=", ">", "<"]},
+                            {"type": "null"},
+                        ]
+                    },
+                    "threshold_pct": {
+                        "anyOf": [
+                            {"type": "number"},
+                            {"type": "null"},
+                        ]
+                    },
+                    "label": {"type": "string"},
+                    "rationale": {"type": "string"},
+                    "watch_for": {
+                        "anyOf": [
+                            {"type": "string"},
+                            {"type": "null"},
+                        ]
+                    },
+                    "direction": {
+                        "anyOf": [
+                            {"type": "string", "enum": ["threatens", "supports"]},
+                            {"type": "null"},
+                        ]
+                    },
+                },
+                "required": [
+                    "signal_type",
+                    "operator",
+                    "threshold_pct",
+                    "label",
+                    "rationale",
+                    "watch_for",
+                    "direction",
+                ],
+                "additionalProperties": False,
+            },
+        },
+    },
+    "required": [
+        "bear_case",
+        "key_risks",
+        "risk_groups",
+        "blind_spots",
+        "what_to_watch",
+        "candidate_signals",
+    ],
+    "additionalProperties": False,
+}
 
 
 def _parse_candidate_signals(raw: Any) -> list:
@@ -2059,6 +2146,27 @@ async def generate_stress_test_analysis(
         context=context,
         thesis_context=thesis_context,
     )
+
+    if not settings.anthropic_api_key:
+        if not settings.openai_api_key:
+            return _fallback_stress_test(ticker, draft_thesis)
+
+    if settings.openai_api_key:
+        try:
+            data = await _call_openai_json(
+                prompt=prompt,
+                model=OPENAI_ASSIST_MODEL,
+                max_tokens=1024,
+                schema_name="stress_test",
+                schema=STRESS_TEST_JSON_SCHEMA,
+            )
+            return _parse_stress_test_output(data)
+        except Exception as openai_error:
+            logger.warning(
+                "Stress test structured output failed for %s: %s",
+                ticker,
+                openai_error,
+            )
 
     if not settings.anthropic_api_key:
         return _fallback_stress_test(ticker, draft_thesis)

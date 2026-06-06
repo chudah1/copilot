@@ -210,3 +210,89 @@ async def test_generate_stress_test_analysis_retries_after_malformed_json():
     assert mock_call.await_count == 2
     assert result.bear_case == "The market may be pricing perfection."
     assert result.risk_groups[0].category == "Business risk"
+
+
+@pytest.mark.asyncio
+async def test_generate_stress_test_analysis_prefers_openai_structured_output():
+    structured = {
+        "bear_case": "The market may be overestimating durability.",
+        "key_risks": ["Execution risk"],
+        "risk_groups": [{"category": "Business risk", "items": ["Execution risk"]}],
+        "blind_spots": ["Exit criteria still vague"],
+        "what_to_watch": ["Gross margin"],
+        "candidate_signals": [
+            {
+                "signal_type": "news_watch",
+                "operator": None,
+                "threshold_pct": None,
+                "label": "Competitor shock",
+                "rationale": "A major competitor move would matter.",
+                "watch_for": "A competitor lands a major enterprise automation win",
+                "direction": "threatens",
+            }
+        ],
+    }
+
+    with patch("app.services.ai_thesis.settings.openai_api_key", "test-openai-key"):
+        with patch("app.services.ai_thesis.settings.anthropic_api_key", "test-anthropic-key"):
+            with patch(
+                "app.services.ai_thesis._call_openai_json",
+                new_callable=AsyncMock,
+                return_value=structured,
+            ) as mock_openai:
+                with patch("app.services.ai_thesis._call_anthropic_json", new_callable=AsyncMock) as mock_anthropic:
+                    result = await generate_stress_test_analysis(
+                        ticker="NOW",
+                        draft_thesis="Enterprise AI workflow demand stays strong.",
+                        company_data=None,
+                    )
+
+    assert mock_openai.await_count == 1
+    assert mock_anthropic.await_count == 0
+    assert result.bear_case == "The market may be overestimating durability."
+    assert result.candidate_signals[0].signal_type == "news_watch"
+
+
+@pytest.mark.asyncio
+async def test_generate_stress_test_analysis_falls_back_to_anthropic_when_openai_structured_output_fails():
+    repaired = {
+        "bear_case": "The multiple may be too rich for the execution risk.",
+        "key_risks": ["Execution risk"],
+        "risk_groups": [{"category": "Business risk", "items": ["Execution risk"]}],
+        "blind_spots": ["Exit criteria still vague"],
+        "what_to_watch": ["Revenue growth"],
+        "candidate_signals": [
+            {
+                "signal_type": "revenue_growth",
+                "operator": ">=",
+                "threshold_pct": 8,
+                "label": "Revenue growth stays above 8%",
+                "rationale": "The case needs continued top-line growth.",
+                "watch_for": None,
+                "direction": None,
+            }
+        ],
+    }
+
+    with patch("app.services.ai_thesis.settings.openai_api_key", "test-openai-key"):
+        with patch("app.services.ai_thesis.settings.anthropic_api_key", "test-anthropic-key"):
+            with patch(
+                "app.services.ai_thesis._call_openai_json",
+                new_callable=AsyncMock,
+                side_effect=RuntimeError("schema rejected"),
+            ) as mock_openai:
+                with patch(
+                    "app.services.ai_thesis._call_anthropic_json",
+                    new_callable=AsyncMock,
+                    return_value=repaired,
+                ) as mock_anthropic:
+                    result = await generate_stress_test_analysis(
+                        ticker="NOW",
+                        draft_thesis="Enterprise AI workflow demand stays strong.",
+                        company_data=None,
+                    )
+
+    assert mock_openai.await_count == 1
+    assert mock_anthropic.await_count == 1
+    assert result.bear_case == "The multiple may be too rich for the execution risk."
+    assert result.candidate_signals[0].signal_type == "revenue_growth"
