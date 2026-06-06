@@ -195,17 +195,20 @@ async def test_generate_stress_test_analysis_retries_after_malformed_json():
         "candidate_signals": [],
     }
 
-    with patch("app.services.ai_thesis.settings.anthropic_api_key", "test-key"):
-        with patch(
-            "app.services.ai_thesis._call_anthropic_json",
-            new_callable=AsyncMock,
-            side_effect=[malformed, repaired],
-        ) as mock_call:
-            result = await generate_stress_test_analysis(
-                ticker="NOW",
-                draft_thesis="AI workflow demand stays strong.",
-                company_data=None,
-            )
+    # Isolate the Anthropic retry path: with no OpenAI key the structured-output
+    # branch is skipped, so the malformed-then-repaired retry is what runs.
+    with patch("app.services.ai_thesis.settings.openai_api_key", ""):
+        with patch("app.services.ai_thesis.settings.anthropic_api_key", "test-key"):
+            with patch(
+                "app.services.ai_thesis._call_anthropic_json",
+                new_callable=AsyncMock,
+                side_effect=[malformed, repaired],
+            ) as mock_call:
+                result = await generate_stress_test_analysis(
+                    ticker="NOW",
+                    draft_thesis="AI workflow demand stays strong.",
+                    company_data=None,
+                )
 
     assert mock_call.await_count == 2
     assert result.bear_case == "The market may be pricing perfection."

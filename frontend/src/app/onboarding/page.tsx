@@ -251,6 +251,11 @@ function WizardInner() {
     if (!wizardState.holdingId || !holding) return;
     goTo("SYNTHESISING");
     setError("");
+    // Bound the LLM call so a slow provider can't strand the user on the
+    // "~10 seconds" spinner indefinitely. The backend has its own 30–60s
+    // timeout; this aborts a touch sooner and recovers gracefully.
+    const controller = new AbortController();
+    const timeoutId = setTimeout(() => controller.abort(), 45000);
     try {
       const activeProfile = wizardState.investorProfile ?? "thesis_driven";
       const promptContent = PROFILE_CONTENT[activeProfile];
@@ -261,19 +266,23 @@ function WizardInner() {
         answer1: wizardState.answer1,
         question2: promptContent.q2,
         answer2: wizardState.answer2,
-      });
+      }, { signal: controller.signal });
       setWizardState((prev) => ({ ...prev, synthesisResult: result }));
 
       // Hype-buyer climb: if the reason is too vague to monitor, ground it
-      // (bear case + measurable watches to pick) before review.
+      // (bear case + measurable watches to pick) before review. Best-effort and
+      // separately bounded — a slow grounding pass should never block the thesis
+      // we already have in hand.
       if (result.needs_grounding) {
+        const groundController = new AbortController();
+        const groundTimeoutId = setTimeout(() => groundController.abort(), 30000);
         try {
           const grounding = await api.post<GroundingResponse>("/api/onboarding/ground", {
             holding_id: wizardState.holdingId,
             investor_profile: activeProfile,
             why_own_it: wizardState.answer1,
             what_would_change_my_mind: wizardState.answer2,
-          });
+          }, { signal: groundController.signal });
           if (grounding.candidate_signals.length > 0 || grounding.bear_case) {
             setGroundingResult(grounding);
             setSelectedSignalIdx(new Set(grounding.candidate_signals.map((_, i) => i)));
@@ -282,13 +291,22 @@ function WizardInner() {
           }
         } catch {
           // Grounding is best-effort — never block the thesis on it.
+        } finally {
+          clearTimeout(groundTimeoutId);
         }
       }
 
       goTo("REVIEW");
     } catch (e) {
-      setError(getErrorMessage(e, "Something went wrong. Please try again."));
+      const aborted = e instanceof DOMException && e.name === "AbortError";
+      setError(
+        aborted
+          ? "That took longer than usual to build. Your answers are saved — tap Build thesis to try again."
+          : getErrorMessage(e, "Something went wrong. Please try again.")
+      );
       goTo("QUESTION_2");
+    } finally {
+      clearTimeout(timeoutId);
     }
   };
 

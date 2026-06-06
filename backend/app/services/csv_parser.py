@@ -23,7 +23,17 @@ class ParsedHolding:
     currency: str
 
 
-def parse_trading212_csv(content: str) -> list[ParsedHolding]:
+@dataclass
+class ParseDiagnostics:
+    """Why rows were dropped, so the caller can give a specific error instead of
+    a blanket 'No holdings found'."""
+    rows_seen: int = 0
+    skipped_bad_numbers: int = 0
+    skipped_missing_fields: int = 0
+    skipped_zero_qty: int = 0
+
+
+def parse_trading212_csv(content: str, diag: ParseDiagnostics | None = None) -> list[ParsedHolding]:
     """Parse Trading 212 transaction history CSV.
 
     Trading 212 exports transactions (buys/sells), not current holdings.
@@ -52,11 +62,15 @@ def parse_trading212_csv(content: str) -> list[ParsedHolding]:
     })
 
     for row in reader:
+        if diag is not None:
+            diag.rows_seen += 1
         action = row.get("Action", "").strip()
         ticker = row.get("Ticker", "").strip().upper()
         name = row.get("Name", "").strip()
 
         if not ticker:
+            if diag is not None:
+                diag.skipped_missing_fields += 1
             continue
 
         try:
@@ -64,6 +78,8 @@ def parse_trading212_csv(content: str) -> list[ParsedHolding]:
             price = float(row.get("Price / share", "0") or "0")
         except ValueError:
             logger.warning(f"Skipping row with invalid numbers: {row}")
+            if diag is not None:
+                diag.skipped_bad_numbers += 1
             continue
 
         currency = row.get("Currency (Price / share)", "GBP").strip() or "GBP"
@@ -95,7 +111,7 @@ def parse_trading212_csv(content: str) -> list[ParsedHolding]:
     return holdings
 
 
-def parse_generic_csv(content: str) -> list[ParsedHolding]:
+def parse_generic_csv(content: str, diag: ParseDiagnostics | None = None) -> list[ParsedHolding]:
     """Parse a simple CSV with columns: ticker, name, quantity, average_cost_basis.
 
     Also accepts: symbol (as ticker alias), qty/shares (as quantity alias),
@@ -114,6 +130,8 @@ def parse_generic_csv(content: str) -> list[ParsedHolding]:
 
     holdings = []
     for row in reader:
+        if diag is not None:
+            diag.rows_seen += 1
         ticker = find_col(row, ["ticker", "symbol", "code"])
         name = find_col(row, ["name", "company", "company_name", "security"])
         qty_str = find_col(row, ["quantity", "qty", "shares", "no. of shares", "units"])
@@ -122,6 +140,8 @@ def parse_generic_csv(content: str) -> list[ParsedHolding]:
         currency = find_col(row, ["currency", "ccy"]) or "GBP"
 
         if not ticker or not qty_str:
+            if diag is not None:
+                diag.skipped_missing_fields += 1
             continue
 
         try:
@@ -129,9 +149,13 @@ def parse_generic_csv(content: str) -> list[ParsedHolding]:
             avg_cost = float(cost_str) if cost_str else 0.0
         except ValueError:
             logger.warning(f"Skipping row with invalid numbers: {row}")
+            if diag is not None:
+                diag.skipped_bad_numbers += 1
             continue
 
         if quantity <= 0:
+            if diag is not None:
+                diag.skipped_zero_qty += 1
             continue
 
         holdings.append(ParsedHolding(
@@ -145,14 +169,22 @@ def parse_generic_csv(content: str) -> list[ParsedHolding]:
     return holdings
 
 
-def parse_csv(content: str) -> list[ParsedHolding]:
-    """Auto-detect CSV format and parse."""
+def parse_csv_detailed(content: str) -> tuple[list[ParsedHolding], ParseDiagnostics]:
+    """Auto-detect CSV format and parse, returning skip diagnostics alongside the
+    holdings so callers can explain *why* a file yielded nothing."""
+    diag = ParseDiagnostics()
     # Peek at headers to detect format
     first_line = content.split("\n")[0] if content else ""
 
     if "No. of shares" in first_line and "Action" in first_line:
         logger.info("Detected Trading 212 CSV format")
-        return parse_trading212_csv(content)
+        return parse_trading212_csv(content, diag), diag
 
     logger.info("Using generic CSV parser")
-    return parse_generic_csv(content)
+    return parse_generic_csv(content, diag), diag
+
+
+def parse_csv(content: str) -> list[ParsedHolding]:
+    """Auto-detect CSV format and parse. Backward-compatible wrapper."""
+    holdings, _ = parse_csv_detailed(content)
+    return holdings

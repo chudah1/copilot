@@ -75,8 +75,12 @@ class ApiClient {
     return this.request<T>(path);
   }
 
-  post<T>(path: string, body?: unknown) {
-    return this.request<T>(path, { method: "POST", body: body ? JSON.stringify(body) : undefined });
+  post<T>(path: string, body?: unknown, init?: { signal?: AbortSignal }) {
+    return this.request<T>(path, {
+      method: "POST",
+      body: body ? JSON.stringify(body) : undefined,
+      ...(init?.signal ? { signal: init.signal } : {}),
+    });
   }
 
   put<T>(path: string, body: unknown) {

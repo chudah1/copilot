@@ -31,7 +31,7 @@ from app.schemas.holding import (
 )
 from app.services.encryption import encrypt, decrypt
 from app.services.trading212 import Trading212Client, build_auth_header, detect_trading212_base_url
-from app.services.csv_parser import parse_csv
+from app.services.csv_parser import parse_csv_detailed
 from app.services.market_data import detect_native_currency, fetch_company_data, fetch_company_overview, fetch_live_price, get_fx_rate
 from app.services.valuation import apply_broker_position, refresh_holding_price, to_account_value
 
@@ -486,8 +486,17 @@ async def upload_csv(
     except UnicodeDecodeError:
         text = content.decode("latin-1")
 
-    parsed = parse_csv(text)
+    parsed, diag = parse_csv_detailed(text)
     if not parsed:
+        if diag.skipped_bad_numbers > 0:
+            raise HTTPException(
+                status_code=400,
+                detail=(
+                    f"Found {diag.skipped_bad_numbers} row(s), but couldn't read the quantity or "
+                    "average cost as numbers. Check those columns hold plain numbers (no currency "
+                    "symbols or commas)."
+                ),
+            )
         raise HTTPException(status_code=400, detail="No holdings found in CSV. Check the format.")
 
     now = datetime.now(timezone.utc)
