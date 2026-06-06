@@ -170,6 +170,7 @@ class ConvictionLogEntryResponse(BaseModel):
     event_severity: str | None = None
     what_would_change_my_mind: str | None = None
     outcome: str | None = None  # "broke" | "held" | None (open)
+    resolution_read: str | None = None  # prose from resolved DecisionSnapshot
     model_config = {"from_attributes": True}
 
 

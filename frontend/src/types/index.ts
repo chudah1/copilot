@@ -196,6 +196,7 @@ export interface ConvictionLogEntry {
   event_severity: string | null;
   what_would_change_my_mind: string | null;
   outcome: "broke" | "held" | null;
+  resolution_read: string | null;
 }
 
 export interface ConvictionLogResponse {

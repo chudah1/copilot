@@ -990,6 +990,7 @@ async def get_conviction_log(
     db: AsyncSession = Depends(get_db),
 ):
     from app.models.conviction_log_entry import ConvictionLogEntry
+    from app.models.decision_snapshot import DecisionSnapshot
     from app.models.monitoring_event import MonitoringEvent
     from app.services.conviction_log import EVIDENCE_REVIEWED, POST_EARNINGS_REVIEW, QUARTERLY_REVIEW
 
@@ -1039,6 +1040,22 @@ async def get_conviction_log(
         )
         theses_by_id = {t.id: t for t in theses_result.scalars().all()}
 
+    # Load resolved DecisionSnapshots for this holding to surface read-back text
+    resolved_reads: dict[uuid.UUID, str] = {}  # monitoring_event_id -> resolution read
+    if parsed_event_ids:
+        snaps_result = await db.execute(
+            select(DecisionSnapshot).where(
+                DecisionSnapshot.holding_id == holding_id,
+                DecisionSnapshot.monitoring_event_id.in_(parsed_event_ids.values()),
+                DecisionSnapshot.resolved_at.is_not(None),
+            )
+        )
+        for snap in snaps_result.scalars().all():
+            if snap.monitoring_event_id and snap.resolution_json:
+                read = snap.resolution_json.get("read")
+                if read:
+                    resolved_reads[snap.monitoring_event_id] = read
+
     # Compute reason age: days since first reason_created entry (fall back to earliest thesis)
     reason_age_days = None
     for entry in reversed(entries):
@@ -1071,6 +1088,8 @@ async def get_conviction_log(
                 if event:
                     extra["event_title"] = event.title
                     extra["event_severity"] = event.severity
+                if event_uuid and event_uuid in resolved_reads:
+                    extra["resolution_read"] = resolved_reads[event_uuid]
             thesis = theses_by_id.get(e.thesis_id) if e.thesis_id else None
             if thesis:
                 extra["what_would_change_my_mind"] = thesis.what_would_change_my_mind

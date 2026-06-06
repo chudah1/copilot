@@ -271,6 +271,17 @@ function DecisionEntry({ entry }: { entry: ConvictionLogEntry }) {
           {notes}
         </p>
       )}
+
+      {entry.resolution_read && (
+        <div className="mt-3 border border-border/40 bg-muted/15 px-3 py-2.5">
+          <p className="font-mono text-[9px] uppercase tracking-[0.15em] text-muted-foreground mb-1">
+            Read back
+          </p>
+          <p className="font-sans text-[13px] text-foreground/85 leading-relaxed">
+            {entry.resolution_read}
+          </p>
+        </div>
+      )}
     </div>
   );
 }
