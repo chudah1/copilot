@@ -990,6 +990,14 @@ async def _call_openai_assist(prompt: str) -> ThesisAssistOutput:
 
 
 def _parse_assist_output(result: ThesisAssistOutput) -> ThesisAssistOutput:
+    return _apply_assist_guardrails(result, ticker=None)
+
+
+def _apply_assist_guardrails(
+    result: ThesisAssistOutput,
+    *,
+    ticker: str | None,
+) -> ThesisAssistOutput:
     if (
         not result.why_own_it.strip()
         or not result.must_remain_true.strip()
@@ -998,18 +1006,51 @@ def _parse_assist_output(result: ThesisAssistOutput) -> ThesisAssistOutput:
         or not isinstance(result.interpretation, dict)
     ):
         raise ValueError("Incomplete thesis output")
-    interpretation = _merge_story_watch_hints(
-        _normalize_interpretation(result.interpretation)["watch_hints"],
-        text=f"{result.why_own_it} {result.must_remain_true} {result.what_would_change_my_mind}",
+    normalized_interpretation = _normalize_interpretation(result.interpretation)
+    why_own_it = result.why_own_it.strip()
+    must_remain_true = result.must_remain_true.strip()
+    what_would_change_my_mind = result.what_would_change_my_mind.strip()
+    ticker_label = ticker or "this company"
+    inferred_must, inferred_change, inferred_ambiguity = _infer_specific_conditions(
+        ticker_label,
+        why_text=why_own_it,
+        change_text=what_would_change_my_mind,
+        investor_profile=None,
+    )
+
+    if _looks_generic_output(must_remain_true) or _text_matches_patterns(must_remain_true, GENERIC_CONDITION_PATTERNS):
+        must_remain_true = inferred_must
+    if _looks_generic_output(what_would_change_my_mind) or _text_matches_patterns(what_would_change_my_mind, GENERIC_CONDITION_PATTERNS):
+        what_would_change_my_mind = inferred_change
+
+    normalized_interpretation["watch_hints"] = _merge_story_watch_hints(
+        normalized_interpretation["watch_hints"],
+        text=f"{why_own_it} {must_remain_true} {what_would_change_my_mind}",
         include_story_growth=True,
     )
-    normalized_interpretation = _normalize_interpretation(result.interpretation)
-    normalized_interpretation["watch_hints"] = interpretation
+
+    has_monitorable_hints = any(
+        hint.get("kind") in {"metric_threshold", "news_watch"}
+        for hint in normalized_interpretation["watch_hints"]
+    )
+    has_concrete_conditions = (
+        not _looks_generic_output(must_remain_true)
+        and not _looks_generic_output(what_would_change_my_mind)
+        and not _text_matches_patterns(must_remain_true, GENERIC_CONDITION_PATTERNS)
+        and not _text_matches_patterns(what_would_change_my_mind, GENERIC_CONDITION_PATTERNS)
+    )
+
+    if has_monitorable_hints and has_concrete_conditions:
+        if normalized_interpretation["monitorability"] == "low":
+            normalized_interpretation["monitorability"] = "medium"
+        normalized_interpretation["ambiguity_note"] = ""
+    elif not normalized_interpretation.get("ambiguity_note") and inferred_ambiguity:
+        normalized_interpretation["ambiguity_note"] = inferred_ambiguity
 
     return ThesisAssistOutput(
-        why_own_it=result.why_own_it.strip(),
-        must_remain_true=result.must_remain_true.strip(),
-        what_would_change_my_mind=result.what_would_change_my_mind.strip(),
+        why_own_it=why_own_it,
+        must_remain_true=must_remain_true,
+        what_would_change_my_mind=what_would_change_my_mind,
         ai_summary=result.ai_summary,
         interpretation=normalized_interpretation,
     )
@@ -1271,7 +1312,7 @@ async def assist_thesis(
             raise RuntimeError("Anthropic API key not configured")
 
         result = await _call_claude(prompt)
-        return _parse_assist_output(result)
+        return _apply_assist_guardrails(result, ticker=clean_ticker)
     except Exception as anthropic_error:
         logger.error("Anthropic thesis assist failed for %s: %s", ticker, anthropic_error)
         try:
@@ -1281,14 +1322,14 @@ async def assist_thesis(
                 prompt
                 + "\n\nIMPORTANT: Return strictly valid JSON. Escape all quotes inside strings and do not emit markdown fences."
             )
-            return _parse_assist_output(result)
+            return _apply_assist_guardrails(result, ticker=clean_ticker)
         except Exception as anthropic_retry_error:
             logger.error("Anthropic thesis assist retry failed for %s: %s", ticker, anthropic_retry_error)
         try:
             if not settings.openai_api_key:
                 raise RuntimeError("OpenAI API key not configured")
             result = await _call_openai_assist(prompt)
-            return _parse_assist_output(result)
+            return _apply_assist_guardrails(result, ticker=clean_ticker)
         except Exception as openai_error:
             logger.error("OpenAI thesis assist failed for %s: %s", ticker, openai_error)
             return (

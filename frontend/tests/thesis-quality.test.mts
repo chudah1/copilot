@@ -1,8 +1,8 @@
 import test from "node:test";
 import assert from "node:assert/strict";
 
-import { classifyThesisQuality } from "../src/lib/thesis-quality.js";
-import type { Thesis } from "../src/types/index.js";
+import { classifyThesisQuality } from "../src/lib/thesis-quality.ts";
+import type { Thesis } from "../src/types/index.ts";
 
 function thesis(overrides: Partial<Thesis> = {}): Thesis {
   return {

@@ -3,6 +3,7 @@
 import { formatDate } from "@/lib/utils";
 import { classifyThesisQuality } from "@/lib/thesis-quality";
 import { describeWatchHint } from "@/lib/watch-hints";
+import { aiAssistWeakMessaging } from "@/lib/ai-assisted-thesis";
 import type { Thesis, ThesisDecomposition } from "@/types";
 
 interface Props {
@@ -117,6 +118,7 @@ function getInterpretation(thesis: Thesis) {
 // ── Component ─────────────────────────────────────────────────────────────────
 
 export function ThesisCard({ thesis, decomposition, investorProfile, onEdit, onInvalidate }: Props) {
+  const aiAssistCopy = aiAssistWeakMessaging(investorProfile);
   const { labels, watchHints, ambiguityNote } = getInterpretation(thesis);
   const watchDescriptions = watchHints
     .map((hint) => describeWatchHint(hint))
@@ -175,6 +177,8 @@ export function ThesisCard({ thesis, decomposition, investorProfile, onEdit, onI
               ? "Overdue for refresh."
               : qualityState === "workable"
                 ? "Usable, but still worth sharpening."
+                : thesis.source === "ai_assisted"
+                  ? aiAssistCopy.qualitySummary
                 : "Too fuzzy to trust without tightening.",
       }
     : investorProfile === "hearsay_driven"
@@ -193,6 +197,8 @@ export function ThesisCard({ thesis, decomposition, investorProfile, onEdit, onI
                 ? "Overdue for refresh."
               : qualityState === "workable"
                   ? "Usable, but the story still needs sharpening."
+                  : thesis.source === "ai_assisted"
+                    ? aiAssistCopy.qualitySummary
                   : "Still too story-like to rely on without tightening.",
         }
       : {
@@ -210,6 +216,8 @@ export function ThesisCard({ thesis, decomposition, investorProfile, onEdit, onI
                 ? "Overdue for refresh."
               : qualityState === "workable"
                   ? "Usable, but still worth sharpening."
+                  : thesis.source === "ai_assisted"
+                    ? aiAssistCopy.qualitySummary
                   : "Too fuzzy to trust without tightening.",
         };
 

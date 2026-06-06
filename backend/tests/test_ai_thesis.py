@@ -2,6 +2,7 @@ from unittest.mock import AsyncMock, patch
 
 from app.services.ai_thesis import (
     ThesisAssistOutput,
+    _apply_assist_guardrails,
     _apply_synthesis_guardrails,
     _fallback_assist,
     _fallback_initial_draft,
@@ -113,6 +114,47 @@ async def test_assist_thesis_falls_back_to_openai_when_anthropic_fails():
     assert result is not None
     assert result.ai_summary == "Apple is owned for ecosystem durability."
     assert result.why_own_it.startswith("Apple")
+
+
+async def test_assist_thesis_repairs_generic_ai_output_before_returning():
+    raw_ai_response = ThesisAssistOutput(
+        why_own_it="I own Apple because Services keeps compounding and deepens the installed-base moat.",
+        must_remain_true="The core investment thesis remains intact.",
+        what_would_change_my_mind="A fundamental change in the business model.",
+        ai_summary="Apple Services thesis.",
+        interpretation={
+            "labels": ["growth", "quality"],
+            "monitorability": "low",
+            "watch_hints": [
+                {
+                    "kind": "metric_threshold",
+                    "metric": "revenue_growth_yoy",
+                    "operator": ">=",
+                    "threshold": 0.10,
+                    "rationale": "Services growth needs to stay healthy.",
+                }
+            ],
+            "proxy_signals": [],
+            "ambiguity_note": "Still vague and hard to monitor precisely.",
+        },
+    )
+
+    with patch("app.services.ai_thesis.settings.anthropic_api_key", "test-key"):
+        with patch("app.services.ai_thesis._call_claude", new_callable=AsyncMock, return_value=raw_ai_response):
+            result = await assist_thesis(
+                ticker="AAPL",
+                name="Apple Inc",
+                quantity=10,
+                average_cost=150.50,
+                draft_text="I own Apple because Services keeps compounding and deepens the installed-base moat.",
+                allow_fallback=False,
+            )
+
+    assert result is not None
+    assert result.interpretation["monitorability"] == "medium"
+    assert result.interpretation["ambiguity_note"] == ""
+    assert "core investment thesis" not in result.must_remain_true.lower()
+    assert "fundamental change in the business model" not in result.what_would_change_my_mind.lower()
 
 
 def test_fallback_assist_does_not_generate_proxy_signals():
@@ -318,6 +360,67 @@ def test_parse_assist_output_merges_qualitative_story_hints_ahead_of_generic_pri
     assert any("replacement or mitigation path by next earnings" in hint.get("watch_for", "") for hint in result.interpretation["watch_hints"])
     assert any("Eucalyptus" in hint.get("watch_for", "") for hint in result.interpretation["watch_hints"])
     assert not any(hint.get("kind") == "price_move_pct" for hint in result.interpretation["watch_hints"])
+
+
+def test_apply_assist_guardrails_upgrades_ai_output_with_concrete_conditions():
+    raw = ThesisAssistOutput(
+        why_own_it="I own Apple because Services keeps taking a bigger share of the mix and deepens the installed-base moat.",
+        must_remain_true="The core investment thesis remains intact.",
+        what_would_change_my_mind="A fundamental change in the business model.",
+        ai_summary="Apple Services thesis.",
+        interpretation={
+            "labels": ["growth", "quality"],
+            "monitorability": "low",
+            "watch_hints": [
+                {
+                    "kind": "metric_threshold",
+                    "metric": "revenue_growth_yoy",
+                    "operator": ">=",
+                    "threshold": 0.10,
+                    "rationale": "Services growth needs to stay healthy.",
+                }
+            ],
+            "proxy_signals": [],
+            "ambiguity_note": "Still vague and hard to monitor precisely.",
+        },
+    )
+
+    result = _apply_assist_guardrails(raw, ticker="AAPL")
+
+    assert result.interpretation["monitorability"] == "medium"
+    assert result.interpretation["ambiguity_note"] == ""
+    assert "core investment thesis" not in result.must_remain_true.lower()
+    assert "fundamental change in the business model" not in result.what_would_change_my_mind.lower()
+
+
+def test_parse_assist_output_without_ticker_still_repairs_generic_conditions():
+    raw = ThesisAssistOutput(
+        why_own_it="I own NVIDIA because AI demand should keep data-center growth and margins strong.",
+        must_remain_true="The core investment thesis remains intact.",
+        what_would_change_my_mind="A fundamental change in the business model.",
+        ai_summary="NVDA thesis.",
+        interpretation={
+            "labels": ["growth"],
+            "monitorability": "low",
+            "watch_hints": [
+                {
+                    "kind": "metric_threshold",
+                    "metric": "revenue_growth_yoy",
+                    "operator": ">=",
+                    "threshold": 0.0,
+                    "rationale": "Revenue growth must stay positive.",
+                }
+            ],
+            "proxy_signals": [],
+            "ambiguity_note": "Still vague.",
+        },
+    )
+
+    result = _parse_assist_output(raw)
+
+    assert result.interpretation["monitorability"] == "medium"
+    assert result.interpretation["ambiguity_note"] == ""
+    assert "core investment thesis" not in result.must_remain_true.lower()
 
 
 def test_parse_draft_output_rewrites_generic_placeholder_language():

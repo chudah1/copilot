@@ -6,6 +6,7 @@ import type {
   UpcomingEarnings,
 } from "@/types";
 import { describeWatchHint as baseDescribeWatchHint } from "@/lib/watch-hints";
+import { aiAssistWeakMessaging } from "@/lib/ai-assisted-thesis";
 
 // Pure presentational helpers + local types extracted from the position
 // page to shrink the god-component. No hooks/state — unit-testable in isolation.
@@ -79,6 +80,7 @@ export function getThesisInsights(
   events: MonitoringEvent[],
   investorProfile: "thesis_driven" | "hearsay_driven" | null,
 ) {
+  const aiAssistCopy = aiAssistWeakMessaging(investorProfile);
   if (!thesis) {
     return {
       nextStep:
@@ -101,6 +103,7 @@ export function getThesisInsights(
   const ambiguity = typeof interpretation.ambiguity_note === "string" ? interpretation.ambiguity_note : "";
   const stalePressure = getStalePressure(thesis);
   const latestEvent = events[0];
+  const isAiAssist = thesis.source === "ai_assisted";
 
   if (thesis.status === "needs_review") {
     return {
@@ -134,14 +137,18 @@ export function getThesisInsights(
     return {
       nextStep:
         ambiguity ||
-        (investorProfile === "hearsay_driven"
+        (isAiAssist
+          ? aiAssistCopy.insightsNextStep
+          : investorProfile === "hearsay_driven"
           ? "Tighten this into a clearer business reason and a sharper break condition."
           : "Tighten the thesis so it can be monitored more precisely."),
-      qualityLabel: "Weak signals",
+      qualityLabel: isAiAssist ? aiAssistCopy.insightsLabel : "Weak signals",
       qualityTone: "bg-muted text-muted-foreground",
       statusDot: "text-muted-foreground",
       watchStatus:
-        investorProfile === "hearsay_driven"
+        isAiAssist
+          ? aiAssistCopy.insightsStatus
+          : investorProfile === "hearsay_driven"
           ? "The current reason still reads more like a story than a case."
           : "The current thesis is too vague for reliable monitoring.",
       canReaffirm: false,
@@ -205,6 +212,7 @@ export function getDecisionPrompt(
   events: MonitoringEvent[],
   investorProfile: "thesis_driven" | "hearsay_driven" | null,
 ) {
+  const aiAssistCopy = aiAssistWeakMessaging(investorProfile);
   if (!thesis) {
     return {
       eyebrow: "Before you add more",
@@ -253,18 +261,27 @@ export function getDecisionPrompt(
   }
 
   if (monitorability === "low" || ambiguity) {
+    const isAiAssist = thesis.source === "ai_assisted";
     return {
       eyebrow: "Before you size up",
       title:
-        investorProfile === "hearsay_driven"
+        isAiAssist
+          ? aiAssistCopy.decisionTitle
+          : investorProfile === "hearsay_driven"
           ? "The reason is still too story-like."
           : "The thesis is still too vague.",
       body:
         ambiguity ||
-        (investorProfile === "hearsay_driven"
+        (isAiAssist
+          ? aiAssistCopy.decisionBody
+          : investorProfile === "hearsay_driven"
           ? "Make the business driver and break condition clearer before you commit more capital."
           : "Tighten the assumptions before you commit more capital."),
-      ctaLabel: investorProfile === "hearsay_driven" ? "Tighten the reason →" : "Tighten the thesis →",
+      ctaLabel: isAiAssist
+        ? aiAssistCopy.decisionCta
+        : investorProfile === "hearsay_driven"
+          ? "Tighten the reason →"
+          : "Tighten the thesis →",
       action: "edit" as const,
       tone: "border-sky-500/25 bg-sky-500/8",
     };

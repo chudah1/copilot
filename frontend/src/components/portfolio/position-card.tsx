@@ -6,6 +6,7 @@ import { formatAssumptionLabel } from "@/lib/assumption-label";
 import { tightenInvestorCopy } from "@/lib/investor-language";
 import { formatCurrency, formatPercent } from "@/lib/utils";
 import { classifyThesisQuality } from "@/lib/thesis-quality";
+import { aiAssistWeakMessaging } from "@/lib/ai-assisted-thesis";
 import type { Holding, Thesis, HoldingPulse, LivePrice, UpcomingEarnings } from "@/types";
 
 const PULSE_DOT: Record<string, string> = {
@@ -26,6 +27,7 @@ function cardStatusCopy(args: {
   investorProfile?: "thesis_driven" | "hearsay_driven" | null;
 }) {
   const { hasThesis, pulse, thesis, investorProfile } = args;
+  const aiAssistCopy = aiAssistWeakMessaging(investorProfile);
   const cadencePressure = Boolean(pulse?.reason?.includes("review cadence"));
   const assumptionLabel = formatAssumptionLabel(pulse?.assumption_label, investorProfile, {
     maxLength: 54,
@@ -79,13 +81,16 @@ function cardStatusCopy(args: {
   }
 
   if (quality.kind === "weak") {
+    const assisted = thesis?.source === "ai_assisted";
     return {
       eyebrow: "Weak",
       headline:
-        investorProfile === "hearsay_driven"
-          ? "This reason is too soft."
-          : "This thesis is too soft.",
-      detail: "Too vague to trust.",
+        assisted
+          ? aiAssistCopy.cardHeadline
+          : investorProfile === "hearsay_driven"
+            ? "This reason is too soft."
+            : "This thesis is too soft.",
+      detail: assisted ? aiAssistCopy.cardDetail : "Too vague to trust.",
       tone: "text-amber-700",
       subLabel: null,
     };
