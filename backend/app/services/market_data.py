@@ -895,7 +895,7 @@ def _build_news_candidate(
         3,
         {
             "event_type": "news_or_earnings_candidate",
-            "description": f"{item.headline} — {item.summary}",
+            "description": f"{item.headline}: {item.summary}" if item.summary else item.headline,
             "evidence": {
                 "article_id": item.id,
                 "headline": item.headline,

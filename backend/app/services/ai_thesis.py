@@ -278,6 +278,7 @@ Requirements:
   - news_watch: use watch_for + direction for a concrete qualitative trigger such as regulation, product failure, customer loss, acquisition integration failure, or management turnover
 - For growth metrics (revenue_growth_yoy, earnings_growth_yoy), only include a watch_hint if you can infer a meaningful threshold from the thesis (e.g. 10%, 15%). Never use 0 as a threshold — if no specific rate is implied, omit the hint entirely.
 - Thresholds for growth metrics are expressed as decimal fractions (e.g. 0.10 means 10%).
+- Avoid em dashes in generated prose. Use commas or periods instead.
 - Include 0-3 proxy_signals: other tickers (never the held ticker itself) whose news or earnings would inform whether this thesis holds.
 - For each proxy, include:
   - rationale: why it matters in the causal chain

@@ -41,7 +41,7 @@ const verdictConfig: Record<string, { label: string; sentence: string; className
   },
   neutral: {
     label: "Neutral",
-    sentence: "This evidence is neutral — it doesn't directly affect your reason.",
+    sentence: "This evidence is neutral. It does not directly affect your reason.",
     className: "bg-muted text-muted-foreground",
   },
 };
@@ -53,6 +53,50 @@ const reviewLabel: Record<string, string> = {
   invalidated: "Invalidated",
   not_relevant: "Not relevant",
 };
+
+function reviewDecisionConfig(
+  action: ReviewAction,
+  investorProfile?: "thesis_driven" | "hearsay_driven" | null,
+): { label: string; sentence: string; className: string } {
+  const subject = investorProfile === "thesis_driven"
+    ? "thesis"
+    : investorProfile === "hearsay_driven"
+      ? "reason"
+      : "case";
+
+  switch (action) {
+    case "reaffirmed":
+      return {
+        label: "Reaffirmed",
+        sentence: `You said this does not break the ${subject}.`,
+        className: "bg-emerald-500/15 text-emerald-700",
+      };
+    case "lowered_confidence":
+      return {
+        label: "Less sure",
+        sentence: `You marked this as weakening the ${subject}, but not breaking it.`,
+        className: "bg-amber-500/15 text-amber-700",
+      };
+    case "invalidated":
+      return {
+        label: "Broken",
+        sentence: `You marked this as breaking the ${subject}.`,
+        className: "bg-red-500/15 text-red-600",
+      };
+    case "ignored":
+      return {
+        label: "Ignored",
+        sentence: "You chose to ignore this signal for now.",
+        className: "bg-muted text-muted-foreground",
+      };
+    case "not_relevant":
+      return {
+        label: "Not relevant",
+        sentence: `You marked this as not relevant to your ${subject}.`,
+        className: "bg-muted text-muted-foreground",
+      };
+  }
+}
 
 function reviewLanguage(investorProfile?: "thesis_driven" | "hearsay_driven" | null) {
   if (investorProfile === "thesis_driven") {
@@ -214,6 +258,7 @@ export function EventTimeline({ events, onReview, onEditReason, reviewingEventId
       <div className="space-y-4 p-5 sm:p-6">
         {events.map((e) => {
           const verdict = e.verdict ? verdictConfig[e.verdict] : null;
+          const reviewDecision = e.review_action ? reviewDecisionConfig(e.review_action, investorProfile) : null;
           const narrative = eventNarrativeFields(e);
           const youSaid = narrative.youSaid;
           const weWatched = narrative.weWatched;
@@ -281,9 +326,13 @@ export function EventTimeline({ events, onReview, onEditReason, reviewingEventId
                 <aside className="space-y-3 border-t border-border/50 pt-4 lg:border-l lg:border-t-0 lg:pl-4 lg:pt-0">
                   <div className="space-y-1">
                     <p className="font-mono text-[10px] uppercase tracking-[0.16em] text-muted-foreground">
-                      Verdict
+                      {reviewDecision ? "Your ruling" : "Verdict"}
                     </p>
-                    {verdict ? (
+                    {reviewDecision ? (
+                      <p className={`inline-block rounded-md px-2 py-1 text-sm font-medium ${reviewDecision.className}`}>
+                        {reviewDecision.sentence}
+                      </p>
+                    ) : verdict ? (
                       <p className={`inline-block rounded-md px-2 py-1 text-sm font-medium ${verdict.className}`}>
                         {verdict.sentence}
                       </p>
@@ -291,6 +340,17 @@ export function EventTimeline({ events, onReview, onEditReason, reviewingEventId
                       <p className="text-sm text-muted-foreground">No model verdict on file.</p>
                     )}
                   </div>
+
+                  {reviewDecision && verdict && (
+                    <div className="space-y-1">
+                      <p className="font-mono text-[10px] uppercase tracking-[0.16em] text-muted-foreground">
+                        Model read
+                      </p>
+                      <p className="text-sm text-muted-foreground">
+                        {verdict.sentence}
+                      </p>
+                    </div>
+                  )}
 
                   {e.review_notes && (
                     <div className="space-y-1">

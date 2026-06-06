@@ -39,6 +39,7 @@ Requirements for analysis (exactly 3 short sentences, plain English, no labels l
 - Sentence 1: what happened
 - Sentence 2: why it matters to their stated reason or assumption
 - Sentence 3: what to do next (keep watching / review soon / thesis may be broken)
+- Avoid em dashes. Use commas or periods instead.
 
 Do not use filler ("worth noting", "decision pressure", "it's important to", "landscape", "robust"). Write like a sharp friend who owns stocks, not a chatbot.
 
@@ -63,7 +64,7 @@ def _classification_profile_context(investor_profile: str | None) -> tuple[str, 
     if investor_profile == "thesis_driven":
         return (
             "thesis_driven",
-            "The user writes in assumptions. Say whether the news weakens, supports, or breaks one of them — plainly.",
+            "The user writes in assumptions. Say whether the news weakens, supports, or breaks one of them, plainly.",
         )
     if investor_profile == "hearsay_driven":
         return (
@@ -80,7 +81,7 @@ def _default_classification(investor_profile: str | None) -> ClassificationResul
     if investor_profile == "thesis_driven":
         return ClassificationResult(
             severity="warning",
-            analysis="This looks relevant to one of your assumptions. It may be weakening a pillar — not just market noise. Re-read that assumption before you add, trim, or shrug it off.",
+            analysis="This looks relevant to one of your assumptions. It may be weakening a pillar, not just market noise. Re-read that assumption before you add, trim, or shrug it off.",
         )
     if investor_profile == "hearsay_driven":
         return ClassificationResult(
@@ -96,9 +97,9 @@ def _default_classification(investor_profile: str | None) -> ClassificationResul
 def _next_step_sentence(severity: str, investor_profile: str | None) -> str:
     if severity == "thesis_breaking":
         return (
-            "You may need to rewrite the story or exit — don't just leave it on watch."
+            "You may need to rewrite the story or exit. Do not just leave it on watch."
             if investor_profile == "hearsay_driven"
-            else "You may need to rewrite the thesis or exit — don't just leave it on watch."
+            else "You may need to rewrite the thesis or exit. Do not just leave it on watch."
         )
     if severity == "warning":
         return (
