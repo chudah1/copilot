@@ -1,7 +1,7 @@
 import uuid
 from typing import Any
 from datetime import datetime
-from pydantic import BaseModel
+from pydantic import BaseModel, field_validator
 
 
 class CreateThesisRequest(BaseModel):
@@ -9,7 +9,7 @@ class CreateThesisRequest(BaseModel):
     thesis_kind: str = "company"
     why_own_it: str
     must_remain_true: str | None = None
-    what_would_change_my_mind: str | None = None
+    what_would_change_my_mind: str
     confidence: str = "medium"
     review_cadence_days: int = 7
     ai_summary: str | None = None
@@ -140,6 +140,13 @@ class UpdateThesisRequest(BaseModel):
     interpretation: dict[str, Any] | None = None
     source: str | None = None
     status: str | None = None
+
+    @field_validator("what_would_change_my_mind")
+    @classmethod
+    def exit_condition_not_empty(cls, v: str | None) -> str | None:
+        if v is not None and not v.strip():
+            raise ValueError("Exit condition cannot be empty — it controls when red alerts fire")
+        return v
 
 
 class DebugDecomposeRequest(BaseModel):

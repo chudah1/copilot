@@ -27,7 +27,7 @@ interface Props {
     thesis_kind: "company";
     why_own_it: string;
     must_remain_true: string | null;
-    what_would_change_my_mind: string | null;
+    what_would_change_my_mind: string;
     confidence: "high" | "medium" | "low";
     review_cadence_days: number;
     ai_summary: string | null;
@@ -49,6 +49,7 @@ export function ThesisEditor({ thesis, investorProfile, mode = "write", onSave, 
   const [interpretation, setInterpretation] = useState<Record<string, unknown> | null>(thesis?.interpretation ?? null);
   const [assisting, setAssisting] = useState(false);
   const [assistError, setAssistError] = useState("");
+  const [changeMindError, setChangeMindError] = useState("");
 
   const interpretationData = interpretation ?? {};
   const watchHints = Array.isArray(interpretationData.watch_hints)
@@ -306,11 +307,14 @@ export function ThesisEditor({ thesis, investorProfile, mode = "write", onSave, 
                 <Label>{copy.breaks}</Label>
                 <Textarea
                   value={changeMind}
-                  onChange={(e) => setChangeMind(e.target.value)}
+                  onChange={(e) => { setChangeMind(e.target.value); if (e.target.value.trim()) setChangeMindError(""); }}
                   rows={5}
                   placeholder={copy.breaksPlaceholder}
-                  className="min-h-28 bg-background/85"
+                  className={`min-h-28 bg-background/85 ${changeMindError ? "border-red-500/60" : ""}`}
                 />
+                {changeMindError && (
+                  <p className="font-sans text-xs text-red-600">{changeMindError}</p>
+                )}
               </div>
             </div>
 
@@ -346,20 +350,24 @@ export function ThesisEditor({ thesis, investorProfile, mode = "write", onSave, 
 
           <div className="flex flex-wrap items-center gap-3 border-t border-border/50 pt-5">
             <Button
-              onClick={() =>
+              onClick={() => {
+                if (!changeMind.trim()) {
+                  setChangeMindError("Required — this is what triggers your red alerts. One sentence is enough.");
+                  return;
+                }
                 onSave({
                   thesis_kind: "company",
                   why_own_it: whyOwnIt,
                   must_remain_true: mustRemainTrue || null,
-                  what_would_change_my_mind: changeMind || null,
+                  what_would_change_my_mind: changeMind,
                   confidence,
                   review_cadence_days: thesis?.review_cadence_days ?? 7,
                   ai_summary: aiSummary || null,
                   interpretation,
                   source: aiSummary ? "ai_assisted" : "user",
                   status: "active",
-                })
-              }
+                });
+              }}
               disabled={whyOwnIt.trim().length === 0}
             >
               {copy.saveLabel}
