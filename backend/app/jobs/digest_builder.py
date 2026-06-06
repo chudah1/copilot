@@ -23,17 +23,17 @@ from app.config import settings
 logger = logging.getLogger(__name__)
 InvestorProfile = str | None
 
-# --- Digest visual language (email-safe hex; matches the app's parchment theme) ---
+# --- Digest visual language (aligned with penKeep brand tokens) ---
 _DZ = {
-    "paper": "#f4efe4",   # outer page
-    "card": "#fffdf8",    # the digest sheet
-    "ink": "#211e19",     # primary text
-    "muted": "#6f6a60",   # secondary text
-    "faint": "#9a9488",   # labels / footer
-    "line": "#e7e1d5",    # hairline
-    "quote": "#efe9dc",   # quote rule + soft fill
-    "accent": "#c1492a",  # rust
-    "accent_deep": "#9c3a21",
+    "paper": "#ECE7DB",   # outer page — parchment
+    "card": "#F5F0E8",    # the digest sheet
+    "ink": "#161510",     # primary text — deep ink
+    "muted": "#6B6258",   # secondary text
+    "faint": "#9A8A78",   # labels / footer
+    "line": "#C8BBA8",    # hairline
+    "quote": "#EDE5DB",   # quote rule + soft fill
+    "accent": "#C1492A",  # rust
+    "accent_deep": "#7A3520",  # mahogany
 }
 _SERIF = "Georgia, 'Times New Roman', serif"
 _SANS = "-apple-system, BlinkMacSystemFont, 'Segoe UI', Helvetica, Arial, sans-serif"
@@ -41,10 +41,10 @@ _MONO = "'SFMono-Regular', Consolas, 'Liberation Mono', Menlo, monospace"
 
 # Verdict → (text colour, soft background, label)
 _VERDICT_STYLE = {
-    "threatens": ("#a83a23", "#f6e7e1", "Threatens this reason"),
-    "supports": ("#4f7a3f", "#e9efe3", "Supports this reason"),
-    "review": ("#9c6a1e", "#f4ecda", "Worth reviewing"),
-    "neutral": ("#6f6a60", "#efe9dc", "Neutral"),
+    "threatens": ("#C1492A", "#F0E3DC", "Threatens this reason"),
+    "supports": ("#3D6B41", "#E3EDE4", "Supports this reason"),
+    "review": ("#9C6A1E", "#F0E8D8", "Worth reviewing"),
+    "neutral": ("#6B6258", "#EDE5DB", "Neutral"),
 }
 
 
@@ -64,27 +64,33 @@ def _wrap_email_shell(body_html: str, *, headline: str, preheader: str = "") -> 
         '<!DOCTYPE html><html lang="en"><head><meta charset="utf-8">'
         '<meta name="viewport" content="width=device-width,initial-scale=1">'
         '<meta name="color-scheme" content="light only">'
-        f'</head><body style="margin:0;padding:0;background:{_DZ["paper"]};">'
-        f'<div style="display:none;max-height:0;overflow:hidden;opacity:0;">{pre}</div>'
+        f'</head><body style="margin:0;padding:0;background:{_DZ["paper"]};font-family:{_SERIF};">'
+        f'<div style="display:none;max-height:0;overflow:hidden;opacity:0;">{pre}&nbsp;</div>'
         '<table role="presentation" width="100%" cellpadding="0" cellspacing="0" border="0" '
-        f'style="background:{_DZ["paper"]};padding:30px 12px;"><tr><td align="center">'
-        '<table role="presentation" width="600" cellpadding="0" cellspacing="0" border="0" '
-        f'style="max-width:600px;width:100%;background:{_DZ["card"]};border:1px solid {_DZ["line"]};">'
+        f'style="background:{_DZ["paper"]};"><tr><td align="center" style="padding:48px 16px 64px;">'
+        '<table role="presentation" width="100%" cellpadding="0" cellspacing="0" border="0" style="max-width:600px;">'
+        # Top mahogany rule
+        f'<tr><td style="background-color:{_DZ["accent_deep"]};height:3px;font-size:0;line-height:0;">&nbsp;</td></tr>'
+        # Card open
+        f'<tr><td style="background:{_DZ["card"]};border-left:1px solid {_DZ["line"]};border-right:1px solid {_DZ["line"]};">'
+        '<table role="presentation" width="100%" cellpadding="0" cellspacing="0" border="0">'
         # Masthead
-        f'<tr><td style="padding:28px 34px 18px;border-bottom:1px solid {_DZ["line"]};">'
-        f'<div style="font-family:{_MONO};font-size:10px;letter-spacing:0.24em;'
-        f'text-transform:uppercase;color:{_DZ["accent"]};">Weekly digest</div>'
-        f'<div style="font-family:{_SERIF};font-style:italic;font-size:27px;'
-        f'color:{_DZ["ink"]};margin-top:6px;">penKeep</div></td></tr>'
+        f'<tr><td style="padding:28px 36px 22px;border-bottom:1px solid {_DZ["line"]};">'
+        f'<table role="presentation" width="100%" cellpadding="0" cellspacing="0" border="0"><tr>'
+        f'<td><p style="margin:0;font-family:{_MONO};font-size:11px;letter-spacing:0.22em;text-transform:uppercase;color:{_DZ["accent_deep"]};">penKeep</p></td>'
+        f'<td align="right"><p style="margin:0;font-family:{_MONO};font-size:10px;letter-spacing:0.16em;text-transform:uppercase;color:{_DZ["faint"]};">Weekly digest</p></td>'
+        '</tr></table></td></tr>'
         # Body
-        f'<tr><td style="padding:8px 34px 4px;font-family:{_SANS};font-size:15px;'
-        f'line-height:1.62;color:{_DZ["ink"]};">{body_html}</td></tr>'
+        f'<tr><td style="padding:8px 36px 4px;font-family:{_SERIF};font-size:15px;line-height:1.62;color:{_DZ["ink"]};">{body_html}</td></tr>'
         # Footer
-        f'<tr><td style="padding:22px 34px 30px;border-top:1px solid {_DZ["line"]};'
-        f'font-family:{_MONO};font-size:11px;line-height:1.7;color:{_DZ["faint"]};">'
-        'You are getting this because you keep your reasons on penKeep.<br>'
-        f'<a href="{settings.frontend_url}/settings" style="color:{_DZ["muted"]};'
-        'text-decoration:underline;">Change your digest schedule</a></td></tr>'
+        f'<tr><td style="padding:22px 36px 28px;border-top:1px solid {_DZ["line"]};">'
+        f'<p style="margin:0;font-family:{_MONO};font-size:11px;line-height:1.7;color:{_DZ["faint"]};">'
+        f'penKeep &middot; <a href="https://penkeep.io" style="color:{_DZ["faint"]};text-decoration:none;">penkeep.io</a><br>'
+        f'<a href="{settings.frontend_url}/settings" style="color:{_DZ["muted"]};text-decoration:underline;">Change digest schedule</a>'
+        '</p></td></tr>'
+        '</table></td></tr>'
+        # Bottom hairline
+        f'<tr><td style="background:{_DZ["line"]};height:1px;font-size:0;line-height:0;">&nbsp;</td></tr>'
         '</table></td></tr></table></body></html>'
     )
 

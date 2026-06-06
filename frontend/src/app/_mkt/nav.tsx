@@ -77,7 +77,6 @@ export function MarketingNav({ active }: MarketingNavProps) {
               }}
               className="hidden md:inline"
             >
-              Thesis-first portfolio review
             </span>
           </div>
         </Link>

@@ -3,7 +3,7 @@ import { mk } from "../../_mkt/tokens";
 
 export const metadata = {
   title: "Blog · penKeep",
-  description: "We built the app we wished we'd had ten years ago.",
+  description: "The reason we built penKeep",
 };
 
 const STORY_POINTS = [
@@ -174,7 +174,7 @@ export default function BlogPage() {
           }}
         >
           <p style={{ margin: 0 }}>
-            Six months later, you check the price. It&apos;s down. Or up. You feel something. You
+            Few months later, you check the price. It&apos;s down. Or up. You feel something. You
             tell yourself a story: &ldquo;the market doesn&apos;t understand it yet&rdquo; or
             &ldquo;I should have sold.&rdquo; The story has nothing to do with the original reason
             you bought, because the original reason is gone.
@@ -223,8 +223,8 @@ export default function BlogPage() {
             being entertained by your own savings.
           </p>
           <p style={{ margin: 0 }}>
-            So we set out to build the opposite. An app that asks you, gently, on a Sunday, why you
-            own each thing. An app that&apos;s quiet for a quarter. Then, when something you
+            So we set out to build the opposite. An app that asks you why you
+            own each stock. An app that&apos;s quiet for a quarter. Then, when something you
             actually care about moves, one short note. No buy buttons. No &ldquo;you&apos;re up
             0.4%.&rdquo; No charts you stare at while waiting for the train.
           </p>

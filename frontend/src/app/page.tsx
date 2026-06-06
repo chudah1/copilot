@@ -222,27 +222,6 @@ export default function LandingPage() {
                   marginBottom: 30,
                 }}
               >
-                <span
-                  style={{
-                    width: 6,
-                    height: 6,
-                    borderRadius: 999,
-                    background: mk.accent,
-                    display: "inline-block",
-                    animation: "pkPulse 2.4s ease-out infinite",
-                  }}
-                />
-                <span
-                  style={{
-                    fontFamily: mk.mono,
-                    fontSize: 10.5,
-                    letterSpacing: "0.16em",
-                    textTransform: "uppercase",
-                    color: mk.pencil,
-                  }}
-                >
-                  Live now · free tier open
-                </span>
               </div>
 
               <h1
