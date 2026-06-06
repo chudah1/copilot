@@ -23,6 +23,9 @@ def ensure_sqlite_dev_compatibility(conn) -> None:
 
     if "holdings" in tables:
         holding_columns = {column["name"] for column in inspector.get_columns("holdings")}
+        if "average_cost_native" not in holding_columns:
+            conn.execute(text("ALTER TABLE holdings ADD COLUMN average_cost_native NUMERIC(18, 4)"))
+            logger.info("Added missing holdings.average_cost_native column for local SQLite compatibility")
         if "last_monitored_at" not in holding_columns:
             conn.execute(text("ALTER TABLE holdings ADD COLUMN last_monitored_at DATETIME"))
             logger.info("Added missing holdings.last_monitored_at column for local SQLite compatibility")

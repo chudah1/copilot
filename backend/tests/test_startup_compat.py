@@ -61,16 +61,34 @@ def test_sqlite_dev_compatibility_adds_missing_signal_columns():
                 """
             )
         )
+        conn.execute(
+            text(
+                """
+                CREATE TABLE holdings (
+                    id TEXT PRIMARY KEY,
+                    user_id TEXT NOT NULL,
+                    ticker TEXT NOT NULL,
+                    name TEXT NOT NULL,
+                    quantity NUMERIC NOT NULL,
+                    average_cost_basis NUMERIC NOT NULL,
+                    currency TEXT NOT NULL
+                )
+                """
+            )
+        )
 
         ensure_sqlite_dev_compatibility(conn)
 
         inspector = inspect(conn)
         user_columns = {column["name"] for column in inspector.get_columns("users")}
         thesis_signal_columns = {column["name"] for column in inspector.get_columns("thesis_signals")}
+        holding_columns = {column["name"] for column in inspector.get_columns("holdings")}
 
         assert "onboarding_completed_at" in user_columns
         assert "last_fired_at" in thesis_signal_columns
         assert "consecutive_ignores" in thesis_signal_columns
+        assert "average_cost_native" in holding_columns
+        assert "last_monitored_at" in holding_columns
 
 
 def test_noise_suppression_migration_skips_existing_sqlite_columns(monkeypatch):
