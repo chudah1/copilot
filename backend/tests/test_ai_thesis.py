@@ -267,7 +267,8 @@ def test_fallback_assist_infers_qualitative_watch_rules_from_regulatory_and_deal
     )
 
     news_hints = [hint for hint in result.interpretation["watch_hints"] if hint.get("kind") == "news_watch"]
-    assert any("FDA restricts compounded GLP-1" in hint.get("watch_for", "") for hint in news_hints)
+    assert any("compounded GLP-1" in hint.get("watch_for", "") for hint in news_hints)
+    assert any("replacement or mitigation path by next earnings" in hint.get("watch_for", "") for hint in news_hints)
     assert any("Eucalyptus" in hint.get("watch_for", "") for hint in news_hints)
 
 

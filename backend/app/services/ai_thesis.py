@@ -462,20 +462,37 @@ def _infer_qualitative_watch_hints(text: str) -> list[dict[str, Any]]:
         ("glp-1" in lowered or "semaglutide" in lowered or "compounded" in lowered)
         and ("fda" in lowered or "ban" in lowered or "restrict" in lowered or "pull" in lowered)
     ):
+        restricted_thing = "the thesis-critical product or channel"
+        match = re.search(
+            r"(?:fda|regulator(?:y)?)\s+(?:formally\s+)?(?:ban(?:s|ned)?|restrict(?:s|ed)?|pull(?:s|ed)?|block(?:s|ed)?)\s+([^,.]+?)(?:\s+and\b|[,.]|$)",
+            text,
+            re.IGNORECASE,
+        )
+        if match:
+            candidate = match.group(1).strip(" -")
+            if candidate:
+                restricted_thing = candidate
         hints.append(
             {
                 "kind": "news_watch",
-                "watch_for": "the FDA restricts compounded GLP-1 and the company fails to present a credible replacement path by next earnings",
+                "watch_for": f"a regulatory restriction hits {restricted_thing} and management fails to present a credible replacement or mitigation path by next earnings",
                 "direction": "threatens",
-                "rationale": "If the GLP-1 channel is restricted and management cannot pivot quickly, the main growth driver is impaired.",
+                "rationale": "If the core product or channel is restricted and management cannot pivot quickly, the main growth driver is impaired.",
             }
         )
 
     if any(keyword in lowered for keyword in ("eucalyptus", "acquisition", "deal", "integration", "overhead drag")):
+        deal_name = "the acquisition or integration"
+        match = re.search(
+            r"\b([A-Z][A-Za-z0-9&.\-]+(?:\s+[A-Z][A-Za-z0-9&.\-]+)*)\s+(?:deal|acquisition)\b",
+            text,
+        )
+        if match:
+            deal_name = match.group(1)
         hints.append(
             {
                 "kind": "news_watch",
-                "watch_for": "the Eucalyptus or acquisition integration fails to add a clear new revenue line and starts reading like overhead drag",
+                "watch_for": f"{deal_name} fails to add a clear new revenue line and starts reading like overhead drag",
                 "direction": "threatens",
                 "rationale": "If the deal adds cost without new revenue traction, the expansion case weakens.",
             }
