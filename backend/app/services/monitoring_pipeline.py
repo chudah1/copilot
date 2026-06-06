@@ -10,6 +10,7 @@ logger = logging.getLogger(__name__)
 _EMBED_MODEL = "text-embedding-3-small"
 _SCORE_THRESHOLD = 0.30
 _MAX_SENTENCES = 8
+_TRANSCRIPT_LOOKBACK = 2
 
 # Objective threshold breaches that should fire regardless of the AI classifier
 # (they test a number against the user's own threshold — no judgment needed).
@@ -144,29 +145,72 @@ async def _thesis_aware_highlights(
         if not claim_texts:
             return None
 
-        sentences = [s.strip() for s in re.split(r"(?<=[.!?])\s+", full_text) if len(s.strip()) > 40]
-        if not sentences:
+        windows = _build_transcript_windows(full_text)
+        if not windows:
             return None
 
         client = AsyncOpenAI(api_key=settings.openai_api_key)
-        resp = await client.embeddings.create(model=_EMBED_MODEL, input=claim_texts + sentences)
+        resp = await client.embeddings.create(
+            model=_EMBED_MODEL,
+            input=claim_texts + [window for _, window in windows],
+        )
         vecs = [d.embedding for d in resp.data]
 
         claim_vecs = vecs[: len(claim_texts)]
-        sent_vecs = vecs[len(claim_texts):]
+        window_vecs = vecs[len(claim_texts):]
 
-        scored: list[tuple[float, str]] = []
-        for sent_vec, sentence in zip(sent_vecs, sentences):
-            score = max(sum(a * b for a, b in zip(sent_vec, cv)) for cv in claim_vecs)
+        scored: list[tuple[float, str, int]] = []
+        for idx, (window_vec, (sentence, _window_text)) in enumerate(zip(window_vecs, windows)):
+            score = max(sum(a * b for a, b in zip(window_vec, cv)) for cv in claim_vecs)
             if score >= _SCORE_THRESHOLD:
-                scored.append((score, sentence))
+                scored.append((score, sentence, idx))
 
-        scored.sort(key=lambda x: x[0], reverse=True)
-        return [s for _, s in scored[:_MAX_SENTENCES]] or None
+        scored.sort(key=lambda x: (x[0], -x[2]), reverse=True)
+        ordered: list[str] = []
+        seen: set[str] = set()
+        for _score, sentence, _idx in scored:
+            if sentence in seen:
+                continue
+            seen.add(sentence)
+            ordered.append(sentence)
+            if len(ordered) >= _MAX_SENTENCES:
+                break
+        return ordered or None
 
     except Exception as exc:
         logger.warning("Transcript embedding extraction failed, falling back to keywords: %s", exc)
         return None
+
+
+def _build_transcript_windows(full_text: str) -> list[tuple[str, str]]:
+    """Build focal-sentence windows for transcript retrieval.
+
+    We embed a small rolling context window instead of the bare sentence so short
+    answers like "It is accelerating rapidly" keep the nearby question/topic.
+    The returned tuple is (focal_sentence_for_ui, contextual_window_for_embedding).
+    """
+    sentences = [s.strip() for s in re.split(r"(?<=[.!?])\s+", full_text) if len(s.strip()) > 25]
+    if not sentences:
+        return []
+
+    windows: list[tuple[str, str]] = []
+    for idx, sentence in enumerate(sentences):
+        start = max(0, idx - _TRANSCRIPT_LOOKBACK)
+        context_parts = sentences[start : idx + 1]
+
+        # If the previous line is an analyst question, keep it glued to the
+        # answer so the answer's pronouns retain their subject.
+        if idx > 0 and sentences[idx - 1].endswith("?"):
+            context_parts = sentences[max(0, idx - 1) : idx + 1]
+            if idx > 1:
+                context_parts = sentences[max(0, idx - _TRANSCRIPT_LOOKBACK) : idx + 1]
+
+        window = " ".join(context_parts).strip()
+        if len(window) <= len(sentence):
+            window = sentence
+        windows.append((sentence, window))
+
+    return windows
 
 
 def extract_news_watches(claims: list[Any] | None) -> list[NewsWatch]:
