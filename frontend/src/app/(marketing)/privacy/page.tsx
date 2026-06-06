@@ -11,13 +11,14 @@ export default function PrivacyPage() {
     <LegalPage
       kicker="Legal"
       title={<>Privacy Policy</>}
-      updated="3 June 2026"
+      updated="6 June 2026"
       intro={
         <>
           This explains what personal data penKeep collects, why, and what rights you have. The
           data controller is <Fill>[LEGAL ENTITY NAME]</Fill>,{" "}
           <Fill>[REGISTERED ADDRESS]</Fill>. For anything privacy-related, email{" "}
-          <Fill>[privacy@penkeep.io]</Fill>. See also our{" "}
+          <a href="mailto:privacy@penkeep.io" style={{ color: mk.accent }}>privacy@penkeep.io</a>.
+          See also our{" "}
           <Link href="/security" style={{ color: mk.accent }}>
             security page
           </Link>
@@ -65,13 +66,25 @@ export default function PrivacyPage() {
             "To keep penKeep secure, debug problems, and improve the product.",
           ]}
         />
+      </LegalSection>
+
+      <LegalSection n="03" title="Your data is never used to train AI">
         <P>
-          <Strong>We do not sell your data, and we do not use your thesis notes to train public AI
-          models, or for advertising.</Strong>
+          <Strong>We do not sell your data. We do not use your thesis notes, portfolio data, or
+          financial reasoning to train any AI model — ours or anyone else&apos;s.</Strong>
+        </P>
+        <P>
+          When we process your thesis against market events, we send the minimum context needed to
+          the AI provider handling that request. We work exclusively with providers — currently
+          Anthropic, OpenAI, and Google — who are contractually bound not to use data submitted
+          via the API to train their models.
+        </P>
+        <P>
+          Your notes are a record of your private financial thinking. We treat them accordingly.
         </P>
       </LegalSection>
 
-      <LegalSection n="03" title="Legal bases (UK/EU GDPR)">
+      <LegalSection n="04" title="Legal bases (UK/EU GDPR)">
         <P>Where GDPR applies, we rely on:</P>
         <L
           items={[
@@ -95,7 +108,7 @@ export default function PrivacyPage() {
         />
       </LegalSection>
 
-      <LegalSection n="04" title="Who we share it with">
+      <LegalSection n="05" title="Who we share it with">
         <P>
           We use a small set of trusted processors who act on our instructions. Each handles only
           what it needs to:
@@ -106,9 +119,9 @@ export default function PrivacyPage() {
             <><Strong>Resend</Strong> — transactional and digest emails.</>,
             <><Strong>Railway</Strong> — cloud hosting and database.</>,
             <>
-              <Strong>AI providers</Strong> (<Fill>[Anthropic, OpenAI, Google]</Fill>) — to analyse
-              public market information against the claims in your thesis. We send the minimum needed
-              and use providers that do not train their models on our API data.
+              <Strong>Anthropic, OpenAI, and Google</Strong> — to analyse public market information
+              against the claims in your thesis. We send the minimum needed and all three are
+              contractually prohibited from using API data to train their models.
             </>,
             <><Strong>Market-data &amp; filing sources</Strong> — to fetch the public information we monitor.</>,
           ]}
@@ -119,15 +132,15 @@ export default function PrivacyPage() {
         </P>
       </LegalSection>
 
-      <LegalSection n="05" title="International transfers">
+      <LegalSection n="06" title="International transfers">
         <P>
-          Some processors are outside your country (for example, in the US). Where we transfer
-          personal data internationally, we rely on appropriate safeguards such as Standard
-          Contractual Clauses.
+          Some processors are outside the UK (for example, in the US). Where we transfer personal
+          data internationally, we rely on appropriate safeguards such as Standard Contractual
+          Clauses.
         </P>
       </LegalSection>
 
-      <LegalSection n="06" title="How long we keep it">
+      <LegalSection n="07" title="How long we keep it">
         <P>
           We keep your data while your account is active and as long as needed to provide the
           service. After you delete your account we remove your personal data within a reasonable
@@ -136,29 +149,30 @@ export default function PrivacyPage() {
         </P>
       </LegalSection>
 
-      <LegalSection n="07" title="Your rights">
+      <LegalSection n="08" title="Your rights">
         <P>
           Depending on where you live, you may have the right to access, correct, delete, export, or
           restrict use of your data, and to object to or withdraw consent for certain processing. To
-          exercise any of these, email <Fill>[privacy@penkeep.io]</Fill> — we respond within 30 days
-          (and aim for sooner). You can also complain to your local data-protection authority (in
-          the UK, the ICO).
+          exercise any of these, email{" "}
+          <a href="mailto:privacy@penkeep.io" style={{ color: mk.accent }}>privacy@penkeep.io</a>{" "}
+          — we respond within 30 days (and aim for sooner). You can also complain to your local
+          data-protection authority (in the UK, the ICO).
         </P>
       </LegalSection>
 
-      <LegalSection n="08" title="Cookies">
+      <LegalSection n="09" title="Cookies">
         <P>
           We use the minimum cookies needed to keep you signed in and the site working, plus limited
-          analytics. We don&apos;t use advertising cookies. <Fill>[If you add analytics that require
-          consent, link your cookie settings here.]</Fill>
+          analytics. We don&apos;t use advertising cookies or share analytics data with third
+          parties for targeting purposes.
         </P>
       </LegalSection>
 
-      <LegalSection n="09" title="Children">
+      <LegalSection n="10" title="Children">
         <P>penKeep is not for anyone under 18, and we don&apos;t knowingly collect their data.</P>
       </LegalSection>
 
-      <LegalSection n="10" title="Changes">
+      <LegalSection n="11" title="Changes">
         <P>
           We&apos;ll update this policy as penKeep evolves and revise the date above. If a change is
           material, we&apos;ll give reasonable notice.

@@ -11,11 +11,11 @@ export default function TermsPage() {
     <LegalPage
       kicker="Legal"
       title={<>Terms of Service</>}
-      updated="3 June 2026"
+      updated="6 June 2026"
       intro={
         <>
           These terms are a binding agreement between you and{" "}
-          <Fill>[LEGAL ENTITY NAME, e.g. PenKeep Ltd]</Fill> (&ldquo;penKeep&rdquo;,
+          <Fill>[LEGAL ENTITY NAME]</Fill> (&ldquo;penKeep&rdquo;,
           &ldquo;we&rdquo;, &ldquo;us&rdquo;). By creating an account, joining the founding
           presale, or using the site, you agree to them. If you don&apos;t agree, please
           don&apos;t use penKeep.
@@ -50,8 +50,10 @@ export default function TermsPage() {
       <LegalSection n="03" title="Your account">
         <P>
           You are responsible for keeping your login credentials secure and for activity under your
-          account. Tell us promptly at <Fill>[support@penkeep.io]</Fill> if you suspect
-          unauthorised access. You agree to give accurate information and keep it up to date.
+          account. Tell us promptly at{" "}
+          <a href="mailto:support@penkeep.io" style={{ color: mk.accent }}>support@penkeep.io</a>{" "}
+          if you suspect unauthorised access. You agree to give accurate information and keep it up
+          to date.
         </P>
       </LegalSection>
 
@@ -88,8 +90,8 @@ export default function TermsPage() {
         />
         <P>
           Payments are processed by <Strong>Stripe</Strong>. We never receive or store your full
-          card details. Prices are shown in <Fill>[GBP]</Fill> and, where applicable, exclusive of
-          taxes that are added at checkout.
+          card details. Prices are shown in GBP and, where applicable, exclusive of taxes that are
+          added at checkout.
         </P>
       </LegalSection>
 
@@ -128,7 +130,18 @@ export default function TermsPage() {
         </P>
       </LegalSection>
 
-      <LegalSection n="08" title="Disclaimers">
+      <LegalSection n="08" title="AI and data">
+        <P>
+          We use AI to analyse public market information against your thesis claims. We do not use
+          your notes or financial reasoning to train any AI model. See our{" "}
+          <Link href="/privacy" style={{ color: mk.accent }}>
+            Privacy Policy
+          </Link>{" "}
+          for full details on how we use AI providers and what commitments they have made.
+        </P>
+      </LegalSection>
+
+      <LegalSection n="09" title="Disclaimers">
         <P>
           penKeep is provided <Strong>&ldquo;as is&rdquo; and &ldquo;as available&rdquo;</Strong>.
           We rely on third-party data (market data, news, filings) and AI models that can be
@@ -138,26 +151,26 @@ export default function TermsPage() {
         </P>
       </LegalSection>
 
-      <LegalSection n="09" title="Limitation of liability">
+      <LegalSection n="10" title="Limitation of liability">
         <P>
           To the maximum extent permitted by law, penKeep is not liable for any investment losses,
           lost profits, or indirect, incidental or consequential damages arising from your use of
           the service. Our total liability to you for any claim is limited to the greater of the
-          amount you paid us in the 12 months before the claim, or <Fill>[£100]</Fill>. Nothing in
-          these terms excludes liability that cannot lawfully be excluded (such as for fraud or
-          death/personal injury caused by negligence). <Strong>Your statutory consumer rights are
-          not affected.</Strong>
+          amount you paid us in the 12 months before the claim, or £100. Nothing in these terms
+          excludes liability that cannot lawfully be excluded (such as for fraud or death/personal
+          injury caused by negligence). <Strong>Your statutory consumer rights are not
+          affected.</Strong>
         </P>
       </LegalSection>
 
-      <LegalSection n="10" title="Indemnity">
+      <LegalSection n="11" title="Indemnity">
         <P>
           You agree to indemnify penKeep against claims and costs arising from your misuse of the
           service or breach of these terms.
         </P>
       </LegalSection>
 
-      <LegalSection n="11" title="Changes and termination">
+      <LegalSection n="12" title="Changes and termination">
         <P>
           We may update the service and these terms. If a change is material, we&apos;ll give
           reasonable notice (for example by email or on the site); continued use after that means
@@ -167,18 +180,19 @@ export default function TermsPage() {
         </P>
       </LegalSection>
 
-      <LegalSection n="12" title="Governing law">
+      <LegalSection n="13" title="Governing law">
         <P>
-          These terms are governed by the laws of <Fill>[JURISDICTION, e.g. England and Wales]</Fill>
-          , and the courts of <Fill>[JURISDICTION]</Fill> have non-exclusive jurisdiction. If you
-          are a consumer, you may also have the right to bring claims in your country of residence.
+          These terms are governed by the laws of England and Wales, and the courts of England and
+          Wales have non-exclusive jurisdiction. If you are a consumer, you may also have the right
+          to bring claims in your country of residence.
         </P>
       </LegalSection>
 
-      <LegalSection n="13" title="Contact">
+      <LegalSection n="14" title="Contact">
         <P>
-          Questions about these terms? Email <Fill>[legal@penkeep.io]</Fill>. Our registered
-          details are <Fill>[LEGAL ENTITY NAME, COMPANY NUMBER, REGISTERED ADDRESS]</Fill>.
+          Questions about these terms? Email{" "}
+          <a href="mailto:legal@penkeep.io" style={{ color: mk.accent }}>legal@penkeep.io</a>.
+          Our registered details are <Fill>[LEGAL ENTITY NAME, COMPANY NUMBER, REGISTERED ADDRESS]</Fill>.
         </P>
       </LegalSection>
     </LegalPage>
