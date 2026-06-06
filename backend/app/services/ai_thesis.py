@@ -2070,6 +2070,30 @@ async def generate_stress_test_analysis(
             max_tokens=1024,
         )
         return _parse_stress_test_output(data)
-    except Exception as e:
-        logger.error("Stress test generation failed for %s: %s", ticker, e, exc_info=True)
-        return _fallback_stress_test(ticker, draft_thesis)
+    except Exception as first_error:
+        logger.warning(
+            "Stress test generation first pass failed for %s: %s",
+            ticker,
+            first_error,
+        )
+        try:
+            data = await _call_anthropic_json(
+                prompt=(
+                    prompt
+                    + "\n\nIMPORTANT: Return strictly valid JSON. Escape quotes inside strings, "
+                    + "do not include markdown fences, and ensure every array/object is closed."
+                ),
+                model=settings.anthropic_model,
+                max_tokens=1024,
+            )
+            return _parse_stress_test_output(data)
+        except Exception as second_error:
+            if isinstance(second_error, json.JSONDecodeError):
+                logger.warning(
+                    "Stress test generation fell back after malformed JSON for %s: %s",
+                    ticker,
+                    second_error,
+                )
+            else:
+                logger.error("Stress test generation failed for %s: %s", ticker, second_error, exc_info=True)
+            return _fallback_stress_test(ticker, draft_thesis)

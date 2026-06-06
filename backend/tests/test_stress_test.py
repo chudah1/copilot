@@ -1,7 +1,9 @@
+import json
 from unittest.mock import AsyncMock, patch
 
 import pytest
 
+from app.services.ai_thesis import generate_stress_test_analysis
 from app.services.stress_test import run_stress_test, _cache
 
 
@@ -179,3 +181,32 @@ def _make_counter_output(
         blind_spots=blind_spots or ["Regulatory exposure not addressed"],
         what_to_watch=what_to_watch or ["Watch gross margin trend"],
     )
+
+
+@pytest.mark.asyncio
+async def test_generate_stress_test_analysis_retries_after_malformed_json():
+    malformed = json.JSONDecodeError("Expecting ',' delimiter", '{"bad"', 6)
+    repaired = {
+        "bear_case": "The market may be pricing perfection.",
+        "key_risks": ["Execution risk"],
+        "risk_groups": [{"category": "Business risk", "items": ["Execution risk"]}],
+        "blind_spots": ["Exit criteria still vague"],
+        "what_to_watch": ["Gross margin"],
+        "candidate_signals": [],
+    }
+
+    with patch("app.services.ai_thesis.settings.anthropic_api_key", "test-key"):
+        with patch(
+            "app.services.ai_thesis._call_anthropic_json",
+            new_callable=AsyncMock,
+            side_effect=[malformed, repaired],
+        ) as mock_call:
+            result = await generate_stress_test_analysis(
+                ticker="NOW",
+                draft_thesis="AI workflow demand stays strong.",
+                company_data=None,
+            )
+
+    assert mock_call.await_count == 2
+    assert result.bear_case == "The market may be pricing perfection."
+    assert result.risk_groups[0].category == "Business risk"
