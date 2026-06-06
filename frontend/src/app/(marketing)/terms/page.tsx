@@ -1,3 +1,4 @@
+import { notFound } from "next/navigation";
 import Link from "next/link";
 import { LegalPage, LegalSection, P, L, Fill, Strong } from "../../_mkt/legal";
 import { mk } from "../../_mkt/tokens";
@@ -7,6 +8,7 @@ export const metadata = {
 };
 
 export default function TermsPage() {
+  notFound();
   return (
     <LegalPage
       kicker="Legal"

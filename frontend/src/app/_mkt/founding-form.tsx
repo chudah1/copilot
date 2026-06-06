@@ -262,10 +262,6 @@ export function FoundingForm({ dark = false }: { dark?: boolean }) {
 
       <p style={{ fontFamily: mk.sans, fontSize: 12, color: muted, marginTop: 12, lineHeight: 1.5 }}>
         By reserving a seat you agree to our{" "}
-        <a href="/terms" style={{ color: mk.accent, textDecoration: "none" }}>
-          Terms
-        </a>{" "}
-        and{" "}
         <a href="/refunds" style={{ color: mk.accent, textDecoration: "none" }}>
           Refund Policy
         </a>

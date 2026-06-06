@@ -23,9 +23,8 @@ export function MarketingFooter() {
     {
       title: "Legal",
       links: [
-        { label: "Privacy", href: "/privacy" },
-        { label: "Terms", href: "/terms" },
         { label: "Refunds", href: "/refunds" },
+        { label: "Security", href: "/security" },
       ],
     },
   ] as const;
