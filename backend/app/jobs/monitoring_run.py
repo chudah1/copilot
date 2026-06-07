@@ -1,6 +1,6 @@
 import logging
 import uuid
-from datetime import datetime, timezone
+from datetime import date, datetime, timedelta, timezone
 from typing import Any
 
 from sqlalchemy import select
@@ -224,6 +224,69 @@ async def _fetch_ticker_data(tickers: set[str]) -> dict[str, CompanyData | None]
     return ticker_data
 
 
+_STATELESS_EVENT_TYPES = frozenset({
+    "earnings_surprise",
+    "upcoming_earnings",
+    "metric_threshold",
+    "monitoring_inactive",
+})
+
+
+def _candidate_event_date(candidate: dict[str, Any]) -> datetime | None:
+    ev = candidate.get("evidence") or {}
+    for key in ("call_date", "published_at", "transaction_date", "filing_date"):
+        raw = ev.get(key)
+        if not raw:
+            continue
+        if isinstance(raw, datetime):
+            return raw if raw.tzinfo else raw.replace(tzinfo=timezone.utc)
+        if isinstance(raw, date) and not isinstance(raw, datetime):
+            return datetime.combine(raw, datetime.min.time()).replace(tzinfo=timezone.utc)
+        if isinstance(raw, str):
+            try:
+                dt = datetime.fromisoformat(raw.replace("Z", "+00:00"))
+                return dt if dt.tzinfo else dt.replace(tzinfo=timezone.utc)
+            except ValueError:
+                continue
+    raw_date = ev.get("date")
+    if raw_date and isinstance(raw_date, str):
+        try:
+            d = date.fromisoformat(raw_date)
+            return datetime.combine(d, datetime.min.time()).replace(tzinfo=timezone.utc)
+        except ValueError:
+            pass
+    return None
+
+
+def _apply_thesis_floor(
+    candidates: list[dict[str, Any]],
+    thesis_created_at: datetime,
+) -> list[dict[str, Any]]:
+    """Drop event-dated candidates that predate this thesis.
+
+    Stateless candidates (earnings_surprise, metric_threshold, etc.) reflect
+    current market state rather than a discrete past event, so they are always
+    kept. Everything else is filtered if its event date is before the thesis was
+    created (minus one day of grace for timezone / scheduling skew).
+
+    This prevents new users from receiving alerts about stale evidence — most
+    obviously earnings-call transcripts, which have a 120-day fetch window.
+    """
+    floor = thesis_created_at - timedelta(days=1)
+    if floor.tzinfo is None:
+        floor = floor.replace(tzinfo=timezone.utc)
+
+    surviving = []
+    for candidate in candidates:
+        if candidate.get("event_type") in _STATELESS_EVENT_TYPES:
+            surviving.append(candidate)
+            continue
+        event_date = _candidate_event_date(candidate)
+        if event_date is None or event_date >= floor:
+            surviving.append(candidate)
+    return surviving
+
+
 async def run_monitoring():
     import time
     started = time.monotonic()
@@ -304,6 +367,10 @@ async def run_monitoring():
                 )
                 candidates.extend(gemini_candidates)
                 candidates = match_candidates_to_signals(candidates, claims)
+
+                # Drop candidates whose event date predates this thesis — guards
+                # new users against stale evidence (transcript window is 120 days).
+                candidates = _apply_thesis_floor(candidates, thesis.created_at)
 
                 # Build lookup tables for narrative generation
                 claims_by_id, signals_by_id = build_claim_signal_lookup(claims)
