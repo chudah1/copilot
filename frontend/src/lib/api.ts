@@ -23,7 +23,9 @@ class ApiClient {
       if (isAuthEndpoint || !accessToken) {
         const body = await response.json().catch(() => ({}));
         const detail = body.detail;
-        const message = typeof detail === "string" ? detail : "Invalid email or password";
+        const message = typeof detail === "string" && detail !== "Invalid credentials"
+          ? detail
+          : "Incorrect email or password";
         throw new Error(message);
       }
       const refreshed = await this.tryRefresh();
