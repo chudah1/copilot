@@ -18,8 +18,9 @@ class ApiClient {
     });
 
     if (response.status === 401) {
-      // Auth endpoints (login, register) — no token to refresh; surface the real error.
-      if (!accessToken) {
+      // Auth endpoints never need a refresh — surface the real error directly.
+      const isAuthEndpoint = path.startsWith("/api/auth/login") || path.startsWith("/api/auth/register");
+      if (isAuthEndpoint || !accessToken) {
         const body = await response.json().catch(() => ({}));
         const detail = body.detail;
         const message = typeof detail === "string" ? detail : "Invalid email or password";
