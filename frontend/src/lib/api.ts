@@ -18,6 +18,13 @@ class ApiClient {
     });
 
     if (response.status === 401) {
+      // Auth endpoints (login, register) — no token to refresh; surface the real error.
+      if (!accessToken) {
+        const body = await response.json().catch(() => ({}));
+        const detail = body.detail;
+        const message = typeof detail === "string" ? detail : `API error: 401`;
+        throw new Error(message);
+      }
       const refreshed = await this.tryRefresh();
       if (refreshed) {
         const retryAccessToken = getStoredAccessToken();
