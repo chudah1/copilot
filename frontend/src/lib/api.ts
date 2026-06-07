@@ -40,7 +40,13 @@ class ApiClient {
 
     if (!response.ok) {
       const body = await response.json().catch(() => ({}));
-      throw new Error(body.detail || `API error: ${response.status}`);
+      const detail = body.detail;
+      const message = Array.isArray(detail)
+        ? detail.map((e: { msg?: string }) => e.msg ?? String(e)).join("; ")
+        : typeof detail === "string"
+        ? detail
+        : `API error: ${response.status}`;
+      throw new Error(message);
     }
 
     if (response.status === 204) {
