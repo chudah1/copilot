@@ -317,19 +317,6 @@ async def run_monitoring():
                     await write_monitoring_gap(db, thesis.id, "gemini_news", str(exc), run_id)
                 candidates = match_candidates_to_signals(candidates, claims)
 
-                # Write an llm_classifier gap if the key is absent and there are candidates to classify
-                qualitative_types = {
-                    "news_or_earnings_candidate", "gemini_news", "edgar_8k",
-                    "earnings_call_transcript", "insider_transaction", "news_keyword_match",
-                }
-                has_qualitative = any(c.get("event_type") in qualitative_types for c in candidates)
-                if has_qualitative and not settings.anthropic_api_key:
-                    await write_monitoring_gap(
-                        db, thesis.id, "llm_classifier",
-                        "anthropic_api_key not configured — qualitative candidates will not fire",
-                        run_id,
-                    )
-
                 # Drop candidates whose event date predates this thesis — guards
                 # new users against stale evidence (transcript window is 120 days).
                 candidates = apply_thesis_floor(candidates, thesis.created_at)
