@@ -4,12 +4,13 @@ import { formatDate } from "@/lib/utils";
 import { classifyThesisQuality } from "@/lib/thesis-quality";
 import { describeWatchHint } from "@/lib/watch-hints";
 import { aiAssistWeakMessaging } from "@/lib/ai-assisted-thesis";
-import type { Thesis, ThesisDecomposition } from "@/types";
+import type { Thesis, ThesisDecomposition, MonitoringGap } from "@/types";
 
 interface Props {
   thesis: Thesis;
   decomposition?: ThesisDecomposition | null;
   investorProfile?: "thesis_driven" | "hearsay_driven" | null;
+  monitoringGaps?: MonitoringGap[];
   onEdit: () => void;
   onInvalidate: () => void;
 }
@@ -117,7 +118,7 @@ function getInterpretation(thesis: Thesis) {
 
 // ── Component ─────────────────────────────────────────────────────────────────
 
-export function ThesisCard({ thesis, decomposition, investorProfile, onEdit, onInvalidate }: Props) {
+export function ThesisCard({ thesis, decomposition, investorProfile, monitoringGaps = [], onEdit, onInvalidate }: Props) {
   const aiAssistCopy = aiAssistWeakMessaging(investorProfile);
   const { labels, watchHints, ambiguityNote } = getInterpretation(thesis);
   const watchDescriptions = watchHints
@@ -221,6 +222,13 @@ export function ThesisCard({ thesis, decomposition, investorProfile, onEdit, onI
                   : "Too fuzzy to trust without tightening.",
         };
 
+  const recentGaps = monitoringGaps.filter((g) => {
+    const age = Date.now() - new Date(g.failed_at).getTime();
+    return age < 24 * 60 * 60 * 1000;
+  });
+  const uniqueSources = [...new Set(recentGaps.map((g) => g.source))];
+  const hasGaps = uniqueSources.length > 0;
+
   return (
     <div className="border border-border bg-card divide-y divide-border/40">
 
@@ -230,6 +238,14 @@ export function ThesisCard({ thesis, decomposition, investorProfile, onEdit, onI
           {/* Status */}
           <div className="flex items-center gap-1.5 shrink-0">
             <span className={`h-1.5 w-1.5 rounded-full ${STATUS_DOT[thesis.status] ?? "bg-border"}`} />
+            {hasGaps && (
+              <span
+                title={`Monitoring gaps in last 24h: ${uniqueSources.join(", ")}`}
+                className="inline-flex items-center justify-center w-4 h-4 rounded-full bg-amber-100 text-amber-600 text-[10px] font-bold cursor-help"
+              >
+                !
+              </span>
+            )}
             <span className={`font-mono text-[10px] uppercase tracking-[0.2em] ${STATUS_TEXT[thesis.status] ?? "text-muted-foreground"}`}>
               {thesis.status.replace("_", " ")}
             </span>

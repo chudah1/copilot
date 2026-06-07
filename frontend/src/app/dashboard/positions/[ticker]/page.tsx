@@ -27,6 +27,7 @@ import type {
   Holding,
   MonitoringEvent,
   MonitoringEventReviewResponse,
+  MonitoringGap,
   OnboardingState,
   Thesis,
   ThesisAssistResponse,
@@ -98,6 +99,7 @@ export default function PositionDetailPage() {
   const [deleteLoading, setDeleteLoading] = useState(false);
   const [thesisSubTab, setThesisSubTab] = useState<ThesisSubTab>("thesis");
   const [headerCollapsed, setHeaderCollapsed] = useState(false);
+  const [allGaps, setAllGaps] = useState<MonitoringGap[]>([]);
 
   const holding = holdings.find((h) => h.ticker === ticker);
   const activeThesis = theses.find((t) => t.status === "active" || t.status === "draft" || t.status === "needs_review");
@@ -114,18 +116,20 @@ export default function PositionDetailPage() {
         setHoldings(h);
         const match = h.find((x) => x.ticker === ticker);
         if (match) {
-          const [t, e, log, earnings, onboarding] = await Promise.all([
+          const [t, e, log, earnings, onboarding, gaps] = await Promise.all([
             api.get<Thesis[]>(`/api/theses/holding/${match.id}`),
             api.get<MonitoringEvent[]>(`/api/monitoring/holdings/${match.id}/events`),
             api.get<ConvictionLogResponse>(`/api/portfolio/holdings/${match.id}/conviction-log`).catch(() => null),
             api.get<UpcomingEarnings[]>("/api/portfolio/upcoming-earnings").catch(() => []),
             api.get<OnboardingState>("/api/onboarding/state").catch(() => null),
+            api.get<MonitoringGap[]>(`/api/monitoring/gaps`).catch(() => []),
           ]);
           setTheses(t);
           setEvents(e);
           setConvictionLog(log);
           setUpcomingEarnings(earnings.find((item) => item.holding_id === match.id) ?? null);
           setOnboardingState(onboarding);
+          setAllGaps(gaps);
           const latestThesis = t.find((item) => item.status === "active" || item.status === "draft" || item.status === "needs_review");
           if (latestThesis) {
             setDecompositionLoading(true);
@@ -1132,6 +1136,7 @@ export default function PositionDetailPage() {
                           thesis={activeThesis}
                           decomposition={decompositionEnvelope?.decomposition ?? null}
                           investorProfile={onboardingState?.investor_profile ?? null}
+                          monitoringGaps={allGaps.filter((g) => g.thesis_id === activeThesis.id)}
                           onEdit={() => setEditing(true)}
                           onInvalidate={() => setInvalidateOpen(true)}
                         />

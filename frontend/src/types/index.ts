@@ -171,6 +171,15 @@ export interface ThesisHealthSnapshot {
   computed_at: string;
 }
 
+export interface MonitoringGap {
+  id: string;
+  thesis_id: string | null;
+  source: string;
+  error_message: string;
+  run_id: string;
+  failed_at: string;
+}
+
 export interface MonitoringEventReviewResponse {
   id: string;
   monitoring_event_id: string;
