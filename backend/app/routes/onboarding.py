@@ -416,6 +416,11 @@ async def synthesize_thesis(
         investor_profile=investor_profile,
     )
 
+    # If the AI synthesis returned an empty exit condition, fall back to the
+    # user's raw answer — it's better than storing a null that silently
+    # disables red-alert monitoring.
+    exit_cond = (output.what_would_change_my_mind or "").strip() or (body.answer2 or "").strip() or None
+
     thesis = Thesis(
         holding_id=holding.id,
         user_id=current_user.id,
@@ -424,7 +429,7 @@ async def synthesize_thesis(
         confidence="medium",
         why_own_it=output.why_own_it,
         must_remain_true=output.must_remain_true,
-        what_would_change_my_mind=output.what_would_change_my_mind,
+        what_would_change_my_mind=exit_cond,
         ai_summary=output.ai_summary,
         interpretation=output.interpretation,
     )

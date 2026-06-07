@@ -1,6 +1,6 @@
 import logging
 import uuid
-from datetime import date, datetime, timedelta, timezone
+from datetime import datetime, timezone
 from typing import Any
 
 from sqlalchemy import select
@@ -17,6 +17,7 @@ from app.services.market_data import CompanyData, fetch_company_data, shortlist_
 from app.services.valuation import apply_market_price
 from app.services.noise_filter import (
     apply_priority_suppression,
+    apply_thesis_floor,
     filter_candidates,
 )
 from app.services.monitoring_pipeline import (
@@ -224,68 +225,6 @@ async def _fetch_ticker_data(tickers: set[str]) -> dict[str, CompanyData | None]
     return ticker_data
 
 
-_STATELESS_EVENT_TYPES = frozenset({
-    "earnings_surprise",
-    "upcoming_earnings",
-    "metric_threshold",
-    "monitoring_inactive",
-})
-
-
-def _candidate_event_date(candidate: dict[str, Any]) -> datetime | None:
-    ev = candidate.get("evidence") or {}
-    for key in ("call_date", "published_at", "transaction_date", "filing_date"):
-        raw = ev.get(key)
-        if not raw:
-            continue
-        if isinstance(raw, datetime):
-            return raw if raw.tzinfo else raw.replace(tzinfo=timezone.utc)
-        if isinstance(raw, date) and not isinstance(raw, datetime):
-            return datetime.combine(raw, datetime.min.time()).replace(tzinfo=timezone.utc)
-        if isinstance(raw, str):
-            try:
-                dt = datetime.fromisoformat(raw.replace("Z", "+00:00"))
-                return dt if dt.tzinfo else dt.replace(tzinfo=timezone.utc)
-            except ValueError:
-                continue
-    raw_date = ev.get("date")
-    if raw_date and isinstance(raw_date, str):
-        try:
-            d = date.fromisoformat(raw_date)
-            return datetime.combine(d, datetime.min.time()).replace(tzinfo=timezone.utc)
-        except ValueError:
-            pass
-    return None
-
-
-def _apply_thesis_floor(
-    candidates: list[dict[str, Any]],
-    thesis_created_at: datetime,
-) -> list[dict[str, Any]]:
-    """Drop event-dated candidates that predate this thesis.
-
-    Stateless candidates (earnings_surprise, metric_threshold, etc.) reflect
-    current market state rather than a discrete past event, so they are always
-    kept. Everything else is filtered if its event date is before the thesis was
-    created (minus one day of grace for timezone / scheduling skew).
-
-    This prevents new users from receiving alerts about stale evidence — most
-    obviously earnings-call transcripts, which have a 120-day fetch window.
-    """
-    floor = thesis_created_at - timedelta(days=1)
-    if floor.tzinfo is None:
-        floor = floor.replace(tzinfo=timezone.utc)
-
-    surviving = []
-    for candidate in candidates:
-        if candidate.get("event_type") in _STATELESS_EVENT_TYPES:
-            surviving.append(candidate)
-            continue
-        event_date = _candidate_event_date(candidate)
-        if event_date is None or event_date >= floor:
-            surviving.append(candidate)
-    return surviving
-
 
 async def run_monitoring():
     import time
@@ -370,14 +309,9 @@ async def run_monitoring():
 
                 # Drop candidates whose event date predates this thesis — guards
                 # new users against stale evidence (transcript window is 120 days).
-                candidates = _apply_thesis_floor(candidates, thesis.created_at)
+                candidates = apply_thesis_floor(candidates, thesis.created_at)
 
-                # Build lookup tables for narrative generation
-                claims_by_id, signals_by_id = build_claim_signal_lookup(claims)
-                investor_profile = await load_investor_profile(db, thesis.user_id)
-
-                # Update holding price from direct ticker data — via the single
-                # valuation path so current_value lands in GBP, not raw native.
+                # Update price and timestamp — always runs, even on quiet passes.
                 if company_data and company_data.current_price is not None:
                     await apply_market_price(
                         holding,
@@ -385,9 +319,6 @@ async def run_monitoring():
                         native_currency=getattr(company_data, "currency", None),
                         now=now,
                     )
-
-                # We reached real market data for this holding — record the check
-                # even if it stays quiet, so "checked X ago" stays current daily.
                 holding.last_monitored_at = now
 
                 if not candidates:
@@ -403,6 +334,10 @@ async def run_monitoring():
                             score=score,
                         )
                     continue
+
+                # Build lookup tables — only needed when there are candidates to classify.
+                claims_by_id, signals_by_id = build_claim_signal_lookup(claims)
+                investor_profile = await load_investor_profile(db, thesis.user_id)
 
                 # Qualitative news_watch matching — BEFORE noise filtering, so a
                 # matched news item is tagged (and survives minimum-relevance).

@@ -17,6 +17,7 @@ from app.services.valuation import apply_market_price, compute_pnl, to_account_v
 from app.services.monitoring import check_metric_watch_hints, generate_monitoring_candidates
 from app.services.noise_filter import (
     apply_priority_suppression,
+    apply_thesis_floor,
     filter_candidates,
 )
 from app.services.monitoring_pipeline import (
@@ -206,6 +207,10 @@ async def run_check_now(
     )
     candidates.extend(gemini_candidates)
     candidates = match_candidates_to_signals(candidates, claims)
+
+    # Drop candidates predating this thesis — same guard as the daily batch run,
+    # critical here because run_first_pulse fires immediately after onboarding.
+    candidates = apply_thesis_floor(candidates, thesis.created_at)
 
     # Build lookup tables for narrative generation
     claims_by_id, signals_by_id = build_claim_signal_lookup(claims)

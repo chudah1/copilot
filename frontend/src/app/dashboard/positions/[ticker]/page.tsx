@@ -296,7 +296,7 @@ export default function PositionDetailPage() {
     thesis_kind: "company";
     why_own_it: string;
     must_remain_true: string | null;
-    what_would_change_my_mind: string | null;
+    what_would_change_my_mind: string;
     confidence: "high" | "medium" | "low";
     review_cadence_days: number;
     ai_summary: string | null;
