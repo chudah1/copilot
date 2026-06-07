@@ -23,3 +23,15 @@ async def test_write_monitoring_gap_inserts_row():
     assert added.error_message == "timeout"
     assert added.thesis_id == thesis_id
     assert added.run_id == run_id
+
+
+@pytest.mark.asyncio
+async def test_write_monitoring_gap_skips_invalid_source():
+    from app.services.monitoring_gap_writer import write_monitoring_gap
+
+    db = AsyncMock()
+    thesis_id = uuid.uuid4()
+
+    await write_monitoring_gap(db, thesis_id, "unknown_source", "some error", "run123")
+
+    db.add.assert_not_called()
