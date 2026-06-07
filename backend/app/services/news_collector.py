@@ -5,8 +5,9 @@ Step 1: call Gemini with Google Search grounding and ask for unstructured
 Step 2: pass the raw markdown to a second call with response_schema enforced.
         Structured-output mode guarantees schema compliance but has no search.
 
-Silently returns [] on any failure — news collection is enrichment, not
-critical path.
+Re-raises exceptions on failure — callers are responsible for catching and
+writing a MonitoringGap record. Returns [] only when the API key is absent
+or no signal labels are provided (non-error fast-paths).
 """
 from __future__ import annotations
 
@@ -153,7 +154,7 @@ Discard anything outside the stated date range (__SINCE__ to __UNTIL__) or unrel
 
     except Exception as exc:
         logger.warning("Gemini news collection failed for %s: %s", ticker, exc)
-        return []
+        raise
 
 
 def _to_candidates(

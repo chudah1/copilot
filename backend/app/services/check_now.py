@@ -186,8 +186,11 @@ async def run_check_now(
     )
 
     # EDGAR 8-K candidates (US tickers only; silently skipped for non-US)
-    edgar_filings = await get_recent_8k_filings(holding.ticker)
-    candidates.extend(build_edgar_candidates(holding.ticker, edgar_filings))
+    try:
+        edgar_filings = await get_recent_8k_filings(holding.ticker)
+        candidates.extend(build_edgar_candidates(holding.ticker, edgar_filings))
+    except Exception as exc:
+        logger.warning("EDGAR fetch failed for %s during check-now — skipping: %s", holding.ticker, exc)
 
     # EDGAR Form 4 insider transactions
     form4_txns = await get_recent_form4_transactions(holding.ticker)
@@ -202,10 +205,13 @@ async def run_check_now(
 
     # Gemini news (uses signal labels from decomposition)
     signal_labels = signal_labels_from_claims(claims)
-    gemini_candidates = await collect_news_evidence(
-        holding.ticker, holding.name or holding.ticker, signal_labels
-    )
-    candidates.extend(gemini_candidates)
+    try:
+        gemini_candidates = await collect_news_evidence(
+            holding.ticker, holding.name or holding.ticker, signal_labels
+        )
+        candidates.extend(gemini_candidates)
+    except Exception as exc:
+        logger.warning("Gemini news failed for %s during check-now — skipping: %s", holding.ticker, exc)
     candidates = match_candidates_to_signals(candidates, claims)
 
     # Drop candidates predating this thesis — same guard as the daily batch run,

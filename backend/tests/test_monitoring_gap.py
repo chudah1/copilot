@@ -26,6 +26,25 @@ async def test_write_monitoring_gap_inserts_row():
 
 
 @pytest.mark.asyncio
+async def test_edgar_exception_propagates():
+    """get_recent_8k_filings should raise on EDGAR network error so callers can write a gap."""
+    import httpx
+    from unittest.mock import patch, AsyncMock
+
+    with patch("app.services.edgar.get_cik_for_ticker", new=AsyncMock(return_value="0001234567")):
+        with patch("httpx.AsyncClient") as mock_client:
+            mock_instance = AsyncMock()
+            mock_instance.__aenter__ = AsyncMock(return_value=mock_instance)
+            mock_instance.__aexit__ = AsyncMock(return_value=None)
+            mock_instance.get.side_effect = httpx.ReadTimeout("timeout")
+            mock_client.return_value = mock_instance
+
+            from app.services.edgar import get_recent_8k_filings
+            with pytest.raises(Exception):
+                await get_recent_8k_filings("NVDA")
+
+
+@pytest.mark.asyncio
 async def test_write_monitoring_gap_skips_invalid_source():
     from app.services.monitoring_gap_writer import write_monitoring_gap
 

@@ -123,7 +123,7 @@ async def get_recent_8k_filings(ticker: str, since: date | None = None) -> list[
             data = resp.json()
     except Exception as exc:
         logger.warning("EDGAR request failed for %s: %s", ticker, exc)
-        return []
+        raise
 
     recent = data.get("filings", {}).get("recent", {})
     forms: list[str] = recent.get("form", [])

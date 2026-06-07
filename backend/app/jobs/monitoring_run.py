@@ -41,6 +41,7 @@ from app.services.signal_matching import (
     load_active_decomposition,
     match_candidates_to_signals,
 )
+from app.services.monitoring_gap_writer import write_monitoring_gap
 
 logger = logging.getLogger(__name__)
 
@@ -229,7 +230,8 @@ async def _fetch_ticker_data(tickers: set[str]) -> dict[str, CompanyData | None]
 async def run_monitoring():
     import time
     started = time.monotonic()
-    logger.info("Starting daily monitoring run")
+    run_id = str(uuid.uuid4())
+    logger.info("Starting daily monitoring run run_id=%s", run_id)
 
     async with async_session() as db:
         result = await db.execute(
@@ -285,8 +287,12 @@ async def run_monitoring():
                     )
 
                 # EDGAR 8-K candidates (US tickers only; silently skipped for non-US)
-                edgar_filings = await get_recent_8k_filings(holding.ticker)
-                candidates.extend(build_edgar_candidates(holding.ticker, edgar_filings))
+                try:
+                    edgar_filings = await get_recent_8k_filings(holding.ticker)
+                    candidates.extend(build_edgar_candidates(holding.ticker, edgar_filings))
+                except Exception as exc:
+                    logger.warning("EDGAR gap for thesis %s: %s", thesis.id, exc)
+                    await write_monitoring_gap(db, thesis.id, "edgar", str(exc), run_id)
 
                 # EDGAR Form 4 insider transactions
                 form4_txns = await get_recent_form4_transactions(holding.ticker)
@@ -301,11 +307,28 @@ async def run_monitoring():
 
                 # Gemini news (uses signal labels from decomposition)
                 signal_labels = signal_labels_from_claims(claims)
-                gemini_candidates = await collect_news_evidence(
-                    holding.ticker, holding.name or holding.ticker, signal_labels
-                )
-                candidates.extend(gemini_candidates)
+                try:
+                    gemini_candidates = await collect_news_evidence(
+                        holding.ticker, holding.name or holding.ticker, signal_labels
+                    )
+                    candidates.extend(gemini_candidates)
+                except Exception as exc:
+                    logger.warning("Gemini gap for thesis %s: %s", thesis.id, exc)
+                    await write_monitoring_gap(db, thesis.id, "gemini_news", str(exc), run_id)
                 candidates = match_candidates_to_signals(candidates, claims)
+
+                # Write an llm_classifier gap if the key is absent and there are candidates to classify
+                qualitative_types = {
+                    "news_or_earnings_candidate", "gemini_news", "edgar_8k",
+                    "earnings_call_transcript", "insider_transaction", "news_keyword_match",
+                }
+                has_qualitative = any(c.get("event_type") in qualitative_types for c in candidates)
+                if has_qualitative and not settings.anthropic_api_key:
+                    await write_monitoring_gap(
+                        db, thesis.id, "llm_classifier",
+                        "anthropic_api_key not configured — qualitative candidates will not fire",
+                        run_id,
+                    )
 
                 # Drop candidates whose event date predates this thesis — guards
                 # new users against stale evidence (transcript window is 120 days).
