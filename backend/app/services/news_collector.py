@@ -23,7 +23,7 @@ from app.config import settings
 
 logger = logging.getLogger(__name__)
 
-MAX_SIGNALS = 6
+MAX_SIGNALS = 12
 _GEMINI_MODEL = "gemini-2.5-flash"
 
 

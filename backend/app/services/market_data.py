@@ -919,7 +919,7 @@ def shortlist_qualitative_candidates(
     insider_transactions: list[InsiderTransaction] | None = None,
     *,
     now: datetime | None = None,
-    max_candidates: int = 3,
+    max_candidates: int = 8,
     ticker: str | None = None,
 ) -> list[dict[str, Any]]:
     reference_now = now or datetime.now(timezone.utc)

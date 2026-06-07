@@ -49,7 +49,7 @@ EVENT_TYPE_SIMILARITY_THRESHOLDS = {
 }
 # Hard cap on judge LLM calls per thesis per run, so a busy news day can't fan
 # out into an unbounded number of paid calls.
-MAX_JUDGE_CALLS = 12
+MAX_JUDGE_CALLS = 25
 _EMBED_MODEL = "text-embedding-3-small"
 
 
