@@ -61,3 +61,4 @@ class Thesis(Base):
         cascade="all, delete-orphan",
         order_by="desc(ThesisHealthSnapshot.computed_at)",
     )
+    monitoring_gaps = relationship("MonitoringGap", back_populates="thesis", cascade="all, delete-orphan")
