@@ -225,6 +225,7 @@ async def test_thesis_response_includes_health_fields(client, auth_headers):
             "status": "active",
             "thesis_kind": "company",
             "why_own_it": "Cloud dominance via Azure.",
+            "what_would_change_my_mind": "Revenue decline or margin compression.",
             "confidence": "high",
             "source": "user",
         },

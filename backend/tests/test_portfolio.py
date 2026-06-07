@@ -279,6 +279,7 @@ async def test_add_manual_note_to_conviction_log(client, auth_headers, db, test_
             "status": "active",
             "thesis_kind": "company",
             "why_own_it": "Ecosystem strength.",
+            "what_would_change_my_mind": "Revenue decline or margin compression.",
             "confidence": "high",
             "review_cadence_days": 7,
             "source": "user",

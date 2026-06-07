@@ -81,16 +81,18 @@ If no relevant articles exist in that date range, write exactly: No news found.\
     extraction_prompt_template = """\
 You are a financial data parser. Extract structured news records from the raw search results below.
 
-Company: {name} ({ticker})
+Company: __NAME__ (__TICKER__)
+
+Date range: __SINCE__ to __UNTIL__
 
 Investment signals (use exact label text when matching):
-{signals_text}
+__SIGNALS__
 
 Raw search results:
-{raw_text}
+__RAW__
 
 Extract every article that is relevant to at least one listed signal. \
-Discard anything outside the stated date range or unrelated to the signals.\
+Discard anything outside the stated date range (__SINCE__ to __UNTIL__) or unrelated to the signals.\
 """
 
     try:
@@ -108,7 +110,7 @@ Discard anything outside the stated date range or unrelated to the signals.\
         )
 
         raw_text = (getattr(search_response, "text", "") or "").strip()
-        if not raw_text or "No news found" in raw_text:
+        if not raw_text or raw_text.lower().startswith("no news found"):
             return []
 
         # Collect grounding metadata for is_grounded tagging
@@ -123,8 +125,14 @@ Discard anything outside the stated date range or unrelated to the signals.\
             pass
 
         # Step 2 — structured extraction, no search
-        extraction_prompt = extraction_prompt_template.format(
-            name=name, ticker=ticker, signals_text=signals_text, raw_text=raw_text
+        extraction_prompt = (
+            extraction_prompt_template
+            .replace("__NAME__", name)
+            .replace("__TICKER__", ticker)
+            .replace("__SINCE__", since_str)
+            .replace("__UNTIL__", until_str)
+            .replace("__SIGNALS__", signals_text)
+            .replace("__RAW__", raw_text)
         )
         extraction_response = await asyncio.to_thread(
             client.models.generate_content,
@@ -139,7 +147,7 @@ Discard anything outside the stated date range or unrelated to the signals.\
 
         extraction_text = (getattr(extraction_response, "text", "") or "").strip()
         parsed = json.loads(extraction_text)
-        items = parsed.get("articles", []) if isinstance(parsed, dict) else parsed
+        items = (parsed.get("articles") or []) if isinstance(parsed, dict) else (parsed or [])
 
         return _to_candidates(items, grounded_urls)
 

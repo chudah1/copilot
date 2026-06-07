@@ -140,6 +140,7 @@ async def test_thesis_creation_logs_reason_created(client, db, test_user, auth_h
             "status": "active",
             "thesis_kind": "company",
             "why_own_it": "I believe in Apple's ecosystem.",
+            "what_would_change_my_mind": "Revenue decline or margin compression.",
             "confidence": "high",
             "review_cadence_days": 7,
             "source": "user",

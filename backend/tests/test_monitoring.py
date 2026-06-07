@@ -282,6 +282,7 @@ async def test_run_monitoring_creates_multiple_events_and_flags_review(db, job_s
             ]
         },
         source="ai_assisted",
+        created_at=reference_now - timedelta(days=30),
     )
     db.add(thesis)
     await db.commit()

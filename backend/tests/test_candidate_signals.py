@@ -179,6 +179,7 @@ async def test_confirm_signals_endpoint_accepts_news_watch(client, auth_headers)
         "/api/theses",
         json={"holding_id": holding.json()["id"], "status": "active", "thesis_kind": "company",
               "why_own_it": "AI demand tailwind.", "confidence": "medium",
+              "what_would_change_my_mind": "Revenue decline for two consecutive quarters.",
               "review_cadence_days": 7, "source": "user"},
         headers=auth_headers,
     )
@@ -216,6 +217,7 @@ async def test_confirm_signals_endpoint_applies_to_thesis(client, auth_headers):
             "holding_id": holding.json()["id"],
             "status": "active", "thesis_kind": "company",
             "why_own_it": "AI demand tailwind.", "confidence": "medium",
+            "what_would_change_my_mind": "Revenue decline for two consecutive quarters.",
             "review_cadence_days": 7, "source": "user",
         },
         headers=auth_headers,
@@ -248,6 +250,7 @@ async def test_confirm_signals_rejects_unsupported_type_at_boundary(client, auth
         json={
             "holding_id": holding.json()["id"], "status": "active", "thesis_kind": "company",
             "why_own_it": "AI demand tailwind.", "confidence": "medium",
+            "what_would_change_my_mind": "Revenue decline for two consecutive quarters.",
             "review_cadence_days": 7, "source": "user",
         },
         headers=auth_headers,
