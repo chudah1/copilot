@@ -13,6 +13,7 @@ from app.services.relevance import compute_relevance_metrics
 from app.models.conviction_log_entry import ConvictionLogEntry
 from app.models.holding import Holding
 from app.models.monitoring_event import MonitoringEvent
+from app.models.monitoring_gap import MonitoringGap
 from app.models.thesis import Thesis
 from app.models.thesis_signal import ThesisSignal
 from app.models.user import User
@@ -22,6 +23,7 @@ from app.schemas.monitoring_event import (
     MonitoringEventReviewResponse,
     ReviewMonitoringEventRequest,
 )
+from app.schemas.monitoring_gap import MonitoringGapResponse
 from app.services.check_now import run_check_now
 from app.services.conviction_log import REASON_CREATED
 from app.services.monitoring_review import review_monitoring_event
@@ -257,6 +259,33 @@ async def get_decisions_for_holding_endpoint(
     from app.services.decision_mirror import get_decisions_for_holding
 
     return await get_decisions_for_holding(db, user.id, holding_id, now=datetime.now(timezone.utc))
+
+
+@router.get("/gaps", response_model=list[MonitoringGapResponse])
+async def get_monitoring_gaps(
+    thesis_id: uuid.UUID | None = Query(default=None),
+    since: datetime | None = Query(default=None),
+    user: User = Depends(get_current_user),
+    db: AsyncSession = Depends(get_db),
+):
+    """Return monitoring gaps (source failures) for the authenticated user's theses."""
+    stmt = (
+        select(MonitoringGap)
+        .join(Thesis, MonitoringGap.thesis_id == Thesis.id, isouter=True)
+        .where(
+            (Thesis.user_id == user.id) | (MonitoringGap.thesis_id.is_(None))
+        )
+        .order_by(MonitoringGap.failed_at.desc())
+        .limit(200)
+    )
+    if thesis_id is not None:
+        stmt = stmt.where(MonitoringGap.thesis_id == thesis_id)
+    if since is not None:
+        normalized_since = _normalize_datetime(since)
+        stmt = stmt.where(MonitoringGap.failed_at >= normalized_since)
+
+    result = await db.execute(stmt)
+    return result.scalars().all()
 
 
 @router.get("/relevance")

@@ -54,3 +54,11 @@ async def test_write_monitoring_gap_skips_invalid_source():
     await write_monitoring_gap(db, thesis_id, "unknown_source", "some error", "run123")
 
     db.add.assert_not_called()
+
+
+@pytest.mark.asyncio
+async def test_get_gaps_endpoint_returns_list(client, auth_headers):
+    """GET /api/monitoring/gaps returns an empty list when no gaps exist."""
+    resp = await client.get("/api/monitoring/gaps", headers=auth_headers)
+    assert resp.status_code == 200
+    assert isinstance(resp.json(), list)
