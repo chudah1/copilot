@@ -22,7 +22,7 @@ class ApiClient {
       if (!accessToken) {
         const body = await response.json().catch(() => ({}));
         const detail = body.detail;
-        const message = typeof detail === "string" ? detail : `API error: 401`;
+        const message = typeof detail === "string" ? detail : "Invalid email or password";
         throw new Error(message);
       }
       const refreshed = await this.tryRefresh();
@@ -36,7 +36,7 @@ class ApiClient {
           },
           credentials: "include",
         });
-        if (!retry.ok) throw new Error(`API error: ${retry.status}`);
+        if (!retry.ok) throw new Error("Something went wrong. Please try again.");
         return retry.json();
       }
       if (typeof window !== "undefined") {
@@ -52,7 +52,7 @@ class ApiClient {
         ? detail.map((e: { msg?: string }) => e.msg ?? String(e)).join("; ")
         : typeof detail === "string"
         ? detail
-        : `API error: ${response.status}`;
+        : "Something went wrong. Please try again.";
       throw new Error(message);
     }
 
