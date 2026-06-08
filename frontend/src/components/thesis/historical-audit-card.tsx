@@ -1,6 +1,7 @@
 "use client";
 
 import type { HistoricalAuditResultItem, HistoricalAuditResponse } from "@/types";
+import { formatDate } from "@/lib/utils";
 
 const SEVERITY_BADGE: Record<string, string> = {
   thesis_breaking: "bg-red-100 text-red-700 border border-red-200",
@@ -45,7 +46,7 @@ function AuditResultItem({ item }: { item: HistoricalAuditResultItem }) {
           )}
         </p>
         {item.event_date && (
-          <p className="mt-0.5 text-xs text-muted-foreground">{item.event_date}</p>
+          <p className="mt-0.5 text-xs text-muted-foreground">{formatDate(item.event_date)}</p>
         )}
       </div>
     </div>
@@ -53,11 +54,10 @@ function AuditResultItem({ item }: { item: HistoricalAuditResultItem }) {
 }
 
 interface Props {
-  thesisId: string;
   audit: HistoricalAuditResponse | null;
 }
 
-export function HistoricalAuditCard({ thesisId: _thesisId, audit }: Props) {
+export function HistoricalAuditCard({ audit }: Props) {
   if (!audit || audit.status === "failed") return null;
 
   if (audit.status === "pending") {
@@ -84,7 +84,7 @@ export function HistoricalAuditCard({ thesisId: _thesisId, audit }: Props) {
   const results = audit.results ?? [];
 
   return (
-    <div className="rounded-lg border border-border/60 bg-card p-4 mt-4 space-y-1">
+    <div className="rounded-lg border border-border/60 bg-card p-4 mt-4">
       <p className="font-mono text-[10px] uppercase tracking-[0.2em] text-muted-foreground mb-3">
         90-day lookback
       </p>
@@ -92,8 +92,11 @@ export function HistoricalAuditCard({ thesisId: _thesisId, audit }: Props) {
         If you&apos;d held this thesis for the last 90 days, here&apos;s what would have fired:
       </p>
       <div>
-        {results.map((item, i) => (
-          <AuditResultItem key={i} item={item} />
+        {results.map((item) => (
+          <AuditResultItem
+            key={`${item.event_type}-${item.event_date ?? "nodate"}-${item.severity}`}
+            item={item}
+          />
         ))}
       </div>
     </div>
