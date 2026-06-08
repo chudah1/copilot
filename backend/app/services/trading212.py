@@ -1,9 +1,86 @@
 import base64
+import re
 from dataclasses import dataclass
 
 import httpx
 
 from app.config import settings
+
+# T212 structured format: {SYMBOL}_{COUNTRY_CODE}_{TYPE}
+# Maps T212 country code → yfinance exchange suffix (empty string = no suffix needed)
+_T212_COUNTRY_TO_SUFFIX: dict[str, str] = {
+    "US": "",
+    "UK": ".L",
+    "DE": ".DE",
+    "FR": ".PA",
+    "NL": ".AS",
+    "BE": ".BR",
+    "IT": ".MI",
+    "ES": ".MC",
+    "PT": ".LS",
+    "SE": ".ST",
+    "DK": ".CO",
+    "NO": ".OL",
+    "FI": ".HE",
+    "AT": ".VI",
+    "CH": ".SW",
+    "IE": ".IR",
+    "PL": ".WA",
+    "CZ": ".PR",
+    "HU": ".BD",
+    "SG": ".SI",
+    "HK": ".HK",
+    "AU": ".AX",
+    "CA": ".TO",
+    "JP": ".T",
+}
+
+# T212 older format: exchange letter embedded at end of symbol, followed by _EQ / _ETF
+# e.g. VUAGL_EQ → VUAG.L, ASMLA_EQ → ASML.AS
+_EMBEDDED_EXCHANGE_CHAR: dict[str, str] = {
+    "L": ".L",    # London Stock Exchange
+    "A": ".AS",   # Euronext Amsterdam
+    "D": ".DE",   # XETRA
+    "P": ".PA",   # Euronext Paris
+    "B": ".BR",   # Euronext Brussels
+    "M": ".MC",   # Bolsa Madrid
+}
+
+_T212_STRUCTURED_RE = re.compile(r"^([A-Z0-9.]+)_([A-Z]{2,3})_(EQ|ETF)$")
+_T212_EMBEDDED_RE = re.compile(r"^([A-Z0-9.]+?)([A-Z])_(EQ|ETF)$")
+
+
+def normalise_t212_ticker(raw: str) -> str:
+    """Convert a Trading 212 instrument ticker to a standard yfinance-compatible ticker.
+
+    T212 uses two formats:
+    1. Structured: AAPL_US_EQ → AAPL, BARC_UK_EQ → BARC.L
+    2. Embedded-exchange: VUAGL_EQ → VUAG.L, ASMLA_EQ → ASML.AS
+
+    Unknown patterns are returned uppercased as-is.
+    """
+    raw = raw.upper()
+
+    # Format 1: structured country code
+    m = _T212_STRUCTURED_RE.match(raw)
+    if m:
+        symbol, country, _ = m.groups()
+        suffix = _T212_COUNTRY_TO_SUFFIX.get(country)
+        if suffix is not None:
+            return symbol + suffix
+        # Unknown country — return symbol without suffix as best effort
+        return symbol
+
+    # Format 2: embedded exchange letter before _EQ/_ETF
+    m = _T212_EMBEDDED_RE.match(raw)
+    if m:
+        base, exchange_char, _ = m.groups()
+        suffix = _EMBEDDED_EXCHANGE_CHAR.get(exchange_char)
+        if suffix is not None:
+            return base + suffix
+
+    # No recognised pattern — return as-is
+    return raw
 
 
 @dataclass

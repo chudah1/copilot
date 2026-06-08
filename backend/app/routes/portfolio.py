@@ -30,7 +30,7 @@ from app.schemas.holding import (
     UpcomingEarningsResponse,
 )
 from app.services.encryption import encrypt, decrypt
-from app.services.trading212 import Trading212Client, build_auth_header, detect_trading212_base_url
+from app.services.trading212 import Trading212Client, build_auth_header, detect_trading212_base_url, normalise_t212_ticker
 from app.services.csv_parser import parse_csv_detailed
 from app.services.market_data import detect_native_currency, fetch_company_data, fetch_company_overview, fetch_live_price, get_fx_rate
 from app.services.valuation import apply_broker_position, refresh_holding_price, to_account_value
@@ -210,6 +210,7 @@ async def sync_broker(
 
     synced_holdings = []
     for pos in positions:
+        pos.ticker = normalise_t212_ticker(pos.ticker)
         existing_result = await db.execute(
             select(Holding).where(
                 Holding.user_id == current_user.id,
