@@ -927,13 +927,16 @@ def _fetch_analyst_consensus_sync(
         current_price_raw = getattr(t.fast_info, "last_price", None)
         current_price = float(current_price_raw) if current_price_raw else None
 
+        def _col_sum(df: Any, col: str) -> int:
+            return int(df[col].sum()) if col in df.columns else 0
+
         net_changes = 0
         if recs is not None and not recs.empty:
             # yfinance recommendations DataFrame: period column "0m"=current, "-1m"=last month
             recent = recs[recs["period"].isin(["0m", "-1m"])] if "period" in recs.columns else recs.head(2)
             if not recent.empty:
-                upgrades = int(recent.get("strongBuy", 0).sum() + recent.get("buy", 0).sum())
-                downgrades = int(recent.get("sell", 0).sum() + recent.get("strongSell", 0).sum())
+                upgrades = _col_sum(recent, "strongBuy") + _col_sum(recent, "buy")
+                downgrades = _col_sum(recent, "sell") + _col_sum(recent, "strongSell")
                 net_changes = upgrades - downgrades
 
         if mean_target is None and net_changes == 0:
@@ -941,7 +944,7 @@ def _fetch_analyst_consensus_sync(
 
         return {
             "net_changes_30d": net_changes,
-            "mean_target": float(mean_target) if mean_target else None,
+            "mean_target": float(mean_target) if mean_target is not None else None,
             "current_price": current_price,
             "previous_target": previous_target,
         }
@@ -951,6 +954,7 @@ def _fetch_analyst_consensus_sync(
 
 def _build_analyst_revision_candidate(
     consensus: dict,
+    ticker: str | None = None,
 ) -> tuple[int, dict[str, Any]] | None:
     """Return (priority, candidate) if firing conditions are met, else None.
 
@@ -986,7 +990,7 @@ def _build_analyst_revision_candidate(
         direction = "significant analyst price target revision"
 
     target_note = ""
-    if mean_target and current_price:
+    if mean_target is not None and current_price is not None:
         pct = ((mean_target - current_price) / current_price) * 100
         target_note = f" Consensus target ${mean_target:.0f} ({pct:+.0f}% vs current)."
 
@@ -996,6 +1000,7 @@ def _build_analyst_revision_candidate(
         "current_price": current_price,
         "previous_target": previous_target,
         "target_below_price": target_below_price,
+        "analyst_revision_id": ticker,
     }
 
     priority = 2 if net < 0 or target_below_price else 1
@@ -1028,7 +1033,7 @@ def shortlist_qualitative_candidates(
     if ticker:
         consensus = _fetch_analyst_consensus_sync(ticker, previous_analyst_target)
         if consensus is not None:
-            analyst_candidate = _build_analyst_revision_candidate(consensus)
+            analyst_candidate = _build_analyst_revision_candidate(consensus, ticker=ticker)
             if analyst_candidate is not None:
                 qualitative_candidates.append(analyst_candidate)
 

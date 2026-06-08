@@ -348,3 +348,27 @@ def test_analyst_revision_not_fired_below_threshold():
     }
     candidate = _build_analyst_revision_candidate(consensus)
     assert candidate is None
+
+
+def test_fetch_analyst_consensus_handles_missing_columns():
+    import pandas as pd
+    from unittest.mock import patch, MagicMock
+    from app.services.market_data import _fetch_analyst_consensus_sync
+
+    mock_ticker = MagicMock()
+    # DataFrame missing strongBuy/strongSell columns
+    mock_ticker.recommendations = pd.DataFrame({
+        "period": ["0m", "-1m"],
+        "buy": [3, 2],
+        "hold": [5, 4],
+        "sell": [2, 1],
+    })
+    mock_ticker.analyst_price_targets = {"mean": 95.0}
+    mock_ticker.fast_info = MagicMock()
+    mock_ticker.fast_info.last_price = 90.0
+
+    with patch("yfinance.Ticker", return_value=mock_ticker):
+        result = _fetch_analyst_consensus_sync("NVDA", previous_target=None)
+
+    assert result is not None  # Should not raise or return None
+    assert result["net_changes_30d"] == (3 + 2) - (2 + 1)  # upgrades - downgrades (no strongBuy/strongSell)

@@ -126,6 +126,7 @@ def _get_evidence_source_id(evidence: dict[str, Any]) -> str | None:
         or evidence.get("transaction_id")
         or evidence.get("transcript_id")
         or evidence.get("edgar_accession")
+        or evidence.get("analyst_revision_id")
     )
 
 
