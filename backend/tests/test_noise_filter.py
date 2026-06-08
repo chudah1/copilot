@@ -433,13 +433,20 @@ async def test_filter_candidates_skip_cooldown_bypasses_rule2():
     candidate = {
         "event_type": "news",
         "description": "Test news",
-        "evidence": {"matched_signal_id": signal_id, "source_id": "abc123"},
+        "evidence": {"signal_id": signal_id, "source_id": "abc123"},
     }
 
     db = AsyncMock()
     db.execute = AsyncMock(return_value=MagicMock(all=MagicMock(return_value=[])))
 
+    # With skip_cooldown: candidate survives despite signal being in cooldown
     result = await filter_candidates(
         [candidate], uuid.uuid4(), signal_map, db, skip_cooldown=True
     )
     assert len(result) == 1
+
+    # Without skip_cooldown: same candidate is filtered by Rule 2
+    filtered = await filter_candidates(
+        [candidate], uuid.uuid4(), signal_map, db, skip_cooldown=False
+    )
+    assert len(filtered) == 0
