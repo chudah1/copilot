@@ -207,39 +207,68 @@ async def classify_event(
         ticker=ticker,
         company_name=company_name,
     )
-    try:
-        if not settings.anthropic_api_key:
-            default = _default_classification(investor_profile)
+    if settings.anthropic_api_key:
+        try:
+            client = anthropic.AsyncAnthropic(api_key=settings.anthropic_api_key)
+            response = await client.messages.create(
+                model="claude-sonnet-4-6",
+                max_tokens=1024,
+                system=_CLASSIFY_SYSTEM,
+                messages=[{"role": "user", "content": prompt}],
+                timeout=30.0,
+            )
+            text = response.content[0].text.strip()
+            parsed = _parse_classification_response(text)
+            if parsed.severity == "skip":
+                return None
             return ClassificationResult(
-                severity=default.severity,
+                severity=parsed.severity,
                 analysis=_normalize_analysis_text(
                     event_description=event_description,
-                    analysis=default.analysis,
-                    severity=default.severity,
+                    analysis=parsed.analysis,
+                    severity=parsed.severity,
                     investor_profile=investor_profile,
                 ),
             )
-        client = anthropic.AsyncAnthropic(api_key=settings.anthropic_api_key)
-        response = await client.messages.create(
-            model="claude-sonnet-4-6",
-            max_tokens=1024,
-            system=_CLASSIFY_SYSTEM,
-            messages=[{"role": "user", "content": prompt}],
-            timeout=30.0,
-        )
-        text = response.content[0].text.strip()
-        parsed = _parse_classification_response(text)
-        if parsed.severity == "skip":
-            return None
-        return ClassificationResult(
-            severity=parsed.severity,
-            analysis=_normalize_analysis_text(
-                event_description=event_description,
-                analysis=parsed.analysis,
+        except Exception as e:
+            logger.warning("Anthropic classification failed (%s), trying OpenAI: %s", type(e).__name__, e)
+
+    if settings.openai_api_key:
+        try:
+            from openai import AsyncOpenAI
+            oa_client = AsyncOpenAI(api_key=settings.openai_api_key)
+            oa_response = await oa_client.chat.completions.create(
+                model="gpt-4o-mini",
+                max_tokens=1024,
+                messages=[
+                    {"role": "system", "content": _CLASSIFY_SYSTEM},
+                    {"role": "user", "content": prompt},
+                ],
+                timeout=30.0,
+            )
+            text = (oa_response.choices[0].message.content or "").strip()
+            parsed = _parse_classification_response(text)
+            if parsed.severity == "skip":
+                return None
+            return ClassificationResult(
                 severity=parsed.severity,
-                investor_profile=investor_profile,
-            ),
-        )
-    except Exception as e:
-        logger.error("AI classification failed (%s): %s", type(e).__name__, e)
-        return None
+                analysis=_normalize_analysis_text(
+                    event_description=event_description,
+                    analysis=parsed.analysis,
+                    severity=parsed.severity,
+                    investor_profile=investor_profile,
+                ),
+            )
+        except Exception as e:
+            logger.error("OpenAI classification also failed (%s): %s", type(e).__name__, e)
+
+    default = _default_classification(investor_profile)
+    return ClassificationResult(
+        severity=default.severity,
+        analysis=_normalize_analysis_text(
+            event_description=event_description,
+            analysis=default.analysis,
+            severity=default.severity,
+            investor_profile=investor_profile,
+        ),
+    )
