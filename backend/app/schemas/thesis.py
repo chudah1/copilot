@@ -318,3 +318,18 @@ class EarningsReviewResponse(BaseModel):
     earnings_surprise_pct: float | None = None
     log_entry_id: uuid.UUID
     reviewed_at: datetime
+
+
+class HistoricalAuditResultItem(BaseModel):
+    description: str
+    severity: str
+    event_type: str
+    event_date: str | None = None
+    evidence: dict[str, Any] | None = None
+
+
+class HistoricalAuditResponse(BaseModel):
+    status: str
+    results: list[HistoricalAuditResultItem] | None = None
+
+    model_config = {"from_attributes": True}

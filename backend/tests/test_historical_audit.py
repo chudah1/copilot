@@ -105,3 +105,39 @@ async def test_run_historical_audit_sets_failed_on_exception():
 
     assert mock_thesis.historical_audit_status == "failed"
     mock_db.commit.assert_called()
+
+
+@pytest.mark.asyncio
+async def test_historical_audit_endpoint_returns_pending_when_status_is_none():
+    """Endpoint returns 'pending' when thesis has no audit result yet."""
+    from httpx import AsyncClient, ASGITransport
+    from app.main import app
+    from app.dependencies import get_current_user
+
+    thesis_id = uuid.uuid4()
+
+    mock_thesis = MagicMock()
+    mock_thesis.historical_audit_status = None
+    mock_thesis.historical_audit_results = None
+
+    mock_user = MagicMock()
+    mock_user.id = uuid.uuid4()
+
+    async def override_get_current_user():
+        return mock_user
+
+    with patch("app.routes.thesis._load_user_thesis", return_value=mock_thesis):
+        app.dependency_overrides[get_current_user] = override_get_current_user
+        try:
+            async with AsyncClient(transport=ASGITransport(app=app), base_url="http://test") as client:
+                response = await client.get(
+                    f"/api/theses/{thesis_id}/historical-audit",
+                    headers={"Authorization": "Bearer test"},
+                )
+        finally:
+            app.dependency_overrides.pop(get_current_user, None)
+
+    assert response.status_code == 200
+    body = response.json()
+    assert body["status"] == "pending"
+    assert body["results"] is None

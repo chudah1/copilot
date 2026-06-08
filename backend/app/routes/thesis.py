@@ -28,6 +28,7 @@ from app.schemas.thesis import (
     DraftThesisResponse,
     EarningsReviewResponse,
     HealthCheckResponse,
+    HistoricalAuditResponse,
     InvalidateThesisRequest,
     ThesisDecompositionEnvelopeResponse,
     ThesisDecompositionResponse,
@@ -280,6 +281,7 @@ async def decompose_thesis(
 async def confirm_decomposition(
     thesis_id: uuid.UUID,
     body: ConfirmDecompositionRequest,
+    background_tasks: BackgroundTasks,
     current_user: User = Depends(get_current_user),
     db: AsyncSession = Depends(get_db),
 ):
@@ -308,7 +310,27 @@ async def confirm_decomposition(
     latest = await _get_latest_decomposition_record(db, thesis.id, current_user.id)
     if latest is None:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Decomposition not found")
+
+    from app.services.check_now import run_historical_audit
+    background_tasks.add_task(run_historical_audit, thesis_id)
+
     return ThesisDecompositionEnvelopeResponse(status=latest.status, message=None, decomposition=latest)
+
+
+@router.get("/{thesis_id}/historical-audit", response_model=HistoricalAuditResponse)
+async def get_historical_audit(
+    thesis_id: uuid.UUID,
+    current_user: User = Depends(get_current_user),
+    db: AsyncSession = Depends(get_db),
+):
+    thesis = await _load_user_thesis(db, thesis_id=thesis_id, user_id=current_user.id)
+    if thesis is None:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Thesis not found")
+
+    return HistoricalAuditResponse(
+        status=thesis.historical_audit_status or "pending",
+        results=thesis.historical_audit_results,
+    )
 
 
 @router.get("/{thesis_id}/decomposition", response_model=ThesisDecompositionEnvelopeResponse)
