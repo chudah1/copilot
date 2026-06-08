@@ -26,12 +26,12 @@ logger = logging.getLogger(__name__)
 # Only material events that warrant immediate surfacing — exec changes and guidance wait for the daily run
 HIGH_MATERIALITY_ITEMS = frozenset({"1.02", "1.03", "2.01", "2.02", "2.05", "2.06", "4.02"})
 
-_LOOKBACK_HOURS = 2
+_LOOKBACK_DAYS = 1  # EDGAR API is date-granular; dedup (edgar_accession) prevents re-firing within the day
 
 
 async def run_edgar_watch():
     run_id = str(uuid.uuid4())
-    since = (datetime.now(timezone.utc) - timedelta(hours=_LOOKBACK_HOURS)).date()
+    since = (datetime.now(timezone.utc) - timedelta(days=_LOOKBACK_DAYS)).date()
     logger.info("Starting edgar_watch run_id=%s since=%s", run_id, since)
 
     async with async_session() as db:

@@ -30,6 +30,7 @@ async def test_edgar_watch_writes_gap_on_failure():
         await run_edgar_watch()
         mock_write_gap.assert_called_once()
         assert mock_write_gap.call_args[0][2] == "edgar"
+        mock_db.commit.assert_called()
 
 
 @pytest.mark.asyncio
