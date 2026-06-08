@@ -32,6 +32,8 @@ class Thesis(Base):
     invalidation_reason: Mapped[str | None] = mapped_column(Text, nullable=True)
     health_score: Mapped[int | None] = mapped_column(Integer, nullable=True)
     health_label: Mapped[str | None] = mapped_column(String(10), nullable=True)
+    historical_audit_status: Mapped[str | None] = mapped_column(String(20), nullable=True)
+    historical_audit_results: Mapped[list | None] = mapped_column(JSON, nullable=True)
 
     holding = relationship("Holding", back_populates="theses")
     user = relationship("User", back_populates="theses")
