@@ -287,3 +287,64 @@ def test_ttl_cache_clear():
 def test_expanded_keywords_include_founder_and_executive_terms():
     expected = {"ceo", "founder", "executive", "resign", "appoint", "cfo", "coo"}
     assert expected.issubset(set(QUALITATIVE_KEYWORDS))
+
+
+def test_analyst_revision_candidate_fires_on_net_downgrades():
+    import pandas as pd
+    from unittest.mock import patch, MagicMock
+    from app.services.market_data import _fetch_analyst_consensus_sync
+
+    mock_ticker = MagicMock()
+    mock_ticker.recommendations = pd.DataFrame({
+        "period": ["0m", "-1m", "-2m"],
+        "strongBuy": [1, 2, 3],
+        "buy": [2, 3, 3],
+        "hold": [5, 4, 4],
+        "sell": [4, 2, 1],
+        "strongSell": [3, 1, 0],
+    })
+    mock_ticker.analyst_price_targets = {
+        "current": 100.0,
+        "mean": 90.0,
+        "low": 70.0,
+        "high": 110.0,
+    }
+    mock_ticker.fast_info = MagicMock()
+    mock_ticker.fast_info.last_price = 100.0
+
+    with patch("yfinance.Ticker", return_value=mock_ticker):
+        result = _fetch_analyst_consensus_sync("NVDA", previous_target=None)
+
+    assert result is not None
+    assert result["net_changes_30d"] < 0  # net downgrades (sell+strongSell > buy+strongBuy in recent periods)
+    assert result["mean_target"] == 90.0
+
+
+def test_build_analyst_revision_candidate_warning_on_downgrades():
+    from app.services.market_data import _build_analyst_revision_candidate
+
+    consensus = {
+        "net_changes_30d": -3,
+        "mean_target": 90.0,
+        "current_price": 95.0,
+        "previous_target": 95.0,
+    }
+    candidate = _build_analyst_revision_candidate(consensus)
+    assert candidate is not None
+    priority, c = candidate
+    assert c["event_type"] == "analyst_revision"
+    assert "downgrade" in c["description"].lower() or "net" in c["description"].lower()
+
+
+def test_analyst_revision_not_fired_below_threshold():
+    from app.services.market_data import _build_analyst_revision_candidate
+
+    # Only 1 change, target moved <10% — below both firing thresholds
+    consensus = {
+        "net_changes_30d": -1,
+        "mean_target": 100.0,
+        "current_price": 95.0,
+        "previous_target": 97.0,
+    }
+    candidate = _build_analyst_revision_candidate(consensus)
+    assert candidate is None

@@ -911,6 +911,102 @@ def _build_news_candidate(
     )
 
 
+def _fetch_analyst_consensus_sync(
+    ticker: str,
+    previous_target: float | None,
+) -> dict | None:
+    """Blocking: fetch analyst ratings + price targets via yfinance."""
+    import yfinance as yf
+
+    try:
+        t = yf.Ticker(ticker)
+        recs = getattr(t, "recommendations", None)
+        targets = getattr(t, "analyst_price_targets", None) or {}
+
+        mean_target = targets.get("mean")
+        current_price_raw = getattr(t.fast_info, "last_price", None)
+        current_price = float(current_price_raw) if current_price_raw else None
+
+        net_changes = 0
+        if recs is not None and not recs.empty:
+            # yfinance recommendations DataFrame: period column "0m"=current, "-1m"=last month
+            recent = recs[recs["period"].isin(["0m", "-1m"])] if "period" in recs.columns else recs.head(2)
+            if not recent.empty:
+                upgrades = int(recent.get("strongBuy", 0).sum() + recent.get("buy", 0).sum())
+                downgrades = int(recent.get("sell", 0).sum() + recent.get("strongSell", 0).sum())
+                net_changes = upgrades - downgrades
+
+        if mean_target is None and net_changes == 0:
+            return None
+
+        return {
+            "net_changes_30d": net_changes,
+            "mean_target": float(mean_target) if mean_target else None,
+            "current_price": current_price,
+            "previous_target": previous_target,
+        }
+    except Exception:
+        return None
+
+
+def _build_analyst_revision_candidate(
+    consensus: dict,
+) -> tuple[int, dict[str, Any]] | None:
+    """Return (priority, candidate) if firing conditions are met, else None.
+
+    Fires when: net rating changes >= 2 OR price target moved >10% vs previous run.
+    Never thesis_breaking — analyst consensus alone does not break a thesis.
+    """
+    net = consensus.get("net_changes_30d", 0)
+    mean_target = consensus.get("mean_target")
+    previous_target = consensus.get("previous_target")
+    current_price = consensus.get("current_price")
+
+    target_moved_significantly = (
+        mean_target is not None
+        and previous_target is not None
+        and previous_target > 0
+        and abs(mean_target - previous_target) / previous_target > 0.10
+    )
+    target_below_price = (
+        mean_target is not None
+        and current_price is not None
+        and mean_target < current_price
+    )
+
+    fires = abs(net) >= 2 or target_moved_significantly
+    if not fires:
+        return None
+
+    if net < 0:
+        direction = f"{abs(net)} net analyst downgrade(s) in the past 30 days"
+    elif net > 0:
+        direction = f"{net} net analyst upgrade(s) in the past 30 days"
+    else:
+        direction = "significant analyst price target revision"
+
+    target_note = ""
+    if mean_target and current_price:
+        pct = ((mean_target - current_price) / current_price) * 100
+        target_note = f" Consensus target ${mean_target:.0f} ({pct:+.0f}% vs current)."
+
+    evidence: dict[str, Any] = {
+        "net_changes_30d": net,
+        "mean_target": mean_target,
+        "current_price": current_price,
+        "previous_target": previous_target,
+        "target_below_price": target_below_price,
+    }
+
+    priority = 2 if net < 0 or target_below_price else 1
+
+    return priority, {
+        "event_type": "analyst_revision",
+        "description": f"{direction}.{target_note}",
+        "evidence": evidence,
+    }
+
+
 def shortlist_qualitative_candidates(
     news_items: list[NewsItem],
     recent_earnings_surprise_pct: float | None,
@@ -921,11 +1017,20 @@ def shortlist_qualitative_candidates(
     now: datetime | None = None,
     max_candidates: int = 8,
     ticker: str | None = None,
+    previous_analyst_target: float | None = None,
 ) -> list[dict[str, Any]]:
     reference_now = now or datetime.now(timezone.utc)
     candidates: list[dict[str, Any]] = []
     qualitative_candidates: list[tuple[int, dict[str, Any]]] = []
     seen_ids: set[str] = set()
+
+    # Analyst consensus (yfinance, free, no new API keys)
+    if ticker:
+        consensus = _fetch_analyst_consensus_sync(ticker, previous_analyst_target)
+        if consensus is not None:
+            analyst_candidate = _build_analyst_revision_candidate(consensus)
+            if analyst_candidate is not None:
+                qualitative_candidates.append(analyst_candidate)
 
     earnings_surprise_candidate = _build_earnings_surprise_candidate(recent_earnings_surprise_pct)
     if earnings_surprise_candidate is not None:

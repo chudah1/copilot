@@ -83,6 +83,7 @@ COOLDOWN_HOURS: dict[str, int] = {
     "news": 48,
     "earnings": 48,
     "insider": 48,
+    "analyst_revision": 72,
 }
 DEFAULT_COOLDOWN_HOURS = 24
 
@@ -99,6 +100,7 @@ EVENT_SPECIFICITY_RANK: dict[str, int] = {
     "insider_transaction": 3,
     "news_or_earnings_candidate": 2,
     "news_keyword_match": 2,
+    "analyst_revision": 2,
     "upcoming_earnings": 1,
     "price_move": 0,
 }
@@ -114,6 +116,7 @@ EVIDENCE_TYPE_MAP: dict[str, str] = {
     "edgar_8k": "regulatory_filing",
     "gemini_news": "news",
     "news_keyword_match": "news",
+    "analyst_revision": "analyst_revision",
 }
 
 
