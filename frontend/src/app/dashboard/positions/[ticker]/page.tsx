@@ -11,6 +11,7 @@ import { ThesisCard } from "@/components/thesis/thesis-card";
 import { ThesisDiffView } from "@/components/thesis/thesis-diff-view";
 import { ConvictionLog } from "@/components/thesis/conviction-log";
 import { ThesisDecompositionReview } from "@/components/thesis/thesis-decomposition-review";
+import { HistoricalAuditCard } from "@/components/thesis/historical-audit-card";
 import { ThesisEditor } from "@/components/thesis/thesis-editor";
 import { InvalidateDialog } from "./invalidate-dialog";
 import { MonitoringTab } from "./monitoring-tab";
@@ -24,6 +25,7 @@ import type {
   ConfirmDecompositionRequest,
   ConvictionLogResponse,
   HealthCheckResult,
+  HistoricalAuditResponse,
   Holding,
   MonitoringEvent,
   MonitoringEventReviewResponse,
@@ -100,6 +102,7 @@ export default function PositionDetailPage() {
   const [thesisSubTab, setThesisSubTab] = useState<ThesisSubTab>("thesis");
   const [headerCollapsed, setHeaderCollapsed] = useState(false);
   const [allGaps, setAllGaps] = useState<MonitoringGap[]>([]);
+  const [historicalAudit, setHistoricalAudit] = useState<HistoricalAuditResponse | null>(null);
 
   const holding = holdings.find((h) => h.ticker === ticker);
   const activeThesis = theses.find((t) => t.status === "active" || t.status === "draft" || t.status === "needs_review");
@@ -242,6 +245,38 @@ export default function PositionDetailPage() {
       window.clearTimeout(timer);
     };
   }, [loading, fromOnboarding, ticker, holdings]);
+
+  useEffect(() => {
+    if (!activeThesis) return;
+    if (historicalAudit && historicalAudit.status !== "pending") return;
+
+    let cancelled = false;
+    let attempts = 0;
+    const MAX_ATTEMPTS = 20; // ~60s at 3s spacing
+
+    const poll = async () => {
+      attempts += 1;
+      try {
+        const result = await api.get<HistoricalAuditResponse>(
+          `/api/theses/${activeThesis.id}/historical-audit`
+        );
+        if (cancelled) return;
+        setHistoricalAudit(result);
+        if (result.status !== "pending") return;
+      } catch {
+        // silently ignore — audit card is non-critical
+      }
+      if (!cancelled && attempts < MAX_ATTEMPTS) {
+        timer = window.setTimeout(poll, 3000);
+      }
+    };
+
+    let timer = window.setTimeout(poll, 3000);
+    return () => {
+      cancelled = true;
+      window.clearTimeout(timer);
+    };
+  }, [activeThesis?.id, historicalAudit?.status]);
 
   const runHealthCheck = async (thesisId: string) => {
     try {
@@ -405,6 +440,7 @@ export default function PositionDetailPage() {
 
   const handleConfirmDecomposition = async (payload: ConfirmDecompositionRequest) => {
     if (!activeThesis) return;
+    setHistoricalAudit({ status: "pending", results: null });
     try {
       setDecompositionSaving(true);
       const envelope = await api.post<ThesisDecompositionEnvelope>(`/api/theses/${activeThesis.id}/decomposition/confirm`, payload);
@@ -1253,6 +1289,11 @@ export default function PositionDetailPage() {
                           />
                         </div>
                       </div>
+                    )}
+
+                    {/* ── Historical audit card ──────────────────────────── */}
+                    {activeThesis && decompositionEnvelope?.status === "confirmed" && (
+                      <HistoricalAuditCard audit={historicalAudit} />
                     )}
 
                     {/* ── Log sub-tab ─────────────────────────────────────── */}
