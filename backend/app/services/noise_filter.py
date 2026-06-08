@@ -430,6 +430,7 @@ async def filter_candidates(
     signal_map: dict[str, ThesisSignal],
     db: AsyncSession,
     now: datetime | None = None,
+    skip_cooldown: bool = False,
 ) -> list[dict[str, Any]]:
     """Apply all noise suppression rules. Call after signal matching, before event creation."""
     if not candidates:
@@ -443,8 +444,9 @@ async def filter_candidates(
     # Rule 1: Evidence dedup (scoped by evidence_type + source_id)
     candidates = _apply_evidence_dedup(candidates, existing_keys)
 
-    # Rule 2: Signal cooldown
-    candidates = _apply_signal_cooldown(candidates, signal_map, now)
+    # Rule 2: Signal cooldown (skipped for historical audit — not persisting results)
+    if not skip_cooldown:
+        candidates = _apply_signal_cooldown(candidates, signal_map, now)
 
     # Rule 3: Priority suppression is applied separately after classification
     # — call apply_priority_suppression() after classify_event() in the caller

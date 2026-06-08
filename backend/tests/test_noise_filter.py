@@ -415,3 +415,31 @@ def test_priority_suppression_end_to_end():
     assert "price_move" in event_types
     assert "earnings_surprise" in event_types
     assert "news_or_earnings_candidate" not in event_types
+
+
+# ---------------------------------------------------------------------------
+# skip_cooldown flag
+# ---------------------------------------------------------------------------
+
+
+@pytest.mark.asyncio
+async def test_filter_candidates_skip_cooldown_bypasses_rule2():
+    """With skip_cooldown=True, candidates whose signal is in cooldown still survive."""
+    signal_id = "aaaaaaaa-aaaa-aaaa-aaaa-aaaaaaaaaaaa"
+    fired_recently = datetime.now(timezone.utc) - timedelta(hours=1)
+    signal = _make_signal(signal_id, last_fired_at=fired_recently)
+    signal_map = {signal_id: signal}
+
+    candidate = {
+        "event_type": "news",
+        "description": "Test news",
+        "evidence": {"matched_signal_id": signal_id, "source_id": "abc123"},
+    }
+
+    db = AsyncMock()
+    db.execute = AsyncMock(return_value=MagicMock(all=MagicMock(return_value=[])))
+
+    result = await filter_candidates(
+        [candidate], uuid.uuid4(), signal_map, db, skip_cooldown=True
+    )
+    assert len(result) == 1
