@@ -12,9 +12,6 @@ def test_thesis_has_historical_audit_columns():
     assert "historical_audit_results" in t.c
 
 
-# test_thesis_has_historical_audit_columns is already in this file from Task 1
-
-
 @pytest.mark.asyncio
 async def test_run_historical_audit_sets_status_empty_when_no_classified():
     """Happy path with no surviving candidates: status goes pending → empty."""

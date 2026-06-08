@@ -417,14 +417,18 @@ def _serialise_audit_results(classified: list[tuple]) -> list[dict]:
             "event_date": event_date,
             "evidence": evidence,
         })
+    def _safe_ts(date_str: str | None) -> float:
+        if not date_str:
+            return 0.0
+        try:
+            return datetime.fromisoformat(date_str).timestamp()
+        except ValueError:
+            return 0.0
+
     results.sort(
         key=lambda r: (
             SEVERITY_ORDER.get(r["severity"], 3),
-            -(
-                datetime.fromisoformat(r["event_date"]).timestamp()
-                if r.get("event_date")
-                else 0
-            ),
+            -_safe_ts(r.get("event_date")),
         )
     )
     return results
@@ -473,9 +477,8 @@ async def _run_historical_audit_with_session(
         )
 
         try:
-            edgar_filings = await get_recent_8k_filings(
-                holding.ticker, lookback_days=HISTORICAL_AUDIT_LOOKBACK_DAYS
-            )
+            audit_since = (now - timedelta(days=HISTORICAL_AUDIT_LOOKBACK_DAYS)).date()
+            edgar_filings = await get_recent_8k_filings(holding.ticker, since=audit_since)
             candidates.extend(build_edgar_candidates(holding.ticker, edgar_filings))
         except Exception as exc:
             logger.warning("EDGAR fetch failed for %s in historical audit: %s", holding.ticker, exc)
@@ -495,7 +498,7 @@ async def _run_historical_audit_with_session(
         candidates = match_candidates_to_signals(candidates, claims)
         candidates = apply_thesis_floor(candidates, audit_floor_anchor)
 
-        claims_by_id, signals_by_id = build_claim_signal_lookup(claims)
+        _, signals_by_id = build_claim_signal_lookup(claims)
         investor_profile = await load_investor_profile(db, thesis.user_id)
 
         news_watches = extract_news_watches(claims)
@@ -542,6 +545,8 @@ async def run_historical_audit(thesis_id: uuid.UUID) -> None:
     Stores results in thesis.historical_audit_results without persisting
     MonitoringEvents — the live feed stays clean. Designed as a BackgroundTask.
     """
+    # Reuses the first-pulse flag — both features share the same API-cost profile
+    # (live market data + Gemini call per thesis). Disabling one disables both.
     if not settings.enable_first_pulse:
         return
 
