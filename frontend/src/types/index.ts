@@ -180,6 +180,19 @@ export interface MonitoringGap {
   failed_at: string;
 }
 
+export interface HistoricalAuditResultItem {
+  description: string;
+  severity: "thesis_breaking" | "warning" | "info";
+  event_type: string;
+  event_date: string | null;
+  evidence: Record<string, unknown> | null;
+}
+
+export interface HistoricalAuditResponse {
+  status: "pending" | "ready" | "empty" | "failed";
+  results: HistoricalAuditResultItem[] | null;
+}
+
 export interface MonitoringEventReviewResponse {
   id: string;
   monitoring_event_id: string;
