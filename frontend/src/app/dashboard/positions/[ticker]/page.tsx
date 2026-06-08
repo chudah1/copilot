@@ -271,12 +271,13 @@ export default function PositionDetailPage() {
       }
     };
 
-    let timer = window.setTimeout(poll, 3000);
+    let timer: number | undefined;
+    void poll();
     return () => {
       cancelled = true;
       window.clearTimeout(timer);
     };
-  }, [activeThesis?.id, historicalAudit?.status]);
+  }, [activeThesis?.id]); // eslint-disable-line react-hooks/exhaustive-deps
 
   const runHealthCheck = async (thesisId: string) => {
     try {
@@ -1288,12 +1289,12 @@ export default function PositionDetailPage() {
                             onConfirm={handleConfirmDecomposition}
                           />
                         </div>
-                      </div>
-                    )}
 
-                    {/* ── Historical audit card ──────────────────────────── */}
-                    {activeThesis && decompositionEnvelope?.status === "confirmed" && (
-                      <HistoricalAuditCard audit={historicalAudit} />
+                        {/* ── Historical audit card ──────────────────────── */}
+                        {activeThesis && decompositionEnvelope?.status === "confirmed" && (
+                          <HistoricalAuditCard audit={historicalAudit} />
+                        )}
+                      </div>
                     )}
 
                     {/* ── Log sub-tab ─────────────────────────────────────── */}
