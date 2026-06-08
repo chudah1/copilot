@@ -444,7 +444,7 @@ async def filter_candidates(
     # Rule 1: Evidence dedup (scoped by evidence_type + source_id)
     candidates = _apply_evidence_dedup(candidates, existing_keys)
 
-    # Rule 2: Signal cooldown (skipped for historical audit — not persisting results)
+    # Rule 2: Signal cooldown (skipped for non-persisting runs, e.g. historical audit)
     if not skip_cooldown:
         candidates = _apply_signal_cooldown(candidates, signal_map, now)
 

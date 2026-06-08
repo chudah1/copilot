@@ -433,7 +433,7 @@ async def test_filter_candidates_skip_cooldown_bypasses_rule2():
     candidate = {
         "event_type": "news",
         "description": "Test news",
-        "evidence": {"signal_id": signal_id, "source_id": "abc123"},
+        "evidence": {"signal_id": signal_id, "article_id": "abc123"},
     }
 
     db = AsyncMock()
