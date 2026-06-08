@@ -453,6 +453,9 @@ async def _run_historical_audit_with_session(
         await db.commit()
         return
 
+    if thesis.historical_audit_status in ("ready", "pending"):
+        return
+
     thesis.historical_audit_status = "pending"
     await db.commit()
 

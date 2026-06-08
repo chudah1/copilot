@@ -1,5 +1,5 @@
 import uuid
-from typing import Any
+from typing import Any, Literal
 from datetime import datetime
 from pydantic import BaseModel, field_validator
 
@@ -322,7 +322,7 @@ class EarningsReviewResponse(BaseModel):
 
 class HistoricalAuditResultItem(BaseModel):
     description: str
-    severity: str
+    severity: Literal["thesis_breaking", "warning", "info"]
     event_type: str
     event_date: str | None = None
     evidence: dict[str, Any] | None = None
