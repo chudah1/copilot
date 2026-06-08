@@ -393,3 +393,162 @@ async def run_first_pulse(
             )
     except Exception:
         logger.exception("First pulse failed for user %s", user_id)
+
+
+HISTORICAL_AUDIT_LOOKBACK_DAYS = 90
+
+
+def _serialise_audit_results(classified: list[tuple]) -> list[dict]:
+    """Convert (candidate, severity, analysis) tuples to JSON-serialisable dicts."""
+    SEVERITY_ORDER = {"thesis_breaking": 0, "warning": 1, "info": 2}
+    results = []
+    for candidate, severity, _analysis in classified:
+        evidence = candidate.get("evidence") or {}
+        raw_date = (
+            evidence.get("date")
+            or evidence.get("filing_date")
+            or evidence.get("event_date")
+        )
+        event_date = str(raw_date)[:10] if raw_date else None
+        results.append({
+            "description": candidate.get("description", ""),
+            "severity": severity,
+            "event_type": candidate.get("event_type", ""),
+            "event_date": event_date,
+            "evidence": evidence,
+        })
+    results.sort(
+        key=lambda r: (
+            SEVERITY_ORDER.get(r["severity"], 3),
+            -(
+                datetime.fromisoformat(r["event_date"]).timestamp()
+                if r.get("event_date")
+                else 0
+            ),
+        )
+    )
+    return results
+
+
+async def _run_historical_audit_with_session(
+    db: AsyncSession,
+    *,
+    thesis_id: uuid.UUID,
+) -> None:
+    thesis = (
+        await db.execute(select(Thesis).where(Thesis.id == thesis_id))
+    ).scalar_one_or_none()
+    if thesis is None:
+        return
+
+    holding = (
+        await db.execute(select(Holding).where(Holding.id == thesis.holding_id))
+    ).scalar_one_or_none()
+    if holding is None:
+        thesis.historical_audit_status = "failed"
+        await db.commit()
+        return
+
+    thesis.historical_audit_status = "pending"
+    await db.commit()
+
+    now = datetime.now(timezone.utc)
+    # apply_thesis_floor uses floor = anchor - timedelta(days=1) internally.
+    # Passing now - (LOOKBACK - 1) days gives an effective floor of now - LOOKBACK days.
+    audit_floor_anchor = now - timedelta(days=HISTORICAL_AUDIT_LOOKBACK_DAYS - 1)
+
+    try:
+        company_data = await fetch_company_data(holding.ticker)
+        if company_data is None:
+            thesis.historical_audit_status = "empty"
+            await db.commit()
+            return
+
+        previous_price = float(holding.current_price) if holding.current_price is not None else None
+        candidates = generate_monitoring_candidates(
+            thesis.interpretation,
+            company_data,
+            previous_price,
+            now=now,
+        )
+
+        try:
+            edgar_filings = await get_recent_8k_filings(
+                holding.ticker, lookback_days=HISTORICAL_AUDIT_LOOKBACK_DAYS
+            )
+            candidates.extend(build_edgar_candidates(holding.ticker, edgar_filings))
+        except Exception as exc:
+            logger.warning("EDGAR fetch failed for %s in historical audit: %s", holding.ticker, exc)
+
+        decomposition = await load_active_decomposition(db, thesis.id)
+        claims = decomposition.claims if decomposition else None
+        signal_labels = signal_labels_from_claims(claims)
+
+        try:
+            gemini_candidates = await collect_news_evidence(
+                holding.ticker, holding.name or holding.ticker, signal_labels
+            )
+            candidates.extend(gemini_candidates)
+        except Exception as exc:
+            logger.warning("Gemini news failed for %s in historical audit: %s", holding.ticker, exc)
+
+        candidates = match_candidates_to_signals(candidates, claims)
+        candidates = apply_thesis_floor(candidates, audit_floor_anchor)
+
+        claims_by_id, signals_by_id = build_claim_signal_lookup(claims)
+        investor_profile = await load_investor_profile(db, thesis.user_id)
+
+        news_watches = extract_news_watches(claims)
+        if not news_watches:
+            news_watches = extract_provisional_news_watches(thesis.interpretation)
+        nw_matched = await match_thesis_news_watches(candidates, news_watches)
+
+        candidates = await filter_candidates(
+            candidates, holding.id, signals_by_id, db, now=now, skip_cooldown=True
+        )
+
+        classified = await classify_candidates_for_thesis(
+            thesis,
+            candidates,
+            investor_profile=investor_profile,
+            sector=holding.sector,
+            ticker=holding.ticker,
+            company_name=holding.name,
+            nw_matched=nw_matched,
+        )
+
+        suppressed = apply_priority_suppression([(c, s) for c, s, _ in classified])
+        surviving_set = {id(c) for c, _ in suppressed}
+        classified = [(c, s, a) for c, s, a in classified if id(c) in surviving_set]
+
+        results = _serialise_audit_results(classified)
+
+        thesis.historical_audit_results = results
+        thesis.historical_audit_status = "ready" if results else "empty"
+        await db.commit()
+
+    except Exception:
+        logger.exception("Historical audit pipeline failed for thesis %s", thesis_id)
+        thesis.historical_audit_status = "failed"
+        try:
+            await db.commit()
+        except Exception:
+            pass
+
+
+async def run_historical_audit(thesis_id: uuid.UUID) -> None:
+    """Run a 90-day historical monitoring pass for a newly confirmed thesis.
+
+    Stores results in thesis.historical_audit_results without persisting
+    MonitoringEvents — the live feed stays clean. Designed as a BackgroundTask.
+    """
+    if not settings.enable_first_pulse:
+        return
+
+    from app.database import async_session
+
+    try:
+        async with async_session() as db:
+            await _run_historical_audit_with_session(db, thesis_id=thesis_id)
+    except Exception:
+        logger.exception("Historical audit failed for thesis %s", thesis_id)
