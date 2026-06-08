@@ -94,7 +94,7 @@ export function HistoricalAuditCard({ audit }: Props) {
       <div>
         {results.map((item) => (
           <AuditResultItem
-            key={`${item.event_type}-${item.event_date ?? "nodate"}-${item.severity}`}
+            key={`${item.event_type}-${item.event_date ?? "nodate"}-${item.severity}-${item.description.slice(0, 20)}`}
             item={item}
           />
         ))}

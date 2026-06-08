@@ -141,3 +141,43 @@ async def test_historical_audit_endpoint_returns_pending_when_status_is_none():
     body = response.json()
     assert body["status"] == "pending"
     assert body["results"] is None
+
+
+@pytest.mark.asyncio
+async def test_run_historical_audit_skips_when_already_ready():
+    """If status is already 'ready', the function returns without touching the pipeline."""
+    thesis_id = uuid.uuid4()
+
+    mock_thesis = MagicMock()
+    mock_thesis.id = thesis_id
+    mock_thesis.holding_id = uuid.uuid4()
+    mock_thesis.historical_audit_status = "ready"
+
+    mock_db = AsyncMock()
+    result = MagicMock()
+    result.scalar_one_or_none.return_value = mock_thesis
+    mock_db.execute = AsyncMock(return_value=result)
+
+    with patch("app.services.check_now.fetch_company_data") as mock_fetch:
+        from app.services.check_now import _run_historical_audit_with_session
+        await _run_historical_audit_with_session(mock_db, thesis_id=thesis_id)
+        mock_fetch.assert_not_called()
+
+
+def test_serialise_audit_results_orders_by_severity_then_recency():
+    """thesis_breaking comes before warning, newer dates before older."""
+    from app.services.check_now import _serialise_audit_results
+
+    classified = [
+        ({"description": "old warning", "event_type": "gemini_news", "evidence": {"date": "2026-01-01"}}, "warning", ""),
+        ({"description": "breaking", "event_type": "edgar", "evidence": {"filing_date": "2026-01-05"}}, "thesis_breaking", ""),
+        ({"description": "new warning", "event_type": "gemini_news", "evidence": {"date": "2026-02-01"}}, "warning", ""),
+    ]
+
+    results = _serialise_audit_results(classified)
+
+    assert results[0]["severity"] == "thesis_breaking"
+    assert results[1]["severity"] == "warning"
+    assert results[1]["event_date"] == "2026-02-01"  # newer warning first
+    assert results[2]["severity"] == "warning"
+    assert results[2]["event_date"] == "2026-01-01"

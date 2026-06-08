@@ -329,7 +329,7 @@ class HistoricalAuditResultItem(BaseModel):
 
 
 class HistoricalAuditResponse(BaseModel):
-    status: str
+    status: Literal["pending", "ready", "empty", "failed"]
     results: list[HistoricalAuditResultItem] | None = None
 
     model_config = {"from_attributes": True}

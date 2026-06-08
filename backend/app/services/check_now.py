@@ -396,6 +396,7 @@ async def run_first_pulse(
 
 
 HISTORICAL_AUDIT_LOOKBACK_DAYS = 90
+_AUDIT_STALE_MINUTES = 10
 
 
 def _serialise_audit_results(classified: list[tuple]) -> list[dict]:
@@ -453,8 +454,14 @@ async def _run_historical_audit_with_session(
         await db.commit()
         return
 
-    if thesis.historical_audit_status in ("ready", "pending"):
+    if thesis.historical_audit_status == "ready":
         return
+    if thesis.historical_audit_status == "pending":
+        updated = thesis.updated_at
+        if updated.tzinfo is None:
+            updated = updated.replace(tzinfo=timezone.utc)
+        if (datetime.now(timezone.utc) - updated) < timedelta(minutes=_AUDIT_STALE_MINUTES):
+            return
 
     thesis.historical_audit_status = "pending"
     await db.commit()
@@ -498,6 +505,8 @@ async def _run_historical_audit_with_session(
         except Exception as exc:
             logger.warning("Gemini news failed for %s in historical audit: %s", holding.ticker, exc)
 
+        # Form 4 insider transactions and earnings enrichment are intentionally omitted —
+        # they add LLM cost per filing over a 90-day window. The live pipeline handles them.
         candidates = match_candidates_to_signals(candidates, claims)
         candidates = apply_thesis_floor(candidates, audit_floor_anchor)
 
