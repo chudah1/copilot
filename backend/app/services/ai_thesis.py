@@ -2189,16 +2189,18 @@ def _build_stress_test_context(
                 f"{shares_str}{' (' + value_str + ')' if value_str else ''} on {date_str}\n"
             )
 
-    # Earnings call tone
+    # Earnings call tone — only include if the transcript is recent (same gate as monitoring candidates)
     call_context = ""
     if company_data.earnings_call:
         ec = company_data.earnings_call
-        call_lines = [f"Last earnings call tone: {ec.sentiment_label or 'neutral'}"]
-        if ec.highlights:
-            call_lines.append("Key highlights:")
-            for h in ec.highlights[:3]:
-                call_lines.append(f"- {h}")
-        call_context = "\n".join(call_lines) + "\n"
+        transcript_cutoff = datetime.now(timezone.utc) - timedelta(days=14)
+        if ec.call_date is not None and ec.call_date >= transcript_cutoff:
+            call_lines = [f"Last earnings call tone: {ec.sentiment_label or 'neutral'}"]
+            if ec.highlights:
+                call_lines.append("Key highlights:")
+                for h in ec.highlights[:3]:
+                    call_lines.append(f"- {h}")
+            call_context = "\n".join(call_lines) + "\n"
 
     return fundamentals + news_context + insider_context + call_context
 

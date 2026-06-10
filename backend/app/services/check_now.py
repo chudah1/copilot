@@ -12,7 +12,7 @@ from app.config import settings
 from app.models.holding import Holding
 from app.models.monitoring_event import MonitoringEvent
 from app.models.thesis import Thesis
-from app.services.market_data import fetch_company_data
+from app.services.market_data import MAX_CURRENT_TRANSCRIPT_AGE_DAYS, fetch_company_data
 from app.services.valuation import apply_market_price, compute_pnl, to_account_value
 from app.services.monitoring import check_metric_watch_hints, generate_monitoring_candidates
 from app.services.noise_filter import (
@@ -399,6 +399,14 @@ HISTORICAL_AUDIT_LOOKBACK_DAYS = 90
 _AUDIT_STALE_MINUTES = 10
 
 
+def _description_fingerprint(description: str) -> frozenset[str]:
+    """Return a bag-of-significant-words for near-duplicate detection."""
+    stop = {"the", "a", "an", "and", "or", "of", "in", "to", "for", "is", "it",
+            "at", "by", "on", "as", "with", "its", "that", "this", "was", "are"}
+    words = {w.lower().strip(".,;:") for w in description.split() if len(w) > 3}
+    return frozenset(words - stop)
+
+
 def _serialise_audit_results(classified: list[tuple]) -> list[dict]:
     """Convert (candidate, severity, analysis) tuples to JSON-serialisable dicts."""
     SEVERITY_ORDER = {"thesis_breaking": 0, "warning": 1, "info": 2}
@@ -418,6 +426,34 @@ def _serialise_audit_results(classified: list[tuple]) -> list[dict]:
             "event_date": event_date,
             "evidence": evidence,
         })
+
+    # Deduplicate: within the same event_type+week, drop lower-severity near-duplicates.
+    # Two descriptions are considered duplicates when they share ≥60% of significant words.
+    def _week_bucket(date_str: str | None) -> str:
+        if not date_str:
+            return "unknown"
+        try:
+            d = datetime.fromisoformat(date_str)
+            return f"{d.isocalendar().year}-W{d.isocalendar().week:02d}"
+        except ValueError:
+            return "unknown"
+
+    results.sort(key=lambda r: SEVERITY_ORDER.get(r["severity"], 3))
+    seen: list[dict] = []
+    for item in results:
+        fp = _description_fingerprint(item["description"])
+        bucket = (item["event_type"], _week_bucket(item.get("event_date")))
+        duplicate = False
+        for kept in seen:
+            if (kept["event_type"], _week_bucket(kept.get("event_date"))) == bucket:
+                kept_fp = _description_fingerprint(kept["description"])
+                union = fp | kept_fp
+                if union and len(fp & kept_fp) / len(union) >= 0.6:
+                    duplicate = True
+                    break
+        if not duplicate:
+            seen.append(item)
+
     def _safe_ts(date_str: str | None) -> float:
         if not date_str:
             return 0.0
@@ -426,13 +462,13 @@ def _serialise_audit_results(classified: list[tuple]) -> list[dict]:
         except ValueError:
             return 0.0
 
-    results.sort(
+    seen.sort(
         key=lambda r: (
             SEVERITY_ORDER.get(r["severity"], 3),
             -_safe_ts(r.get("event_date")),
         )
     )
-    return results
+    return seen
 
 
 async def _run_historical_audit_with_session(
@@ -484,6 +520,7 @@ async def _run_historical_audit_with_session(
             company_data,
             previous_price,
             now=now,
+            transcript_max_age_days=MAX_CURRENT_TRANSCRIPT_AGE_DAYS,
         )
 
         try:
@@ -499,7 +536,8 @@ async def _run_historical_audit_with_session(
 
         try:
             gemini_candidates = await collect_news_evidence(
-                holding.ticker, holding.name or holding.ticker, signal_labels
+                holding.ticker, holding.name or holding.ticker, signal_labels,
+                days_back=HISTORICAL_AUDIT_LOOKBACK_DAYS,
             )
             candidates.extend(gemini_candidates)
         except Exception as exc:

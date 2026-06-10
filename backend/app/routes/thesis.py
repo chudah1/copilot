@@ -320,12 +320,18 @@ async def confirm_decomposition(
 @router.get("/{thesis_id}/historical-audit", response_model=HistoricalAuditResponse)
 async def get_historical_audit(
     thesis_id: uuid.UUID,
+    background_tasks: BackgroundTasks,
     current_user: User = Depends(get_current_user),
     db: AsyncSession = Depends(get_db),
 ):
+    from app.services.check_now import run_historical_audit
+
     thesis = await _load_user_thesis(db, thesis_id=thesis_id, user_id=current_user.id)
     if thesis is None:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Thesis not found")
+
+    if thesis.historical_audit_status is None:
+        background_tasks.add_task(run_historical_audit, thesis_id)
 
     return HistoricalAuditResponse(
         status=thesis.historical_audit_status or "pending",

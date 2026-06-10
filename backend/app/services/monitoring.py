@@ -138,6 +138,7 @@ def generate_monitoring_candidates(
     previous_price: float | None,
     *,
     now: datetime | None = None,
+    transcript_max_age_days: int = 14,
 ) -> list[dict[str, Any]]:
     if company_data is None:
         return []
@@ -213,6 +214,7 @@ def generate_monitoring_candidates(
             getattr(company_data, "insider_transactions", []),
             now=normalized_now,
             ticker=company_data.ticker,
+            transcript_max_age_days=transcript_max_age_days,
         )
     )
 

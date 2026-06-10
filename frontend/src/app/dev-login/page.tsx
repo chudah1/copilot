@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { Suspense, useEffect, useState } from "react";
 import { useSearchParams } from "next/navigation";
 import { getApiBaseUrl } from "@/lib/api-base";
 import { storeTokens } from "@/lib/auth-tokens";
@@ -21,7 +21,7 @@ function safeRedirect(target: string | null) {
   }
 }
 
-export default function DevLoginPage() {
+function DevLoginInner() {
   const searchParams = useSearchParams();
   const [message, setMessage] = useState("Signing you in…");
   const localHost = isLocalHost();
@@ -90,5 +90,13 @@ export default function DevLoginPage() {
         {message}
       </p>
     </main>
+  );
+}
+
+export default function DevLoginPage() {
+  return (
+    <Suspense>
+      <DevLoginInner />
+    </Suspense>
   );
 }

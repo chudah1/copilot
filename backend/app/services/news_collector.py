@@ -45,6 +45,7 @@ async def collect_news_evidence(
     ticker: str,
     name: str,
     signal_labels: list[str],
+    days_back: int = 7,
 ) -> list[dict[str, Any]]:
     """Return gemini_news monitoring candidates for the given ticker and signals."""
     if not settings.gemini_api_key or not signal_labels:
@@ -60,7 +61,7 @@ async def collect_news_evidence(
     signals_text = "\n".join(f"- {label}" for label in signal_labels[:MAX_SIGNALS])
 
     now = datetime.now(timezone.utc)
-    since_str = (now - timedelta(days=7)).strftime("%B %-d, %Y")
+    since_str = (now - timedelta(days=days_back)).strftime("%B %-d, %Y")
     until_str = now.strftime("%B %-d, %Y")
 
     search_prompt = f"""\

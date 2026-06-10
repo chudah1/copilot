@@ -778,11 +778,12 @@ def _build_transcript_candidate(
     earnings_call: TranscriptSignal | None,
     *,
     now: datetime,
+    transcript_max_age_days: int = 14,
 ) -> tuple[int, dict[str, Any]] | None:
     if earnings_call is None:
         return None
 
-    transcript_cutoff = now - timedelta(days=14)
+    transcript_cutoff = now - timedelta(days=transcript_max_age_days)
     negative_sentiment = earnings_call.sentiment is not None and earnings_call.sentiment <= -0.15
     if (
         earnings_call.call_date is None
@@ -1023,6 +1024,7 @@ def shortlist_qualitative_candidates(
     max_candidates: int = 8,
     ticker: str | None = None,
     previous_analyst_target: float | None = None,
+    transcript_max_age_days: int = 14,
 ) -> list[dict[str, Any]]:
     reference_now = now or datetime.now(timezone.utc)
     candidates: list[dict[str, Any]] = []
@@ -1045,7 +1047,7 @@ def shortlist_qualitative_candidates(
     if upcoming_earnings_candidate is not None:
         candidates.append(upcoming_earnings_candidate)
 
-    transcript_candidate = _build_transcript_candidate(earnings_call, now=reference_now)
+    transcript_candidate = _build_transcript_candidate(earnings_call, now=reference_now, transcript_max_age_days=transcript_max_age_days)
     if transcript_candidate is not None:
         qualitative_candidates.append(transcript_candidate)
 

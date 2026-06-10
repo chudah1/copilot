@@ -1,6 +1,6 @@
 "use client";
 
-import { startTransition, useEffect, useState } from "react";
+import { Suspense, startTransition, useEffect, useState } from "react";
 import { useParams, useRouter, useSearchParams } from "next/navigation";
 import { motion, AnimatePresence } from "framer-motion";
 import { api } from "@/lib/api";
@@ -66,7 +66,7 @@ import {
   getEventAssumptionLabel,
 } from "./position-helpers";
 
-export default function PositionDetailPage() {
+function PositionDetailInner() {
   const { ticker } = useParams<{ ticker: string }>();
   const searchParams = useSearchParams();
   const router = useRouter();
@@ -277,7 +277,7 @@ export default function PositionDetailPage() {
       cancelled = true;
       window.clearTimeout(timer);
     };
-  }, [activeThesis?.id]); // eslint-disable-line react-hooks/exhaustive-deps
+  }, [activeThesis?.id, historicalAudit?.status]); // eslint-disable-line react-hooks/exhaustive-deps
 
   const runHealthCheck = async (thesisId: string) => {
     try {
@@ -1291,7 +1291,7 @@ export default function PositionDetailPage() {
                         </div>
 
                         {/* ── Historical audit card ──────────────────────── */}
-                        {activeThesis && decompositionEnvelope?.status === "confirmed" && (
+                        {activeThesis && (decompositionEnvelope?.status === "confirmed" || decompositionEnvelope?.status === "partially_confirmed") && (
                           <HistoricalAuditCard audit={historicalAudit} />
                         )}
                       </div>
@@ -1436,5 +1436,13 @@ export default function PositionDetailPage() {
         onConfirm={handleInvalidate}
       />
     </div>
+  );
+}
+
+export default function PositionDetailPage() {
+  return (
+    <Suspense>
+      <PositionDetailInner />
+    </Suspense>
   );
 }

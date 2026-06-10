@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useMemo, useState } from "react";
+import { Suspense, useEffect, useMemo, useState } from "react";
 import Link from "next/link";
 import { useSearchParams } from "next/navigation";
 import { motion, AnimatePresence } from "framer-motion";
@@ -319,7 +319,7 @@ function recentReviewBannerCopy(
 
 // ── Dashboard ──────────────────────────────────────────────────────────────
 
-export default function DashboardPage() {
+function DashboardInner() {
   const searchParams = useSearchParams();
   const [draftBannerDismissed, setDraftBannerDismissed] = useState(false);
   const [showAddForm, setShowAddForm] = useState(false);
@@ -1191,5 +1191,13 @@ export default function DashboardPage() {
         </ErrorBoundary>
       )}
     </div>
+  );
+}
+
+export default function DashboardPage() {
+  return (
+    <Suspense>
+      <DashboardInner />
+    </Suspense>
   );
 }

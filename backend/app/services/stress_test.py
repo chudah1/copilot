@@ -3,7 +3,7 @@ from __future__ import annotations
 import hashlib
 import logging
 from dataclasses import dataclass, field
-from datetime import datetime, timezone
+from datetime import datetime, timedelta, timezone
 from typing import Any
 
 logger = logging.getLogger(__name__)
@@ -270,8 +270,10 @@ def _build_source_notes(
                 )
             )
 
-    if getattr(company_data, "earnings_call", None) and getattr(company_data.earnings_call, "highlights", None):
-        highlight = next((h for h in company_data.earnings_call.highlights if h), None)
+    ec = getattr(company_data, "earnings_call", None)
+    transcript_cutoff = datetime.now(timezone.utc) - timedelta(days=14)
+    if ec and getattr(ec, "highlights", None) and getattr(ec, "call_date", None) and ec.call_date >= transcript_cutoff:
+        highlight = next((h for h in ec.highlights if h), None)
         if highlight:
             notes.append(
                 StressTestSourceNote(

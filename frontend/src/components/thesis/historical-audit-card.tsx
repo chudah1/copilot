@@ -58,9 +58,9 @@ interface Props {
 }
 
 export function HistoricalAuditCard({ audit }: Props) {
-  if (!audit || audit.status === "failed") return null;
+  if (audit?.status === "failed") return null;
 
-  if (audit.status === "pending") {
+  if (!audit || audit.status === "pending") {
     return (
       <div className="rounded-lg border border-border/60 bg-muted/30 p-4 mt-4">
         <div className="flex items-center gap-2 text-sm text-muted-foreground">
