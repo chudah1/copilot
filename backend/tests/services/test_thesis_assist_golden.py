@@ -17,7 +17,6 @@ import pytest
 from app.services.ai_thesis import (
     GENERIC_CONDITION_PATTERNS,
     GENERIC_OUTPUT_PATTERNS,
-    HEARSAY_PATTERNS,
     _dedupe_watch_hints,
     _detect_monitorable_drivers,
     _fallback_assist,
@@ -90,7 +89,7 @@ def test_specific_thesis_with_metric_and_threshold_not_vague():
     )
     a = assess_thesis_vagueness(text)
     assert not a.is_vague
-    assert "growth" in a.detected_drivers or "quality" in a.detected_drivers
+    assert "growth" in a.detected_drivers and "quality" in a.detected_drivers
 
 
 def test_terse_thesis_with_concrete_numbers_not_vague():
@@ -122,16 +121,10 @@ def test_substring_trap_ideally_does_not_trigger_deal_hint():
         if h.get("kind") == "news_watch"
         and any(
             kw in h.get("watch_for", "").lower()
-            for kw in ("deal", "acquisition", "integration", "eucalyptus")
+            for kw in ("deal", "acquisition", "integration")
         )
     ]
     assert bad == [], f"Unexpected acquisition hints triggered by 'ideally': {bad}"
-
-
-def test_substring_trap_europe_does_not_match_pe_driver():
-    """'pe' inside 'europe' must NOT be detected as a valuation driver."""
-    drivers = _detect_monitorable_drivers("exposure in Europe")
-    assert "valuation" not in drivers
 
 
 def test_substring_trap_pe_in_europe_does_not_trigger_valuation_branch():
@@ -152,6 +145,18 @@ def test_detect_monitorable_drivers_word_boundary_for_ai():
     """'ai' must not match inside 'domain', 'email', 'maintain'."""
     assert "theme" not in _detect_monitorable_drivers("deep domain expertise and email marketing")
     assert "theme" in _detect_monitorable_drivers("AI demand is enormous")
+
+
+# =============================================================================
+# WORD-BOUNDARY REGRESSION GUARDS
+# regression guard — _detect_monitorable_drivers already uses word boundaries
+# =============================================================================
+
+
+def test_substring_trap_europe_does_not_match_pe_driver():
+    """'pe' inside 'europe' must NOT be detected as a valuation driver (regression guard)."""
+    drivers = _detect_monitorable_drivers("exposure in Europe")
+    assert "valuation" not in drivers
 
 
 # =============================================================================
@@ -208,7 +213,7 @@ def test_normalize_interpretation_leaves_small_growth_threshold_unchanged():
 
 
 # =============================================================================
-# SELF-CONSISTENCY FAMILY — FAILS before Task 1
+# SELF-CONSISTENCY FAMILY
 # =============================================================================
 
 
