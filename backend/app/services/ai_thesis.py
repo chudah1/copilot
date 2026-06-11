@@ -5,7 +5,9 @@ import math
 import re
 import uuid
 from dataclasses import dataclass
-from typing import Any
+from typing import Any, Literal
+
+from pydantic import BaseModel, field_validator
 
 import anthropic
 
@@ -139,6 +141,69 @@ SUPPORTED_PROXY_METRICS = {
     "dividend_yield",
 }
 GROWTH_METRICS: frozenset[str] = frozenset({"revenue_growth_yoy", "earnings_growth_yoy"})
+
+
+def _coerce_threshold(v: Any) -> float:
+    """Parse threshold from str ('10%', '0.10') or numeric. Raises ValueError if unparseable."""
+    if isinstance(v, bool):
+        raise ValueError(f"boolean is not a valid threshold: {v!r}")
+    if isinstance(v, (int, float)):
+        return float(v)
+    if isinstance(v, str):
+        stripped = v.strip().rstrip("%").strip()
+        try:
+            parsed = float(stripped)
+        except ValueError:
+            raise ValueError(f"unparseable threshold string: {v!r}")
+        if "%" in v:
+            return parsed / 100  # "10%" → 0.10
+        return parsed
+    raise ValueError(f"unexpected threshold type {type(v)}: {v!r}")
+
+
+class _MetricThresholdHint(BaseModel):
+    kind: Literal["metric_threshold"]
+    metric: str
+    operator: str
+    threshold: float
+    rationale: str = ""
+
+    @field_validator("threshold", mode="before")
+    @classmethod
+    def parse_threshold(cls, v: Any) -> float:
+        return _coerce_threshold(v)
+
+    @field_validator("operator")
+    @classmethod
+    def validate_operator(cls, v: str) -> str:
+        if v not in {">=", "<=", ">", "<", "=="}:
+            raise ValueError(f"invalid operator: {v!r}")
+        return v
+
+
+class _NewsWatchHint(BaseModel):
+    kind: Literal["news_watch"]
+    watch_for: str
+    direction: str
+    rationale: str = ""
+
+    @field_validator("direction")
+    @classmethod
+    def validate_direction(cls, v: str) -> str:
+        if v not in {"threatens", "supports"}:
+            raise ValueError(f"invalid direction: {v!r}")
+        return v
+
+
+class _PriceMoveHint(BaseModel):
+    kind: Literal["price_move_pct"]
+    threshold: float
+    rationale: str = ""
+
+    @field_validator("threshold", mode="before")
+    @classmethod
+    def parse_threshold(cls, v: Any) -> float:
+        return _coerce_threshold(v)
 PROXY_TICKER_PATTERN = re.compile(r"^[A-Z][A-Z0-9.\-]{0,9}$")
 OPENAI_ASSIST_MODEL = "gpt-4.1-mini"
 
@@ -1281,66 +1346,55 @@ def _normalize_interpretation(interpretation: dict | None) -> dict:
             continue
         kind = hint.get("kind")
         if kind == "price_move_pct":
-            threshold = hint.get("threshold")
-            if isinstance(threshold, (int, float)):
+            try:
+                parsed = _PriceMoveHint(**{k: v for k, v in hint.items() if k in _PriceMoveHint.model_fields})
                 normalized_watch_hints.append(
                     {
                         "kind": "price_move_pct",
-                        "threshold": float(threshold),
-                        "rationale": str(hint.get("rationale", "")).strip(),
+                        "threshold": parsed.threshold,
+                        "rationale": parsed.rationale,
                     }
                 )
+            except Exception as exc:
+                logger.warning("DROPPED price_move_pct hint (raw=%r): %s", hint, exc)
         elif kind == "metric_threshold":
-            metric = hint.get("metric")
-            operator = hint.get("operator")
-            threshold = hint.get("threshold")
-            rationale = str(hint.get("rationale", "")).strip()
-            if (
-                isinstance(metric, str)
-                and isinstance(operator, str)
-                and operator in {">=", "<=", ">", "<", "=="}
-                and isinstance(threshold, (int, float))
-            ):
-                normalized_operator = _normalize_metric_operator(operator, rationale)
-                threshold = float(threshold)
-                is_growth_metric = metric.endswith("_yoy") or metric in GROWTH_METRICS
+            try:
+                parsed = _MetricThresholdHint(**{k: v for k, v in hint.items() if k in _MetricThresholdHint.model_fields})
+                threshold = parsed.threshold
+                is_growth_metric = parsed.metric.endswith("_yoy") or parsed.metric in GROWTH_METRICS
                 if is_growth_metric and threshold > 1.5:
                     logger.warning(
-                        "unit-corrected: %s threshold %.4f interpreted as %% → %.4f",
-                        metric,
-                        threshold,
-                        threshold / 100,
+                        "unit-corrected: %s threshold %.4f → %.4f",
+                        parsed.metric, threshold, threshold / 100,
                     )
                     threshold = threshold / 100
+                normalized_operator = _normalize_metric_operator(parsed.operator, parsed.rationale)
                 normalized_watch_hints.append(
                     {
                         "kind": "metric_threshold",
-                        "metric": metric,
-                        "label": _metric_label(metric),
-                        "unit": _metric_unit(metric),
+                        "metric": parsed.metric,
+                        "label": _metric_label(parsed.metric),
+                        "unit": _metric_unit(parsed.metric),
                         "operator": normalized_operator,
                         "threshold": threshold,
-                        "rationale": rationale,
+                        "rationale": parsed.rationale,
                     }
                 )
+            except Exception as exc:
+                logger.warning("DROPPED metric_threshold hint (raw=%r): %s", hint, exc)
         elif kind == "news_watch":
-            watch_for = hint.get("watch_for")
-            direction = hint.get("direction")
-            rationale = str(hint.get("rationale", "")).strip()
-            if (
-                isinstance(watch_for, str)
-                and watch_for.strip()
-                and isinstance(direction, str)
-                and direction in {"threatens", "supports"}
-            ):
+            try:
+                parsed = _NewsWatchHint(**{k: v for k, v in hint.items() if k in _NewsWatchHint.model_fields})
                 normalized_watch_hints.append(
                     {
                         "kind": "news_watch",
-                        "watch_for": watch_for.strip(),
-                        "direction": direction,
-                        "rationale": rationale,
+                        "watch_for": parsed.watch_for.strip(),
+                        "direction": parsed.direction,
+                        "rationale": parsed.rationale,
                     }
                 )
+            except Exception as exc:
+                logger.warning("DROPPED news_watch hint (raw=%r): %s", hint, exc)
 
     if (
         monitorability in {"high", "medium"}

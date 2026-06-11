@@ -404,3 +404,34 @@ def test_infer_story_watch_hints_fallback_includes_price_hint():
 def test_max_tokens_error_is_distinct():
     from app.services.ai_thesis import MaxTokensError
     assert issubclass(MaxTokensError, RuntimeError)
+
+
+# =============================================================================
+# TASK 7: Pydantic repair — string '10%' threshold is coerced to 0.10
+# =============================================================================
+
+
+def test_normalize_interpretation_repairs_string_percent_threshold():
+    """'10%' string threshold must be converted to 0.10 and a warning logged."""
+    result = _normalize_interpretation(
+        {
+            "labels": ["growth"],
+            "monitorability": "high",
+            "watch_hints": [
+                {
+                    "kind": "metric_threshold",
+                    "metric": "revenue_growth_yoy",
+                    "operator": ">=",
+                    "threshold": "10%",
+                    "rationale": "Must grow 10%.",
+                }
+            ],
+            "proxy_signals": [],
+            "ambiguity_note": "",
+        }
+    )
+    metric_hint = next(
+        (h for h in result["watch_hints"] if h.get("kind") == "metric_threshold"), None
+    )
+    assert metric_hint is not None, "metric_threshold hint was dropped"
+    assert metric_hint["threshold"] == pytest.approx(0.10)
