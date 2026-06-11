@@ -460,3 +460,63 @@ def test_parse_draft_output_logs_warning_for_administration_reference(caplog):
     assert "administration" in result["why_own_it"].lower()
     # But a warning is logged
     assert any("administration" in r.message.lower() for r in caplog.records)
+
+
+# =============================================================================
+# TASK 9: Guardrail telemetry and ambiguity_note preservation
+# =============================================================================
+
+
+def test_guardrail_telemetry_logs_rewrite(caplog):
+    """_apply_assist_guardrails must emit a guardrail_rewrite log when it replaces must_remain_true."""
+    import logging
+    from app.services.ai_thesis import ThesisAssistOutput, _apply_assist_guardrails
+
+    raw = ThesisAssistOutput(
+        why_own_it="I own AAPL for the services flywheel.",
+        must_remain_true="The core investment thesis remains intact.",
+        what_would_change_my_mind="A fundamental change in the business model.",
+        ai_summary="AAPL thesis.",
+        interpretation={
+            "labels": ["growth"],
+            "monitorability": "low",
+            "watch_hints": [],
+            "proxy_signals": [],
+            "ambiguity_note": "",
+        },
+    )
+    with caplog.at_level(logging.INFO, logger="app.services.ai_thesis"):
+        _apply_assist_guardrails(raw, ticker="AAPL")
+    rewrite_events = [r for r in caplog.records if "guardrail_rewrite" in r.message]
+    assert rewrite_events, "Expected at least one guardrail_rewrite log"
+
+
+def test_guardrail_preserves_why_own_it_ambiguity_note():
+    """ambiguity_note about 'why you own it' must NOT be cleared by guardrails."""
+    from app.services.ai_thesis import ThesisAssistOutput, _apply_assist_guardrails
+
+    why_note = "Still vague — name the business driver and what you are watching."
+    raw = ThesisAssistOutput(
+        why_own_it="I own AAPL for its services revenue.",
+        must_remain_true="Services revenue growth must stay above 10%.",
+        what_would_change_my_mind="If services growth drops below 10% for two quarters.",
+        ai_summary="AAPL services thesis.",
+        interpretation={
+            "labels": ["growth"],
+            "monitorability": "high",
+            "watch_hints": [
+                {
+                    "kind": "metric_threshold",
+                    "metric": "revenue_growth_yoy",
+                    "operator": ">=",
+                    "threshold": 0.10,
+                    "rationale": "Services growth check.",
+                }
+            ],
+            "proxy_signals": [],
+            "ambiguity_note": why_note,
+        },
+    )
+    result = _apply_assist_guardrails(raw, ticker="AAPL")
+    # Note is about why_own_it vagueness — must be preserved even though conditions are concrete
+    assert result.interpretation["ambiguity_note"] == why_note

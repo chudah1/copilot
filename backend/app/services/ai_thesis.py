@@ -872,6 +872,16 @@ def _looks_generic_output(text: str) -> bool:
     return _text_matches_patterns(stripped, GENERIC_OUTPUT_PATTERNS)
 
 
+_CONDITIONS_RE = re.compile(r"\bcondition\b|\bsell\b|\btrigger\b|\bchange your mind\b|\bexit\b", re.IGNORECASE)
+_WHY_OWN_RE = re.compile(r"\bwhy\b|\breason\b|\bown\b|\binvest\b|\bbusiness driver\b", re.IGNORECASE)
+
+
+def _ambiguity_note_is_about_conditions(note: str) -> bool:
+    """Return True if the note is about sell conditions / triggers (safe to clear),
+    False if it is about why_own_it vagueness (must be preserved)."""
+    return bool(_CONDITIONS_RE.search(note)) and not bool(_WHY_OWN_RE.search(note))
+
+
 def _infer_market_driver(ticker: str, market_data: Any | None) -> tuple[str, str, str]:
     sector = getattr(market_data, "sector", None) or "its market"
     industry = getattr(market_data, "industry", None) or "its category"
@@ -928,8 +938,16 @@ def _apply_synthesis_guardrails(
             investor_profile=investor_profile,
         )
         if _looks_generic_output(must_remain_true) or _text_matches_patterns(must_remain_true, GENERIC_CONDITION_PATTERNS):
+            logger.info(
+                '{"event":"guardrail_rewrite","field":"must_remain_true","ticker":"%s","reason":"generic"}',
+                ticker,
+            )
             must_remain_true = inferred_must
         if _looks_generic_output(what_would_change_my_mind) or _text_matches_patterns(what_would_change_my_mind, GENERIC_CONDITION_PATTERNS):
+            logger.info(
+                '{"event":"guardrail_rewrite","field":"what_would_change_my_mind","ticker":"%s","reason":"generic"}',
+                ticker,
+            )
             what_would_change_my_mind = inferred_change
         if not interpretation.get("ambiguity_note") and inferred_ambiguity:
             interpretation["ambiguity_note"] = inferred_ambiguity
@@ -1213,8 +1231,16 @@ def _apply_assist_guardrails(
     )
 
     if _looks_generic_output(must_remain_true) or _text_matches_patterns(must_remain_true, GENERIC_CONDITION_PATTERNS):
+        logger.info(
+            '{"event":"guardrail_rewrite","field":"must_remain_true","ticker":"%s","reason":"generic"}',
+            ticker_label,
+        )
         must_remain_true = inferred_must
     if _looks_generic_output(what_would_change_my_mind) or _text_matches_patterns(what_would_change_my_mind, GENERIC_CONDITION_PATTERNS):
+        logger.info(
+            '{"event":"guardrail_rewrite","field":"what_would_change_my_mind","ticker":"%s","reason":"generic"}',
+            ticker_label,
+        )
         what_would_change_my_mind = inferred_change
 
     normalized_interpretation["watch_hints"] = _merge_story_watch_hints(
@@ -1237,7 +1263,10 @@ def _apply_assist_guardrails(
     if has_monitorable_hints and has_concrete_conditions:
         if normalized_interpretation["monitorability"] == "low":
             normalized_interpretation["monitorability"] = "medium"
-        normalized_interpretation["ambiguity_note"] = ""
+        existing_note = normalized_interpretation.get("ambiguity_note", "")
+        # Preserve only notes that are specifically about why_own_it vagueness; clear everything else.
+        if not existing_note or not bool(_WHY_OWN_RE.search(existing_note)):
+            normalized_interpretation["ambiguity_note"] = ""
     elif not normalized_interpretation.get("ambiguity_note") and inferred_ambiguity:
         normalized_interpretation["ambiguity_note"] = inferred_ambiguity
 
@@ -1798,7 +1827,7 @@ def _fallback_synthesize(
     labels = [
         label
         for label, keywords in THEME_KEYWORDS.items()
-        if any(keyword in lowered for keyword in keywords)
+        if any(_contains_keyword(lowered, keyword) for keyword in keywords)
     ] or ["user_defined"]
     inferred_must, inferred_change, inferred_ambiguity = _infer_specific_conditions(
         ticker,
