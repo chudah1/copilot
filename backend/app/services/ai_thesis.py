@@ -495,21 +495,49 @@ def assess_thesis_vagueness(
 
 
 def _dedupe_watch_hints(watch_hints: list[dict[str, Any]]) -> list[dict[str, Any]]:
+    """Deduplicate watch hints.
+
+    - metric_threshold: dedupes on (kind, metric); keeps the hint with a non-zero threshold
+      over one with threshold=0.  If both are non-zero, keeps the first (model hints come first).
+    - news_watch: dedupes on lowercased watch_for.
+    - price_move_pct and others: exact-tuple dedupe as before.
+    """
     deduped: list[dict[str, Any]] = []
-    seen: set[tuple[Any, ...]] = set()
+    metric_seen: dict[tuple, int] = {}  # (kind, metric) -> index in deduped
+    other_seen: set[tuple] = set()
+
     for hint in watch_hints:
-        key = (
-            hint.get("kind"),
-            hint.get("metric"),
-            hint.get("operator"),
-            hint.get("threshold"),
-            hint.get("watch_for"),
-            hint.get("direction"),
-        )
-        if key in seen:
-            continue
-        deduped.append(hint)
-        seen.add(key)
+        kind = hint.get("kind")
+        if kind == "metric_threshold":
+            metric = hint.get("metric", "")
+            key = (kind, metric)
+            if key in metric_seen:
+                idx = metric_seen[key]
+                existing_threshold = deduped[idx].get("threshold", 0.0)
+                current_threshold = hint.get("threshold", 0.0)
+                if current_threshold != 0.0 and existing_threshold == 0.0:
+                    deduped[idx] = hint
+            else:
+                metric_seen[key] = len(deduped)
+                deduped.append(hint)
+        elif kind == "news_watch":
+            watch_for_key = (kind, (hint.get("watch_for") or "").lower())
+            if watch_for_key not in other_seen:
+                deduped.append(hint)
+                other_seen.add(watch_for_key)
+        else:
+            key = (
+                kind,
+                hint.get("metric"),
+                hint.get("operator"),
+                hint.get("threshold"),
+                hint.get("watch_for"),
+                hint.get("direction"),
+            )
+            if key not in other_seen:
+                deduped.append(hint)
+                other_seen.add(key)
+
     return deduped
 
 
