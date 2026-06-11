@@ -771,7 +771,7 @@ def _apply_synthesis_guardrails(
         ):
             interpretation["monitorability"] = "medium"
         return SynthesisOutput(
-            why_own_it=why_own_it or f"Investing in {ticker} for long-term potential.",
+            why_own_it=why_own_it or f"Investing in {ticker} based on its current operating performance.",
             must_remain_true=must_remain_true or inferred_must,
             what_would_change_my_mind=what_would_change_my_mind or inferred_change,
             ai_summary=ai_summary,
@@ -932,7 +932,7 @@ def _fallback_assist(
             else "The specific business driver behind the thesis continues to hold."
         )
         refined_change = change or (
-            "New evidence shows the original reason for owning this is no longer intact."
+            "If reported results or management guidance consistently contradict the investment rationale, the position should be reconsidered."
             if is_vague
             else "A measurable deterioration in the key business driver or execution would break the thesis."
         )
@@ -945,9 +945,14 @@ def _fallback_assist(
             "proxy_signals": [],
             "ambiguity_note": "The user has not given enough detail to monitor this thesis well.",
         }
-        cleaned = f"I own {ticker} because it fits my investment strategy."
-        refined_must = "The underlying business case remains intact."
-        refined_change = "Evidence shows the original investment case is no longer valid."
+        cleaned = f"I own {ticker} because it fits my current investment strategy."
+        refined_must = (
+            "The business must keep validating the reason for owning it through revenue, margins, or management guidance."
+        )
+        refined_change = (
+            "If operating results or management guidance stop backing the core reason for multiple quarters, "
+            "the position should be reconsidered."
+        )
     return ThesisAssistOutput(
         why_own_it=cleaned,
         must_remain_true=refined_must,
@@ -1591,7 +1596,7 @@ def _fallback_synthesize(
     investor_profile: str | None = None,
 ) -> SynthesisOutput:
     why_own_it = answer1.strip() or f"Investing in {ticker} for long-term growth."
-    what_would_change_my_mind = answer2.strip() or "A fundamental change in the business model."
+    what_would_change_my_mind = answer2.strip()
     if investor_profile == "hearsay_driven":
         why_own_it = answer1.strip() or f"This started as a rough idea in {ticker}."
     lowered = why_own_it.lower()
