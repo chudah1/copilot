@@ -38,9 +38,9 @@ def _cors_origins() -> list[str]:
         "http://127.0.0.1:3000",
         "http://127.0.0.1:3001",
     }
-    if settings.frontend_url:
-        origins.add(settings.frontend_url.rstrip("/"))
-        parsed = urlparse(settings.frontend_url)
+    for url in filter(None, [settings.frontend_url, settings.app_url]):
+        origins.add(url.rstrip("/"))
+        parsed = urlparse(url)
         if parsed.scheme in {"http", "https"} and parsed.port:
             if parsed.hostname == "localhost":
                 origins.add(f"{parsed.scheme}://127.0.0.1:{parsed.port}")

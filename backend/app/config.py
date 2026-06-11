@@ -57,6 +57,7 @@ class Settings(BaseSettings):
     market_data_provider: str = "yfinance"
     edgar_user_agent: str = "penKeep contact@penkeep.io"
     frontend_url: str = "http://localhost:3000"
+    app_url: str = ""  # e.g. https://app.penkeep.io — added to CORS alongside frontend_url
 
     # LLM optimizations / reliability
     llm_response_cache_ttl_seconds: int = 15 * 60
