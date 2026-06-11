@@ -1,3 +1,4 @@
+import asyncio
 import json
 import logging
 import math
@@ -13,6 +14,20 @@ from app.services.ai_utils import strip_code_fences
 from app.services.market_data import fetch_company_data
 
 logger = logging.getLogger(__name__)
+
+
+class MaxTokensError(RuntimeError):
+    """Raised when the Anthropic response was truncated by max_tokens."""
+
+
+_anthropic_client: "anthropic.AsyncAnthropic | None" = None
+
+
+def _get_anthropic_client() -> "anthropic.AsyncAnthropic":
+    global _anthropic_client
+    if _anthropic_client is None:
+        _anthropic_client = anthropic.AsyncAnthropic(api_key=settings.anthropic_api_key)
+    return _anthropic_client
 
 
 @dataclass
@@ -323,6 +338,34 @@ THESIS_ASSIST_JSON_SCHEMA = {
     ],
     "additionalProperties": False,
 }
+
+COUNTER_THESIS_JSON_SCHEMA = {
+    "type": "object",
+    "properties": {
+        "bear_case": {"type": "string"},
+        "key_risks": {"type": "array", "items": {"type": "string"}},
+        "blind_spots": {"type": "array", "items": {"type": "string"}},
+        "suggested_additions": {"type": "array", "items": {"type": "string"}},
+    },
+    "required": ["bear_case", "key_risks", "blind_spots", "suggested_additions"],
+    "additionalProperties": False,
+}
+
+DRAFT_THESIS_JSON_SCHEMA = {
+    "type": "object",
+    "properties": {
+        "why_own_it": {"type": "string"},
+        "must_remain_true": {"type": "string"},
+        "what_would_change_my_mind": {"type": "string"},
+    },
+    "required": ["why_own_it", "must_remain_true", "what_would_change_my_mind"],
+    "additionalProperties": False,
+}
+
+_STRICT_JSON_SUFFIX = (
+    "\n\nIMPORTANT: Return strictly valid JSON. Escape all quotes inside strings "
+    "and do not emit markdown fences."
+)
 
 
 
@@ -896,15 +939,31 @@ async def _call_anthropic_json(
     prompt: str,
     model: str,
     max_tokens: int,
+    schema: dict[str, Any] | None = None,
+    schema_name: str = "output",
 ) -> dict[str, Any]:
-    client = anthropic.AsyncAnthropic(api_key=settings.anthropic_api_key)
-    response = await client.messages.create(
+    effective_schema = schema or THESIS_ASSIST_JSON_SCHEMA
+    response = await _get_anthropic_client().messages.create(
         model=model,
         max_tokens=max_tokens,
+        temperature=0.2,
+        tools=[
+            {
+                "name": schema_name,
+                "description": "Structured JSON output",
+                "input_schema": effective_schema,
+            }
+        ],
+        tool_choice={"type": "tool", "name": schema_name},
         messages=[{"role": "user", "content": prompt}],
         timeout=30.0,
     )
-    return json.loads(strip_code_fences(response.content[0].text))
+    if response.stop_reason == "max_tokens":
+        raise MaxTokensError(f"Response truncated by max_tokens for tool '{schema_name}'")
+    for block in response.content:
+        if block.type == "tool_use":
+            return block.input  # type: ignore[return-value]
+    raise ValueError(f"No tool_use block in Anthropic response for '{schema_name}'")
 
 
 async def _call_openai_json(
@@ -1025,6 +1084,8 @@ async def _call_claude(prompt: str) -> ThesisAssistOutput:
         prompt=prompt,
         model=settings.anthropic_model,
         max_tokens=1500,
+        schema=THESIS_ASSIST_JSON_SCHEMA,
+        schema_name="thesis_assist",
     )
     return ThesisAssistOutput(
         why_own_it=str(data["why_own_it"]),
@@ -1386,36 +1447,41 @@ async def assist_thesis(
 
         result = await _call_claude(prompt)
         return _apply_assist_guardrails(result, ticker=clean_ticker)
-    except Exception as anthropic_error:
-        logger.error("Anthropic thesis assist failed for %s: %s", ticker, anthropic_error)
+    except MaxTokensError:
+        raise  # never retry a max_tokens truncation
+    except (json.JSONDecodeError, ValueError) as parse_err:
+        logger.warning("Thesis assist JSON parse error for %s, retrying: %s", ticker, parse_err)
         try:
-            if not settings.anthropic_api_key:
-                raise RuntimeError("Anthropic API key not configured")
-            result = await _call_claude(
-                prompt
-                + "\n\nIMPORTANT: Return strictly valid JSON. Escape all quotes inside strings and do not emit markdown fences."
-            )
+            result = await _call_claude(prompt + _STRICT_JSON_SUFFIX)
             return _apply_assist_guardrails(result, ticker=clean_ticker)
-        except Exception as anthropic_retry_error:
-            logger.error("Anthropic thesis assist retry failed for %s: %s", ticker, anthropic_retry_error)
+        except Exception as retry_err:
+            logger.error("Thesis assist strict-JSON retry failed for %s: %s", ticker, retry_err)
+    except Exception as api_err:
+        logger.warning("Thesis assist Anthropic API error for %s, retrying after backoff: %s", ticker, api_err)
+        await asyncio.sleep(2)
         try:
-            if not settings.openai_api_key:
-                raise RuntimeError("OpenAI API key not configured")
-            result = await _call_openai_assist(prompt)
+            result = await _call_claude(prompt)
             return _apply_assist_guardrails(result, ticker=clean_ticker)
-        except Exception as openai_error:
-            logger.error("OpenAI thesis assist failed for %s: %s", ticker, openai_error)
-            return (
-                _fallback_assist(
-                    ticker=ticker,
-                    why_own_it=why_own_it,
-                    must_remain_true=must_remain_true,
-                    what_would_change_my_mind=what_would_change_my_mind,
-                    draft_text=draft_text,
-                )
-                if allow_fallback
-                else None
+        except Exception as backoff_retry_err:
+            logger.error("Thesis assist backoff retry failed for %s: %s", ticker, backoff_retry_err)
+    try:
+        if not settings.openai_api_key:
+            raise RuntimeError("OpenAI API key not configured")
+        result = await _call_openai_assist(prompt)
+        return _apply_assist_guardrails(result, ticker=clean_ticker)
+    except Exception as openai_error:
+        logger.error("OpenAI thesis assist failed for %s: %s", ticker, openai_error)
+        return (
+            _fallback_assist(
+                ticker=ticker,
+                why_own_it=why_own_it,
+                must_remain_true=must_remain_true,
+                what_would_change_my_mind=what_would_change_my_mind,
+                draft_text=draft_text,
             )
+            if allow_fallback
+            else None
+        )
 
 
 COUNTER_THESIS_PROMPT = """You play skeptic on a retail investor's thesis. Stress-test their case; don't flatter it.
@@ -1523,6 +1589,8 @@ async def generate_counter_thesis(
             prompt=prompt,
             model=settings.anthropic_model,
             max_tokens=1024,
+            schema=COUNTER_THESIS_JSON_SCHEMA,
+            schema_name="counter_thesis",
         )
         return _parse_counter_thesis_output(data)
     except Exception as e:
@@ -1584,6 +1652,8 @@ async def generate_initial_draft(ticker: str) -> dict[str, str]:
             prompt=prompt,
             model=settings.anthropic_model,
             max_tokens=500,
+            schema=DRAFT_THESIS_JSON_SCHEMA,
+            schema_name="initial_draft",
         )
         return _parse_draft_output(data, clean_ticker)
     except Exception as e:
@@ -1774,6 +1844,8 @@ async def synthesize_thesis_from_qa(
             prompt=prompt,
             model=settings.anthropic_model,
             max_tokens=1024,
+            schema=THESIS_ASSIST_JSON_SCHEMA,
+            schema_name="synthesis",
         )
         return _parse_synthesis_output(
             data,
@@ -2322,6 +2394,8 @@ async def generate_stress_test_analysis(
             prompt=prompt,
             model=settings.anthropic_model,
             max_tokens=1024,
+            schema=STRESS_TEST_JSON_SCHEMA,
+            schema_name="stress_test",
         )
         return _parse_stress_test_output(data)
     except Exception as first_error:
@@ -2339,6 +2413,8 @@ async def generate_stress_test_analysis(
                 ),
                 model=settings.anthropic_model,
                 max_tokens=1024,
+                schema=STRESS_TEST_JSON_SCHEMA,
+                schema_name="stress_test",
             )
             return _parse_stress_test_output(data)
         except Exception as second_error:

@@ -394,3 +394,13 @@ def test_infer_story_watch_hints_revenue_text_generates_metric_hint():
 def test_infer_story_watch_hints_fallback_includes_price_hint():
     hints = _infer_story_watch_hints("general holding for diversification")
     assert any(h.get("kind") == "price_move_pct" for h in hints)
+
+
+# =============================================================================
+# TASK 6: MaxTokensError is a distinct exception
+# =============================================================================
+
+
+def test_max_tokens_error_is_distinct():
+    from app.services.ai_thesis import MaxTokensError
+    assert issubclass(MaxTokensError, RuntimeError)
