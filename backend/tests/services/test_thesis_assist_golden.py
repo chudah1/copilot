@@ -435,3 +435,28 @@ def test_normalize_interpretation_repairs_string_percent_threshold():
     )
     assert metric_hint is not None, "metric_threshold hint was dropped"
     assert metric_hint["threshold"] == pytest.approx(0.10)
+
+
+# =============================================================================
+# TASK 8: Date injection — administration triggers warning not rewrite
+# =============================================================================
+
+
+def test_parse_draft_output_logs_warning_for_administration_reference(caplog):
+    """After Task 8: 'administration' in output triggers a warning, not a rewrite."""
+    import logging
+    from app.services.ai_thesis import _parse_draft_output
+
+    with caplog.at_level(logging.WARNING, logger="app.services.ai_thesis"):
+        result = _parse_draft_output(
+            {
+                "why_own_it": "Tesla benefits if the new administration's EV credits stay.",
+                "must_remain_true": "Federal administration support continues.",
+                "what_would_change_my_mind": "If the administration reverses the policy.",
+            },
+            "TSLA",
+        )
+    # Text is NOT rewritten
+    assert "administration" in result["why_own_it"].lower()
+    # But a warning is logged
+    assert any("administration" in r.message.lower() for r in caplog.records)

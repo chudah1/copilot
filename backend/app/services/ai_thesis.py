@@ -1,4 +1,5 @@
 import asyncio
+import datetime
 import json
 import logging
 import math
@@ -260,7 +261,9 @@ THESIS_ASSIST_INTERPRETATION_SCHEMA = {
 }
 
 
-THESIS_ASSIST_FROM_BLANK_PROMPT = """Draft a first-pass reason for holding a specific stock, in the investor's own first-person voice.
+THESIS_ASSIST_FROM_BLANK_PROMPT = """Today's date: {iso_date}. Do not reference any specific government administration; use neutral wording like "U.S. federal policy".
+
+Draft a first-pass reason for holding a specific stock, in the investor's own first-person voice.
 The investor hasn't written anything yet — generate a starting point they can edit and make their own.
 
 Position:
@@ -313,7 +316,9 @@ Output valid JSON with this exact structure:
 - Output ONLY valid JSON, no markdown fences."""
 
 
-THESIS_PROMPT = """You help a retail investor tighten why they own a position — same meaning, clearer words.
+THESIS_PROMPT = """Today's date: {iso_date}. Do not reference any specific government administration; use neutral wording like "U.S. federal policy".
+
+You help a retail investor tighten why they own a position — same meaning, clearer words.
 
 Given the position, the user's current thesis draft, and any available market data, produce:
 - refined thesis text that preserves the investor's meaning while making it clearer and more monitorable
@@ -1262,40 +1267,28 @@ def _parse_counter_thesis_output(data: dict[str, Any]) -> CounterThesisOutput:
     )
 
 
-_STALE_ADMIN_PATTERNS: tuple[tuple[re.Pattern[str], str], ...] = (
-    (
-        re.compile(r"\bthe\s+biden\s+administration'?s?\b", re.IGNORECASE),
-        "U.S. federal policy",
-    ),
-    (
-        re.compile(r"\bbiden\s+administration'?s?\b", re.IGNORECASE),
-        "U.S. federal policy",
-    ),
-)
-
-
-def _sanitize_time_sensitive_references(text: str) -> str:
-    cleaned = text.strip()
-    for pattern, replacement in _STALE_ADMIN_PATTERNS:
-        cleaned = pattern.sub(replacement, cleaned)
-    cleaned = re.sub(r"\s{2,}", " ", cleaned)
-    return cleaned
-
-
 def _parse_draft_output(data: dict[str, Any], ticker: str) -> dict[str, str]:
     why_own_it = data.get("why_own_it")
     must_remain_true = data.get("must_remain_true")
     what_would_change_my_mind = data.get("what_would_change_my_mind")
     if not all(isinstance(item, str) for item in (why_own_it, must_remain_true, what_would_change_my_mind)):
         raise ValueError("Invalid draft payload")
-    cleaned_why = _sanitize_time_sensitive_references(why_own_it)
-    cleaned_must = _sanitize_time_sensitive_references(must_remain_true)
-    cleaned_change = _sanitize_time_sensitive_references(what_would_change_my_mind)
+    for field_name, field_value in [
+        ("why_own_it", why_own_it),
+        ("must_remain_true", must_remain_true),
+        ("what_would_change_my_mind", what_would_change_my_mind),
+    ]:
+        if re.search(r"\badministration\b", field_value, re.IGNORECASE):
+            logger.warning(
+                "Draft thesis for %s contains 'administration' in %s — prompt should use neutral wording",
+                ticker,
+                field_name,
+            )
     fallback = _fallback_initial_draft(ticker)
     return {
-        "why_own_it": fallback["why_own_it"] if _text_matches_patterns(cleaned_why, GENERIC_DRAFT_PATTERNS) else cleaned_why,
-        "must_remain_true": fallback["must_remain_true"] if _text_matches_patterns(cleaned_must, GENERIC_DRAFT_PATTERNS) else cleaned_must,
-        "what_would_change_my_mind": fallback["what_would_change_my_mind"] if _text_matches_patterns(cleaned_change, GENERIC_DRAFT_PATTERNS) else cleaned_change,
+        "why_own_it": fallback["why_own_it"] if _text_matches_patterns(why_own_it, GENERIC_DRAFT_PATTERNS) else why_own_it,
+        "must_remain_true": fallback["must_remain_true"] if _text_matches_patterns(must_remain_true, GENERIC_DRAFT_PATTERNS) else must_remain_true,
+        "what_would_change_my_mind": fallback["what_would_change_my_mind"] if _text_matches_patterns(what_would_change_my_mind, GENERIC_DRAFT_PATTERNS) else what_would_change_my_mind,
     }
 
 
@@ -1477,6 +1470,7 @@ async def assist_thesis(
     is_blank = not any([refined_why_own_it, refined_must_remain_true, refined_change_mind])
     if is_blank:
         prompt = THESIS_ASSIST_FROM_BLANK_PROMPT.format(
+            iso_date=datetime.date.today().isoformat(),
             ticker=clean_ticker,
             name=name,
             quantity=quantity,
@@ -1485,6 +1479,7 @@ async def assist_thesis(
         )
     else:
         prompt = THESIS_PROMPT.format(
+            iso_date=datetime.date.today().isoformat(),
             ticker=clean_ticker,
             name=name,
             quantity=quantity,
@@ -1538,7 +1533,9 @@ async def assist_thesis(
         )
 
 
-COUNTER_THESIS_PROMPT = """You play skeptic on a retail investor's thesis. Stress-test their case; don't flatter it.
+COUNTER_THESIS_PROMPT = """Today's date: {iso_date}. Do not reference any specific government administration; use neutral wording like "U.S. federal policy".
+
+You play skeptic on a retail investor's thesis. Stress-test their case; don't flatter it.
 
 Ticker: {ticker}
 Why they own it: {why_own_it}
@@ -1631,6 +1628,7 @@ async def generate_counter_thesis(
         )
 
     prompt = COUNTER_THESIS_PROMPT.format(
+        iso_date=datetime.date.today().isoformat(),
         ticker=ticker,
         why_own_it=why_own_it or "Not provided",
         must_remain_true=must_remain_true or "Not provided",
@@ -1658,7 +1656,9 @@ async def generate_counter_thesis(
         )
 
 
-DRAFT_THESIS_PROMPT = """Draft a first-pass reason for holding a specific stock, written in the investor's own voice.
+DRAFT_THESIS_PROMPT = """Today's date: {iso_date}. Do not reference any specific government administration; use neutral wording like "U.S. federal policy".
+
+Draft a first-pass reason for holding a specific stock, written in the investor's own voice.
 
 Rules:
 - Write in first person: "I own this because...", "I need to see...", "I'd sell if..."
@@ -1697,6 +1697,7 @@ async def generate_initial_draft(ticker: str) -> dict[str, str]:
     market_data_section = _build_market_data_section(market_data)
 
     prompt = DRAFT_THESIS_PROMPT.format(
+        iso_date=datetime.date.today().isoformat(),
         ticker=clean_ticker,
         market_data_section=market_data_section,
     )
@@ -1719,7 +1720,9 @@ async def generate_initial_draft(ticker: str) -> dict[str, str]:
 # Wizard synthesis — construct a thesis from two Q&A answers
 # ---------------------------------------------------------------------------
 
-SYNTHESIS_PROMPT = """Turn two short answers into a structured reason for holding a stock.
+SYNTHESIS_PROMPT = """Today's date: {iso_date}. Do not reference any specific government administration; use neutral wording like "U.S. federal policy".
+
+Turn two short answers into a structured reason for holding a stock.
 
 Keep the investor's wording where you can; clean up vagueness, don't corporate-wash it.
 
@@ -1882,6 +1885,7 @@ async def synthesize_thesis_from_qa(
     investor_profile_label, investor_profile_guidance = _synthesis_profile_context(investor_profile)
 
     prompt = SYNTHESIS_PROMPT.format(
+        iso_date=datetime.date.today().isoformat(),
         ticker=ticker,
         name=name,
         investor_profile_label=investor_profile_label,
@@ -2036,7 +2040,9 @@ async def generate_draft_theses_for_user(
         logger.exception("Background draft generation crashed for user %s", user_id)
 
 
-_STRESS_TEST_PROMPT = """You are a skeptical buy-side analyst reviewing a retail investor's pre-purchase thesis.
+_STRESS_TEST_PROMPT = """Today's date: {iso_date}. Do not reference any specific government administration; use neutral wording like "U.S. federal policy".
+
+You are a skeptical buy-side analyst reviewing a retail investor's pre-purchase thesis.
 Stress-test it hard. Don't flatter it.
 
 Ticker: {ticker}
@@ -2414,6 +2420,7 @@ async def generate_stress_test_analysis(
     thesis_context = f"Investor's draft thesis: {draft_thesis}\n" if draft_thesis else ""
 
     prompt = _STRESS_TEST_PROMPT.format(
+        iso_date=datetime.date.today().isoformat(),
         ticker=ticker,
         context=context,
         thesis_context=thesis_context,

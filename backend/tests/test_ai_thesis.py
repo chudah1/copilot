@@ -282,17 +282,21 @@ def test_normalize_interpretation_keeps_news_watch_hints():
     assert "FDA restricts" in news_hint["watch_for"]
 
 
-def test_parse_draft_output_sanitizes_stale_administration_references():
-    result = _parse_draft_output(
-        {
-            "why_own_it": "Tesla benefits if the Biden administration's charging rules favor NACS.",
-            "must_remain_true": "The Biden administration's standards continue to support adoption.",
-            "what_would_change_my_mind": "If the Biden administration's policy is reversed.",
-        },
-        "TSLA",
-    )
-    assert "Biden" not in result["why_own_it"]
-    assert "Biden" not in result["must_remain_true"]
+def test_parse_draft_output_warns_on_administration_reference(caplog):
+    import logging
+    with caplog.at_level(logging.WARNING, logger="app.services.ai_thesis"):
+        result = _parse_draft_output(
+            {
+                "why_own_it": "Tesla benefits if the Biden administration's charging rules favor NACS.",
+                "must_remain_true": "The Biden administration's standards continue to support adoption.",
+                "what_would_change_my_mind": "If federal policy is reversed.",
+            },
+            "TSLA",
+        )
+    # No longer rewritten — text passes through
+    assert "Biden" in result["why_own_it"] or "administration" in result["why_own_it"].lower()
+    # But a warning is logged
+    assert any("administration" in r.message.lower() for r in caplog.records)
 
 
 def test_fallback_assist_infers_qualitative_watch_rules_from_regulatory_and_deal_risk():
