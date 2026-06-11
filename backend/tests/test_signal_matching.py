@@ -75,6 +75,23 @@ def test_watch_hint_from_signal_keeps_metric_specificity_and_converts_threshold_
     assert hint["threshold"] == 0.166
 
 
+def test_normalize_signal_config_backfills_proxy_growth_signal():
+    from app.services.decomposition import _normalize_signal_config_json
+
+    config = _normalize_signal_config_json(
+        signal_type="revenue_growth",
+        signal_label="SHOP merchant additions growth",
+        claim_text="Shopify merchant additions grow consistently to support revenue",
+        rationale="Merchant momentum should keep feeding revenue growth.",
+        raw_config={},
+    )
+
+    assert config["metric"] == "revenue_growth_yoy"
+    assert config["operator"] == ">="
+    assert config["threshold_pct"] == 0.0
+    assert config["proxy_for"] == "SHOP merchant additions growth"
+
+
 def test_watch_hint_from_signal_includes_ids_earnings_growth():
     signal = _make_signal("earnings_growth", {"threshold": 0.10, "operator": ">="})
     claim_id = str(uuid.uuid4())

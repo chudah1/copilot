@@ -1,4 +1,5 @@
 import logging
+import re
 from dataclasses import dataclass
 from typing import Any
 
@@ -51,6 +52,7 @@ APPROVED_DIRECT_SIGNAL_TYPES = {
 # Noise-filter cooldowns keep it from spamming.
 FLOOR_PRICE_MOVE_THRESHOLD = DEFAULT_PRICE_THRESHOLD_PCT
 FLOOR_SIGNAL_SOURCE = "floor"
+SUPPORTED_NUMERIC_SIGNAL_METRICS = {"revenue_growth_yoy", "earnings_growth_yoy"}
 
 _gateway: ThesisReasoningGateway | None = None
 
@@ -221,6 +223,52 @@ def _watch_hint_from_signal(signal: ThesisSignal, *, override_claim_id: str | No
             "claim_id": claim_id,
         }
     return None
+
+
+def _extract_threshold_pct_from_text(*parts: str | None) -> float | None:
+    for part in parts:
+        if not part:
+            continue
+        match = re.search(r"(\d+(?:\.\d+)?)\s*%", part)
+        if match:
+            value = to_float(match.group(1))
+            if value is not None:
+                return value
+    return None
+
+
+def _normalize_signal_config_json(
+    *,
+    signal_type: str,
+    signal_label: str | None,
+    claim_text: str | None,
+    rationale: str | None,
+    raw_config: dict[str, Any] | None,
+) -> dict[str, Any]:
+    config = dict(raw_config or {})
+
+    if signal_type == "price_move":
+        config["threshold_pct"] = to_float(config.get("threshold_pct")) or FLOOR_PRICE_MOVE_THRESHOLD
+        return config
+
+    if signal_type not in {"revenue_growth", "earnings_growth"}:
+        return config
+
+    default_metric = "revenue_growth_yoy" if signal_type == "revenue_growth" else "earnings_growth_yoy"
+    metric_name = config.get("metric") if isinstance(config.get("metric"), str) else None
+    if metric_name not in SUPPORTED_NUMERIC_SIGNAL_METRICS:
+        config["metric"] = default_metric
+        if signal_label or claim_text:
+            config["proxy_for"] = signal_label or claim_text
+
+    if config.get("operator") not in {">=", "<=", ">", "<", "=="}:
+        config["operator"] = ">="
+
+    if to_float(config.get("threshold")) is None and to_float(config.get("threshold_pct")) is None:
+        threshold_pct = _extract_threshold_pct_from_text(signal_label, claim_text, rationale)
+        config["threshold_pct"] = threshold_pct if threshold_pct is not None else 0.0
+
+    return config
 
 
 def _sync_interpretation_cache(
@@ -696,11 +744,18 @@ async def _persist_successful_decomposition(
 
             for signal_data in entity_data.get("signals", []):
                 auto_activate = _signal_is_direct_and_auto_activatable(holding, entity_data, signal_data)
+                normalized_signal_config = _normalize_signal_config_json(
+                    signal_type=signal_data["signal_type"],
+                    signal_label=signal_data.get("signal_label"),
+                    claim_text=claim.claim_text,
+                    rationale=signal_data.get("rationale"),
+                    raw_config=signal_data.get("signal_config_json") or {},
+                )
                 signal = ThesisSignal(
                     entity_id=entity.id,
                     signal_type=signal_data["signal_type"],
                     signal_label=signal_data.get("signal_label"),
-                    signal_config_json=signal_data.get("signal_config_json") or {},
+                    signal_config_json=normalized_signal_config,
                     rationale=signal_data.get("rationale"),
                     confidence=signal_data.get("confidence"),
                     confirmation_required=signal_data.get("confirmation_required", True),
