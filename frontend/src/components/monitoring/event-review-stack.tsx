@@ -30,6 +30,7 @@ const verdictBg: Record<string, string> = {
 };
 
 function parseNarrative(text: string) {
+  const normalizedText = text.replace(/\\n/g, "\n");
   const structuredKeys = new Set([
     "Your thesis",
     "You said",
@@ -46,7 +47,7 @@ function parseNarrative(text: string) {
   ]);
   const out: Record<string, string> = {};
   const body: string[] = [];
-  for (const line of text.split("\n")) {
+  for (const line of normalizedText.split("\n")) {
     const i = line.indexOf(":");
     if (i > 0 && i < 28) {
       const k = line.slice(0, i).trim();

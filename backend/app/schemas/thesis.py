@@ -325,6 +325,9 @@ class HistoricalAuditResultItem(BaseModel):
     severity: Literal["thesis_breaking", "warning", "info"]
     event_type: str
     event_date: str | None = None
+    signal_label: str | None = None
+    claim_text: str | None = None
+    analysis: str | None = None
     evidence: dict[str, Any] | None = None
 
 

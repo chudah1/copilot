@@ -31,6 +31,11 @@ function AuditResultItem({ item }: { item: HistoricalAuditResultItem }) {
         {SEVERITY_LABEL[item.severity] ?? item.severity}
       </span>
       <div className="flex-1 min-w-0">
+        {item.signal_label && (
+          <p className="mb-1 font-mono text-[10px] uppercase tracking-[0.18em] text-muted-foreground">
+            Signal: {item.signal_label}
+          </p>
+        )}
         <p className="text-sm text-foreground leading-snug">
           {url ? (
             <a
@@ -45,6 +50,16 @@ function AuditResultItem({ item }: { item: HistoricalAuditResultItem }) {
             item.description
           )}
         </p>
+        {item.analysis && item.analysis !== item.description && (
+          <p className="mt-2 whitespace-pre-line text-xs leading-relaxed text-muted-foreground">
+            {item.analysis}
+          </p>
+        )}
+        {item.claim_text && (
+          <p className="mt-2 text-xs italic text-muted-foreground">
+            Testing: {item.claim_text}
+          </p>
+        )}
         {item.event_date && (
           <p className="mt-0.5 text-xs text-muted-foreground">{formatDate(item.event_date)}</p>
         )}
@@ -75,7 +90,7 @@ export function HistoricalAuditCard({ audit }: Props) {
     return (
       <div className="rounded-lg border border-border/60 bg-muted/30 p-4 mt-4">
         <p className="text-sm text-muted-foreground">
-          No major events in the last 90 days — your thesis has been steady.
+          No active signal would have fired in the last 90 days.
         </p>
       </div>
     );
@@ -89,7 +104,7 @@ export function HistoricalAuditCard({ audit }: Props) {
         90-day lookback
       </p>
       <p className="text-sm font-medium text-foreground mb-3">
-        If you&apos;d held this thesis for the last 90 days, here&apos;s what would have fired:
+        If you&apos;d held this thesis for the last 90 days, these signals would have fired:
       </p>
       <div>
         {results.map((item) => (

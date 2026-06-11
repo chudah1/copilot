@@ -673,7 +673,6 @@ function PositionDetailInner() {
     hasThesis: Boolean(activeThesis),
     hasSignals,
     hasActiveSignals,
-    decompositionStatus: decompositionEnvelope?.status ?? null,
     investorProfile: onboardingState?.investor_profile ?? null,
   });
   const onboardingMonitoringMessage = decompositionLoading

@@ -182,11 +182,16 @@ def _watch_hint_from_signal(signal: ThesisSignal, *, override_claim_id: str | No
         }
     if signal.signal_type == "revenue_growth":
         threshold = to_float(config.get("threshold")) if isinstance(config, dict) else None
+        if threshold is None and isinstance(config, dict):
+            threshold_pct = to_float(config.get("threshold_pct"))
+            if threshold_pct is not None:
+                threshold = threshold_pct / 100.0
         raw_op = config.get("operator", ">=") if isinstance(config, dict) else ">="
         operator = raw_op if raw_op in {">=", "<=", ">", "<", "=="} else ">="
+        metric_name = config.get("metric") if isinstance(config, dict) and isinstance(config.get("metric"), str) else "revenue_growth_yoy"
         return {
             "kind": "metric_threshold",
-            "metric": "revenue_growth_yoy",
+            "metric": metric_name,
             "label": "Revenue Growth (YoY)",
             "unit": "pct",
             "operator": operator,
@@ -197,11 +202,16 @@ def _watch_hint_from_signal(signal: ThesisSignal, *, override_claim_id: str | No
         }
     if signal.signal_type == "earnings_growth":
         threshold = to_float(config.get("threshold")) if isinstance(config, dict) else None
+        if threshold is None and isinstance(config, dict):
+            threshold_pct = to_float(config.get("threshold_pct"))
+            if threshold_pct is not None:
+                threshold = threshold_pct / 100.0
         raw_op = config.get("operator", ">=") if isinstance(config, dict) else ">="
         operator = raw_op if raw_op in {">=", "<=", ">", "<", "=="} else ">="
+        metric_name = config.get("metric") if isinstance(config, dict) and isinstance(config.get("metric"), str) else "earnings_growth_yoy"
         return {
             "kind": "metric_threshold",
-            "metric": "earnings_growth_yoy",
+            "metric": metric_name,
             "label": "Earnings Growth (YoY)",
             "unit": "pct",
             "operator": operator,

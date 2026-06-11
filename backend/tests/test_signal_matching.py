@@ -62,6 +62,19 @@ def test_watch_hint_from_signal_includes_ids_revenue_growth():
     assert hint["claim_id"] == claim_id
 
 
+def test_watch_hint_from_signal_keeps_metric_specificity_and_converts_threshold_pct():
+    signal = _make_signal(
+        "revenue_growth",
+        {"metric": "services_revenue_growth", "threshold_pct": 16.6, "operator": ">="},
+    )
+
+    hint = _watch_hint_from_signal(signal)
+
+    assert hint is not None
+    assert hint["metric"] == "services_revenue_growth"
+    assert hint["threshold"] == 0.166
+
+
 def test_watch_hint_from_signal_includes_ids_earnings_growth():
     signal = _make_signal("earnings_growth", {"threshold": 0.10, "operator": ">="})
     claim_id = str(uuid.uuid4())

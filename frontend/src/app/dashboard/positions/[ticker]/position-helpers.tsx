@@ -311,10 +311,9 @@ export function getThesisHandoffPrompt(args: {
   hasThesis: boolean;
   hasSignals: boolean;
   hasActiveSignals: boolean;
-  decompositionStatus: string | null;
   investorProfile: "thesis_driven" | "hearsay_driven" | null;
 }) {
-  const { hasThesis, hasSignals, hasActiveSignals, decompositionStatus, investorProfile } = args;
+  const { hasThesis, hasSignals, hasActiveSignals, investorProfile } = args;
   if (!hasThesis) return null;
 
   if (!hasSignals) {
@@ -332,7 +331,7 @@ export function getThesisHandoffPrompt(args: {
     };
   }
 
-  if (!hasActiveSignals || decompositionStatus === "draft" || decompositionStatus === "partially_confirmed") {
+  if (!hasActiveSignals) {
     return {
       title:
         investorProfile === "hearsay_driven"

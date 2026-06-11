@@ -39,6 +39,7 @@ from app.services.edgar import (
 from app.services.edgar_extractor import enrich_earnings_candidates
 from app.services.news_collector import collect_news_evidence
 from app.services.signal_matching import (
+    build_evidence_summary,
     load_active_decomposition,
     match_candidates_to_signals,
 )
@@ -407,23 +408,57 @@ def _description_fingerprint(description: str) -> frozenset[str]:
     return frozenset(words - stop)
 
 
-def _serialise_audit_results(classified: list[tuple]) -> list[dict]:
-    """Convert (candidate, severity, analysis) tuples to JSON-serialisable dicts."""
+def _serialise_audit_results(
+    classified: list[tuple],
+    *,
+    thesis: Thesis,
+    investor_profile: str | None,
+    claims_by_id: dict[str, object],
+    signals_by_id: dict[str, object],
+) -> list[dict]:
+    """Convert classified candidates into a signal-aware historical audit payload."""
     SEVERITY_ORDER = {"thesis_breaking": 0, "warning": 1, "info": 2}
     results = []
     for candidate, severity, _analysis in classified:
         evidence = candidate.get("evidence") or {}
+        evidence_signal_id = evidence.get("signal_id")
+        evidence_claim_id = evidence.get("claim_id")
+        claim_obj = claims_by_id.get(evidence_claim_id) if evidence_claim_id else None
+        signal_obj = signals_by_id.get(evidence_signal_id) if evidence_signal_id else None
+
+        # A 90-day "value from day one" pass should surface either:
+        # - events tied to a specific claim/signal, or
+        # - stronger warnings/breaks that would have mattered anyway.
+        # Generic info-only rows (e.g. broad analyst sentiment with no thesis link)
+        # make the feature look busier than it really is.
+        if severity == "info" and claim_obj is None and signal_obj is None:
+            continue
+
         raw_date = (
             evidence.get("date")
             or evidence.get("filing_date")
             or evidence.get("event_date")
         )
         event_date = str(raw_date)[:10] if raw_date else None
+        claim_text = getattr(claim_obj, "claim_text", None)
+        signal_label = getattr(signal_obj, "signal_label", None)
+        analysis = build_evidence_summary(
+            candidate=candidate,
+            claim_text=claim_text,
+            signal_label=signal_label,
+            why_own_it=thesis.why_own_it,
+            severity=severity,
+            verdict=None,
+            investor_profile=investor_profile,
+        )
         results.append({
             "description": candidate.get("description", ""),
             "severity": severity,
             "event_type": candidate.get("event_type", ""),
             "event_date": event_date,
+            "signal_label": signal_label,
+            "claim_text": claim_text,
+            "analysis": analysis,
             "evidence": evidence,
         })
 
@@ -548,7 +583,7 @@ async def _run_historical_audit_with_session(
         candidates = match_candidates_to_signals(candidates, claims)
         candidates = apply_thesis_floor(candidates, audit_floor_anchor)
 
-        _, signals_by_id = build_claim_signal_lookup(claims)
+        claims_by_id, signals_by_id = build_claim_signal_lookup(claims)
         investor_profile = await load_investor_profile(db, thesis.user_id)
 
         news_watches = extract_news_watches(claims)
@@ -574,7 +609,13 @@ async def _run_historical_audit_with_session(
         surviving_set = {id(c) for c, _ in suppressed}
         classified = [(c, s, a) for c, s, a in classified if id(c) in surviving_set]
 
-        results = _serialise_audit_results(classified)
+        results = _serialise_audit_results(
+            classified,
+            thesis=thesis,
+            investor_profile=investor_profile,
+            claims_by_id=claims_by_id,
+            signals_by_id=signals_by_id,
+        )
 
         thesis.historical_audit_results = results
         thesis.historical_audit_status = "ready" if results else "empty"

@@ -23,28 +23,41 @@ const severityColors: Record<string, string> = {
   thesis_breaking: "bg-red-500/15 text-red-600",
 };
 
-const verdictConfig: Record<string, { label: string; sentence: string; className: string }> = {
-  supports: {
-    label: "Supports",
-    sentence: "This evidence supports your reason.",
-    className: "bg-emerald-500/15 text-emerald-700",
-  },
-  threatens: {
-    label: "Threatens",
-    sentence: "This evidence threatens your reason.",
-    className: "bg-red-500/15 text-red-600",
-  },
-  review: {
-    label: "Review",
-    sentence: "This evidence warrants a closer look at your reason.",
-    className: "bg-amber-500/15 text-amber-700",
-  },
-  neutral: {
-    label: "Neutral",
-    sentence: "This evidence is neutral. It does not directly affect your reason.",
-    className: "bg-muted text-muted-foreground",
-  },
-};
+function verdictConfig(
+  verdict: string,
+  investorProfile?: "thesis_driven" | "hearsay_driven" | null,
+): { label: string; sentence: string; className: string } | null {
+  const subject = investorProfile === "thesis_driven"
+    ? "thesis"
+    : investorProfile === "hearsay_driven"
+      ? "reason"
+      : "case";
+
+  const configs: Record<string, { label: string; sentence: string; className: string }> = {
+    supports: {
+      label: "Supports",
+      sentence: `This evidence supports your ${subject}.`,
+      className: "bg-emerald-500/15 text-emerald-700",
+    },
+    threatens: {
+      label: "Threatens",
+      sentence: `This evidence threatens your ${subject}.`,
+      className: "bg-red-500/15 text-red-600",
+    },
+    review: {
+      label: "Review",
+      sentence: `This evidence warrants a closer look at your ${subject}.`,
+      className: "bg-amber-500/15 text-amber-700",
+    },
+    neutral: {
+      label: "Neutral",
+      sentence: `This evidence is neutral. It does not directly affect your ${subject}.`,
+      className: "bg-muted text-muted-foreground",
+    },
+  };
+
+  return configs[verdict] ?? null;
+}
 
 const reviewLabel: Record<string, string> = {
   reaffirmed: "Reaffirmed",
@@ -138,6 +151,7 @@ function reviewLanguage(investorProfile?: "thesis_driven" | "hearsay_driven" | n
 }
 
 function parseNarrative(text: string) {
+  const normalizedText = text.replace(/\\n/g, "\n");
   const structuredKeys = new Set([
     "Your thesis",
     "You said",
@@ -154,7 +168,7 @@ function parseNarrative(text: string) {
   ]);
   const parsed: Record<string, string> = {};
   const body: string[] = [];
-  for (const line of text.split("\n")) {
+  for (const line of normalizedText.split("\n")) {
     const colonIdx = line.indexOf(":");
     if (colonIdx > 0 && colonIdx < 24) {
       const key = line.slice(0, colonIdx).trim();
@@ -192,7 +206,7 @@ function EvidenceNarrative({ text }: { text: string }) {
   ].filter((item): item is [string, string] => Boolean(item[1]));
 
   if (items.length === 0) {
-    return <p className="mt-2 text-sm text-foreground/80">{text}</p>;
+    return <p className="mt-2 whitespace-pre-line text-sm text-foreground/80">{text.replace(/\\n/g, "\n")}</p>;
   }
 
   return (
@@ -257,7 +271,7 @@ export function EventTimeline({ events, onReview, onEditReason, reviewingEventId
 
       <div className="space-y-4 p-5 sm:p-6">
         {events.map((e) => {
-          const verdict = e.verdict ? verdictConfig[e.verdict] : null;
+          const verdict = e.verdict ? verdictConfig(e.verdict, investorProfile) : null;
           const reviewDecision = e.review_action ? reviewDecisionConfig(e.review_action, investorProfile) : null;
           const narrative = eventNarrativeFields(e);
           const youSaid = narrative.youSaid;

@@ -185,6 +185,9 @@ export interface HistoricalAuditResultItem {
   severity: "thesis_breaking" | "warning" | "info";
   event_type: string;
   event_date: string | null;
+  signal_label: string | null;
+  claim_text: string | null;
+  analysis: string | null;
   evidence: Record<string, unknown> | null;
 }
 

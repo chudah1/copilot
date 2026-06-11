@@ -168,16 +168,58 @@ def test_serialise_audit_results_orders_by_severity_then_recency():
     """thesis_breaking comes before warning, newer dates before older."""
     from app.services.check_now import _serialise_audit_results
 
+    mock_thesis = MagicMock()
+    mock_thesis.why_own_it = "Revenue keeps compounding."
+
     classified = [
-        ({"description": "old warning", "event_type": "gemini_news", "evidence": {"date": "2026-01-01"}}, "warning", ""),
-        ({"description": "breaking", "event_type": "edgar", "evidence": {"filing_date": "2026-01-05"}}, "thesis_breaking", ""),
-        ({"description": "new warning", "event_type": "gemini_news", "evidence": {"date": "2026-02-01"}}, "warning", ""),
+        ({"description": "old warning", "event_type": "gemini_news", "evidence": {"date": "2026-01-01", "claim_id": "claim-1"}}, "warning", ""),
+        ({"description": "breaking", "event_type": "edgar", "evidence": {"filing_date": "2026-01-05", "signal_id": "signal-1"}}, "thesis_breaking", ""),
+        ({"description": "new warning", "event_type": "gemini_news", "evidence": {"date": "2026-02-01", "claim_id": "claim-1"}}, "warning", ""),
     ]
 
-    results = _serialise_audit_results(classified)
+    claim = MagicMock()
+    claim.claim_text = "Revenue keeps growing."
+    signal = MagicMock()
+    signal.signal_label = "Revenue growth"
+
+    results = _serialise_audit_results(
+        classified,
+        thesis=mock_thesis,
+        investor_profile="thesis_driven",
+        claims_by_id={"claim-1": claim},
+        signals_by_id={"signal-1": signal},
+    )
 
     assert results[0]["severity"] == "thesis_breaking"
+    assert results[0]["signal_label"] == "Revenue growth"
     assert results[1]["severity"] == "warning"
     assert results[1]["event_date"] == "2026-02-01"  # newer warning first
     assert results[2]["severity"] == "warning"
     assert results[2]["event_date"] == "2026-01-01"
+
+
+def test_serialise_audit_results_drops_unlinked_info_noise():
+    from app.services.check_now import _serialise_audit_results
+
+    mock_thesis = MagicMock()
+    mock_thesis.why_own_it = "Merchant and GMV growth stay healthy."
+
+    classified = [
+        ({"description": "generic analyst revision", "event_type": "analyst_revision", "evidence": {}}, "info", ""),
+        ({"description": "merchant growth warning", "event_type": "gemini_news", "evidence": {"claim_id": "claim-1"}}, "warning", ""),
+    ]
+
+    claim = MagicMock()
+    claim.claim_text = "Merchant growth does not stall for several quarters."
+
+    results = _serialise_audit_results(
+        classified,
+        thesis=mock_thesis,
+        investor_profile="thesis_driven",
+        claims_by_id={"claim-1": claim},
+        signals_by_id={},
+    )
+
+    assert len(results) == 1
+    assert results[0]["description"] == "merchant growth warning"
+    assert results[0]["claim_text"] == "Merchant growth does not stall for several quarters."
