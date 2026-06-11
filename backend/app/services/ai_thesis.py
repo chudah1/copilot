@@ -123,6 +123,7 @@ SUPPORTED_PROXY_METRICS = {
     "pe_ratio",
     "dividend_yield",
 }
+GROWTH_METRICS: frozenset[str] = frozenset({"revenue_growth_yoy", "earnings_growth_yoy"})
 PROXY_TICKER_PATTERN = re.compile(r"^[A-Z][A-Z0-9.\-]{0,9}$")
 OPENAI_ASSIST_MODEL = "gpt-4.1-mini"
 
@@ -325,10 +326,14 @@ THESIS_ASSIST_JSON_SCHEMA = {
 
 
 
-def _format_metric_pct(value: float | None) -> str:
+def _format_metric_pct(value: float | None, metric: str = "") -> str:
     if value is None:
         return "Not available"
-    pct = value * 100 if abs(value) <= 1 else value
+    is_growth = metric.endswith("_yoy") or metric in GROWTH_METRICS
+    if is_growth:
+        pct = value * 100
+    else:
+        pct = value * 100 if abs(value) <= 1 else value
     return f"{pct:.1f}%"
 
 
@@ -847,8 +852,8 @@ def _build_market_data_section(market_data: Any | None) -> str:
         "Market Data:",
         f"- Sector: {market_data.sector}",
         f"- Industry: {market_data.industry}",
-        f"- Revenue Growth: {_format_metric_pct(market_data.revenue_growth_yoy)}",
-        f"- Earnings Growth: {_format_metric_pct(market_data.earnings_growth_yoy)}",
+        f"- Revenue Growth: {_format_metric_pct(market_data.revenue_growth_yoy, 'revenue_growth_yoy')}",
+        f"- Earnings Growth: {_format_metric_pct(market_data.earnings_growth_yoy, 'earnings_growth_yoy')}",
     ]
     recent_headlines = [h for h in (market_data.recent_news or []) if h][:5]
     if recent_headlines:
@@ -1208,6 +1213,16 @@ def _normalize_interpretation(interpretation: dict | None) -> dict:
                 and isinstance(threshold, (int, float))
             ):
                 normalized_operator = _normalize_metric_operator(operator, rationale)
+                threshold = float(threshold)
+                is_growth_metric = metric.endswith("_yoy") or metric in GROWTH_METRICS
+                if is_growth_metric and threshold > 1.5:
+                    logger.warning(
+                        "unit-corrected: %s threshold %.4f interpreted as %% → %.4f",
+                        metric,
+                        threshold,
+                        threshold / 100,
+                    )
+                    threshold = threshold / 100
                 normalized_watch_hints.append(
                     {
                         "kind": "metric_threshold",
@@ -1215,7 +1230,7 @@ def _normalize_interpretation(interpretation: dict | None) -> dict:
                         "label": _metric_label(metric),
                         "unit": _metric_unit(metric),
                         "operator": normalized_operator,
-                        "threshold": float(threshold),
+                        "threshold": threshold,
                         "rationale": rationale,
                     }
                 )
