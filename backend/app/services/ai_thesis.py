@@ -360,6 +360,11 @@ def _detect_monitorable_drivers(text: str) -> list[str]:
     return found
 
 
+def _contains_keyword(text: str, kw: str) -> bool:
+    """Word-boundary safe keyword check — avoids 'deal' matching 'ideally'."""
+    return bool(re.search(r'\b' + re.escape(kw) + r'\b', text, re.IGNORECASE))
+
+
 def _build_grounding_questions(
     company: str,
     *,
@@ -530,7 +535,7 @@ def _infer_qualitative_watch_hints(text: str) -> list[dict[str, Any]]:
             }
         )
 
-    if any(keyword in lowered for keyword in ("eucalyptus", "acquisition", "deal", "integration", "overhead drag")):
+    if any(_contains_keyword(lowered, kw) for kw in ("eucalyptus", "acquisition", "deal", "integration", "overhead drag")):
         deal_name = "the acquisition or integration"
         match = re.search(
             r"\b([A-Z][A-Za-z0-9&.\-]+(?:\s+[A-Z][A-Za-z0-9&.\-]+)*)\s+(?:deal|acquisition)\b",
@@ -559,8 +564,8 @@ def _infer_story_watch_hints(text: str, *, include_story_growth: bool = False) -
     # so include_story_growth lets those generic growth/demand cues back the matching watch hint.
     revenue_keywords = ("revenue", "sales", "orders", "bookings", "subscribers", "users", "capex", "top line", "top-line")
     story_growth_keywords = ("growth", "demand", "adoption", "ai")
-    if any(keyword in lowered for keyword in revenue_keywords) or (
-        include_story_growth and any(keyword in lowered for keyword in story_growth_keywords)
+    if any(_contains_keyword(lowered, kw) for kw in revenue_keywords) or (
+        include_story_growth and any(_contains_keyword(lowered, kw) for kw in story_growth_keywords)
     ):
         watch_hints.append(
             {
@@ -571,7 +576,7 @@ def _infer_story_watch_hints(text: str, *, include_story_growth: bool = False) -
                 "rationale": "Revenue growth must stay positive to validate this thesis.",
             }
         )
-    if any(keyword in lowered for keyword in ("margin", "margins", "profit", "profitability", "earnings", "cash flow", "ebitda", "eps")):
+    if any(_contains_keyword(lowered, kw) for kw in ("margin", "margins", "profit", "profitability", "earnings", "cash flow", "ebitda", "eps")):
         watch_hints.append(
             {
                 "kind": "metric_threshold",
@@ -609,21 +614,21 @@ def _infer_hearsay_conditions(ticker: str, answer1: str, answer2: str) -> tuple[
         "If the operating results and management commentary stop supporting the original story for multiple quarters, the position should be reconsidered."
     )
 
-    if any(keyword in lowered for keyword in ("growth", "demand", "adoption", "sales", "orders", "capex", "ai")):
+    if any(_contains_keyword(lowered, kw) for kw in ("growth", "demand", "adoption", "sales", "orders", "capex", "ai")):
         must_remain_true = (
             f"The demand story in {ticker} needs to keep showing up in revenue growth, customer adoption, and management commentary."
         )
         what_would_change_my_mind = (
             "If demand weakens for multiple quarters or management commentary stops backing the original growth story, the position should be reconsidered."
         )
-    elif any(keyword in lowered for keyword in ("margin", "margins", "profit", "profitability", "earnings", "cash flow")):
+    elif any(_contains_keyword(lowered, kw) for kw in ("margin", "margins", "profit", "profitability", "earnings", "cash flow")):
         must_remain_true = (
             f"{ticker} needs to turn the story into profitable execution rather than just narrative excitement."
         )
         what_would_change_my_mind = (
             "If margins or earnings deteriorate while the original story is still being sold aggressively, the thesis is weaker than it looks."
         )
-    elif any(keyword in lowered for keyword in ("leader", "leadership", "moat", "ecosystem", "competitive")):
+    elif any(_contains_keyword(lowered, kw) for kw in ("leader", "leadership", "moat", "ecosystem", "competitive")):
         must_remain_true = (
             f"{ticker} needs to keep showing real competitive strength in customer adoption, pricing, or product leadership."
         )
@@ -660,28 +665,28 @@ def _infer_specific_conditions(
         "If operating results or management commentary stop validating the core business driver for multiple quarters, the position should be reconsidered."
     )
 
-    if any(keyword in lowered for keyword in ("growth", "demand", "adoption", "orders", "capex", "ai", "sales")):
+    if any(_contains_keyword(lowered, kw) for kw in ("growth", "demand", "adoption", "orders", "capex", "ai", "sales")):
         must_remain_true = (
             f"{ticker} needs to keep showing real demand in revenue growth, customer adoption, and management commentary."
         )
         what_would_change_my_mind = (
             "If demand softens for multiple quarters or management commentary stops supporting the growth driver behind the thesis, the position should be reconsidered."
         )
-    elif any(keyword in lowered for keyword in ("margin", "margins", "profit", "profitability", "earnings", "cash flow")):
+    elif any(_contains_keyword(lowered, kw) for kw in ("margin", "margins", "profit", "profitability", "earnings", "cash flow")):
         must_remain_true = (
             f"{ticker} needs to keep turning the thesis into healthy margins, earnings, or cash flow rather than just narrative momentum."
         )
         what_would_change_my_mind = (
             "If margins, earnings, or cash generation deteriorate for multiple quarters, the position should be reconsidered."
         )
-    elif any(keyword in lowered for keyword in ("moat", "ecosystem", "leadership", "competitive", "pricing power")):
+    elif any(_contains_keyword(lowered, kw) for kw in ("moat", "ecosystem", "leadership", "competitive", "pricing power")):
         must_remain_true = (
             f"{ticker} needs to keep showing competitive strength through customer adoption, pricing power, or product leadership."
         )
         what_would_change_my_mind = (
             "If credible competition starts eroding adoption, pricing power, or management confidence in the competitive edge, the position should be reconsidered."
         )
-    elif any(keyword in lowered for keyword in ("valuation", "multiple", "cheap", "expensive", "p/e", "pe")):
+    elif any(_contains_keyword(lowered, kw) for kw in ("valuation", "multiple", "cheap", "expensive", "p/e", "pe")):
         must_remain_true = (
             f"{ticker} needs to keep delivering enough business performance to justify the valuation being paid today."
         )
@@ -911,7 +916,7 @@ def _fallback_assist(
         labels = [
             label
             for label, keywords in THEME_KEYWORDS.items()
-            if any(keyword in lowered for keyword in keywords)
+            if any(_contains_keyword(lowered, kw) for kw in keywords)
         ] or ["user_defined"]
         monitorability = "low" if is_vague else "medium"
         watch_hints = [] if is_vague else _infer_story_watch_hints(
@@ -1386,7 +1391,7 @@ def _fallback_counter_thesis(
     labels = [
         label
         for label, keywords in THEME_KEYWORDS.items()
-        if any(keyword in lowered for keyword in keywords)
+        if any(_contains_keyword(lowered, kw) for kw in keywords)
     ] or ["general"]
 
     bear_case = (
