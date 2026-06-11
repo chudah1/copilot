@@ -365,6 +365,17 @@ def _contains_keyword(text: str, kw: str) -> bool:
     return bool(re.search(r'\b' + re.escape(kw) + r'\b', text, re.IGNORECASE))
 
 
+_THRESHOLD_RE = re.compile(
+    r"\d|%|percent|above|below|at least|more than|less than|greater than|exceeds?",
+    re.IGNORECASE,
+)
+
+
+def _has_concrete_threshold(text: str) -> bool:
+    """Return True if text contains a digit, percent sign, or explicit threshold phrase."""
+    return bool(_THRESHOLD_RE.search(text))
+
+
 def _build_grounding_questions(
     company: str,
     *,
@@ -423,6 +434,9 @@ def assess_thesis_vagueness(
     combined = f"{why_text} {change_text}".strip()
 
     drivers = _detect_monitorable_drivers(combined)
+    # Drivers only suppress weak_prose when the text contains a concrete threshold.
+    # Thematic-only drivers ("AI growth") cannot rescue a too-short or generic thesis.
+    monitorable_drivers = drivers if _has_concrete_threshold(combined) else []
 
     reasons: list[str] = []
     is_short = len(why_text.split()) < MIN_SPECIFIC_WORDS
@@ -438,6 +452,8 @@ def assess_thesis_vagueness(
         reasons.append("generic")
     if not drivers:
         reasons.append("no_monitorable_driver")
+    if drivers and not monitorable_drivers:
+        reasons.append("thematic_only")
 
     # Strong signals mark a thesis vague on their own: explicit chatter FRAMING
     # ("everyone was talking about it") and vague/tip language. The rest are SOFT —
@@ -453,9 +469,13 @@ def assess_thesis_vagueness(
     if "vague_language" in reasons:
         strong_signals.add("vague_language")
     bare_hearsay = has_hearsay and not hearsay_is_framing
-    weak_prose = is_short or "generic" in reasons or bare_hearsay
-    is_vague = bool(strong_signals) or (weak_prose and not drivers) or (
-        investor_profile == "hearsay_driven" and not drivers
+    # Short theses require a concrete threshold (monitorable_drivers); generic/hearsay
+    # boilerplate is rescued by any driver (with or without a numeric threshold).
+    is_vague = (
+        bool(strong_signals)
+        or (is_short and not monitorable_drivers)
+        or (("generic" in reasons or bare_hearsay) and not drivers)
+        or (investor_profile == "hearsay_driven" and not monitorable_drivers)
     )
 
     company_label = company or "this company"
