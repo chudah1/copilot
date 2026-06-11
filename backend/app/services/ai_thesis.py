@@ -1649,7 +1649,7 @@ def _parse_synthesis_output(
     if not all(isinstance(v, str) for v in (why_own_it, must_remain_true, what_would_change_my_mind, ai_summary)):
         raise ValueError("Invalid synthesis payload")
     output = SynthesisOutput(
-        why_own_it=why_own_it.strip() or f"Investing in {ticker} for long-term potential.",
+        why_own_it=why_own_it.strip() or f"Investing in {ticker} based on its current operating performance.",
         must_remain_true=must_remain_true.strip() or "",
         what_would_change_my_mind=what_would_change_my_mind.strip() or "",
         ai_summary=ai_summary.strip(),
