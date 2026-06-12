@@ -228,6 +228,8 @@ def test_serialise_audit_results_drops_unlinked_info_noise():
 def test_build_coverage_gap_items_reports_uncovered_qualitative_signals():
     from app.services.check_now import _build_coverage_gap_items
 
+    thesis = MagicMock()
+    thesis.interpretation = {}
     active_signal = MagicMock()
     active_signal.id = "sig-1"
     active_signal.active = True
@@ -235,6 +237,7 @@ def test_build_coverage_gap_items_reports_uncovered_qualitative_signals():
     active_signal.signal_label = "NVDA Blackwell product cycle deployment"
 
     gap_items = _build_coverage_gap_items(
+        thesis=thesis,
         candidates=[],
         nw_matched={},
         signals_by_id={"sig-1": active_signal},
@@ -249,6 +252,8 @@ def test_build_coverage_gap_items_reports_uncovered_qualitative_signals():
 def test_build_coverage_gap_items_stays_quiet_when_qualitative_signal_is_linked():
     from app.services.check_now import _build_coverage_gap_items
 
+    thesis = MagicMock()
+    thesis.interpretation = {}
     active_signal = MagicMock()
     active_signal.id = "sig-1"
     active_signal.active = True
@@ -256,6 +261,7 @@ def test_build_coverage_gap_items_stays_quiet_when_qualitative_signal_is_linked(
     active_signal.signal_label = "NVDA Blackwell product cycle deployment"
 
     gap_items = _build_coverage_gap_items(
+        thesis=thesis,
         candidates=[
             {
                 "event_type": "earnings_call_transcript",
@@ -268,3 +274,29 @@ def test_build_coverage_gap_items_stays_quiet_when_qualitative_signal_is_linked(
     )
 
     assert gap_items == []
+
+
+def test_build_coverage_gap_items_uses_provisional_watch_hints_when_no_active_decomposition():
+    from app.services.check_now import _build_coverage_gap_items
+
+    thesis = MagicMock()
+    thesis.interpretation = {
+        "watch_hints": [
+            {
+                "kind": "news_watch",
+                "watch_for": "NVDA Blackwell product cycle deployment",
+                "direction": "supports",
+            }
+        ]
+    }
+
+    gap_items = _build_coverage_gap_items(
+        thesis=thesis,
+        candidates=[],
+        nw_matched={},
+        signals_by_id={},
+    )
+
+    assert len(gap_items) == 1
+    assert gap_items[0]["event_type"] == "coverage_gap"
+    assert "Blackwell" in gap_items[0]["analysis"]

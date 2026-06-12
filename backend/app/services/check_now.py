@@ -508,6 +508,7 @@ def _serialise_audit_results(
 
 def _build_coverage_gap_items(
     *,
+    thesis: Thesis,
     candidates: list[dict],
     nw_matched: dict[int, tuple[object, str, str]] | None,
     signals_by_id: dict[str, object],
@@ -526,8 +527,18 @@ def _build_coverage_gap_items(
         for sig in signals_by_id.values()
         if getattr(sig, "active", False) and getattr(sig, "signal_type", None) in qualitative_types
     ]
+    provisional_labels: list[str] = []
     if not active_qualitative:
-        return []
+        watch_hints = (thesis.interpretation or {}).get("watch_hints")
+        if isinstance(watch_hints, list):
+            provisional_labels = [
+                str(hint.get("label") or hint.get("watch_for") or "").strip()
+                for hint in watch_hints
+                if isinstance(hint, dict) and hint.get("kind") == "news_watch"
+            ]
+            provisional_labels = [label for label in provisional_labels if label]
+        if not provisional_labels:
+            return []
 
     linked_signal_ids: set[str] = set()
     for candidate in candidates:
@@ -542,10 +553,16 @@ def _build_coverage_gap_items(
             linked_signal_ids.add(str(signal_id))
 
     uncovered = [sig for sig in active_qualitative if str(sig.id) not in linked_signal_ids]
-    if not uncovered:
+    if uncovered:
+        labels = [
+            getattr(sig, "signal_label", None) or getattr(sig, "signal_type", "qualitative signal")
+            for sig in uncovered
+        ]
+    else:
+        labels = provisional_labels
+    if not labels:
         return []
 
-    labels = [getattr(sig, "signal_label", None) or getattr(sig, "signal_type", "qualitative signal") for sig in uncovered]
     preview = ", ".join(labels[:2])
     if len(labels) > 2:
         preview = f"{preview}, and {len(labels) - 2} more"
@@ -679,6 +696,7 @@ async def _run_historical_audit_with_session(
         )
         if not results:
             results = _build_coverage_gap_items(
+                thesis=thesis,
                 candidates=candidates,
                 nw_matched=nw_matched,
                 signals_by_id=signals_by_id,
