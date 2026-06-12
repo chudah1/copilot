@@ -133,31 +133,69 @@ async def _thesis_aware_highlights(
     must_remain_true: str | None,
     what_would_change_my_mind: str | None,
 ) -> list[str] | None:
-    """Return thesis-relevant sentences from a transcript via embedding similarity.
+    """Return thesis-relevant sentences from a transcript."""
+    claim_texts = [t for t in [why_own_it, must_remain_true, what_would_change_my_mind] if t and t.strip()]
+    return await _relevant_transcript_highlights(full_text, claim_texts)
 
-    Returns None on any failure so the caller can fall back to keyword highlights.
-    text-embedding-3-small returns unit vectors, so dot product == cosine similarity.
+
+def _word_overlap_score(a: str, b: str) -> float:
+    aw = {w for w in re.findall(r"\w{4,}", a.lower())}
+    bw = {w for w in re.findall(r"\w{4,}", b.lower())}
+    if not aw or not bw:
+        return 0.0
+    return len(aw & bw) / len(aw | bw)
+
+
+async def _relevant_transcript_highlights(
+    full_text: str,
+    focus_texts: list[str],
+) -> list[str] | None:
+    """Return transcript sentences most relevant to the supplied focus texts.
+
+    Used in two places:
+    - thesis-aware transcript summarisation before generic classification
+    - signal-aware transcript enrichment before qualitative watch matching
     """
     try:
-        from openai import AsyncOpenAI
-
-        claim_texts = [t for t in [why_own_it, must_remain_true, what_would_change_my_mind] if t and t.strip()]
-        if not claim_texts:
+        focus_texts = [t for t in focus_texts if t and t.strip()]
+        if not focus_texts:
             return None
 
         windows = _build_transcript_windows(full_text)
         if not windows:
             return None
 
+        if not settings.openai_api_key:
+            scored: list[tuple[float, str, int]] = []
+            for idx, (sentence, window_text) in enumerate(windows):
+                score = max(_word_overlap_score(window_text, focus) for focus in focus_texts)
+                if score > 0:
+                    scored.append((score, sentence, idx))
+            if not scored:
+                return None
+            scored.sort(key=lambda x: (x[0], -x[2]), reverse=True)
+            ordered: list[str] = []
+            seen: set[str] = set()
+            for _score, sentence, _idx in scored:
+                if sentence in seen:
+                    continue
+                seen.add(sentence)
+                ordered.append(sentence)
+                if len(ordered) >= _MAX_SENTENCES:
+                    break
+            return ordered or None
+
+        from openai import AsyncOpenAI
+
         client = AsyncOpenAI(api_key=settings.openai_api_key)
         resp = await client.embeddings.create(
             model=_EMBED_MODEL,
-            input=claim_texts + [window for _, window in windows],
+            input=focus_texts + [window for _, window in windows],
         )
         vecs = [d.embedding for d in resp.data]
 
-        claim_vecs = vecs[: len(claim_texts)]
-        window_vecs = vecs[len(claim_texts):]
+        claim_vecs = vecs[: len(focus_texts)]
+        window_vecs = vecs[len(focus_texts):]
 
         scored: list[tuple[float, str, int]] = []
         for idx, (window_vec, (sentence, _window_text)) in enumerate(zip(window_vecs, windows)):
@@ -179,7 +217,25 @@ async def _thesis_aware_highlights(
 
     except Exception as exc:
         logger.warning("Transcript embedding extraction failed, falling back to keywords: %s", exc)
-        return None
+        scored: list[tuple[float, str, int]] = []
+        windows = _build_transcript_windows(full_text)
+        for idx, (sentence, window_text) in enumerate(windows):
+            score = max(_word_overlap_score(window_text, focus) for focus in focus_texts)
+            if score > 0:
+                scored.append((score, sentence, idx))
+        if not scored:
+            return None
+        scored.sort(key=lambda x: (x[0], -x[2]), reverse=True)
+        ordered: list[str] = []
+        seen: set[str] = set()
+        for _score, sentence, _idx in scored:
+            if sentence in seen:
+                continue
+            seen.add(sentence)
+            ordered.append(sentence)
+            if len(ordered) >= _MAX_SENTENCES:
+                break
+        return ordered or None
 
 
 def _build_transcript_windows(full_text: str) -> list[tuple[str, str]]:
@@ -297,6 +353,20 @@ async def match_thesis_news_watches(
     verdict map (id(candidate) -> (watch, severity, reason))."""
     if not news_watches:
         return {}
+    watch_texts = [w.watch_for for w in news_watches if w.watch_for]
+    if watch_texts:
+        for candidate in candidates:
+            if candidate.get("event_type") != "earnings_call_transcript":
+                continue
+            evidence = candidate.get("evidence") or {}
+            full_text = evidence.get("full_transcript")
+            if not isinstance(full_text, str) or not full_text.strip():
+                continue
+            smart = await _relevant_transcript_highlights(full_text, watch_texts)
+            if not smart:
+                continue
+            evidence["highlights"] = smart
+            evidence["excerpt"] = " ".join(smart[:2])
     news_texts = [
         candidate_text(c) for c in candidates if c.get("event_type") in NEWS_LIKE_EVENT_TYPES
     ]

@@ -3,7 +3,11 @@ from unittest.mock import MagicMock, patch
 
 import pytest
 
-from app.services.monitoring_pipeline import _build_transcript_windows, _thesis_aware_highlights
+from app.services.monitoring_pipeline import (
+    _build_transcript_windows,
+    _relevant_transcript_highlights,
+    _thesis_aware_highlights,
+)
 
 
 def test_build_transcript_windows_keeps_question_with_answer():
@@ -57,3 +61,40 @@ async def test_thesis_aware_highlights_uses_context_window_for_anaphoric_answer(
 
     assert highlights is not None
     assert "CEO: It is accelerating rapidly and margins are crushing it." in highlights
+
+
+@pytest.mark.asyncio
+async def test_relevant_transcript_highlights_supports_signal_focused_windows(monkeypatch):
+    monkeypatch.setattr(
+        "app.services.monitoring_pipeline.settings.openai_api_key",
+        "test-key",
+        raising=False,
+    )
+
+    transcript = (
+        "Analyst: How is Blackwell deployment progressing with hyperscalers? "
+        "CEO: It is ahead of plan and supply constraints are easing."
+    )
+
+    async def fake_create(*, model, input):
+        vectors = []
+        for text in input:
+            if text == "Blackwell deployment":
+                vectors.append([1.0, 0.0])
+            elif "Blackwell deployment progressing" in text and "ahead of plan" in text:
+                vectors.append([1.0, 0.0])
+            else:
+                vectors.append([0.0, 1.0])
+        return SimpleNamespace(data=[SimpleNamespace(embedding=v) for v in vectors])
+
+    fake_client = MagicMock()
+    fake_client.embeddings.create = fake_create
+
+    with patch("openai.AsyncOpenAI", return_value=fake_client):
+        highlights = await _relevant_transcript_highlights(
+            transcript,
+            ["Blackwell deployment"],
+        )
+
+    assert highlights is not None
+    assert "CEO: It is ahead of plan and supply constraints are easing." in highlights

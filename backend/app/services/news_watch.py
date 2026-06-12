@@ -47,6 +47,7 @@ EVENT_TYPE_SIMILARITY_THRESHOLDS = {
     "news_or_earnings_candidate": 0.45,
     "gemini_news": 0.50,
     "news_keyword_match": 0.58,
+    "earnings_call_transcript": 0.18,
 }
 # Hard cap on judge LLM calls per thesis per run, so a busy news day can't fan
 # out into an unbounded number of paid calls.
@@ -76,9 +77,9 @@ def candidate_text(candidate: dict[str, Any]) -> str:
     if candidate.get("event_type") == "earnings_call_transcript":
         highlights = evidence.get("highlights")
         if isinstance(highlights, list) and highlights:
-            joined = " ".join(str(part).strip() for part in highlights if str(part).strip())
-            if joined:
-                return joined
+            first = str(highlights[0]).strip()
+            if first:
+                return first
         excerpt = (evidence.get("excerpt") or "").strip()
         if excerpt:
             return excerpt

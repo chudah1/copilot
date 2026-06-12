@@ -54,8 +54,7 @@ def test_candidate_text_uses_transcript_highlights_first():
             "evidence": {"highlights": ["Blackwell demand remains strong.", "Supply is improving."]},
         }
     )
-    assert "Blackwell demand remains strong." in txt
-    assert "Supply is improving." in txt
+    assert txt == "Blackwell demand remains strong."
 
 
 @pytest.mark.asyncio
@@ -327,6 +326,39 @@ async def test_match_thesis_news_watches_tags_before_filtering(monkeypatch):
 
     assert id(cand) in result
     assert cand["evidence"]["signal_id"] == "sig1"
+
+
+@pytest.mark.asyncio
+async def test_match_thesis_news_watches_rewrites_transcript_highlights_for_signal_focus(monkeypatch):
+    from app.services import monitoring_pipeline as mp
+    import app.services.news_watch as nw
+
+    monkeypatch.setattr(mp, "judge_news_watch", _judge_yes)
+    monkeypatch.setattr(nw.settings, "openai_api_key", "", raising=False)
+
+    cand = {
+        "event_type": "earnings_call_transcript",
+        "description": "Latest earnings call signaled: generic demand commentary",
+        "evidence": {
+            "highlights": ["Generic demand commentary."],
+            "full_transcript": (
+                "Analyst: How is Blackwell deployment progressing with hyperscalers? "
+                "CEO: It is ahead of plan and supply constraints are easing."
+            ),
+        },
+    }
+    watch = NewsWatch(
+        signal_id="sig1",
+        claim_id="cl1",
+        watch_for="Blackwell deployment",
+        direction="supports",
+    )
+
+    result = await mp.match_thesis_news_watches([cand], [watch])
+
+    assert id(cand) in result
+    assert cand["evidence"]["signal_id"] == "sig1"
+    assert "ahead of plan" in " ".join(cand["evidence"]["highlights"])
 
 
 def test_extract_provisional_news_watches_from_interpretation():
