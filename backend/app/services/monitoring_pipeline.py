@@ -214,22 +214,40 @@ def _build_transcript_windows(full_text: str) -> list[tuple[str, str]]:
 
 
 def extract_news_watches(claims: list[Any] | None) -> list[NewsWatch]:
-    """Collect active qualitative news_watch signals from a decomposition tree."""
+    """Collect active qualitative signals from a decomposition tree.
+
+    ``news_watch`` is explicit. ``news_topic`` and ``transcript_topic`` are
+    lifted into the same watch shape so strong held-company qualitative signals
+    can participate in live monitoring immediately.
+    """
     watches: list[NewsWatch] = []
     for claim in claims or []:
         for entity in (claim.entities or []):
             for sig in (entity.signals or []):
-                if not (sig.active and sig.signal_type == "news_watch"):
+                if not (sig.active and sig.signal_type in {"news_watch", "news_topic", "transcript_topic"}):
                     continue
                 cfg = sig.signal_config_json or {}
-                watch_for = (cfg.get("watch_for") or "").strip()
+                watch_for = (
+                    str(
+                        cfg.get("watch_for")
+                        or cfg.get("topic")
+                        or sig.signal_label
+                        or sig.rationale
+                        or ""
+                    ).strip()
+                )
                 if watch_for:
+                    raw_direction = str(cfg.get("direction") or "").strip().lower()
+                    if raw_direction in {"supports", "threatens"}:
+                        direction = raw_direction
+                    else:
+                        direction = "threatens" if getattr(entity, "relation_type", None) == "threatened_by" else "supports"
                     watches.append(
                         NewsWatch(
                             signal_id=str(sig.id),
                             claim_id=str(claim.id),
                             watch_for=watch_for,
-                            direction=cfg.get("direction") or "threatens",
+                            direction=direction,
                             label=sig.signal_label,
                         )
                     )
@@ -397,6 +415,12 @@ async def persist_classified_candidates(
         signal_obj = signals_by_id.get(evidence_signal_id) if evidence_signal_id else None
 
         verdict = determine_verdict(severity, candidate)
+        if claim_obj is None and signal_obj is None:
+            if candidate.get("event_type") == "analyst_revision":
+                continue
+            if candidate.get("event_type") == "earnings_surprise" and verdict == "supports":
+                continue
+
         evidence_summary = build_evidence_summary(
             candidate=candidate,
             claim_text=claim_obj.claim_text if claim_obj else None,

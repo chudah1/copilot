@@ -10,6 +10,10 @@ const METRIC_LABELS: Record<string, string> = {
 
 type PriceStyle = "review" | "discipline";
 
+function toSentenceCaseLabel(label: string): string {
+  return label ? `${label.charAt(0).toLowerCase()}${label.slice(1)}` : label;
+}
+
 function formatThresholdValue(unit: string | undefined, threshold: number): string {
   if (unit === "pct") {
     const pct = Math.abs(threshold) <= 1 ? threshold * 100 : threshold;
@@ -59,22 +63,47 @@ export function describeWatchHint(
     typeof hint.operator === "string" &&
     typeof hint.threshold === "number"
   ) {
-    if (hint.threshold === 0) return null;
-
     const label =
       typeof hint.label === "string"
         ? hint.label
         : (METRIC_LABELS[hint.metric] ?? hint.metric.replaceAll("_", " "));
-    const unit = typeof hint.unit === "string" ? hint.unit : undefined;
+    const proxyFor =
+      typeof hint.proxy_for === "string" && hint.proxy_for.trim().length > 0
+        ? hint.proxy_for.trim()
+        : null;
+    const unit =
+      typeof hint.unit === "string"
+        ? hint.unit
+        : hint.metric === "revenue_growth_yoy" ||
+            hint.metric === "earnings_growth_yoy" ||
+            hint.metric === "gross_margin"
+          ? "pct"
+          : undefined;
     const thresholdText = formatThresholdValue(unit, hint.threshold);
     const direction = inferMetricBreachDirection(
       hint.operator,
       typeof hint.rationale === "string" ? hint.rationale : undefined,
     );
 
-    if (direction === "below") return `Review if ${label} falls below ${thresholdText}.`;
-    if (direction === "above") return `Review if ${label} rises above ${thresholdText}.`;
-    return `Review if ${label} drifts away from ${thresholdText}.`;
+    if (hint.threshold === 0) {
+      return proxyFor
+        ? `Track ${toSentenceCaseLabel(label)} as a proxy for ${proxyFor}.`
+        : null;
+    }
+
+    if (direction === "below") {
+      return proxyFor
+        ? `Review if ${label} falls below ${thresholdText}, using it as a proxy for ${proxyFor}.`
+        : `Review if ${label} falls below ${thresholdText}.`;
+    }
+    if (direction === "above") {
+      return proxyFor
+        ? `Review if ${label} rises above ${thresholdText}, using it as a proxy for ${proxyFor}.`
+        : `Review if ${label} rises above ${thresholdText}.`;
+    }
+    return proxyFor
+      ? `Review if ${label} drifts away from ${thresholdText}, using it as a proxy for ${proxyFor}.`
+      : `Review if ${label} drifts away from ${thresholdText}.`;
   }
 
   if (

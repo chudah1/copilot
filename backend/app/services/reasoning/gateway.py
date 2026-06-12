@@ -10,6 +10,7 @@ from app.services.reasoning.providers.openai_provider import Gpt4oMiniProvider
 from app.services.reasoning.types import ReasoningRequest, ReasoningResult, ReasoningTaskType
 from app.services.reasoning.validators import (
     output_needs_escalation,
+    prune_invalid_mappings,
     validate_decomposition_output,
 )
 
@@ -87,6 +88,26 @@ class ThesisReasoningGateway:
                 normalized_output,
                 original_text=original_text,
             )
+            if not valid:
+                if validation_error and "not a sensible match" in validation_error:
+                    sanitized_output, removed = prune_invalid_mappings(normalized_output)
+                    sanitized_valid, sanitized_error = validate_decomposition_output(
+                        sanitized_output,
+                        original_text=original_text,
+                    )
+                    if sanitized_valid and sanitized_output.get("claims"):
+                        logger.warning(
+                            "Provider %s produced partially invalid decomposition; dropped %d invalid mappings: %s",
+                            provider.name,
+                            len(removed),
+                            "; ".join(removed),
+                        )
+                        normalized_output = sanitized_output
+                        validation_error = None
+                        valid = True
+                    else:
+                        validation_error = sanitized_error or validation_error
+
             if not valid:
                 last_failure = ReasoningResult(
                     success=False,

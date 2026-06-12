@@ -752,6 +752,80 @@ async def test_proxy_signal_remains_inactive_and_not_projected(client, auth_head
     assert thesis_response.json()["interpretation"] is None
 
 
+async def test_margin_proxy_signal_requires_review_and_does_not_auto_activate(client, auth_headers, holding):
+    create = await client.post(
+        "/api/theses",
+        json={
+            "holding_id": holding["id"],
+            "status": "active",
+            "thesis_kind": "company",
+            "why_own_it": "Gross margins should stay healthy.",
+            "what_would_change_my_mind": "Gross margin compression would weaken the case.",
+            "confidence": "medium",
+            "review_cadence_days": 7,
+            "source": "user",
+        },
+        headers=auth_headers,
+    )
+    thesis_id = create.json()["id"]
+    gateway_result = ReasoningResult(
+        success=True,
+        status="success",
+        provider="anthropic",
+        model="claude-test",
+        prompt_version="v1",
+        normalized_output={
+            "reason_type": "unit_economics",
+            "monitorability": "high",
+            "decomposition_confidence": 0.84,
+            "claims": [
+                {
+                    "claim_text": "Gross margins stay healthy.",
+                    "claim_type": "profitability",
+                    "confidence": 0.86,
+                    "entities": [
+                        {
+                            "entity_name": "Apple Inc",
+                            "entity_ticker": "AAPL",
+                            "entity_type": "held_company",
+                            "relation_type": "validated_by",
+                            "rationale": "Company margin trend matters directly.",
+                            "confidence": 0.93,
+                            "confirmation_required": False,
+                            "signals": [
+                                {
+                                    "signal_type": "earnings_growth",
+                                    "signal_label": "Apple gross margin trend",
+                                    "signal_config_json": {"metric": "gross_margin", "operator": ">="},
+                                    "rationale": "Gross margin compression would weaken the case.",
+                                    "confidence": 0.92,
+                                    "confirmation_required": False,
+                                }
+                            ],
+                        }
+                    ],
+                }
+            ],
+        },
+        raw_output={"provider": "anthropic"},
+        confidence=0.84,
+        latency_ms=120,
+        failure_reason=None,
+    )
+    with patch("app.services.decomposition.get_reasoning_gateway", return_value=MockGateway(gateway_result)):
+        response = await client.post(f"/api/theses/{thesis_id}/decompose", headers=auth_headers)
+
+    assert response.status_code == 201
+    signal = response.json()["decomposition"]["claims"][0]["entities"][0]["signals"][0]
+    assert signal["active"] is False
+    assert signal["user_confirmed"] is None
+    assert signal["confirmation_required"] is True
+    assert signal["signal_config_json"]["proxy_review_required"] is True
+
+    thesis_response = await client.get(f"/api/theses/{thesis_id}", headers=auth_headers)
+    assert thesis_response.json()["interpretation"] is None
+
+
 async def test_confirm_decomposition_activates_proxy_signal_and_updates_status(client, auth_headers, holding):
     create = await client.post(
         "/api/theses",
@@ -835,6 +909,85 @@ async def test_confirm_decomposition_activates_proxy_signal_and_updates_status(c
     confirmed_signal = envelope["decomposition"]["claims"][0]["entities"][0]["signals"][0]
     assert confirmed_signal["user_confirmed"] is True
     assert confirmed_signal["active"] is True
+
+
+async def test_decompose_auto_activates_strong_held_company_transcript_signal(client, auth_headers, holding):
+    create = await client.post(
+        "/api/theses",
+        json={
+            "holding_id": holding["id"],
+            "status": "active",
+            "thesis_kind": "company",
+            "why_own_it": "Blackwell deployment keeps strengthening demand.",
+            "what_would_change_my_mind": "Deployment bottlenecks emerge.",
+            "confidence": "high",
+            "review_cadence_days": 7,
+            "source": "user",
+        },
+        headers=auth_headers,
+    )
+    thesis_id = create.json()["id"]
+    gateway_result = ReasoningResult(
+        success=True,
+        status="success",
+        provider="anthropic",
+        model="claude-test",
+        prompt_version="v1",
+        normalized_output={
+            "reason_type": "business_performance",
+            "monitorability": "high",
+            "decomposition_confidence": 0.88,
+            "claims": [
+                {
+                    "claim_text": "Blackwell deployment continues on plan.",
+                    "claim_type": "growth",
+                    "confidence": 0.9,
+                    "entities": [
+                        {
+                            "entity_name": holding["name"],
+                            "entity_ticker": holding["ticker"],
+                            "entity_type": "held_company",
+                            "relation_type": "validated_by",
+                            "rationale": "Management commentary confirms rollout health.",
+                            "confidence": 0.95,
+                            "confirmation_required": False,
+                            "signals": [
+                                {
+                                    "signal_type": "transcript_topic",
+                                    "signal_label": "NVDA Blackwell deployment",
+                                    "signal_config_json": {"topic": "Blackwell deployment"},
+                                    "rationale": "Transcript discussion should confirm rollout progress.",
+                                    "confidence": 0.93,
+                                    "confirmation_required": False,
+                                }
+                            ],
+                        }
+                    ],
+                }
+            ],
+        },
+        raw_output={"provider": "anthropic"},
+        confidence=0.88,
+        latency_ms=120,
+        failure_reason=None,
+    )
+
+    with patch("app.services.decomposition.get_reasoning_gateway", return_value=MockGateway(gateway_result)):
+        response = await client.post(f"/api/theses/{thesis_id}/decompose", headers=auth_headers)
+
+    assert response.status_code == 201
+    signal = response.json()["decomposition"]["claims"][0]["entities"][0]["signals"][0]
+    assert signal["active"] is True
+    assert signal["user_confirmed"] is True
+    assert signal["signal_config_json"]["direction"] == "supports"
+    assert signal["signal_config_json"]["watch_for"] == "Blackwell deployment"
+
+    thesis_response = await client.get(f"/api/theses/{thesis_id}", headers=auth_headers)
+    interpretation = thesis_response.json()["interpretation"]
+    assert interpretation is not None
+    assert interpretation["watch_hints"][0]["kind"] == "news_watch"
+    assert interpretation["watch_hints"][0]["watch_for"] == "Blackwell deployment"
+    assert interpretation["watch_hints"][0]["direction"] == "supports"
 
 
 async def test_confirm_decomposition_can_reject_active_signal_and_clear_interpretation(client, auth_headers, holding):

@@ -219,6 +219,81 @@ async def test_gateway_escalates_when_first_provider_returns_odd_signal_mapping(
     assert result.provider == "anthropic"
 
 
+async def test_gateway_salvages_valid_signals_when_one_mapping_is_invalid():
+    gateway = ThesisReasoningGateway(
+        providers=[
+            StubProvider(
+                "openai",
+                ReasoningResult(
+                    success=True,
+                    status="success",
+                    provider="openai",
+                    model="test-model",
+                    prompt_version="v1",
+                    normalized_output=None,
+                    raw_output={
+                        "reason_type": "business_performance",
+                        "monitorability": "high",
+                        "decomposition_confidence": 0.9,
+                        "claims": [
+                            {
+                                "claim_text": "Data center demand remains strong.",
+                                "claim_type": "growth",
+                                "confidence": 0.9,
+                                "entities": [
+                                    {
+                                        "entity_name": "NVIDIA",
+                                        "entity_ticker": "NVDA",
+                                        "entity_type": "held_company",
+                                        "signals": [
+                                            {
+                                                "signal_type": "revenue_growth",
+                                                "signal_label": "Data center revenue growth",
+                                                "confidence": 0.9,
+                                                "confirmation_required": False,
+                                            }
+                                        ],
+                                    }
+                                ],
+                            },
+                            {
+                                "claim_text": "Hyperscaler capex remains strong.",
+                                "claim_type": "demand",
+                                "confidence": 0.85,
+                                "entities": [
+                                    {
+                                        "entity_name": "Hyperscalers",
+                                        "entity_ticker": None,
+                                        "entity_type": "customer",
+                                        "signals": [
+                                            {
+                                                "signal_type": "macro_series_change",
+                                                "signal_label": "Hyperscaler capex",
+                                                "confidence": 0.85,
+                                                "confirmation_required": False,
+                                            }
+                                        ],
+                                    }
+                                ],
+                            },
+                        ],
+                    },
+                    confidence=None,
+                    latency_ms=50,
+                    failure_reason=None,
+                ),
+            )
+        ]
+    )
+
+    result = await gateway.run(_request("AI demand and capex should keep driving NVDA data center growth."))
+    assert result.success is True
+    assert result.provider == "openai"
+    assert result.normalized_output is not None
+    assert len(result.normalized_output["claims"]) == 1
+    assert result.normalized_output["claims"][0]["entities"][0]["signals"][0]["signal_type"] == "revenue_growth"
+
+
 async def test_gateway_allows_earnings_growth_for_demand_claims():
     gateway = ThesisReasoningGateway(
         providers=[

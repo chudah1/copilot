@@ -1,3 +1,4 @@
+from copy import deepcopy
 from typing import Any
 
 from app.services.reasoning.normalizers import is_descriptive_only, is_vague_thesis
@@ -81,6 +82,44 @@ def _invalid_mapping_reason(normalized_output: dict[str, Any]) -> str | None:
                 if allowed_for_claim is not None and signal_type not in allowed_for_claim:
                     return f"Signal {signal_type} is not a sensible match for claim type {claim_type}"
     return None
+
+
+def prune_invalid_mappings(normalized_output: dict[str, Any]) -> tuple[dict[str, Any], list[str]]:
+    pruned = deepcopy(normalized_output)
+    removed: list[str] = []
+    claims_out: list[dict[str, Any]] = []
+
+    for claim in pruned.get("claims", []):
+        claim_type = claim.get("claim_type")
+        allowed_for_claim = CLAIM_SIGNAL_ALLOWLIST.get(str(claim_type)) if claim_type else None
+        entities_out: list[dict[str, Any]] = []
+        for entity in claim.get("entities", []):
+            entity_type = entity.get("entity_type")
+            allowed_for_entity = ENTITY_SIGNAL_ALLOWLIST.get(str(entity_type)) if entity_type else None
+            kept_signals: list[dict[str, Any]] = []
+            for signal in entity.get("signals", []):
+                signal_type = signal.get("signal_type")
+                invalid_reason = None
+                if allowed_for_entity is not None and signal_type not in allowed_for_entity:
+                    invalid_reason = f"Signal {signal_type} is not a sensible match for entity type {entity_type}"
+                elif allowed_for_claim is not None and signal_type not in allowed_for_claim:
+                    invalid_reason = f"Signal {signal_type} is not a sensible match for claim type {claim_type}"
+
+                if invalid_reason:
+                    removed.append(invalid_reason)
+                    continue
+                kept_signals.append(signal)
+
+            if kept_signals:
+                entity["signals"] = kept_signals
+                entities_out.append(entity)
+
+        if entities_out:
+            claim["entities"] = entities_out
+            claims_out.append(claim)
+
+    pruned["claims"] = claims_out
+    return pruned, removed
 
 
 def validate_decomposition_output(

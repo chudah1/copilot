@@ -314,3 +314,75 @@ async def test_run_check_now_uses_provisional_news_watches_without_decomposition
     assert len(captured["watches"]) == 1
     assert captured["watches"][0].signal_id is None
     assert "compounded GLP-1" in captured["watches"][0].watch_for
+
+
+async def test_run_check_now_skips_unlinked_analyst_revision_and_supportive_earnings_surprise(db, test_user):
+    holding = Holding(
+        user_id=test_user.id,
+        ticker="NVDA",
+        name="NVIDIA",
+        quantity=10,
+        average_cost_basis=100,
+        current_price=100,
+        current_value=1000,
+    )
+    db.add(holding)
+    await db.flush()
+
+    thesis = Thesis(
+        user_id=test_user.id,
+        holding_id=holding.id,
+        status="active",
+        thesis_kind="company",
+        why_own_it="Data center demand stays strong.",
+        must_remain_true="Revenue growth stays high.",
+        what_would_change_my_mind="Demand rolls over.",
+        confidence="high",
+        review_cadence_days=7,
+        interpretation={"watch_hints": []},
+        source="user",
+    )
+    db.add(thesis)
+    await db.commit()
+
+    company_data = _make_company_data(ticker="NVDA", current_price=120.0)
+    candidates = [
+        {
+            "event_type": "earnings_surprise",
+            "description": "Recent earnings surprise was 5.6%.",
+            "evidence": {"recent_earnings_surprise_pct": 5.6},
+        },
+        {
+            "event_type": "analyst_revision",
+            "description": "10 net analyst upgrades in the past 30 days.",
+            "evidence": {"analyst_revision_id": "NVDA", "net_changes_30d": 10},
+        },
+    ]
+
+    with patch(
+        "app.services.check_now.fetch_company_data",
+        new_callable=AsyncMock,
+        return_value=company_data,
+    ), patch(
+        "app.services.check_now.generate_monitoring_candidates",
+        return_value=candidates,
+    ), patch(
+        "app.services.check_now.load_active_decomposition",
+        new_callable=AsyncMock,
+        return_value=None,
+    ), patch(
+        "app.services.check_now.collect_news_evidence",
+        new_callable=AsyncMock,
+        return_value=[],
+    ), patch(
+        "app.services.check_now.filter_candidates",
+        new_callable=AsyncMock,
+        side_effect=lambda candidates, *args, **kwargs: candidates,
+    ):
+        result = await run_check_now(holding, thesis, db)
+
+    assert result.status == "completed"
+    assert result.events_created == 0
+
+    events = (await db.execute(MonitoringEvent.__table__.select())).all()
+    assert events == []

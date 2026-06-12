@@ -32,6 +32,7 @@ NEWS_LIKE_EVENT_TYPES = {
     "gemini_news",
     "news_keyword_match",
     "edgar_8k",
+    "earnings_call_transcript",
 }
 
 # Cosine similarity floor for the embedding pre-filter (unit vectors → dot = cos).
@@ -72,6 +73,15 @@ class NewsWatchVerdict:
 def candidate_text(candidate: dict[str, Any]) -> str:
     """The prose to match a candidate against — headline + summary if present."""
     evidence = candidate.get("evidence") or {}
+    if candidate.get("event_type") == "earnings_call_transcript":
+        highlights = evidence.get("highlights")
+        if isinstance(highlights, list) and highlights:
+            joined = " ".join(str(part).strip() for part in highlights if str(part).strip())
+            if joined:
+                return joined
+        excerpt = (evidence.get("excerpt") or "").strip()
+        if excerpt:
+            return excerpt
     headline = (evidence.get("headline") or "").strip()
     summary = (evidence.get("summary") or evidence.get("description") or "").strip()
     if headline or summary:

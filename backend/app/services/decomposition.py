@@ -40,6 +40,8 @@ APPROVED_DIRECT_SIGNAL_TYPES = {
     "guidance_change",
     "earnings_surprise",
     "dividend_change",
+    "news_topic",
+    "transcript_topic",
 }
 
 # Monitorability floor: the baseline that guarantees *every* thesis — however
@@ -53,6 +55,14 @@ APPROVED_DIRECT_SIGNAL_TYPES = {
 FLOOR_PRICE_MOVE_THRESHOLD = DEFAULT_PRICE_THRESHOLD_PCT
 FLOOR_SIGNAL_SOURCE = "floor"
 SUPPORTED_NUMERIC_SIGNAL_METRICS = {"revenue_growth_yoy", "earnings_growth_yoy"}
+
+_PROXY_REVIEW_KEYWORDS = re.compile(r"\b(margin|cost|expense|overhead|dilution|burn|profitability)\b", re.I)
+_TEXT_THRESHOLD_HINTS: list[tuple[re.Pattern[str], float]] = [
+    (re.compile(r"\bdouble[ -]?digits?\b", re.I), 10.0),
+    (re.compile(r"\blow single[ -]?digits?\b", re.I), 5.0),
+    (re.compile(r"\bmid single[ -]?digits?\b", re.I), 6.0),
+    (re.compile(r"\bhigh single[ -]?digits?\b", re.I), 8.0),
+]
 
 _gateway: ThesisReasoningGateway | None = None
 
@@ -155,6 +165,7 @@ def _signal_is_direct_and_auto_activatable(
     holding: Holding,
     entity_data: dict,
     signal_data: dict,
+    normalized_signal_config: dict[str, Any] | None = None,
 ) -> bool:
     entity_ticker = entity_data.get("entity_ticker")
     return (
@@ -163,6 +174,7 @@ def _signal_is_direct_and_auto_activatable(
         and signal_data.get("signal_type") in APPROVED_DIRECT_SIGNAL_TYPES
         and (signal_data.get("confidence") or 0.0) >= 0.8
         and not signal_data.get("confirmation_required", True)
+        and not bool((normalized_signal_config or {}).get("proxy_review_required"))
     )
 
 
@@ -222,6 +234,35 @@ def _watch_hint_from_signal(signal: ThesisSignal, *, override_claim_id: str | No
             "signal_id": signal_id,
             "claim_id": claim_id,
         }
+    if signal.signal_type in {"news_topic", "transcript_topic", "news_watch"}:
+        watch_for = ""
+        direction = "threatens"
+        label = signal.signal_label or None
+        if signal.signal_type == "news_watch":
+            watch_for = str(config.get("watch_for") or "").strip()
+            raw_direction = str(config.get("direction") or "threatens").strip().lower()
+            direction = raw_direction if raw_direction in {"threatens", "supports"} else "threatens"
+        else:
+            watch_for = str(
+                config.get("watch_for")
+                or config.get("topic")
+                or signal.signal_label
+                or signal.rationale
+                or ""
+            ).strip()
+            raw_direction = str(config.get("direction") or "supports").strip().lower()
+            direction = raw_direction if raw_direction in {"threatens", "supports"} else "supports"
+        if not watch_for:
+            return None
+        return {
+            "kind": "news_watch",
+            "watch_for": watch_for,
+            "direction": direction,
+            "label": label,
+            "rationale": signal.rationale or watch_for,
+            "signal_id": signal_id,
+            "claim_id": claim_id,
+        }
     return None
 
 
@@ -234,6 +275,9 @@ def _extract_threshold_pct_from_text(*parts: str | None) -> float | None:
             value = to_float(match.group(1))
             if value is not None:
                 return value
+        for pattern, threshold in _TEXT_THRESHOLD_HINTS:
+            if pattern.search(part):
+                return threshold
     return None
 
 
@@ -251,6 +295,13 @@ def _normalize_signal_config_json(
         config["threshold_pct"] = to_float(config.get("threshold_pct")) or FLOOR_PRICE_MOVE_THRESHOLD
         return config
 
+    if signal_type in {"news_topic", "transcript_topic"}:
+        topic = str(config.get("topic") or signal_label or claim_text or "").strip()
+        if topic:
+            config["topic"] = topic
+            config.setdefault("watch_for", topic)
+        return config
+
     if signal_type not in {"revenue_growth", "earnings_growth"}:
         return config
 
@@ -260,6 +311,18 @@ def _normalize_signal_config_json(
         config["metric"] = default_metric
         if signal_label or claim_text:
             config["proxy_for"] = signal_label or claim_text
+        if metric_name:
+            config["proxy_source_metric"] = metric_name
+
+    context_blob = " ".join(part for part in (signal_label, claim_text, rationale, config.get("proxy_for")) if part)
+    if (
+        signal_type == "earnings_growth"
+        and (
+            config.get("proxy_source_metric") in {"gross_margin", "operating_margin"}
+            or _PROXY_REVIEW_KEYWORDS.search(context_blob)
+        )
+    ):
+        config["proxy_review_required"] = True
 
     if config.get("operator") not in {">=", "<=", ">", "<", "=="}:
         config["operator"] = ">="
@@ -743,13 +806,37 @@ async def _persist_successful_decomposition(
             await db.flush()
 
             for signal_data in entity_data.get("signals", []):
-                auto_activate = _signal_is_direct_and_auto_activatable(holding, entity_data, signal_data)
                 normalized_signal_config = _normalize_signal_config_json(
                     signal_type=signal_data["signal_type"],
                     signal_label=signal_data.get("signal_label"),
                     claim_text=claim.claim_text,
                     rationale=signal_data.get("rationale"),
                     raw_config=signal_data.get("signal_config_json") or {},
+                )
+                if signal_data["signal_type"] in {"news_topic", "transcript_topic"}:
+                    relation_type = str(entity_data.get("relation_type") or "").strip()
+                    inferred_direction = (
+                        "threatens" if relation_type == "threatened_by" else "supports"
+                    )
+                    normalized_signal_config.setdefault("direction", inferred_direction)
+                    normalized_signal_config.setdefault(
+                        "watch_for",
+                        str(
+                            normalized_signal_config.get("topic")
+                            or signal_data.get("signal_label")
+                            or signal_data.get("rationale")
+                            or claim.claim_text
+                            or ""
+                        ).strip(),
+                    )
+                auto_activate = _signal_is_direct_and_auto_activatable(
+                    holding,
+                    entity_data,
+                    signal_data,
+                    normalized_signal_config,
+                )
+                signal_confirmation_required = signal_data.get("confirmation_required", True) or bool(
+                    normalized_signal_config.get("proxy_review_required")
                 )
                 signal = ThesisSignal(
                     entity_id=entity.id,
@@ -758,7 +845,7 @@ async def _persist_successful_decomposition(
                     signal_config_json=normalized_signal_config,
                     rationale=signal_data.get("rationale"),
                     confidence=signal_data.get("confidence"),
-                    confirmation_required=signal_data.get("confirmation_required", True),
+                    confirmation_required=signal_confirmation_required,
                     user_confirmed=True if auto_activate else None,
                     active=auto_activate,
                     raw_extraction_json=signal_data.get("raw_extraction_json"),

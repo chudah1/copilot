@@ -1,5 +1,6 @@
 """Tests for qualitative news_watch matching (embed pre-filter + judge)."""
 import re
+from types import SimpleNamespace
 
 import pytest
 
@@ -13,7 +14,7 @@ from app.services.news_watch import (
     match_news_watches,
     similarity_threshold_for_candidate,
 )
-from app.services.monitoring_pipeline import extract_provisional_news_watches
+from app.services.monitoring_pipeline import extract_news_watches, extract_provisional_news_watches
 
 
 def _kw_similarity(a: str, b: str) -> float:
@@ -46,6 +47,17 @@ def test_candidate_text_uses_headline_and_summary():
     assert "Big news" in txt and "details here" in txt
 
 
+def test_candidate_text_uses_transcript_highlights_first():
+    txt = candidate_text(
+        {
+            "event_type": "earnings_call_transcript",
+            "evidence": {"highlights": ["Blackwell demand remains strong.", "Supply is improving."]},
+        }
+    )
+    assert "Blackwell demand remains strong." in txt
+    assert "Supply is improving." in txt
+
+
 @pytest.mark.asyncio
 async def test_match_links_candidate_on_confirmed_match():
     cand = _news("AMD announces major design win with hyperscaler")
@@ -55,6 +67,27 @@ async def test_match_links_candidate_on_confirmed_match():
     assert cand["evidence"]["claim_id"] == "cl1"
     # threatens judge=thesis_breaking is capped to warning (no auto status flip)
     assert matched[id(cand)][1] == "warning"
+
+
+def test_extract_news_watches_lifts_active_topic_signals():
+    signal = SimpleNamespace(
+        id="sig1",
+        active=True,
+        signal_type="transcript_topic",
+        signal_label="NVDA Blackwell deployment",
+        rationale="Blackwell rollout commentary matters.",
+        signal_config_json={"topic": "Blackwell deployment"},
+    )
+    entity = SimpleNamespace(relation_type="validated_by", signals=[signal])
+    claim = SimpleNamespace(id="cl1", entities=[entity])
+
+    watches = extract_news_watches([claim])
+
+    assert len(watches) == 1
+    assert watches[0].watch_for == "Blackwell deployment"
+    assert watches[0].direction == "supports"
+    assert watches[0].signal_id == "sig1"
+    assert watches[0].claim_id == "cl1"
 
 
 @pytest.mark.asyncio
@@ -103,6 +136,27 @@ async def test_match_uses_lower_threshold_for_edgar_8k():
     )
 
     assert id(cand) in matched
+
+
+@pytest.mark.asyncio
+async def test_match_uses_transcript_candidates_for_topic_watches():
+    cand = {
+        "event_type": "earnings_call_transcript",
+        "description": "Earnings call",
+        "evidence": {"highlights": ["Blackwell deployment is ahead of plan."]},
+    }
+    watch = NewsWatch(
+        signal_id="sig1",
+        claim_id="cl1",
+        watch_for="Blackwell deployment",
+        direction="supports",
+    )
+
+    matched = await match_news_watches([cand], [watch], similarity=lambda a, b: 1.0, judge=_judge_yes)
+
+    assert id(cand) in matched
+    assert cand["evidence"]["signal_id"] == "sig1"
+    assert cand["evidence"]["news_watch_direction"] == "supports"
 
 
 @pytest.mark.asyncio

@@ -75,6 +75,22 @@ def test_watch_hint_from_signal_keeps_metric_specificity_and_converts_threshold_
     assert hint["threshold"] == 0.166
 
 
+def test_watch_hint_from_topic_signal_uses_topic_and_direction():
+    signal = _make_signal(
+        "transcript_topic",
+        {"topic": "Blackwell deployment", "direction": "supports"},
+        rationale="Deployment commentary matters.",
+    )
+    signal.signal_label = "NVDA Blackwell deployment"
+
+    hint = _watch_hint_from_signal(signal)
+
+    assert hint is not None
+    assert hint["kind"] == "news_watch"
+    assert hint["watch_for"] == "Blackwell deployment"
+    assert hint["direction"] == "supports"
+
+
 def test_normalize_signal_config_backfills_proxy_growth_signal():
     from app.services.decomposition import _normalize_signal_config_json
 
@@ -90,6 +106,51 @@ def test_normalize_signal_config_backfills_proxy_growth_signal():
     assert config["operator"] == ">="
     assert config["threshold_pct"] == 0.0
     assert config["proxy_for"] == "SHOP merchant additions growth"
+
+
+def test_normalize_signal_config_marks_margin_proxy_for_review():
+    from app.services.decomposition import _normalize_signal_config_json
+
+    config = _normalize_signal_config_json(
+        signal_type="earnings_growth",
+        signal_label="HIMS gross margin trend",
+        claim_text="Gross margins stay healthy.",
+        rationale="Margin compression would weaken the case.",
+        raw_config={"metric": "gross_margin"},
+    )
+
+    assert config["metric"] == "earnings_growth_yoy"
+    assert config["proxy_for"] == "HIMS gross margin trend"
+    assert config["proxy_source_metric"] == "gross_margin"
+    assert config["proxy_review_required"] is True
+
+
+def test_normalize_signal_config_infers_double_digit_threshold_from_text():
+    from app.services.decomposition import _normalize_signal_config_json
+
+    config = _normalize_signal_config_json(
+        signal_type="revenue_growth",
+        signal_label="AAPL Services revenue growth",
+        claim_text="Apple Services revenue grows at double-digit rates",
+        rationale="Services should keep compounding.",
+        raw_config={},
+    )
+
+    assert config["threshold_pct"] == 10.0
+
+
+def test_normalize_signal_config_infers_low_single_digit_threshold_from_text():
+    from app.services.decomposition import _normalize_signal_config_json
+
+    config = _normalize_signal_config_json(
+        signal_type="revenue_growth",
+        signal_label="AAPL Services revenue growth decline",
+        claim_text="Apple Services growth does not fall to low single digits",
+        rationale="Low-single-digit Services growth would weaken the case.",
+        raw_config={},
+    )
+
+    assert config["threshold_pct"] == 5.0
 
 
 def test_watch_hint_from_signal_includes_ids_earnings_growth():

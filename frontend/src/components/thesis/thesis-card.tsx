@@ -1,5 +1,6 @@
 "use client";
 
+import { useState } from "react";
 import { formatDate } from "@/lib/utils";
 import { classifyThesisQuality } from "@/lib/thesis-quality";
 import { describeWatchHint } from "@/lib/watch-hints";
@@ -52,7 +53,12 @@ const QUALITY_TONE: Record<string, string> = {
 // ── Helpers ───────────────────────────────────────────────────────────────────
 
 function formatSignalThresholdValue(unit: string | undefined, threshold: number): string {
-  if (unit === "pct") {
+  if (
+    unit === "pct" ||
+    unit === "revenue_growth_yoy" ||
+    unit === "earnings_growth_yoy" ||
+    unit === "gross_margin"
+  ) {
     const pct = Math.abs(threshold) <= 1 ? threshold * 100 : threshold;
     return `${pct % 1 === 0 ? pct.toFixed(0) : pct.toFixed(1)}%`;
   }
@@ -61,23 +67,36 @@ function formatSignalThresholdValue(unit: string | undefined, threshold: number)
 
 function describeSignalCheckLogic(signalType: string, config: Record<string, unknown> | null): string | null {
   const c = config ?? {};
+  const proxyFor = typeof c.proxy_for === "string" && c.proxy_for.trim().length > 0 ? c.proxy_for.trim() : null;
   if (signalType === "price_move") {
     const t = typeof c.threshold_pct === "number" ? c.threshold_pct : null;
     return t != null ? `Flags if the stock moves ${t}% or more.` : "Flags on a sharp price move.";
   }
   if (signalType === "revenue_growth" || signalType === "earnings_growth") {
     const threshold = typeof c.threshold === "number" ? c.threshold : null;
+    const thresholdPct = typeof c.threshold_pct === "number" ? c.threshold_pct / 100 : null;
+    const effectiveThreshold = threshold ?? thresholdPct;
     const operator = typeof c.operator === "string" ? c.operator : ">=";
     const label = signalType === "revenue_growth" ? "revenue growth" : "earnings growth";
-    if (threshold == null || (threshold === 0 && operator === ">=")) {
-      return `Flags when ${label} turns negative YoY.`;
+    if (effectiveThreshold == null || (effectiveThreshold === 0 && operator === ">=")) {
+      return proxyFor
+        ? `Tracks ${label} as a proxy for ${proxyFor}.`
+        : `Flags when ${label} turns negative YoY.`;
     }
     const fmt = formatSignalThresholdValue(
       signalType === "revenue_growth" ? "revenue_growth_yoy" : "earnings_growth_yoy",
-      threshold,
+      effectiveThreshold,
     );
-    if (operator === ">=" || operator === ">") return `Flags when ${label} falls below ${fmt} YoY.`;
-    if (operator === "<=" || operator === "<") return `Flags when ${label} rises above ${fmt} YoY.`;
+    if (operator === ">=" || operator === ">") {
+      return proxyFor
+        ? `Flags when ${label} falls below ${fmt} YoY, using it as a proxy for ${proxyFor}.`
+        : `Flags when ${label} falls below ${fmt} YoY.`;
+    }
+    if (operator === "<=" || operator === "<") {
+      return proxyFor
+        ? `Flags when ${label} rises above ${fmt} YoY, using it as a proxy for ${proxyFor}.`
+        : `Flags when ${label} rises above ${fmt} YoY.`;
+    }
   }
   if (signalType === "guidance_change") return "Watches guidance for meaningful deterioration.";
   if (signalType === "earnings_surprise") return "Watches for a big miss versus expectations.";
@@ -119,6 +138,7 @@ function getInterpretation(thesis: Thesis) {
 // ── Component ─────────────────────────────────────────────────────────────────
 
 export function ThesisCard({ thesis, decomposition, investorProfile, monitoringGaps = [], onEdit, onInvalidate }: Props) {
+  const [renderedAt] = useState(() => Date.now());
   const aiAssistCopy = aiAssistWeakMessaging(investorProfile);
   const { labels, watchHints, ambiguityNote } = getInterpretation(thesis);
   const watchDescriptions = watchHints
@@ -223,7 +243,7 @@ export function ThesisCard({ thesis, decomposition, investorProfile, monitoringG
         };
 
   const recentGaps = monitoringGaps.filter((g) => {
-    const age = Date.now() - new Date(g.failed_at).getTime();
+    const age = renderedAt - new Date(g.failed_at).getTime();
     return age < 24 * 60 * 60 * 1000;
   });
   const uniqueSources = [...new Set(recentGaps.map((g) => g.source))];
