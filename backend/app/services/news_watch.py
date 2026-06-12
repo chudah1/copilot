@@ -18,6 +18,7 @@ from __future__ import annotations
 import json
 import logging
 import math
+import re
 from dataclasses import dataclass
 from typing import Any, Awaitable, Callable
 
@@ -29,6 +30,7 @@ logger = logging.getLogger(__name__)
 # Candidate event types that carry news/filing prose worth matching.
 NEWS_LIKE_EVENT_TYPES = {
     "news_or_earnings_candidate",
+    "product_ramp_update",
     "gemini_news",
     "news_keyword_match",
     "edgar_8k",
@@ -45,6 +47,7 @@ DEFAULT_SIMILARITY_THRESHOLD = 0.45
 EVENT_TYPE_SIMILARITY_THRESHOLDS = {
     "edgar_8k": 0.38,
     "news_or_earnings_candidate": 0.45,
+    "product_ramp_update": 0.40,
     "gemini_news": 0.50,
     "news_keyword_match": 0.58,
     "earnings_call_transcript": 0.18,
@@ -53,6 +56,16 @@ EVENT_TYPE_SIMILARITY_THRESHOLDS = {
 # out into an unbounded number of paid calls.
 MAX_JUDGE_CALLS = 25
 _EMBED_MODEL = "text-embedding-3-small"
+_QUERY_REPLACEMENTS: tuple[tuple[re.Pattern[str], tuple[str, ...]], ...] = (
+    (re.compile(r"\bdeployment\b", re.I), ("rollout", "ramp", "shipments")),
+    (re.compile(r"\brollout\b", re.I), ("deployment", "ramp", "availability")),
+    (re.compile(r"\bramp\b", re.I), ("deployment", "rollout", "production")),
+    (re.compile(r"\bshipments?\b", re.I), ("deployment", "ramp", "availability")),
+    (re.compile(r"\blaunch\b", re.I), ("release", "rollout", "availability")),
+    (re.compile(r"\bdemand\b", re.I), ("orders", "adoption", "bookings")),
+    (re.compile(r"\bcapex\b", re.I), ("capital spending", "infrastructure spending")),
+    (re.compile(r"\bmargin\b", re.I), ("profitability", "pricing")),
+)
 
 
 @dataclass
@@ -69,6 +82,24 @@ class NewsWatchVerdict:
     matches: bool
     severity: str  # info | warning | thesis_breaking
     reason: str
+
+
+def expand_watch_queries(watch_for: str) -> list[str]:
+    """Expand a qualitative watch into a small, conservative query bundle."""
+    base = (watch_for or "").strip()
+    if not base:
+        return []
+    variants = [base]
+    lowered = base.lower()
+    for pattern, replacements in _QUERY_REPLACEMENTS:
+        if not pattern.search(lowered):
+            continue
+        for replacement in replacements:
+            candidate = pattern.sub(replacement, base)
+            candidate = re.sub(r"\s+", " ", candidate).strip()
+            if candidate and candidate not in variants:
+                variants.append(candidate)
+    return variants[:4]
 
 
 def candidate_text(candidate: dict[str, Any]) -> str:
@@ -243,7 +274,8 @@ async def match_news_watches(
 
         best: tuple[float, NewsWatch] | None = None
         for watch in watches:
-            sim = similarity(text, watch.watch_for)
+            watch_queries = expand_watch_queries(watch.watch_for) or [watch.watch_for]
+            sim = max(similarity(text, query) for query in watch_queries)
             if sim >= candidate_threshold and (best is None or sim > best[0]):
                 best = (sim, watch)
         if best is None:

@@ -374,6 +374,25 @@ def test_match_candidates_news_or_earnings_candidate():
     assert result[0]["evidence"]["claim_id"] == str(claims[0].id)
 
 
+def test_match_candidates_product_ramp_update():
+    claim, signal = _make_active_signal(
+        "Blackwell deployment remains on plan.",
+        signal_type="news_topic",
+        signal_label="NVDA Blackwell product cycle deployment",
+        rationale="Rollout updates matter.",
+    )
+    candidates = [
+        {
+            "event_type": "product_ramp_update",
+            "description": "NVIDIA says Blackwell rollout is ahead of plan and supply is improving.",
+            "evidence": {"headline": "Blackwell rollout is ahead of plan"},
+        }
+    ]
+
+    result = match_candidates_to_signals(candidates, [claim])
+    assert result[0]["evidence"]["signal_id"] == str(signal.id)
+
+
 def test_match_candidates_edgar_8k_uses_text_overlap():
     claims = [
         _make_claim("integration", "Eucalyptus acquisition expands international reach", position=0),

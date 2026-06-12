@@ -98,6 +98,7 @@ EVENT_SPECIFICITY_RANK: dict[str, int] = {
     "earnings_call_transcript": 4,
     "earnings_surprise": 3,
     "insider_transaction": 3,
+    "product_ramp_update": 3,
     "news_or_earnings_candidate": 2,
     "news_keyword_match": 2,
     "analyst_revision": 2,
@@ -109,6 +110,7 @@ EVIDENCE_TYPE_MAP: dict[str, str] = {
     "price_move": "price_move",
     "metric_threshold": "metric_breach",
     "news_or_earnings_candidate": "news",
+    "product_ramp_update": "news",
     "earnings_surprise": "earnings",
     "upcoming_earnings": "earnings",
     "earnings_call_transcript": "earnings",
@@ -367,7 +369,7 @@ def _apply_minimum_relevance(
     return filtered
 
 
-_NEWS_EVENT_TYPES = {"gemini_news", "news_or_earnings_candidate", "news_keyword_match"}
+_NEWS_EVENT_TYPES = {"gemini_news", "news_or_earnings_candidate", "product_ramp_update", "news_keyword_match"}
 
 
 def _headline_prefix(text: str, words: int = 6) -> str:

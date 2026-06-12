@@ -67,7 +67,7 @@ def match_candidates_to_signals(
             evidence["signal_id"] = str(signal.id)
         elif event_type in ("earnings_surprise", "upcoming_earnings", "earnings_call_transcript"):
             matched_claim = _find_claim_by_type_keywords(claims, EARNINGS_CLAIM_KEYWORDS)
-        elif event_type in {"news_or_earnings_candidate", "gemini_news", "news_keyword_match", "edgar_8k"}:
+        elif event_type in {"news_or_earnings_candidate", "product_ramp_update", "gemini_news", "news_keyword_match", "edgar_8k"}:
             headline = evidence.get("headline") or candidate.get("description", "")
             matched_claim = _find_claim_by_text_overlap(claims, headline)
         elif event_type == "insider_transaction":
@@ -168,7 +168,7 @@ def _signal_match_score(
         family_bonus = 4 if signal_type in MANAGEMENT_SIGNAL_TYPES else 2 if _has_management_words(signal_words) else 0
         return family_bonus + overlap * 10
 
-    if event_type in {"news_or_earnings_candidate", "gemini_news", "news_keyword_match", "edgar_8k"}:
+    if event_type in {"news_or_earnings_candidate", "product_ramp_update", "gemini_news", "news_keyword_match", "edgar_8k"}:
         family_bonus = 2 if signal_type in NEWS_SIGNAL_TYPES else 0
         return family_bonus + overlap * 10
 

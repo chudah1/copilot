@@ -31,6 +31,7 @@ from app.services.news_watch import (
     NewsWatch,
     build_embedding_similarity,
     candidate_text,
+    expand_watch_queries,
     judge_news_watch,
     match_news_watches,
 )
@@ -54,7 +55,7 @@ def _event_title(ticker: str, candidate: dict[str, Any], claim_obj: Any | None) 
         metric = evidence.get("metric", "").replace("_", " ")
         return f"{clean}: {metric} threshold breached" if metric else f"{clean} metric alert"
 
-    if event_type in ("news_or_earnings_candidate", "news_keyword_match"):
+    if event_type in ("news_or_earnings_candidate", "product_ramp_update", "news_keyword_match"):
         if claim_obj:
             return f"{clean}: news touches '{claim_obj.claim_text[:50]}'"
         return f"{clean}: relevant news"
@@ -353,7 +354,11 @@ async def match_thesis_news_watches(
     verdict map (id(candidate) -> (watch, severity, reason))."""
     if not news_watches:
         return {}
-    watch_texts = [w.watch_for for w in news_watches if w.watch_for]
+    watch_texts: list[str] = []
+    for watch in news_watches:
+        if not watch.watch_for:
+            continue
+        watch_texts.extend(expand_watch_queries(watch.watch_for) or [watch.watch_for])
     if watch_texts:
         for candidate in candidates:
             if candidate.get("event_type") != "earnings_call_transcript":

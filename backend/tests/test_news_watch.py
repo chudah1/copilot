@@ -10,6 +10,7 @@ from app.services.news_watch import (
     NewsWatchVerdict,
     _JUDGE_SYSTEM,
     candidate_text,
+    expand_watch_queries,
     judge_news_watch,
     match_news_watches,
     similarity_threshold_for_candidate,
@@ -45,6 +46,14 @@ _WATCH = NewsWatch(signal_id="sig1", claim_id="cl1", watch_for="AMD lands a majo
 def test_candidate_text_uses_headline_and_summary():
     txt = candidate_text({"evidence": {"headline": "Big news", "summary": "details here"}})
     assert "Big news" in txt and "details here" in txt
+
+
+def test_expand_watch_queries_adds_rollout_style_aliases():
+    variants = expand_watch_queries("NVDA Blackwell product cycle deployment")
+
+    assert "NVDA Blackwell product cycle deployment" in variants
+    assert any("rollout" in variant.lower() for variant in variants)
+    assert any("ramp" in variant.lower() for variant in variants)
 
 
 def test_candidate_text_uses_transcript_highlights_first():

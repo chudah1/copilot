@@ -226,6 +226,36 @@ def test_shortlist_qualitative_candidates_filters_noise():
     assert candidates[2]["event_type"] == "news_or_earnings_candidate"
 
 
+def test_shortlist_qualitative_candidates_marks_product_ramp_updates():
+    now = datetime(2026, 5, 11, 12, 0, tzinfo=timezone.utc)
+    items = _parse_alpha_vantage_news(
+        {
+            "feed": [
+                {
+                    "title": "NVIDIA says Blackwell rollout is ahead of plan",
+                    "summary": "Management said Blackwell deployment is accelerating and supply is improving.",
+                    "time_published": "20260511T0900",
+                    "source": "Reuters",
+                    "url": "https://example.com/nvda-blackwell",
+                    "overall_sentiment_score": "0.18",
+                    "topics": [{"topic": "earnings"}],
+                    "ticker_sentiment": [{"ticker": "NVDA", "relevance_score": "0.55"}],
+                }
+            ]
+        },
+        "NVDA",
+    )
+    candidates = shortlist_qualitative_candidates(
+        items,
+        recent_earnings_surprise_pct=None,
+        upcoming_earnings_date=None,
+        now=now,
+        ticker="NVDA",
+    )
+    assert len(candidates) == 1
+    assert candidates[0]["event_type"] == "product_ramp_update"
+
+
 def test_shortlist_qualitative_candidates_includes_transcript_and_insider_signals():
     now = datetime(2026, 5, 11, 12, 0, tzinfo=timezone.utc)
     transcript = _parse_alpha_vantage_transcript(

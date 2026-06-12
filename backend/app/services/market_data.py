@@ -892,10 +892,23 @@ def _build_news_candidate(
         if ticker and ticker.lower() not in combined_text:
             return None
 
+    ramp_keywords = (
+        "deployment",
+        "rollout",
+        "ramp",
+        "shipment",
+        "shipments",
+        "availability",
+        "launch",
+        "production",
+        "supply constraint",
+    )
+    event_type = "product_ramp_update" if any(keyword in combined_text for keyword in ramp_keywords) else "news_or_earnings_candidate"
+
     return (
         3,
         {
-            "event_type": "news_or_earnings_candidate",
+            "event_type": event_type,
             "description": f"{item.headline}: {item.summary}" if item.summary else item.headline,
             "evidence": {
                 "article_id": item.id,

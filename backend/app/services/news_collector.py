@@ -21,6 +21,7 @@ from typing import Any
 from pydantic import BaseModel, Field
 
 from app.config import settings
+from app.services.news_watch import expand_watch_queries
 
 logger = logging.getLogger(__name__)
 
@@ -58,7 +59,14 @@ async def collect_news_evidence(
         logger.warning("google-genai SDK not installed — skipping news collection")
         return []
 
-    signals_text = "\n".join(f"- {label}" for label in signal_labels[:MAX_SIGNALS])
+    signal_lines: list[str] = []
+    for label in signal_labels[:MAX_SIGNALS]:
+        variants = expand_watch_queries(label)
+        if len(variants) > 1:
+            signal_lines.append(f"- {label} (also watch for: {', '.join(variants[1:])})")
+        else:
+            signal_lines.append(f"- {label}")
+    signals_text = "\n".join(signal_lines)
 
     now = datetime.now(timezone.utc)
     since_str = (now - timedelta(days=days_back)).strftime("%B %-d, %Y")
