@@ -506,6 +506,67 @@ def _serialise_audit_results(
     return seen
 
 
+def _build_coverage_gap_items(
+    *,
+    candidates: list[dict],
+    nw_matched: dict[int, tuple[object, str, str]] | None,
+    signals_by_id: dict[str, object],
+) -> list[dict]:
+    """Return an informational audit row when source coverage looks thin.
+
+    This is intentionally conservative and only fires when a thesis has active
+    qualitative signals but the 90-day pass surfaced no candidate tied to them.
+    That lets the UI distinguish:
+    - "No signal fired" from
+    - "We do not yet have strong enough news/transcript coverage for this shape"
+    """
+    qualitative_types = {"news_topic", "transcript_topic", "news_watch"}
+    active_qualitative = [
+        sig
+        for sig in signals_by_id.values()
+        if getattr(sig, "active", False) and getattr(sig, "signal_type", None) in qualitative_types
+    ]
+    if not active_qualitative:
+        return []
+
+    linked_signal_ids: set[str] = set()
+    for candidate in candidates:
+        evidence = candidate.get("evidence") or {}
+        signal_id = evidence.get("signal_id")
+        if signal_id:
+            linked_signal_ids.add(str(signal_id))
+
+    for watch, _severity, _reason in (nw_matched or {}).values():
+        signal_id = getattr(watch, "signal_id", None)
+        if signal_id:
+            linked_signal_ids.add(str(signal_id))
+
+    uncovered = [sig for sig in active_qualitative if str(sig.id) not in linked_signal_ids]
+    if not uncovered:
+        return []
+
+    labels = [getattr(sig, "signal_label", None) or getattr(sig, "signal_type", "qualitative signal") for sig in uncovered]
+    preview = ", ".join(labels[:2])
+    if len(labels) > 2:
+        preview = f"{preview}, and {len(labels) - 2} more"
+
+    return [
+        {
+            "description": "Coverage is still thin for some active qualitative signals.",
+            "severity": "info",
+            "event_type": "coverage_gap",
+            "event_date": None,
+            "signal_label": None,
+            "claim_text": None,
+            "analysis": (
+                "No active signal fired in the last 90 days, but this audit also did not surface "
+                f"claim-linked news or transcript evidence for: {preview}."
+            ),
+            "evidence": {"uncovered_signal_labels": labels[:5]},
+        }
+    ]
+
+
 async def _run_historical_audit_with_session(
     db: AsyncSession,
     *,
@@ -616,6 +677,12 @@ async def _run_historical_audit_with_session(
             claims_by_id=claims_by_id,
             signals_by_id=signals_by_id,
         )
+        if not results:
+            results = _build_coverage_gap_items(
+                candidates=candidates,
+                nw_matched=nw_matched,
+                signals_by_id=signals_by_id,
+            )
 
         thesis.historical_audit_results = results
         thesis.historical_audit_status = "ready" if results else "empty"

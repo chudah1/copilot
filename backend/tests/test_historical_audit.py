@@ -223,3 +223,48 @@ def test_serialise_audit_results_drops_unlinked_info_noise():
     assert len(results) == 1
     assert results[0]["description"] == "merchant growth warning"
     assert results[0]["claim_text"] == "Merchant growth does not stall for several quarters."
+
+
+def test_build_coverage_gap_items_reports_uncovered_qualitative_signals():
+    from app.services.check_now import _build_coverage_gap_items
+
+    active_signal = MagicMock()
+    active_signal.id = "sig-1"
+    active_signal.active = True
+    active_signal.signal_type = "news_topic"
+    active_signal.signal_label = "NVDA Blackwell product cycle deployment"
+
+    gap_items = _build_coverage_gap_items(
+        candidates=[],
+        nw_matched={},
+        signals_by_id={"sig-1": active_signal},
+    )
+
+    assert len(gap_items) == 1
+    assert gap_items[0]["event_type"] == "coverage_gap"
+    assert "coverage is still thin" in gap_items[0]["description"].lower()
+    assert "Blackwell" in gap_items[0]["analysis"]
+
+
+def test_build_coverage_gap_items_stays_quiet_when_qualitative_signal_is_linked():
+    from app.services.check_now import _build_coverage_gap_items
+
+    active_signal = MagicMock()
+    active_signal.id = "sig-1"
+    active_signal.active = True
+    active_signal.signal_type = "news_topic"
+    active_signal.signal_label = "NVDA Blackwell product cycle deployment"
+
+    gap_items = _build_coverage_gap_items(
+        candidates=[
+            {
+                "event_type": "earnings_call_transcript",
+                "description": "Blackwell deployment is on track.",
+                "evidence": {"signal_id": "sig-1"},
+            }
+        ],
+        nw_matched={},
+        signals_by_id={"sig-1": active_signal},
+    )
+
+    assert gap_items == []

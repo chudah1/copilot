@@ -97,6 +97,8 @@ export function HistoricalAuditCard({ audit }: Props) {
   }
 
   const results = audit.results ?? [];
+  const coverageOnly =
+    results.length > 0 && results.every((item) => item.event_type === "coverage_gap");
 
   return (
     <div className="rounded-lg border border-border/60 bg-card p-4 mt-4">
@@ -104,7 +106,9 @@ export function HistoricalAuditCard({ audit }: Props) {
         90-day lookback
       </p>
       <p className="text-sm font-medium text-foreground mb-3">
-        If you&apos;d held this thesis for the last 90 days, these signals would have fired:
+        {coverageOnly
+          ? "No active signal fired, but coverage is still thin for part of this thesis."
+          : "If you&apos;d held this thesis for the last 90 days, these signals would have fired:"}
       </p>
       <div>
         {results.map((item) => (
