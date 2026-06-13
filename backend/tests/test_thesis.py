@@ -1098,7 +1098,7 @@ async def test_decompose_auto_activates_explicit_high_confidence_threat_watch(cl
                             "relation_type": "threatened_by",
                             "rationale": "Regulatory restriction would directly break the case.",
                             "confidence": 0.9,
-                            "confirmation_required": False,
+                            "confirmation_required": True,
                             "signals": [
                                 {
                                     "signal_type": "news_topic",
@@ -1106,7 +1106,7 @@ async def test_decompose_auto_activates_explicit_high_confidence_threat_watch(cl
                                     "signal_config_json": {"topic": "FDA restriction"},
                                     "rationale": "Restriction news would threaten the case.",
                                     "confidence": 0.86,
-                                    "confirmation_required": False,
+                                    "confirmation_required": True,
                                 }
                             ],
                         }

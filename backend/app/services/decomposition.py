@@ -197,7 +197,7 @@ def _signal_is_direct_and_auto_activatable(
         (held_company_match or explicit_threat_watch)
         and signal_type in APPROVED_DIRECT_SIGNAL_TYPES
         and confidence >= 0.8
-        and not signal_data.get("confirmation_required", True)
+        and (explicit_threat_watch or not signal_data.get("confirmation_required", True))
         and not bool(config.get("proxy_review_required"))
     )
 
