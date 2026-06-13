@@ -3,6 +3,7 @@ from datetime import datetime, timezone
 from unittest.mock import AsyncMock, MagicMock, patch
 
 import pytest
+from sqlalchemy.exc import OperationalError
 from app.models.thesis import Thesis
 
 
@@ -35,13 +36,10 @@ async def test_run_historical_audit_sets_status_empty_when_no_classified():
     mock_company_data.current_price = 155.0
     mock_company_data.news_items = []
 
-    call_count = [0]
-
     def execute_side_effect(query):
         result = MagicMock()
-        call_count[0] += 1
-        # First call → Thesis, second call → Holding
-        result.scalar_one_or_none.return_value = mock_thesis if call_count[0] == 1 else mock_holding
+        query_text = str(query)
+        result.scalar_one_or_none.return_value = mock_thesis if "FROM theses" in query_text else mock_holding
         return result
 
     mock_db = AsyncMock()
@@ -87,12 +85,10 @@ async def test_run_historical_audit_sets_failed_on_exception():
     mock_holding.name = "Apple Inc"
     mock_holding.current_price = 150.0
 
-    call_count = [0]
-
     def execute_side_effect(query):
         result = MagicMock()
-        call_count[0] += 1
-        result.scalar_one_or_none.return_value = mock_thesis if call_count[0] == 1 else mock_holding
+        query_text = str(query)
+        result.scalar_one_or_none.return_value = mock_thesis if "FROM theses" in query_text else mock_holding
         return result
 
     mock_db = AsyncMock()
@@ -162,6 +158,68 @@ async def test_run_historical_audit_skips_when_already_ready():
         from app.services.check_now import _run_historical_audit_with_session
         await _run_historical_audit_with_session(mock_db, thesis_id=thesis_id)
         mock_fetch.assert_not_called()
+
+
+@pytest.mark.asyncio
+async def test_persist_historical_audit_state_retries_sqlite_lock_once():
+    from app.services.check_now import _persist_historical_audit_state
+
+    thesis_id = uuid.uuid4()
+    mock_thesis = MagicMock()
+    mock_thesis.id = thesis_id
+
+    execute_result = MagicMock()
+    execute_result.scalar_one_or_none.return_value = mock_thesis
+
+    mock_db = AsyncMock()
+    mock_db.execute = AsyncMock(return_value=execute_result)
+    mock_db.commit = AsyncMock(
+        side_effect=[
+            OperationalError("UPDATE theses", {}, Exception("database is locked")),
+            None,
+        ]
+    )
+    mock_db.rollback = AsyncMock()
+
+    await _persist_historical_audit_state(
+        mock_db,
+        thesis_id=thesis_id,
+        status="ready",
+        results=[{"status": "warning"}],
+    )
+
+    assert mock_db.commit.await_count == 2
+    mock_db.rollback.assert_awaited_once()
+    assert mock_thesis.historical_audit_status == "ready"
+    assert mock_thesis.historical_audit_results == [{"status": "warning"}]
+
+
+@pytest.mark.asyncio
+async def test_persist_historical_audit_state_raises_non_lock_operational_error():
+    from app.services.check_now import _persist_historical_audit_state
+
+    thesis_id = uuid.uuid4()
+    mock_thesis = MagicMock()
+    mock_thesis.id = thesis_id
+
+    execute_result = MagicMock()
+    execute_result.scalar_one_or_none.return_value = mock_thesis
+
+    mock_db = AsyncMock()
+    mock_db.execute = AsyncMock(return_value=execute_result)
+    mock_db.commit = AsyncMock(
+        side_effect=OperationalError("UPDATE theses", {}, Exception("no such table"))
+    )
+    mock_db.rollback = AsyncMock()
+
+    with pytest.raises(OperationalError):
+        await _persist_historical_audit_state(
+            mock_db,
+            thesis_id=thesis_id,
+            status="failed",
+        )
+
+    mock_db.rollback.assert_awaited_once()
 
 
 def test_serialise_audit_results_orders_by_severity_then_recency():

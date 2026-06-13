@@ -405,6 +405,24 @@ _NEWS_EVENT_PATTERNS: tuple[tuple[str, tuple[str, ...]], ...] = (
         ),
     ),
 )
+_ROUNDUP_NOISE_PATTERNS: tuple[str, ...] = (
+    "stocks to buy",
+    "stocks to watch",
+    "stock is up today",
+    "stock is down today",
+    "why amd stock is up today",
+    "why amd stock is down today",
+    "why intel, amd",
+    "why nvidia, amd",
+    "couldn't stop buzzing",
+    "next nvidia",
+    "top stocks",
+    "best stocks",
+    "market recap",
+    "weekly roundup",
+    "roundup",
+    "wallstreetbets",
+)
 
 
 @dataclass
@@ -437,6 +455,11 @@ def _classify_news_event_type(combined_text: str) -> tuple[str, list[str]]:
         if found:
             return event_type, found[:4]
     return "news_or_earnings_candidate", []
+
+
+def _looks_like_roundup_noise(headline: str, summary: str) -> bool:
+    text = f"{headline} {summary}".lower()
+    return any(pattern in text for pattern in _ROUNDUP_NOISE_PATTERNS)
 
 
 MAX_CURRENT_TRANSCRIPT_AGE_DAYS = 120
@@ -967,6 +990,9 @@ def _build_news_candidate(
         # yfinance news has no relevance score; require the ticker to appear in the text
         if ticker and ticker.lower() not in combined_text:
             return None
+
+    if _looks_like_roundup_noise(item.headline, item.summary):
+        return None
 
     event_type, matched_topics = _classify_news_event_type(combined_text)
     topic_context = ", ".join(matched_topics)

@@ -27,6 +27,20 @@ logger = logging.getLogger(__name__)
 
 MAX_SIGNALS = 12
 _GEMINI_MODEL = "gemini-2.5-flash"
+_ROUNDUP_NOISE_PATTERNS: tuple[str, ...] = (
+    "stocks to buy",
+    "stocks to watch",
+    "stock is up today",
+    "stock is down today",
+    "next nvidia",
+    "top stocks",
+    "best stocks",
+    "market recap",
+    "weekly roundup",
+    "roundup",
+    "wallstreetbets",
+    "buzzing about",
+)
 
 
 class _NewsArticle(BaseModel):
@@ -40,6 +54,22 @@ class _NewsArticle(BaseModel):
 
 class _NewsResponse(BaseModel):
     articles: list[_NewsArticle]
+
+
+def _signal_search_bullets(signal_labels: list[str]) -> str:
+    lines: list[str] = []
+    for label in signal_labels[:MAX_SIGNALS]:
+        variants = expand_watch_queries(label)
+        if len(variants) > 1:
+            lines.append(f"- {label} | alternate phrasings: {', '.join(variants[1:4])}")
+        else:
+            lines.append(f"- {label}")
+    return "\n".join(lines)
+
+
+def _looks_like_roundup_noise(headline: str, summary: str) -> bool:
+    text = f"{headline} {summary}".lower()
+    return any(pattern in text for pattern in _ROUNDUP_NOISE_PATTERNS)
 
 
 async def collect_news_evidence(
@@ -59,14 +89,7 @@ async def collect_news_evidence(
         logger.warning("google-genai SDK not installed — skipping news collection")
         return []
 
-    signal_lines: list[str] = []
-    for label in signal_labels[:MAX_SIGNALS]:
-        variants = expand_watch_queries(label)
-        if len(variants) > 1:
-            signal_lines.append(f"- {label} (also watch for: {', '.join(variants[1:])})")
-        else:
-            signal_lines.append(f"- {label}")
-    signals_text = "\n".join(signal_lines)
+    signals_text = _signal_search_bullets(signal_labels)
 
     now = datetime.now(timezone.utc)
     since_str = (now - timedelta(days=days_back)).strftime("%B %-d, %Y")
@@ -77,6 +100,10 @@ Search for news articles published between {since_str} and {until_str} about {na
 
 Find articles directly relevant to one or more of these investment signals:
 {signals_text}
+
+Only include articles where {name} or {ticker} is a primary subject.
+Exclude broad stock roundups, market recaps, "why this stock is up/down today" explainers,
+peer-comparison lists, or articles where the company is only mentioned in passing.
 
 For every relevant article write a structured markdown entry with:
 - HEADLINE: [exact article title]
@@ -102,7 +129,8 @@ Raw search results:
 __RAW__
 
 Extract every article that is relevant to at least one listed signal. \
-Discard anything outside the stated date range (__SINCE__ to __UNTIL__) or unrelated to the signals.\
+Discard anything outside the stated date range (__SINCE__ to __UNTIL__), unrelated to the signals,
+or clearly a roundup / market-recap / "why the stock moved" explainer where the company is not the central subject.\
 """
 
     try:
@@ -182,6 +210,8 @@ def _to_candidates(
             continue
         url = item.get("url") or item.get("source_url") or ""
         summary = (item.get("summary") or "").strip()
+        if _looks_like_roundup_noise(headline, summary):
+            continue
         relevant_signals = item.get("relevant_signals")
         if not isinstance(relevant_signals, list):
             relevant_signals = []

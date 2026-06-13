@@ -1,11 +1,13 @@
 from __future__ import annotations
 
+import asyncio
 import logging
 import uuid
 from dataclasses import dataclass, field
 from datetime import datetime, timedelta, timezone
 
 from sqlalchemy import select, func
+from sqlalchemy.exc import OperationalError
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.config import settings
@@ -47,6 +49,8 @@ from app.services.signal_matching import (
 logger = logging.getLogger(__name__)
 
 RATE_LIMIT_HOURS = 4
+_SQLITE_LOCK_RETRY_ATTEMPTS = 3
+_SQLITE_LOCK_RETRY_DELAY_SECONDS = 0.15
 
 
 @dataclass
@@ -126,6 +130,38 @@ async def _build_snapshot(
     snapshot.watch_hints_ok = sum(1 for r in hint_results if not r.breached)
 
     return snapshot
+
+
+def _is_sqlite_locked_error(exc: Exception) -> bool:
+    return "database is locked" in str(exc).lower()
+
+
+async def _persist_historical_audit_state(
+    db: AsyncSession,
+    *,
+    thesis_id: uuid.UUID,
+    status: str,
+    results: list[dict] | None | object = ...,
+) -> None:
+    for attempt in range(_SQLITE_LOCK_RETRY_ATTEMPTS):
+        thesis = (
+            await db.execute(select(Thesis).where(Thesis.id == thesis_id))
+        ).scalar_one_or_none()
+        if thesis is None:
+            return
+
+        thesis.historical_audit_status = status
+        if results is not ...:
+            thesis.historical_audit_results = results
+
+        try:
+            await db.commit()
+            return
+        except OperationalError as exc:
+            await db.rollback()
+            if not _is_sqlite_locked_error(exc) or attempt == _SQLITE_LOCK_RETRY_ATTEMPTS - 1:
+                raise
+            await asyncio.sleep(_SQLITE_LOCK_RETRY_DELAY_SECONDS * (attempt + 1))
 
 
 async def run_check_now(
@@ -607,8 +643,7 @@ async def _run_historical_audit_with_session(
         await db.execute(select(Holding).where(Holding.id == thesis.holding_id))
     ).scalar_one_or_none()
     if holding is None:
-        thesis.historical_audit_status = "failed"
-        await db.commit()
+        await _persist_historical_audit_state(db, thesis_id=thesis_id, status="failed")
         return
 
     if thesis.historical_audit_status == "ready":
@@ -620,8 +655,7 @@ async def _run_historical_audit_with_session(
         if (datetime.now(timezone.utc) - updated) < timedelta(minutes=_AUDIT_STALE_MINUTES):
             return
 
-    thesis.historical_audit_status = "pending"
-    await db.commit()
+    await _persist_historical_audit_state(db, thesis_id=thesis_id, status="pending")
 
     now = datetime.now(timezone.utc)
     # apply_thesis_floor uses floor = anchor - timedelta(days=1) internally.
@@ -631,8 +665,7 @@ async def _run_historical_audit_with_session(
     try:
         company_data = await fetch_company_data(holding.ticker)
         if company_data is None:
-            thesis.historical_audit_status = "empty"
-            await db.commit()
+            await _persist_historical_audit_state(db, thesis_id=thesis_id, status="empty")
             return
 
         previous_price = float(holding.current_price) if holding.current_price is not None else None
@@ -710,15 +743,17 @@ async def _run_historical_audit_with_session(
                 signals_by_id=signals_by_id,
             )
 
-        thesis.historical_audit_results = results
-        thesis.historical_audit_status = "ready" if results else "empty"
-        await db.commit()
+        await _persist_historical_audit_state(
+            db,
+            thesis_id=thesis_id,
+            status="ready" if results else "empty",
+            results=results,
+        )
 
     except Exception:
         logger.exception("Historical audit pipeline failed for thesis %s", thesis_id)
-        thesis.historical_audit_status = "failed"
         try:
-            await db.commit()
+            await _persist_historical_audit_state(db, thesis_id=thesis_id, status="failed")
         except Exception:
             pass
 

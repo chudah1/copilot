@@ -2,6 +2,7 @@ from datetime import datetime, timedelta, timezone
 
 from app.services.market_data import _TTLCache, QUALITATIVE_KEYWORDS
 from app.services.market_data import (
+    _build_news_candidate,
     _build_company_data_from_alpha_vantage,
     _parse_alpha_vantage_earnings,
     _parse_alpha_vantage_earnings_calendar,
@@ -285,6 +286,35 @@ def test_shortlist_qualitative_candidates_marks_contract_renewal_updates():
     assert len(candidates) == 1
     assert candidates[0]["event_type"] == "contract_renewal_update"
     assert "backlog" in candidates[0]["evidence"]["topic_context"]
+
+
+def test_shortlist_qualitative_candidates_drops_roundup_noise():
+    now = datetime(2026, 6, 13, 12, 0, tzinfo=timezone.utc)
+    items = _parse_alpha_vantage_news(
+        {
+            "feed": [
+                {
+                    "title": "Why Intel, AMD, Arm, and Other Artificial Intelligence (AI) Stocks Popped Today",
+                    "summary": "A broad sector roundup discussing several chip stocks and the AI trade.",
+                    "time_published": "20260613T0900",
+                    "source": "Motley Fool",
+                    "url": "https://example.com/amd-roundup",
+                    "overall_sentiment_score": "0.12",
+                    "topics": [{"topic": "technology"}],
+                    "ticker_sentiment": [{"ticker": "AMD", "relevance_score": "0.55"}],
+                }
+            ]
+        },
+        "AMD",
+    )
+    candidates = shortlist_qualitative_candidates(
+        items,
+        recent_earnings_surprise_pct=None,
+        upcoming_earnings_date=None,
+        now=now,
+        ticker="AMD",
+    )
+    assert candidates == []
 
 
 def test_shortlist_qualitative_candidates_marks_funding_updates():
