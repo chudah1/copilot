@@ -1429,6 +1429,80 @@ async def test_decompose_adds_fallback_regulatory_watch_when_model_misses_it(cli
     assert "App Store economics" in fallback_watch["signal_config_json"]["watch_for"]
 
 
+async def test_decompose_adds_fallback_credit_and_usage_watches_when_model_misses_them(client, auth_headers, holding):
+    create = await client.post(
+        "/api/theses",
+        json={
+            "holding_id": holding["id"],
+            "status": "active",
+            "thesis_kind": "company",
+            "why_own_it": "Merchant adoption and repeat user growth should keep driving gross merchandise volume while the funding model stays available.",
+            "must_remain_true": "Funding capacity remains available without ugly credit deterioration.",
+            "what_would_change_my_mind": "Funding costs spike and management cannot offset them, delinquencies rise enough to show underwriting is breaking, or merchant growth stalls and repeat usage weakens.",
+            "confidence": "high",
+            "review_cadence_days": 21,
+            "source": "user",
+        },
+        headers=auth_headers,
+    )
+    thesis_id = create.json()["id"]
+    gateway_result = ReasoningResult(
+        success=True,
+        status="success",
+        provider="anthropic",
+        model="claude-test",
+        prompt_version="v1",
+        normalized_output={
+            "reason_type": "business_performance",
+            "monitorability": "high",
+            "decomposition_confidence": 0.9,
+            "claims": [
+                {
+                    "claim_text": "Gross merchandise volume keeps compounding.",
+                    "claim_type": "growth",
+                    "confidence": 0.9,
+                    "entities": [
+                        {
+                            "entity_name": holding["name"],
+                            "entity_ticker": holding["ticker"],
+                            "entity_type": "held_company",
+                            "relation_type": "validated_by",
+                            "rationale": "Volume growth matters most.",
+                            "confidence": 0.95,
+                            "confirmation_required": False,
+                            "signals": [
+                                {
+                                    "signal_type": "revenue_growth",
+                                    "signal_label": "Gross merchandise volume growth",
+                                    "signal_config_json": {"operator": ">=", "threshold_pct": 0.0},
+                                    "rationale": "Volume growth validates demand.",
+                                    "confidence": 0.95,
+                                    "confirmation_required": False,
+                                }
+                            ],
+                        }
+                    ],
+                }
+            ],
+        },
+        raw_output={"provider": "anthropic"},
+        confidence=0.9,
+        latency_ms=120,
+        failure_reason=None,
+    )
+
+    with patch("app.services.decomposition.get_reasoning_gateway", return_value=MockGateway(gateway_result)):
+        response = await client.post(f"/api/theses/{thesis_id}/decompose", headers=auth_headers)
+
+    assert response.status_code == 201
+    signals = response.json()["decomposition"]["claims"][0]["entities"][0]["signals"]
+    fallback_watches = [s for s in signals if s["signal_type"] == "news_watch" and s["active"]]
+    watch_fors = {s["signal_config_json"]["watch_for"] for s in fallback_watches}
+    assert "funding costs spike or funding capacity tightens and management cannot offset it" in watch_fors
+    assert "delinquencies rise enough to show underwriting is breaking" in watch_fors
+    assert "merchant growth stalls and repeat usage weakens materially" in watch_fors
+
+
 async def test_confirm_decomposition_can_reject_active_signal_and_clear_interpretation(client, auth_headers, holding):
     create = await client.post(
         "/api/theses",

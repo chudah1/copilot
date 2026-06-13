@@ -15,6 +15,10 @@ import anthropic
 from app.config import settings
 from app.services.ai_utils import strip_code_fences
 from app.services.market_data import fetch_company_data
+from app.services.thesis_patterns import (
+    infer_qualitative_watch_hints as infer_pattern_qualitative_watch_hints,
+    infer_story_watch_hints as infer_pattern_story_watch_hints,
+)
 
 logger = logging.getLogger(__name__)
 
@@ -675,137 +679,13 @@ def _merge_story_watch_hints(
 
 
 def _infer_qualitative_watch_hints(text: str) -> list[dict[str, Any]]:
-    lowered = text.lower()
-    hints: list[dict[str, Any]] = []
-
-    if (
-        ("glp-1" in lowered or "semaglutide" in lowered or "compounded" in lowered)
-        and ("fda" in lowered or "ban" in lowered or "restrict" in lowered or "pull" in lowered)
-    ):
-        restricted_thing = "the thesis-critical product or channel"
-        match = re.search(
-            r"(?:fda|regulator(?:y)?)\s+(?:formally\s+)?(?:ban(?:s|ned)?|restrict(?:s|ed)?|pull(?:s|ed)?|block(?:s|ed)?)\s+([^,.]+?)(?:\s+and\b|[,.]|$)",
-            text,
-            re.IGNORECASE,
-        )
-        if match:
-            candidate = match.group(1).strip(" -")
-            if candidate:
-                restricted_thing = candidate
-        hints.append(
-            {
-                "kind": "news_watch",
-                "watch_for": f"a regulatory restriction hits {restricted_thing} and management fails to present a credible replacement or mitigation path by next earnings",
-                "direction": "threatens",
-                "rationale": "If the core product or channel is restricted and management cannot pivot quickly, the main growth driver is impaired.",
-            }
-        )
-
-    generic_regulatory_context = any(
-        _contains_keyword(lowered, kw)
-        for kw in (
-            "regulatory",
-            "regulation",
-            "regulator",
-            "fee cut",
-            "fee cuts",
-            "economics",
-            "app store",
-            "open up",
-        )
-    )
-    replacement_context = any(
-        _contains_keyword(lowered, kw)
-        for kw in (
-            "replacement path",
-            "replacement monetization path",
-            "mitigation path",
-            "replacement",
-            "mitigation",
-            "offset",
-            "monetization path",
-        )
-    )
-    if generic_regulatory_context and replacement_context:
-        affected_economics = "the thesis-critical unit economics"
-        match = re.search(
-            r"(?:changes?\s+to|forces?)\s+([^,.]+?\s+economics)(?:\s+without\b|[,.]|$)",
-            text,
-            re.IGNORECASE,
-        )
-        if match:
-            candidate = match.group(1).strip(" -")
-            if candidate:
-                affected_economics = candidate
-        hints.append(
-            {
-                "kind": "news_watch",
-                "watch_for": f"a regulatory change forces meaningful changes to {affected_economics} and management has no credible replacement or mitigation path",
-                "direction": "threatens",
-                "rationale": "If regulation changes the core economics and management cannot offset it, the thesis weakens materially.",
-            }
-        )
-
-    if any(_contains_keyword(lowered, kw) for kw in ("eucalyptus", "acquisition", "deal", "integration", "overhead drag")):
-        deal_name = "the acquisition or integration"
-        match = re.search(
-            r"\b([A-Z][A-Za-z0-9&.\-]+(?:\s+[A-Z][A-Za-z0-9&.\-]+)*)\s+(?:deal|acquisition)\b",
-            text,
-        )
-        if match:
-            deal_name = match.group(1)
-        hints.append(
-            {
-                "kind": "news_watch",
-                "watch_for": f"{deal_name} fails to add a clear new revenue line and starts reading like overhead drag",
-                "direction": "threatens",
-                "rationale": "If the deal adds cost without new revenue traction, the expansion case weakens.",
-            }
-        )
-
-    return hints
+    return infer_pattern_qualitative_watch_hints(text)
 
 
 def _infer_story_watch_hints(text: str, *, include_story_growth: bool = False) -> list[dict[str, Any]]:
-    lowered = text.lower()
-    watch_hints: list[dict[str, Any]] = _infer_qualitative_watch_hints(text)
-    # Only trigger on explicit revenue/unit language — "growth", "AI", "demand" alone are too
-    # generic for a self-described thesis. For hearsay/story-driven ideas the synthesis has
-    # already committed to revenue growth as the measurable proxy (see _infer_hearsay_conditions),
-    # so include_story_growth lets those generic growth/demand cues back the matching watch hint.
-    revenue_keywords = ("revenue", "sales", "orders", "bookings", "subscribers", "users", "capex", "top line", "top-line")
-    story_growth_keywords = ("growth", "demand", "adoption", "ai")
-    if any(_contains_keyword(lowered, kw) for kw in revenue_keywords) or (
-        include_story_growth and any(_contains_keyword(lowered, kw) for kw in story_growth_keywords)
-    ):
-        watch_hints.append(
-            {
-                "kind": "metric_threshold",
-                "metric": "revenue_growth_yoy",
-                "operator": ">=",
-                "threshold": 0.0,
-                "rationale": "Revenue growth must stay positive to validate this thesis.",
-            }
-        )
-    if any(_contains_keyword(lowered, kw) for kw in ("margin", "margins", "profit", "profitability", "earnings", "cash flow", "ebitda", "eps")):
-        watch_hints.append(
-            {
-                "kind": "metric_threshold",
-                "metric": "earnings_growth_yoy",
-                "operator": ">=",
-                "threshold": 0.0,
-                "rationale": "The thesis depends on profitable execution — monitor earnings growth.",
-            }
-        )
-    if len(watch_hints) < 3:
-        watch_hints.append(
-            {
-                "kind": "price_move_pct",
-                "threshold": 5.0,
-                "rationale": "Prompt a review when price moves sharply.",
-            }
-        )
-    return _prioritize_watch_hints(watch_hints)
+    return _prioritize_watch_hints(
+        infer_pattern_story_watch_hints(text, include_story_growth=include_story_growth)
+    )
 
 
 def _infer_hearsay_conditions(ticker: str, answer1: str, answer2: str) -> tuple[str, str, str]:

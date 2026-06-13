@@ -336,6 +336,31 @@ def test_fallback_assist_infers_generic_regulatory_economics_watch_rule():
     assert any("App Store economics" in hint.get("watch_for", "") for hint in news_hints)
 
 
+def test_fallback_assist_infers_credit_funding_and_repeat_usage_watch_rules():
+    result = _fallback_assist(
+        "AFRM",
+        why_own_it=(
+            "I own Affirm because merchant adoption and repeat user growth should keep driving gross merchandise volume "
+            "while the funding model stays available enough to support that growth."
+        ),
+        must_remain_true=(
+            "Gross merchandise volume keeps compounding, repeat usage stays strong, and funding capacity remains available "
+            "without ugly credit deterioration."
+        ),
+        what_would_change_my_mind=(
+            "I would revisit the thesis if funding costs spike and management cannot offset them, if delinquencies rise enough "
+            "to show underwriting is breaking, or if merchant growth stalls and repeat usage weakens."
+        ),
+        draft_text=None,
+    )
+
+    news_hints = [hint for hint in result.interpretation["watch_hints"] if hint.get("kind") == "news_watch"]
+    watch_fors = [hint.get("watch_for", "") for hint in news_hints]
+    assert any("funding costs spike" in watch for watch in watch_fors)
+    assert any("delinquencies rise enough to show underwriting is breaking" in watch for watch in watch_fors)
+    assert any("merchant growth stalls and repeat usage weakens materially" in watch for watch in watch_fors)
+
+
 def test_parse_assist_output_merges_qualitative_story_hints_ahead_of_generic_price_rule():
     raw = ThesisAssistOutput(
         why_own_it=(
