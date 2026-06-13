@@ -1130,6 +1130,77 @@ async def test_decompose_auto_activates_explicit_high_confidence_threat_watch(cl
     assert signal["signal_config_json"]["direction"] == "threatens"
 
 
+async def test_decompose_auto_activates_explicit_high_confidence_transcript_watch(client, auth_headers, holding):
+    create = await client.post(
+        "/api/theses",
+        json={
+            "holding_id": holding["id"],
+            "status": "active",
+            "thesis_kind": "company",
+            "why_own_it": "Management needs a credible replacement plan.",
+            "what_would_change_my_mind": "No credible replacement plan emerges.",
+            "confidence": "high",
+            "review_cadence_days": 7,
+            "source": "user",
+        },
+        headers=auth_headers,
+    )
+    thesis_id = create.json()["id"]
+    gateway_result = ReasoningResult(
+        success=True,
+        status="success",
+        provider="anthropic",
+        model="claude-test",
+        prompt_version="v1",
+        normalized_output={
+            "reason_type": "business_performance",
+            "monitorability": "high",
+            "decomposition_confidence": 0.86,
+            "claims": [
+                {
+                    "claim_text": "Management presents a credible replacement path.",
+                    "claim_type": "growth",
+                    "confidence": 0.88,
+                    "entities": [
+                        {
+                            "entity_name": holding["name"],
+                            "entity_ticker": holding["ticker"],
+                            "entity_type": "held_company",
+                            "relation_type": "validated_by",
+                            "rationale": "Management commentary should confirm contingency planning.",
+                            "confidence": 0.9,
+                            "confirmation_required": True,
+                            "signals": [
+                                {
+                                    "signal_type": "transcript_topic",
+                                    "signal_label": "Management replacement path discussion",
+                                    "signal_config_json": {"topic": "replacement path discussion"},
+                                    "rationale": "Transcript discussion should confirm a credible replacement path.",
+                                    "confidence": 0.82,
+                                    "confirmation_required": True,
+                                }
+                            ],
+                        }
+                    ],
+                }
+            ],
+        },
+        raw_output={"provider": "anthropic"},
+        confidence=0.86,
+        latency_ms=120,
+        failure_reason=None,
+    )
+
+    with patch("app.services.decomposition.get_reasoning_gateway", return_value=MockGateway(gateway_result)):
+        response = await client.post(f"/api/theses/{thesis_id}/decompose", headers=auth_headers)
+
+    assert response.status_code == 201
+    signal = response.json()["decomposition"]["claims"][0]["entities"][0]["signals"][0]
+    assert signal["active"] is True
+    assert signal["user_confirmed"] is True
+    assert signal["signal_config_json"]["watch_for"] == "replacement path discussion"
+
+
 async def test_confirm_decomposition_can_reject_active_signal_and_clear_interpretation(client, auth_headers, holding):
     create = await client.post(
         "/api/theses",
