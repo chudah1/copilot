@@ -57,6 +57,10 @@ FLOOR_SIGNAL_SOURCE = "floor"
 SUPPORTED_NUMERIC_SIGNAL_METRICS = {"revenue_growth_yoy", "earnings_growth_yoy"}
 
 _PROXY_REVIEW_KEYWORDS = re.compile(r"\b(margin|cost|expense|overhead|dilution|burn|profitability)\b", re.I)
+_ACQUISITION_INTEGRATION_KEYWORDS = re.compile(
+    r"\b(acquisition|acquire|acquired|deal|integration|integrate|merger|overhead drag|cost drag)\b",
+    re.I,
+)
 _TEXT_THRESHOLD_HINTS: list[tuple[re.Pattern[str], float]] = [
     (re.compile(r"\bdouble[ -]?digits?\b", re.I), 10.0),
     (re.compile(r"\blow single[ -]?digits?\b", re.I), 5.0),
@@ -192,6 +196,13 @@ def _signal_is_direct_and_auto_activatable(
         and confidence >= 0.85
         and bool(config.get("watch_for") or config.get("topic"))
     )
+    explicit_integration_watch = (
+        signal_type == "news_topic"
+        and relation_type == "validated_by"
+        and confidence >= 0.8
+        and bool(config.get("integration_watch"))
+        and bool(config.get("watch_for") or config.get("topic"))
+    )
     explicit_transcript_watch = (
         signal_type == "transcript_topic"
         and held_company_match
@@ -201,12 +212,88 @@ def _signal_is_direct_and_auto_activatable(
     )
 
     return (
-        (held_company_match or explicit_threat_watch or explicit_transcript_watch)
+        (held_company_match or explicit_threat_watch or explicit_integration_watch or explicit_transcript_watch)
         and signal_type in APPROVED_DIRECT_SIGNAL_TYPES
         and confidence >= 0.8
-        and (explicit_threat_watch or explicit_transcript_watch or not signal_data.get("confirmation_required", True))
+        and (
+            explicit_threat_watch
+            or explicit_integration_watch
+            or explicit_transcript_watch
+            or not signal_data.get("confirmation_required", True)
+        )
         and not bool(config.get("proxy_review_required"))
     )
+
+
+def _build_companion_qualitative_signal(
+    *,
+    entity_data: dict,
+    signal_data: dict,
+    claim_text: str | None,
+) -> dict[str, Any] | None:
+    entity_type = entity_data.get("entity_type")
+    relation_type = str(entity_data.get("relation_type") or "").strip()
+    if entity_type == "held_company" or relation_type != "validated_by":
+        return None
+
+    signal_type = signal_data.get("signal_type")
+    if signal_type not in {"revenue_growth", "earnings_growth"}:
+        return None
+
+    entity_name = str(entity_data.get("entity_name") or "").strip()
+    context_parts = [
+        entity_name,
+        str(signal_data.get("signal_label") or "").strip(),
+        str(signal_data.get("rationale") or "").strip(),
+        str(claim_text or "").strip(),
+    ]
+    context = " ".join(part for part in context_parts if part)
+    lowered = context.lower()
+    if not _ACQUISITION_INTEGRATION_KEYWORDS.search(context):
+        return None
+
+    confidence = signal_data.get("confidence") or entity_data.get("confidence") or 0.0
+    if confidence < 0.8:
+        return None
+
+    subject = entity_name or "the acquisition or integration"
+    if signal_type == "revenue_growth" and any(
+        token in lowered for token in ("revenue", "contribution", "new revenue", "new line", "traction")
+    ):
+        watch_for = f"{subject} adds a clear new revenue line"
+        return {
+            "signal_type": "news_topic",
+            "signal_label": f"{subject} integration revenue traction",
+            "signal_config_json": {
+                "topic": watch_for,
+                "watch_for": watch_for,
+                "direction": "supports",
+                "integration_watch": True,
+            },
+            "rationale": signal_data.get("rationale") or f"{subject} should contribute visible new revenue traction.",
+            "confidence": confidence,
+            "confirmation_required": False,
+        }
+
+    if signal_type == "earnings_growth" and any(
+        token in lowered for token in ("cost", "overhead", "drag", "dilution", "margin", "expense")
+    ):
+        watch_for = f"{subject} starts reading like overhead drag"
+        return {
+            "signal_type": "news_topic",
+            "signal_label": f"{subject} integration overhead drag",
+            "signal_config_json": {
+                "topic": watch_for,
+                "watch_for": watch_for,
+                "direction": "threatens",
+                "integration_watch": True,
+            },
+            "rationale": signal_data.get("rationale") or f"{subject} should not become overhead drag without clear payoff.",
+            "confidence": confidence,
+            "confirmation_required": False,
+        }
+
+    return None
 
 
 def _watch_hint_from_signal(signal: ThesisSignal, *, override_claim_id: str | None = None) -> dict | None:
@@ -836,7 +923,30 @@ async def _persist_successful_decomposition(
             db.add(entity)
             await db.flush()
 
-            for signal_data in entity_data.get("signals", []):
+            signal_payloads = list(entity_data.get("signals", []))
+            existing_signal_types = {
+                (
+                    str(sig.get("signal_type") or "").strip(),
+                    str(sig.get("signal_label") or "").strip().lower(),
+                )
+                for sig in signal_payloads
+            }
+            for signal_data in list(signal_payloads):
+                companion_signal = _build_companion_qualitative_signal(
+                    entity_data=entity_data,
+                    signal_data=signal_data,
+                    claim_text=claim.claim_text,
+                )
+                if companion_signal:
+                    companion_key = (
+                        str(companion_signal.get("signal_type") or "").strip(),
+                        str(companion_signal.get("signal_label") or "").strip().lower(),
+                    )
+                    if companion_key not in existing_signal_types:
+                        signal_payloads.append(companion_signal)
+                        existing_signal_types.add(companion_key)
+
+            for signal_data in signal_payloads:
                 normalized_signal_config = _normalize_signal_config_json(
                     signal_type=signal_data["signal_type"],
                     signal_label=signal_data.get("signal_label"),

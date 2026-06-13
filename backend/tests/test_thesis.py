@@ -1201,6 +1201,86 @@ async def test_decompose_auto_activates_explicit_high_confidence_transcript_watc
     assert signal["signal_config_json"]["watch_for"] == "replacement path discussion"
 
 
+async def test_decompose_adds_active_integration_companion_watches(client, auth_headers, holding):
+    create = await client.post(
+        "/api/theses",
+        json={
+            "holding_id": holding["id"],
+            "status": "active",
+            "thesis_kind": "company",
+            "why_own_it": "The acquisition should add new revenue without becoming overhead drag.",
+            "what_would_change_my_mind": "The deal adds cost without clear new revenue traction.",
+            "confidence": "high",
+            "review_cadence_days": 7,
+            "source": "user",
+        },
+        headers=auth_headers,
+    )
+    thesis_id = create.json()["id"]
+    gateway_result = ReasoningResult(
+        success=True,
+        status="success",
+        provider="anthropic",
+        model="claude-test",
+        prompt_version="v1",
+        normalized_output={
+            "reason_type": "business_performance",
+            "monitorability": "high",
+            "decomposition_confidence": 0.84,
+            "claims": [
+                {
+                    "claim_text": "The acquisition adds a clear new revenue line without overhead drag.",
+                    "claim_type": "growth",
+                    "confidence": 0.86,
+                    "entities": [
+                        {
+                            "entity_name": "TargetCo",
+                            "entity_type": "supplier",
+                            "relation_type": "validated_by",
+                            "rationale": "The deal must add revenue rather than just overhead.",
+                            "confidence": 0.84,
+                            "confirmation_required": False,
+                            "signals": [
+                                {
+                                    "signal_type": "revenue_growth",
+                                    "signal_label": "TargetCo acquisition revenue contribution",
+                                    "signal_config_json": {"operator": ">=", "threshold_pct": 0.0},
+                                    "rationale": "Revenue contribution validates the acquisition case.",
+                                    "confidence": 0.84,
+                                    "confirmation_required": False,
+                                },
+                                {
+                                    "signal_type": "earnings_growth",
+                                    "signal_label": "TargetCo acquisition cost impact",
+                                    "signal_config_json": {"operator": ">=", "threshold_pct": 0.0},
+                                    "rationale": "Cost impact should not turn into overhead drag.",
+                                    "confidence": 0.84,
+                                    "confirmation_required": False,
+                                },
+                            ],
+                        }
+                    ],
+                }
+            ],
+        },
+        raw_output={"provider": "anthropic"},
+        confidence=0.84,
+        latency_ms=120,
+        failure_reason=None,
+    )
+
+    with patch("app.services.decomposition.get_reasoning_gateway", return_value=MockGateway(gateway_result)):
+        response = await client.post(f"/api/theses/{thesis_id}/decompose", headers=auth_headers)
+
+    assert response.status_code == 201
+    signals = response.json()["decomposition"]["claims"][0]["entities"][0]["signals"]
+    active_news_topics = [s for s in signals if s["signal_type"] == "news_topic" and s["active"]]
+    assert {s["signal_label"] for s in active_news_topics} == {
+        "TargetCo integration revenue traction",
+        "TargetCo integration overhead drag",
+    }
+
+
 async def test_confirm_decomposition_can_reject_active_signal_and_clear_interpretation(client, auth_headers, holding):
     create = await client.post(
         "/api/theses",
