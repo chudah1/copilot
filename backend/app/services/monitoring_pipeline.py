@@ -372,6 +372,7 @@ async def match_thesis_news_watches(
                 continue
             evidence["highlights"] = smart
             evidence["excerpt"] = " ".join(smart[:2])
+            evidence["topic_context"] = " ".join(smart[1:3])
     news_texts = [
         candidate_text(c) for c in candidates if c.get("event_type") in NEWS_LIKE_EVENT_TYPES
     ]

@@ -31,6 +31,10 @@ logger = logging.getLogger(__name__)
 NEWS_LIKE_EVENT_TYPES = {
     "news_or_earnings_candidate",
     "product_ramp_update",
+    "contract_renewal_update",
+    "funding_condition_update",
+    "margin_pressure_update",
+    "customer_capex_signal",
     "gemini_news",
     "news_keyword_match",
     "edgar_8k",
@@ -48,9 +52,13 @@ EVENT_TYPE_SIMILARITY_THRESHOLDS = {
     "edgar_8k": 0.38,
     "news_or_earnings_candidate": 0.45,
     "product_ramp_update": 0.40,
+    "contract_renewal_update": 0.40,
+    "funding_condition_update": 0.40,
+    "margin_pressure_update": 0.42,
+    "customer_capex_signal": 0.40,
     "gemini_news": 0.50,
     "news_keyword_match": 0.58,
-    "earnings_call_transcript": 0.18,
+    "earnings_call_transcript": 0.15,
 }
 # Hard cap on judge LLM calls per thesis per run, so a busy news day can't fan
 # out into an unbounded number of paid calls.
@@ -109,15 +117,22 @@ def candidate_text(candidate: dict[str, Any]) -> str:
         highlights = evidence.get("highlights")
         if isinstance(highlights, list) and highlights:
             first = str(highlights[0]).strip()
+            topic_context = (evidence.get("topic_context") or "").strip()
             if first:
+                if topic_context:
+                    return f"{first}. Topic context: {topic_context}".strip(". ").strip()
                 return first
         excerpt = (evidence.get("excerpt") or "").strip()
         if excerpt:
             return excerpt
     headline = (evidence.get("headline") or "").strip()
     summary = (evidence.get("summary") or evidence.get("description") or "").strip()
-    if headline or summary:
-        return f"{headline}. {summary}".strip(". ").strip()
+    topic_context = (evidence.get("topic_context") or "").strip()
+    if headline or summary or topic_context:
+        base = f"{headline}. {summary}".strip(". ").strip()
+        if topic_context:
+            return f"{base}. Topic context: {topic_context}".strip(". ").strip()
+        return base
     return (candidate.get("description") or "").strip()
 
 
@@ -134,6 +149,20 @@ def _norm_words(text: str) -> list[str]:
     import re
 
     return [w for w in re.findall(r"\w{3,}", text.lower())]
+
+
+def _direct_topic_match(text: str, query: str) -> bool:
+    text_lower = text.lower()
+    query_lower = query.lower().strip()
+    if not query_lower:
+        return False
+    if query_lower in text_lower:
+        return True
+    terms = [term for term in _norm_words(query_lower) if len(term) >= 5]
+    if not terms:
+        return False
+    hits = sum(1 for term in terms if term in text_lower)
+    return hits >= min(2, len(terms))
 
 
 async def build_embedding_similarity(texts: list[str]) -> Callable[[str, str], float]:
@@ -276,6 +305,9 @@ async def match_news_watches(
         for watch in watches:
             watch_queries = expand_watch_queries(watch.watch_for) or [watch.watch_for]
             sim = max(similarity(text, query) for query in watch_queries)
+            if candidate.get("event_type") == "earnings_call_transcript" and sim < candidate_threshold:
+                if any(_direct_topic_match(text, query) for query in watch_queries):
+                    sim = candidate_threshold
             if sim >= candidate_threshold and (best is None or sim > best[0]):
                 best = (sim, watch)
         if best is None:

@@ -48,6 +48,20 @@ def test_candidate_text_uses_headline_and_summary():
     assert "Big news" in txt and "details here" in txt
 
 
+def test_candidate_text_appends_topic_context():
+    txt = candidate_text(
+        {
+            "evidence": {
+                "headline": "Oracle signs major cloud contract",
+                "summary": "Management called out strong backlog.",
+                "topic_context": "contract extension, backlog",
+            }
+        }
+    )
+    assert "contract extension" in txt
+    assert "backlog" in txt
+
+
 def test_expand_watch_queries_adds_rollout_style_aliases():
     variants = expand_watch_queries("NVDA Blackwell product cycle deployment")
 
@@ -127,6 +141,7 @@ async def test_match_skips_below_similarity_threshold():
 def test_similarity_threshold_uses_event_type_mapping():
     assert similarity_threshold_for_candidate({"event_type": "edgar_8k"}) == EVENT_TYPE_SIMILARITY_THRESHOLDS["edgar_8k"]
     assert similarity_threshold_for_candidate({"event_type": "news_keyword_match"}) == EVENT_TYPE_SIMILARITY_THRESHOLDS["news_keyword_match"]
+    assert similarity_threshold_for_candidate({"event_type": "funding_condition_update"}) == EVENT_TYPE_SIMILARITY_THRESHOLDS["funding_condition_update"]
 
 
 @pytest.mark.asyncio

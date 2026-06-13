@@ -256,6 +256,68 @@ def test_shortlist_qualitative_candidates_marks_product_ramp_updates():
     assert candidates[0]["event_type"] == "product_ramp_update"
 
 
+def test_shortlist_qualitative_candidates_marks_contract_renewal_updates():
+    now = datetime(2026, 5, 11, 12, 0, tzinfo=timezone.utc)
+    items = _parse_alpha_vantage_news(
+        {
+            "feed": [
+                {
+                    "title": "Oracle says large customer renewals and backlog remain strong",
+                    "summary": "Management highlighted contract extensions and remaining performance obligations growth.",
+                    "time_published": "20260511T0900",
+                    "source": "Reuters",
+                    "url": "https://example.com/orcl-renewals",
+                    "overall_sentiment_score": "0.12",
+                    "topics": [{"topic": "earnings"}],
+                    "ticker_sentiment": [{"ticker": "ORCL", "relevance_score": "0.55"}],
+                }
+            ]
+        },
+        "ORCL",
+    )
+    candidates = shortlist_qualitative_candidates(
+        items,
+        recent_earnings_surprise_pct=None,
+        upcoming_earnings_date=None,
+        now=now,
+        ticker="ORCL",
+    )
+    assert len(candidates) == 1
+    assert candidates[0]["event_type"] == "contract_renewal_update"
+    assert "backlog" in candidates[0]["evidence"]["topic_context"]
+
+
+def test_shortlist_qualitative_candidates_marks_funding_updates():
+    now = datetime(2026, 5, 11, 12, 0, tzinfo=timezone.utc)
+    items = _parse_alpha_vantage_news(
+        {
+            "feed": [
+                {
+                    "title": "Affirm expands warehouse facility as ABS market stays open",
+                    "summary": "Funding capacity improved and management said securitization costs remain stable.",
+                    "time_published": "20260511T0900",
+                    "source": "Reuters",
+                    "url": "https://example.com/afrm-funding",
+                    "overall_sentiment_score": "0.14",
+                    "topics": [{"topic": "finance"}],
+                    "ticker_sentiment": [{"ticker": "AFRM", "relevance_score": "0.55"}],
+                }
+            ]
+        },
+        "AFRM",
+    )
+    candidates = shortlist_qualitative_candidates(
+        items,
+        recent_earnings_surprise_pct=None,
+        upcoming_earnings_date=None,
+        now=now,
+        ticker="AFRM",
+    )
+    assert len(candidates) == 1
+    assert candidates[0]["event_type"] == "funding_condition_update"
+    assert "funding capacity" in candidates[0]["evidence"]["topic_context"]
+
+
 def test_shortlist_qualitative_candidates_includes_transcript_and_insider_signals():
     now = datetime(2026, 5, 11, 12, 0, tzinfo=timezone.utc)
     transcript = _parse_alpha_vantage_transcript(

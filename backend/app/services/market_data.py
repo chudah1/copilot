@@ -337,6 +337,74 @@ INSIDER_ROLE_KEYWORDS = (
 )
 INSIDER_SALE_KEYWORDS = ("sale", "sell", "sold", "dispose", "disposition")
 INSIDER_BUY_KEYWORDS = ("buy", "bought", "purchase", "acquire", "acquisition")
+_NEWS_EVENT_PATTERNS: tuple[tuple[str, tuple[str, ...]], ...] = (
+    (
+        "product_ramp_update",
+        (
+            "deployment",
+            "rollout",
+            "ramp",
+            "shipment",
+            "shipments",
+            "availability",
+            "launch",
+            "production",
+            "supply constraint",
+        ),
+    ),
+    (
+        "contract_renewal_update",
+        (
+            "renewal",
+            "renewals",
+            "contract extension",
+            "customer expansion",
+            "signed demand",
+            "bookings",
+            "backlog",
+            "remaining performance obligations",
+            "rpo",
+        ),
+    ),
+    (
+        "funding_condition_update",
+        (
+            "funding capacity",
+            "warehouse facility",
+            "asset backed",
+            "abs market",
+            "securitization",
+            "funding cost",
+            "liquidity facility",
+            "credit facility",
+        ),
+    ),
+    (
+        "customer_capex_signal",
+        (
+            "capital spending",
+            "capex",
+            "infrastructure spending",
+            "data center spending",
+            "budget expansion",
+            "budget cuts",
+            "customer demand",
+        ),
+    ),
+    (
+        "margin_pressure_update",
+        (
+            "margin pressure",
+            "gross margin",
+            "operating margin",
+            "profitability",
+            "pricing pressure",
+            "cost drag",
+            "overhead drag",
+            "expense pressure",
+        ),
+    ),
+)
 
 
 @dataclass
@@ -361,6 +429,14 @@ class TranscriptSignal:
     highlights: list[str]
     excerpt: str
     full_text: str | None = None
+
+
+def _classify_news_event_type(combined_text: str) -> tuple[str, list[str]]:
+    for event_type, keywords in _NEWS_EVENT_PATTERNS:
+        found = [keyword for keyword in keywords if keyword in combined_text]
+        if found:
+            return event_type, found[:4]
+    return "news_or_earnings_candidate", []
 
 
 MAX_CURRENT_TRANSCRIPT_AGE_DAYS = 120
@@ -892,18 +968,8 @@ def _build_news_candidate(
         if ticker and ticker.lower() not in combined_text:
             return None
 
-    ramp_keywords = (
-        "deployment",
-        "rollout",
-        "ramp",
-        "shipment",
-        "shipments",
-        "availability",
-        "launch",
-        "production",
-        "supply constraint",
-    )
-    event_type = "product_ramp_update" if any(keyword in combined_text for keyword in ramp_keywords) else "news_or_earnings_candidate"
+    event_type, matched_topics = _classify_news_event_type(combined_text)
+    topic_context = ", ".join(matched_topics)
 
     return (
         3,
@@ -920,6 +986,8 @@ def _build_news_candidate(
                 "sentiment": item.sentiment,
                 "topics": item.topics,
                 "ticker_relevance": item.ticker_relevance,
+                "matched_topics": matched_topics,
+                "topic_context": topic_context,
             },
         },
     )
