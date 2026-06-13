@@ -1,10 +1,29 @@
-from app.services.news_collector import _signal_search_bullets, _to_candidates
+from app.services.news_collector import (
+    _select_focused_signal_labels,
+    _signal_search_bullets,
+    _to_candidates,
+)
 
 
 def test_signal_search_bullets_include_alternate_phrasings():
     bullets = _signal_search_bullets(["AMD MI350 Instinct ramp commentary"])
     assert "AMD MI350 Instinct ramp commentary" in bullets
     assert "alternate phrasings" in bullets
+
+
+def test_select_focused_signal_labels_prefers_specific_qualitative_branches():
+    labels = _select_focused_signal_labels(
+        [
+            "AMD data center revenue growth",
+            "AMD AI accelerator demand commentary",
+            "AMD customer deployment commentary",
+            "AMD gross margin trend",
+        ]
+    )
+
+    assert "AMD AI accelerator demand commentary" in labels
+    assert "AMD customer deployment commentary" in labels
+    assert len(labels) <= 3
 
 
 def test_to_candidates_drops_roundup_noise():
@@ -76,3 +95,28 @@ def test_to_candidates_adds_topic_context_from_relevant_signals():
     evidence = candidates[0]["evidence"]
     assert evidence["matched_topics"]
     assert "AMD MI350 Instinct ramp commentary" in evidence["topic_context"]
+
+
+def test_to_candidates_dedupes_duplicate_articles_from_overlapping_searches():
+    candidates = _to_candidates(
+        [
+            {
+                "headline": "AMD says MI350 ramp remains on track",
+                "summary": "Management highlighted strong accelerator demand.",
+                "url": "https://example.com/mi350",
+                "date": "2026-06-13",
+                "relevant_signals": ["AMD MI350 Instinct ramp commentary"],
+                "relevance": "high",
+            },
+            {
+                "headline": "AMD says MI350 ramp remains on track",
+                "summary": "Management highlighted strong accelerator demand.",
+                "url": "https://example.com/mi350",
+                "date": "2026-06-13",
+                "relevant_signals": ["AMD AI accelerator demand commentary"],
+                "relevance": "high",
+            },
+        ]
+    )
+
+    assert len(candidates) == 1

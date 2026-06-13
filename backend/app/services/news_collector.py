@@ -27,6 +27,7 @@ logger = logging.getLogger(__name__)
 
 MAX_SIGNALS = 12
 _GEMINI_MODEL = "gemini-2.5-flash"
+_MAX_FOCUSED_SIGNAL_SEARCHES = 3
 _ROUNDUP_NOISE_PATTERNS: tuple[str, ...] = (
     "stocks to buy",
     "stocks to watch",
@@ -42,6 +43,24 @@ _ROUNDUP_NOISE_PATTERNS: tuple[str, ...] = (
     "buzzing about",
 )
 _LOW_RELEVANCE_VALUES = {"low"}
+_FOCUSED_SIGNAL_HINTS: tuple[str, ...] = (
+    "commentary",
+    "guidance",
+    "share",
+    "renewal",
+    "deployment",
+    "ramp",
+    "demand",
+    "adoption",
+    "funding",
+    "margin",
+    "capex",
+    "backlog",
+    "underwriting",
+    "delinquency",
+    "payoff",
+    "customer",
+)
 
 
 class _NewsArticle(BaseModel):
@@ -68,6 +87,68 @@ def _signal_search_bullets(signal_labels: list[str]) -> str:
     return "\n".join(lines)
 
 
+def _focused_signal_score(label: str) -> tuple[int, int]:
+    lowered = label.lower()
+    keyword_hits = sum(1 for hint in _FOCUSED_SIGNAL_HINTS if hint in lowered)
+    word_count = len(label.split())
+    return keyword_hits, word_count
+
+
+def _select_focused_signal_labels(signal_labels: list[str]) -> list[str]:
+    seen: set[str] = set()
+    cleaned: list[str] = []
+    for label in signal_labels[:MAX_SIGNALS]:
+        candidate = str(label or "").strip()
+        if not candidate:
+            continue
+        normalized = candidate.lower()
+        if normalized in seen:
+            continue
+        seen.add(normalized)
+        cleaned.append(candidate)
+
+    ranked = sorted(
+        cleaned,
+        key=lambda label: (_focused_signal_score(label), len(expand_watch_queries(label)), len(label)),
+        reverse=True,
+    )
+    return ranked[:_MAX_FOCUSED_SIGNAL_SEARCHES]
+
+
+def _focused_signal_prompt(
+    *,
+    ticker: str,
+    name: str,
+    signal_label: str,
+    since_str: str,
+    until_str: str,
+) -> str:
+    variants = expand_watch_queries(signal_label)
+    alternate_text = ""
+    if len(variants) > 1:
+        alternate_text = f"\nAlternate phrasings to treat as equivalent: {', '.join(variants[1:4])}"
+
+    return f"""\
+Search for news articles published between {since_str} and {until_str} about {name} (ticker: {ticker}) specifically tied to this investment signal:
+- {signal_label}{alternate_text}
+
+Only include articles where {name} or {ticker} is a primary subject.
+Prioritize discrete business updates, management commentary, customer announcements, press releases,
+earnings-call coverage, or Reuters/Bloomberg-style reporting that directly bears on this signal.
+Exclude broad stock roundups, market recaps, "why this stock is up/down today" explainers,
+peer-comparison lists, or articles where the company is only mentioned in passing.
+
+For every relevant article write a structured markdown entry with:
+- HEADLINE: [exact article title]
+- URL: [full destination URL]
+- DATE: [YYYY-MM-DD]
+- SUMMARY: [1-2 sentence description of what happened]
+- SIGNALS: [which of the listed signals this matches]
+
+If no relevant articles exist in that date range, write exactly: No news found.\
+"""
+
+
 def _looks_like_roundup_noise(headline: str, summary: str) -> bool:
     text = f"{headline} {summary}".lower()
     return any(pattern in text for pattern in _ROUNDUP_NOISE_PATTERNS)
@@ -83,6 +164,36 @@ def _topic_context_from_relevant_signals(relevant_signals: list[str]) -> tuple[l
             if len(matched_topics) >= 6:
                 return matched_topics, ", ".join(matched_topics)
     return matched_topics, ", ".join(matched_topics)
+
+
+async def _run_grounded_search(
+    client: Any,
+    *,
+    prompt: str,
+) -> tuple[str, set[str]]:
+    from google.genai import types
+
+    search_response = await asyncio.to_thread(
+        client.models.generate_content,
+        model=_GEMINI_MODEL,
+        contents=prompt,
+        config=types.GenerateContentConfig(
+            tools=[types.Tool(google_search=types.GoogleSearch())],
+            temperature=0.1,
+        ),
+    )
+
+    raw_text = (getattr(search_response, "text", "") or "").strip()
+    grounded_urls: set[str] = set()
+    try:
+        metadata = search_response.candidates[0].grounding_metadata
+        if metadata and metadata.grounding_chunks:
+            for chunk in metadata.grounding_chunks:
+                if chunk.web and chunk.web.uri:
+                    grounded_urls.add(chunk.web.uri)
+    except (AttributeError, IndexError, TypeError):
+        pass
+    return raw_text, grounded_urls
 
 
 async def collect_news_evidence(
@@ -108,7 +219,7 @@ async def collect_news_evidence(
     since_str = (now - timedelta(days=days_back)).strftime("%B %-d, %Y")
     until_str = now.strftime("%B %-d, %Y")
 
-    search_prompt = f"""\
+    broad_search_prompt = f"""\
 Search for news articles published between {since_str} and {until_str} about {name} (ticker: {ticker}).
 
 Find articles directly relevant to one or more of these investment signals:
@@ -149,31 +260,47 @@ or clearly a roundup / market-recap / "why the stock moved" explainer where the 
     try:
         client = genai.Client(api_key=settings.gemini_api_key)
 
-        # Step 1 — search with grounding, unstructured output
-        search_response = await asyncio.to_thread(
-            client.models.generate_content,
-            model=_GEMINI_MODEL,
-            contents=search_prompt,
-            config=types.GenerateContentConfig(
-                tools=[types.Tool(google_search=types.GoogleSearch())],
-                temperature=0.1,
-            ),
-        )
+        # Step 1 — run a broad company search plus a few focused signal searches.
+        search_jobs: list[tuple[str, str | None]] = [(broad_search_prompt, None)]
+        for signal_label in _select_focused_signal_labels(signal_labels):
+            search_jobs.append(
+                (
+                    _focused_signal_prompt(
+                        ticker=ticker,
+                        name=name,
+                        signal_label=signal_label,
+                        since_str=since_str,
+                        until_str=until_str,
+                    ),
+                    signal_label,
+                )
+            )
 
-        raw_text = (getattr(search_response, "text", "") or "").strip()
-        if not raw_text or raw_text.lower().startswith("no news found"):
-            return []
-
-        # Collect grounding metadata for is_grounded tagging
         grounded_urls: set[str] = set()
-        try:
-            metadata = search_response.candidates[0].grounding_metadata
-            if metadata and metadata.grounding_chunks:
-                for chunk in metadata.grounding_chunks:
-                    if chunk.web and chunk.web.uri:
-                        grounded_urls.add(chunk.web.uri)
-        except (AttributeError, IndexError, TypeError):
-            pass
+        raw_sections: list[str] = []
+        last_error: Exception | None = None
+        for prompt, signal_label in search_jobs:
+            try:
+                raw_text, search_grounded_urls = await _run_grounded_search(client, prompt=prompt)
+            except Exception as exc:
+                last_error = exc
+                logger.warning(
+                    "Gemini grounded search failed for %s (%s): %s",
+                    ticker,
+                    signal_label or "broad",
+                    exc,
+                )
+                continue
+            if not raw_text or raw_text.lower().startswith("no news found"):
+                continue
+            grounded_urls.update(search_grounded_urls)
+            section_header = f"SEARCH FOCUS: {signal_label}" if signal_label else "SEARCH FOCUS: broad company search"
+            raw_sections.append(f"{section_header}\n{raw_text}")
+
+        if not raw_sections:
+            if last_error is not None:
+                raise last_error
+            return []
 
         # Step 2 — structured extraction, no search
         extraction_prompt = (
@@ -183,7 +310,7 @@ or clearly a roundup / market-recap / "why the stock moved" explainer where the 
             .replace("__SINCE__", since_str)
             .replace("__UNTIL__", until_str)
             .replace("__SIGNALS__", signals_text)
-            .replace("__RAW__", raw_text)
+            .replace("__RAW__", "\n\n".join(raw_sections))
         )
         extraction_response = await asyncio.to_thread(
             client.models.generate_content,
@@ -215,6 +342,7 @@ def _to_candidates(
         grounded_urls = set()
 
     candidates = []
+    seen_article_keys: set[str] = set()
     for item in items:
         if not isinstance(item, dict):
             continue
@@ -237,6 +365,10 @@ def _to_candidates(
         matched_topics, topic_context = _topic_context_from_relevant_signals(relevant_signals)
 
         article_id = hashlib.sha256(f"{headline}{url}".encode()).hexdigest()[:16]
+        dedupe_key = url.strip().lower() or article_id
+        if dedupe_key in seen_article_keys:
+            continue
+        seen_article_keys.add(dedupe_key)
 
         candidates.append({
             "event_type": "gemini_news",
