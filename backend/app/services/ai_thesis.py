@@ -701,6 +701,51 @@ def _infer_qualitative_watch_hints(text: str) -> list[dict[str, Any]]:
             }
         )
 
+    generic_regulatory_context = any(
+        _contains_keyword(lowered, kw)
+        for kw in (
+            "regulatory",
+            "regulation",
+            "regulator",
+            "fee cut",
+            "fee cuts",
+            "economics",
+            "app store",
+            "open up",
+        )
+    )
+    replacement_context = any(
+        _contains_keyword(lowered, kw)
+        for kw in (
+            "replacement path",
+            "replacement monetization path",
+            "mitigation path",
+            "replacement",
+            "mitigation",
+            "offset",
+            "monetization path",
+        )
+    )
+    if generic_regulatory_context and replacement_context:
+        affected_economics = "the thesis-critical unit economics"
+        match = re.search(
+            r"(?:changes?\s+to|forces?)\s+([^,.]+?\s+economics)(?:\s+without\b|[,.]|$)",
+            text,
+            re.IGNORECASE,
+        )
+        if match:
+            candidate = match.group(1).strip(" -")
+            if candidate:
+                affected_economics = candidate
+        hints.append(
+            {
+                "kind": "news_watch",
+                "watch_for": f"a regulatory change forces meaningful changes to {affected_economics} and management has no credible replacement or mitigation path",
+                "direction": "threatens",
+                "rationale": "If regulation changes the core economics and management cannot offset it, the thesis weakens materially.",
+            }
+        )
+
     if any(_contains_keyword(lowered, kw) for kw in ("eucalyptus", "acquisition", "deal", "integration", "overhead drag")):
         deal_name = "the acquisition or integration"
         match = re.search(

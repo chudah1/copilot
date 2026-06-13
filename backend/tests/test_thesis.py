@@ -1356,6 +1356,79 @@ async def test_decompose_auto_activates_explicit_integration_topic_on_non_primar
     assert signal["user_confirmed"] is True
 
 
+async def test_decompose_adds_fallback_regulatory_watch_when_model_misses_it(client, auth_headers, holding):
+    create = await client.post(
+        "/api/theses",
+        json={
+            "holding_id": holding["id"],
+            "status": "active",
+            "thesis_kind": "company",
+            "why_own_it": "Services should keep compounding and the installed base should stay sticky.",
+            "must_remain_true": "Services revenue keeps growing double digits.",
+            "what_would_change_my_mind": "Regulatory pressure forces meaningful changes to App Store economics without a replacement monetization path.",
+            "confidence": "high",
+            "review_cadence_days": 21,
+            "source": "user",
+        },
+        headers=auth_headers,
+    )
+    thesis_id = create.json()["id"]
+    gateway_result = ReasoningResult(
+        success=True,
+        status="success",
+        provider="anthropic",
+        model="claude-test",
+        prompt_version="v1",
+        normalized_output={
+            "reason_type": "business_performance",
+            "monitorability": "high",
+            "decomposition_confidence": 0.9,
+            "claims": [
+                {
+                    "claim_text": "Services revenue keeps compounding.",
+                    "claim_type": "growth",
+                    "confidence": 0.9,
+                    "entities": [
+                        {
+                            "entity_name": holding["name"],
+                            "entity_ticker": holding["ticker"],
+                            "entity_type": "held_company",
+                            "relation_type": "validated_by",
+                            "rationale": "Services growth matters most.",
+                            "confidence": 0.95,
+                            "confirmation_required": False,
+                            "signals": [
+                                {
+                                    "signal_type": "revenue_growth",
+                                    "signal_label": "AAPL Services revenue growth",
+                                    "signal_config_json": {"operator": ">=", "threshold_pct": 10.0},
+                                    "rationale": "Double-digit services growth is required.",
+                                    "confidence": 0.95,
+                                    "confirmation_required": False,
+                                }
+                            ],
+                        }
+                    ],
+                }
+            ],
+        },
+        raw_output={"provider": "anthropic"},
+        confidence=0.9,
+        latency_ms=120,
+        failure_reason=None,
+    )
+
+    with patch("app.services.decomposition.get_reasoning_gateway", return_value=MockGateway(gateway_result)):
+        response = await client.post(f"/api/theses/{thesis_id}/decompose", headers=auth_headers)
+
+    assert response.status_code == 201
+    signals = response.json()["decomposition"]["claims"][0]["entities"][0]["signals"]
+    fallback_watch = next(s for s in signals if s["signal_type"] == "news_watch")
+    assert fallback_watch["active"] is True
+    assert fallback_watch["user_confirmed"] is True
+    assert "App Store economics" in fallback_watch["signal_config_json"]["watch_for"]
+
+
 async def test_confirm_decomposition_can_reject_active_signal_and_clear_interpretation(client, auth_headers, holding):
     create = await client.post(
         "/api/theses",

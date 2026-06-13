@@ -319,6 +319,23 @@ def test_fallback_assist_infers_qualitative_watch_rules_from_regulatory_and_deal
     assert any("Eucalyptus" in hint.get("watch_for", "") for hint in news_hints)
 
 
+def test_fallback_assist_infers_generic_regulatory_economics_watch_rule():
+    result = _fallback_assist(
+        "AAPL",
+        why_own_it=(
+            "I own Apple because Services should keep compounding while the installed base keeps feeding the recurring software and payments layer."
+        ),
+        must_remain_true="Services revenue keeps growing double digits.",
+        what_would_change_my_mind=(
+            "I would revisit the thesis if regulatory pressure starts forcing meaningful changes to App Store economics without a replacement monetization path."
+        ),
+        draft_text=None,
+    )
+
+    news_hints = [hint for hint in result.interpretation["watch_hints"] if hint.get("kind") == "news_watch"]
+    assert any("App Store economics" in hint.get("watch_for", "") for hint in news_hints)
+
+
 def test_parse_assist_output_merges_qualitative_story_hints_ahead_of_generic_price_rule():
     raw = ThesisAssistOutput(
         why_own_it=(

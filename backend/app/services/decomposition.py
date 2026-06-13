@@ -400,6 +400,10 @@ def _watch_hint_from_signal(signal: ThesisSignal, *, override_claim_id: str | No
     return None
 
 
+def _watch_hint_key(watch_for: str | None) -> str:
+    return re.sub(r"[^a-z0-9]+", " ", str(watch_for or "").lower()).strip()
+
+
 def _extract_threshold_pct_from_text(*parts: str | None) -> float | None:
     for part in parts:
         if not part:
@@ -903,6 +907,9 @@ async def _persist_successful_decomposition(
     interpretation_labels: list[str] = []
     active_signals: list[ThesisSignal] = []
     signal_claim_map: dict[str, str] = {}  # signal_id -> claim_id for freshly built signals
+    inferred_watch_keys: set[str] = set()
+    primary_claim: ThesisClaim | None = None
+    primary_entity: ThesisEntity | None = None
 
     for position, claim_data in enumerate(normalized.get("claims", []), start=1):
         if claim_data.get("claim_type") and claim_data["claim_type"] not in interpretation_labels:
@@ -917,6 +924,8 @@ async def _persist_successful_decomposition(
         )
         db.add(claim)
         await db.flush()
+        if primary_claim is None:
+            primary_claim = claim
 
         for entity_data in claim_data.get("entities", []):
             entity_confirmed = (
@@ -938,6 +947,8 @@ async def _persist_successful_decomposition(
             )
             db.add(entity)
             await db.flush()
+            if primary_entity is None and _entity_matches_holding(holding, entity_data):
+                primary_entity = entity
 
             signal_payloads = list(entity_data.get("signals", []))
             existing_signal_types = {
@@ -987,6 +998,14 @@ async def _persist_successful_decomposition(
                             or ""
                         ).strip(),
                     )
+                if signal_data["signal_type"] in {"news_topic", "transcript_topic", "news_watch"}:
+                    inferred_watch_keys.add(
+                        _watch_hint_key(
+                            normalized_signal_config.get("watch_for")
+                            or normalized_signal_config.get("topic")
+                            or signal_data.get("signal_label")
+                        )
+                    )
                 auto_activate = _signal_is_direct_and_auto_activatable(
                     holding,
                     entity_data,
@@ -1012,6 +1031,47 @@ async def _persist_successful_decomposition(
                 if auto_activate:
                     active_signals.append(signal)
                     signal_claim_map[str(signal.id)] = str(claim.id)
+
+    if primary_claim is not None and primary_entity is not None:
+        from app.services.ai_thesis import _infer_qualitative_watch_hints
+
+        combined_text = " ".join(
+            part.strip()
+            for part in (
+                thesis.why_own_it or "",
+                thesis.must_remain_true or "",
+                thesis.what_would_change_my_mind or "",
+            )
+            if part and part.strip()
+        )
+        inferred_watch_hints = _infer_qualitative_watch_hints(combined_text)
+        for hint in inferred_watch_hints:
+            if hint.get("kind") != "news_watch":
+                continue
+            watch_for = str(hint.get("watch_for") or "").strip()
+            key = _watch_hint_key(watch_for)
+            if not watch_for or not key or key in inferred_watch_keys:
+                continue
+            signal = ThesisSignal(
+                entity_id=primary_entity.id,
+                signal_type="news_watch",
+                signal_label=watch_for[:120],
+                signal_config_json={
+                    "watch_for": watch_for,
+                    "direction": hint.get("direction") or "threatens",
+                },
+                rationale=hint.get("rationale") or watch_for,
+                confidence=0.82,
+                confirmation_required=False,
+                user_confirmed=True,
+                active=True,
+                raw_extraction_json={"source": "thesis_text_fallback"},
+            )
+            db.add(signal)
+            await db.flush()
+            active_signals.append(signal)
+            signal_claim_map[str(signal.id)] = str(primary_claim.id)
+            inferred_watch_keys.add(key)
 
     await db.flush()
     _sync_interpretation_cache(
