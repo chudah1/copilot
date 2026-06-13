@@ -67,6 +67,14 @@ _TEXT_THRESHOLD_HINTS: list[tuple[re.Pattern[str], float]] = [
     (re.compile(r"\bmid single[ -]?digits?\b", re.I), 6.0),
     (re.compile(r"\bhigh single[ -]?digits?\b", re.I), 8.0),
 ]
+_INFERRED_PROXY_METRICS: list[tuple[re.Pattern[str], str]] = [
+    (re.compile(r"\bremaining performance obligations\b|\brpo\b", re.I), "remaining_performance_obligations_growth"),
+    (re.compile(r"\btransactions per active consumer\b", re.I), "transactions_per_active_consumer"),
+    (re.compile(r"\bmerchant additions?\b", re.I), "merchant_additions_growth"),
+    (re.compile(r"\brepeat user\b|\brepeat usage\b", re.I), "repeat_user_engagement"),
+    (re.compile(r"\boperating margin\b", re.I), "operating_margin"),
+    (re.compile(r"\bgross margin\b", re.I), "gross_margin"),
+]
 
 _gateway: ThesisReasoningGateway | None = None
 
@@ -419,6 +427,16 @@ def _extract_threshold_pct_from_text(*parts: str | None) -> float | None:
     return None
 
 
+def _infer_proxy_source_metric(*parts: str | None) -> str | None:
+    for part in parts:
+        if not part:
+            continue
+        for pattern, proxy_metric in _INFERRED_PROXY_METRICS:
+            if pattern.search(part):
+                return proxy_metric
+    return None
+
+
 def _normalize_signal_config_json(
     *,
     signal_type: str,
@@ -445,6 +463,9 @@ def _normalize_signal_config_json(
 
     default_metric = "revenue_growth_yoy" if signal_type == "revenue_growth" else "earnings_growth_yoy"
     metric_name = config.get("metric") if isinstance(config.get("metric"), str) else None
+    inferred_proxy_metric = _infer_proxy_source_metric(signal_label, claim_text, rationale)
+    if metric_name is None and inferred_proxy_metric is not None:
+        metric_name = inferred_proxy_metric
     if metric_name not in SUPPORTED_NUMERIC_SIGNAL_METRICS:
         config["metric"] = default_metric
         if signal_label or claim_text:
@@ -460,6 +481,13 @@ def _normalize_signal_config_json(
             or _PROXY_REVIEW_KEYWORDS.search(context_blob)
         )
     ):
+        config["proxy_review_required"] = True
+    if config.get("proxy_source_metric") in {
+        "remaining_performance_obligations_growth",
+        "transactions_per_active_consumer",
+        "merchant_additions_growth",
+        "repeat_user_engagement",
+    }:
         config["proxy_review_required"] = True
 
     if config.get("operator") not in {">=", "<=", ">", "<", "=="}:

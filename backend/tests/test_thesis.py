@@ -826,6 +826,77 @@ async def test_margin_proxy_signal_requires_review_and_does_not_auto_activate(cl
     assert thesis_response.json()["interpretation"] is None
 
 
+async def test_internal_kpi_proxy_requires_review_and_does_not_auto_activate(client, auth_headers, holding):
+    create = await client.post(
+        "/api/theses",
+        json={
+            "holding_id": holding["id"],
+            "status": "active",
+            "thesis_kind": "company",
+            "why_own_it": "Capacity should convert into signed customer demand.",
+            "what_would_change_my_mind": "Contracted demand stops showing up.",
+            "confidence": "medium",
+            "review_cadence_days": 7,
+            "source": "user",
+        },
+        headers=auth_headers,
+    )
+    thesis_id = create.json()["id"]
+    gateway_result = ReasoningResult(
+        success=True,
+        status="success",
+        provider="openai",
+        model="gpt-5.5",
+        prompt_version="v1",
+        normalized_output={
+            "reason_type": "business_performance",
+            "monitorability": "medium",
+            "decomposition_confidence": 0.82,
+            "claims": [
+                {
+                    "claim_text": "Capacity expansion keeps converting into signed customer demand.",
+                    "claim_type": "demand",
+                    "confidence": 0.82,
+                    "entities": [
+                        {
+                            "entity_name": "Apple Inc",
+                            "entity_ticker": "AAPL",
+                            "entity_type": "held_company",
+                            "relation_type": "validated_by",
+                            "rationale": "Buildout must become contracted demand.",
+                            "confidence": 0.86,
+                            "confirmation_required": False,
+                            "signals": [
+                                {
+                                    "signal_type": "revenue_growth",
+                                    "signal_label": "ORCL remaining performance obligations growth",
+                                    "signal_config_json": {},
+                                    "rationale": "RPO indicates contracted future revenue.",
+                                    "confidence": 0.82,
+                                    "confirmation_required": False,
+                                }
+                            ],
+                        }
+                    ],
+                }
+            ],
+        },
+        raw_output={"provider": "openai"},
+        confidence=0.82,
+        latency_ms=120,
+        failure_reason=None,
+    )
+    with patch("app.services.decomposition.get_reasoning_gateway", return_value=MockGateway(gateway_result)):
+        response = await client.post(f"/api/theses/{thesis_id}/decompose", headers=auth_headers)
+
+    assert response.status_code == 201
+    signal = response.json()["decomposition"]["claims"][0]["entities"][0]["signals"][0]
+    assert signal["active"] is False
+    assert signal["confirmation_required"] is True
+    assert signal["signal_config_json"]["proxy_source_metric"] == "remaining_performance_obligations_growth"
+    assert signal["signal_config_json"]["proxy_review_required"] is True
+
+
 async def test_confirm_decomposition_activates_proxy_signal_and_updates_status(client, auth_headers, holding):
     create = await client.post(
         "/api/theses",

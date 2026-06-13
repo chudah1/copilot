@@ -17,10 +17,10 @@ from app.services.reasoning.validators import (
 logger = logging.getLogger(__name__)
 
 # Cheap tier: simple theses (complexity score < 4)
-# gpt-4o-mini first for cost; fall back to gpt-4.1-mini, then Anthropic if OpenAI unavailable
-_CHEAP_PROVIDERS = [Gpt4oMiniProvider(), OpenAIReasoningProvider(), AnthropicReasoningProvider()]
+# Use the latest OpenAI model first, then older OpenAI/Anthropic fallbacks.
+_CHEAP_PROVIDERS = [OpenAIReasoningProvider(), Gpt4oMiniProvider(), AnthropicReasoningProvider()]
 # Expensive tier: rich theses with explicit thresholds, competitors, all fields filled
-_EXPENSIVE_PROVIDERS = [AnthropicReasoningProvider(), OpenAIReasoningProvider()]
+_EXPENSIVE_PROVIDERS = [OpenAIReasoningProvider(), AnthropicReasoningProvider()]
 
 
 class ThesisReasoningGateway:

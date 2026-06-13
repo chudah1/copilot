@@ -210,7 +210,7 @@ class _PriceMoveHint(BaseModel):
     def parse_threshold(cls, v: Any) -> float:
         return _coerce_threshold(v)
 PROXY_TICKER_PATTERN = re.compile(r"^[A-Z][A-Z0-9.\-]{0,9}$")
-OPENAI_ASSIST_MODEL = "gpt-4.1-mini"
+OPENAI_ASSIST_MODEL = "gpt-5.5"
 
 THESIS_ASSIST_WATCH_HINT_SCHEMA = {
     "type": "object",
@@ -990,9 +990,9 @@ async def _call_openai_json(
     from openai import AsyncOpenAI
 
     client = AsyncOpenAI(api_key=settings.openai_api_key)
-    response = await client.chat.completions.create(
-        model=model,
-        response_format={
+    request_kwargs: dict[str, Any] = {
+        "model": model,
+        "response_format": {
             "type": "json_schema",
             "json_schema": {
                 "name": schema_name,
@@ -1000,11 +1000,13 @@ async def _call_openai_json(
                 "schema": schema,
             },
         },
-        messages=[{"role": "user", "content": prompt}],
-        temperature=0,
-        timeout=30.0,
-        max_tokens=max_tokens,
-    )
+        "messages": [{"role": "user", "content": prompt}],
+        "timeout": 30.0,
+        "max_tokens": max_tokens,
+    }
+    if not model.startswith("gpt-5"):
+        request_kwargs["temperature"] = 0
+    response = await client.chat.completions.create(**request_kwargs)
     return json.loads(strip_code_fences(response.choices[0].message.content or "{}"))
 
 

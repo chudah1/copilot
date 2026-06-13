@@ -17,10 +17,10 @@ from app.services.reasoning.simple_cache import TTLCache
 
 class OpenAIReasoningProvider:
     name = "openai"
-    model = "gpt-4.1-mini"
+    model = "gpt-5.5"
     timeout_seconds = 60
     schema_strict = True
-    temperature: float | None = 0  # None = omit (required for o-series reasoning models)
+    temperature: float | None = None  # Omit temperature for newer reasoning families that only support the default.
     _cache = TTLCache(ttl_seconds=settings.llm_response_cache_ttl_seconds)
 
     def _response_schema(self) -> dict:

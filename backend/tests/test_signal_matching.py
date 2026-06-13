@@ -125,6 +125,40 @@ def test_normalize_signal_config_marks_margin_proxy_for_review():
     assert config["proxy_review_required"] is True
 
 
+def test_normalize_signal_config_marks_rpo_proxy_for_review():
+    from app.services.decomposition import _normalize_signal_config_json
+
+    config = _normalize_signal_config_json(
+        signal_type="revenue_growth",
+        signal_label="ORCL remaining performance obligations growth",
+        claim_text="Capacity expansion keeps converting into signed customer demand.",
+        rationale="RPO indicates contracted future revenue.",
+        raw_config={},
+    )
+
+    assert config["metric"] == "revenue_growth_yoy"
+    assert config["proxy_for"] == "ORCL remaining performance obligations growth"
+    assert config["proxy_source_metric"] == "remaining_performance_obligations_growth"
+    assert config["proxy_review_required"] is True
+
+
+def test_normalize_signal_config_marks_transactions_per_consumer_proxy_for_review():
+    from app.services.decomposition import _normalize_signal_config_json
+
+    config = _normalize_signal_config_json(
+        signal_type="revenue_growth",
+        signal_label="AFRM transactions per active consumer",
+        claim_text="Repeat user engagement remains stable or improves.",
+        rationale="Usage frequency indicates repeat engagement.",
+        raw_config={},
+    )
+
+    assert config["metric"] == "revenue_growth_yoy"
+    assert config["proxy_for"] == "AFRM transactions per active consumer"
+    assert config["proxy_source_metric"] == "transactions_per_active_consumer"
+    assert config["proxy_review_required"] is True
+
+
 def test_normalize_signal_config_infers_double_digit_threshold_from_text():
     from app.services.decomposition import _normalize_signal_config_json
 
