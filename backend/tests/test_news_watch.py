@@ -66,8 +66,18 @@ def test_expand_watch_queries_adds_rollout_style_aliases():
     variants = expand_watch_queries("NVDA Blackwell product cycle deployment")
 
     assert "NVDA Blackwell product cycle deployment" in variants
+    assert "Blackwell product cycle deployment" in variants
     assert any("rollout" in variant.lower() for variant in variants)
     assert any("ramp" in variant.lower() for variant in variants)
+
+
+def test_expand_watch_queries_trims_generic_suffixes():
+    variants = expand_watch_queries("AMD AI accelerator demand commentary")
+
+    assert "AMD AI accelerator demand commentary" in variants
+    assert "AMD AI accelerator demand" in variants
+    assert "AI accelerator demand commentary" in variants
+    assert "AI accelerator demand" in variants
 
 
 def test_candidate_text_uses_transcript_highlights_first():

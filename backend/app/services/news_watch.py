@@ -74,6 +74,10 @@ _QUERY_REPLACEMENTS: tuple[tuple[re.Pattern[str], tuple[str, ...]], ...] = (
     (re.compile(r"\bcapex\b", re.I), ("capital spending", "infrastructure spending")),
     (re.compile(r"\bmargin\b", re.I), ("profitability", "pricing")),
 )
+_QUERY_SUFFIX_PATTERNS: tuple[re.Pattern[str], ...] = (
+    re.compile(r"\b(commentary|news flow|news|trends|trend|reports|report|updates|update)\b$", re.I),
+    re.compile(r"\b(guidance changes|guidance change)\b$", re.I),
+)
 
 
 @dataclass
@@ -97,17 +101,37 @@ def expand_watch_queries(watch_for: str) -> list[str]:
     base = (watch_for or "").strip()
     if not base:
         return []
-    variants = [base]
-    lowered = base.lower()
-    for pattern, replacements in _QUERY_REPLACEMENTS:
-        if not pattern.search(lowered):
-            continue
-        for replacement in replacements:
-            candidate = pattern.sub(replacement, base)
-            candidate = re.sub(r"\s+", " ", candidate).strip()
-            if candidate and candidate not in variants:
-                variants.append(candidate)
-    return variants[:4]
+    variants: list[str] = []
+
+    def _add_variant(value: str) -> None:
+        candidate = re.sub(r"\s+", " ", value).strip(" ,.-")
+        if candidate and candidate not in variants:
+            variants.append(candidate)
+
+    def _trim_suffix(value: str) -> str:
+        trimmed = value
+        for pattern in _QUERY_SUFFIX_PATTERNS:
+            trimmed = pattern.sub("", trimmed).strip(" ,.-")
+        return trimmed
+
+    _add_variant(base)
+    _add_variant(_trim_suffix(base))
+
+    words = base.split()
+    if words and re.fullmatch(r"[A-Z0-9._-]{1,5}", words[0]):
+        without_prefix = " ".join(words[1:])
+        _add_variant(without_prefix)
+        _add_variant(_trim_suffix(without_prefix))
+
+    seed_variants = list(variants)
+    for seed in seed_variants:
+        lowered = seed.lower()
+        for pattern, replacements in _QUERY_REPLACEMENTS:
+            if not pattern.search(lowered):
+                continue
+            for replacement in replacements:
+                _add_variant(pattern.sub(replacement, seed))
+    return variants[:6]
 
 
 def candidate_text(candidate: dict[str, Any]) -> str:
