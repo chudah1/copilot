@@ -494,7 +494,7 @@ async def persist_classified_candidates(
         if claim_obj is None and signal_obj is None:
             if candidate.get("event_type") == "analyst_revision":
                 continue
-            if candidate.get("event_type") == "earnings_surprise" and verdict == "supports":
+            if candidate.get("event_type") == "earnings_surprise":
                 continue
 
         evidence_summary = build_evidence_summary(

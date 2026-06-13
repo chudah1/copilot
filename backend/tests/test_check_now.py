@@ -316,7 +316,7 @@ async def test_run_check_now_uses_provisional_news_watches_without_decomposition
     assert "compounded GLP-1" in captured["watches"][0].watch_for
 
 
-async def test_run_check_now_skips_unlinked_analyst_revision_and_supportive_earnings_surprise(db, test_user):
+async def test_run_check_now_skips_unlinked_analyst_revision_and_unlinked_earnings_surprises(db, test_user):
     holding = Holding(
         user_id=test_user.id,
         ticker="NVDA",
@@ -347,6 +347,11 @@ async def test_run_check_now_skips_unlinked_analyst_revision_and_supportive_earn
 
     company_data = _make_company_data(ticker="NVDA", current_price=120.0)
     candidates = [
+        {
+            "event_type": "earnings_surprise",
+            "description": "Recent earnings surprise was -15.1%.",
+            "evidence": {"recent_earnings_surprise_pct": -15.1},
+        },
         {
             "event_type": "earnings_surprise",
             "description": "Recent earnings surprise was 5.6%.",
