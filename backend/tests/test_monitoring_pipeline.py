@@ -5,9 +5,11 @@ import pytest
 
 from app.services.monitoring_pipeline import (
     _build_transcript_windows,
+    _expand_transcript_candidates_for_watches,
     _relevant_transcript_highlights,
     _thesis_aware_highlights,
 )
+from app.services.news_watch import NewsWatch
 
 
 def test_build_transcript_windows_keeps_question_with_answer():
@@ -98,3 +100,46 @@ async def test_relevant_transcript_highlights_supports_signal_focused_windows(mo
 
     assert highlights is not None
     assert "CEO: It is ahead of plan and supply constraints are easing." in highlights
+
+
+@pytest.mark.asyncio
+async def test_expand_transcript_candidates_for_watches_creates_topic_specific_candidates(monkeypatch):
+    monkeypatch.setattr(
+        "app.services.monitoring_pipeline.settings.openai_api_key",
+        None,
+        raising=False,
+    )
+
+    transcript = (
+        "Analyst: How is MI350 demand trending with cloud customers? "
+        "CEO: MI350 demand is strong and customer deployments are accelerating. "
+        "Analyst: Any update on consumer GPUs? "
+        "CEO: We remain disciplined there."
+    )
+    candidate = {
+        "event_type": "earnings_call_transcript",
+        "description": "Earnings call",
+        "evidence": {
+            "quarter": "2026Q2",
+            "full_transcript": transcript,
+            "highlights": ["Generic highlight."],
+        },
+    }
+    watch = NewsWatch(
+        signal_id="sig1",
+        claim_id="cl1",
+        watch_for="AMD MI350 demand commentary",
+        direction="supports",
+        label="AMD MI350 demand commentary",
+    )
+
+    expanded = await _expand_transcript_candidates_for_watches([candidate], [watch])
+
+    assert len(expanded) == 2
+    watch_specific = expanded[1]
+    assert watch_specific["description"].startswith("2026Q2 earnings call on AMD MI350 demand commentary:")
+    assert "AMD MI350 demand commentary" in watch_specific["evidence"]["topic_context"]
+    assert any(
+        "MI350 demand is strong and customer deployments are accelerating." in highlight
+        for highlight in watch_specific["evidence"]["highlights"]
+    )

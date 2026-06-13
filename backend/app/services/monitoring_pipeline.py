@@ -354,6 +354,7 @@ async def match_thesis_news_watches(
     verdict map (id(candidate) -> (watch, severity, reason))."""
     if not news_watches:
         return {}
+    candidates = await _expand_transcript_candidates_for_watches(candidates, news_watches)
     watch_texts: list[str] = []
     for watch in news_watches:
         if not watch.watch_for:
@@ -382,6 +383,45 @@ async def match_thesis_news_watches(
     return await match_news_watches(
         candidates, news_watches, similarity=similarity, judge=judge_news_watch
     )
+
+
+async def _expand_transcript_candidates_for_watches(
+    candidates: list[dict[str, Any]],
+    news_watches: list[NewsWatch],
+) -> list[dict[str, Any]]:
+    expanded = list(candidates)
+    for candidate in candidates:
+        if candidate.get("event_type") != "earnings_call_transcript":
+            continue
+        evidence = candidate.get("evidence") or {}
+        full_text = evidence.get("full_transcript")
+        if not isinstance(full_text, str) or not full_text.strip():
+            continue
+
+        for watch in news_watches:
+            focus_texts = expand_watch_queries(watch.watch_for) or [watch.watch_for]
+            smart = await _relevant_transcript_highlights(full_text, focus_texts)
+            if not smart:
+                continue
+
+            topic_context_parts = [watch.label or watch.watch_for]
+            topic_context_parts.extend(smart[1:3])
+            expanded.append(
+                {
+                    **candidate,
+                    "description": (
+                        f"{evidence.get('quarter') or 'Latest'} earnings call on "
+                        f"{watch.label or watch.watch_for}: {' '.join(smart[:2])}"
+                    ).strip(),
+                    "evidence": {
+                        **evidence,
+                        "highlights": smart,
+                        "excerpt": " ".join(smart[:2]),
+                        "topic_context": " ".join(part for part in topic_context_parts if part),
+                    },
+                }
+            )
+    return expanded
 
 
 async def classify_candidates_for_thesis(
