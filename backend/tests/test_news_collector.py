@@ -11,6 +11,21 @@ def test_signal_search_bullets_include_alternate_phrasings():
     assert "alternate phrasings" in bullets
 
 
+def test_signal_search_bullets_include_claim_and_rationale_context():
+    bullets = _signal_search_bullets(
+        [
+            {
+                "label": "AMD customer deployment commentary",
+                "claim_text": "AMD management describes customer deployments as strengthening.",
+                "rationale": "Deployments validate real customer adoption.",
+            }
+        ]
+    )
+
+    assert "claim:" in bullets
+    assert "why it matters:" in bullets
+
+
 def test_select_focused_signal_labels_prefers_specific_qualitative_branches():
     labels = _select_focused_signal_labels(
         [
@@ -21,8 +36,10 @@ def test_select_focused_signal_labels_prefers_specific_qualitative_branches():
         ]
     )
 
-    assert "AMD AI accelerator demand commentary" in labels
-    assert "AMD customer deployment commentary" in labels
+    label_names = [entry["label"] for entry in labels]
+
+    assert "AMD AI accelerator demand commentary" in label_names
+    assert "AMD customer deployment commentary" in label_names
     assert len(labels) <= 3
 
 

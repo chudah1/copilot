@@ -76,40 +76,71 @@ class _NewsResponse(BaseModel):
     articles: list[_NewsArticle]
 
 
-def _signal_search_bullets(signal_labels: list[str]) -> str:
+def _normalise_signal_search_inputs(signal_inputs: list[Any]) -> list[dict[str, str]]:
+    descriptors: list[dict[str, str]] = []
+    seen: set[str] = set()
+    for item in signal_inputs[:MAX_SIGNALS]:
+        if isinstance(item, dict):
+            label = str(item.get("label") or "").strip()
+            claim_text = str(item.get("claim_text") or "").strip()
+            rationale = str(item.get("rationale") or "").strip()
+        else:
+            label = str(item or "").strip()
+            claim_text = ""
+            rationale = ""
+        if not label:
+            continue
+        normalized = label.lower()
+        if normalized in seen:
+            continue
+        seen.add(normalized)
+        descriptors.append(
+            {
+                "label": label,
+                "claim_text": claim_text,
+                "rationale": rationale,
+            }
+        )
+    return descriptors
+
+
+def _signal_search_bullets(signal_inputs: list[Any]) -> str:
     lines: list[str] = []
-    for label in signal_labels[:MAX_SIGNALS]:
+    for descriptor in _normalise_signal_search_inputs(signal_inputs):
+        label = descriptor["label"]
         variants = expand_watch_queries(label)
+        details: list[str] = []
+        if descriptor["claim_text"]:
+            details.append(f"claim: {descriptor['claim_text']}")
+        if descriptor["rationale"]:
+            details.append(f"why it matters: {descriptor['rationale']}")
         if len(variants) > 1:
-            lines.append(f"- {label} | alternate phrasings: {', '.join(variants[1:4])}")
+            details.append(f"alternate phrasings: {', '.join(variants[1:4])}")
+        if details:
+            lines.append(f"- {label} | {' | '.join(details)}")
         else:
             lines.append(f"- {label}")
     return "\n".join(lines)
 
 
-def _focused_signal_score(label: str) -> tuple[int, int]:
-    lowered = label.lower()
+def _focused_signal_score(descriptor: dict[str, str]) -> tuple[int, int, int]:
+    label = descriptor["label"]
+    lowered = f"{label} {descriptor.get('claim_text', '')} {descriptor.get('rationale', '')}".lower()
     keyword_hits = sum(1 for hint in _FOCUSED_SIGNAL_HINTS if hint in lowered)
     word_count = len(label.split())
-    return keyword_hits, word_count
+    context_words = len(descriptor.get("claim_text", "").split()) + len(descriptor.get("rationale", "").split())
+    return keyword_hits, context_words, word_count
 
 
-def _select_focused_signal_labels(signal_labels: list[str]) -> list[str]:
-    seen: set[str] = set()
-    cleaned: list[str] = []
-    for label in signal_labels[:MAX_SIGNALS]:
-        candidate = str(label or "").strip()
-        if not candidate:
-            continue
-        normalized = candidate.lower()
-        if normalized in seen:
-            continue
-        seen.add(normalized)
-        cleaned.append(candidate)
-
+def _select_focused_signal_labels(signal_inputs: list[Any]) -> list[dict[str, str]]:
+    cleaned = _normalise_signal_search_inputs(signal_inputs)
     ranked = sorted(
         cleaned,
-        key=lambda label: (_focused_signal_score(label), len(expand_watch_queries(label)), len(label)),
+        key=lambda descriptor: (
+            _focused_signal_score(descriptor),
+            len(expand_watch_queries(descriptor["label"])),
+            len(descriptor["label"]),
+        ),
         reverse=True,
     )
     return ranked[:_MAX_FOCUSED_SIGNAL_SEARCHES]
@@ -119,18 +150,23 @@ def _focused_signal_prompt(
     *,
     ticker: str,
     name: str,
-    signal_label: str,
+    signal: dict[str, str],
     since_str: str,
     until_str: str,
 ) -> str:
+    signal_label = signal["label"]
+    claim_text = signal.get("claim_text", "").strip()
+    rationale = signal.get("rationale", "").strip()
     variants = expand_watch_queries(signal_label)
     alternate_text = ""
     if len(variants) > 1:
         alternate_text = f"\nAlternate phrasings to treat as equivalent: {', '.join(variants[1:4])}"
+    claim_text_block = f"\nUnderlying claim: {claim_text}" if claim_text else ""
+    rationale_block = f"\nWhy this matters: {rationale}" if rationale else ""
 
     return f"""\
 Search for news articles published between {since_str} and {until_str} about {name} (ticker: {ticker}) specifically tied to this investment signal:
-- {signal_label}{alternate_text}
+- {signal_label}{alternate_text}{claim_text_block}{rationale_block}
 
 Only include articles where {name} or {ticker} is a primary subject.
 Prioritize discrete business updates, management commentary, customer announcements, press releases,
@@ -199,11 +235,11 @@ async def _run_grounded_search(
 async def collect_news_evidence(
     ticker: str,
     name: str,
-    signal_labels: list[str],
+    signal_inputs: list[Any],
     days_back: int = 7,
 ) -> list[dict[str, Any]]:
     """Return gemini_news monitoring candidates for the given ticker and signals."""
-    if not settings.gemini_api_key or not signal_labels:
+    if not settings.gemini_api_key or not signal_inputs:
         return []
 
     try:
@@ -213,7 +249,11 @@ async def collect_news_evidence(
         logger.warning("google-genai SDK not installed — skipping news collection")
         return []
 
-    signals_text = _signal_search_bullets(signal_labels)
+    signal_descriptors = _normalise_signal_search_inputs(signal_inputs)
+    if not signal_descriptors:
+        return []
+
+    signals_text = _signal_search_bullets(signal_descriptors)
 
     now = datetime.now(timezone.utc)
     since_str = (now - timedelta(days=days_back)).strftime("%B %-d, %Y")
@@ -262,13 +302,14 @@ or clearly a roundup / market-recap / "why the stock moved" explainer where the 
 
         # Step 1 — run a broad company search plus a few focused signal searches.
         search_jobs: list[tuple[str, str | None]] = [(broad_search_prompt, None)]
-        for signal_label in _select_focused_signal_labels(signal_labels):
+        for signal_descriptor in _select_focused_signal_labels(signal_descriptors):
+            signal_label = signal_descriptor["label"]
             search_jobs.append(
                 (
                     _focused_signal_prompt(
                         ticker=ticker,
                         name=name,
-                        signal_label=signal_label,
+                        signal=signal_descriptor,
                         since_str=since_str,
                         until_str=until_str,
                     ),

@@ -30,7 +30,7 @@ from app.services.monitoring_pipeline import (
     load_investor_profile,
     match_thesis_news_watches,
     persist_classified_candidates,
-    signal_labels_from_claims,
+    signal_search_descriptors_from_claims,
 )
 from app.services.edgar import (
     build_edgar_candidates,
@@ -240,11 +240,12 @@ async def run_check_now(
     decomposition = await load_active_decomposition(db, thesis.id)
     claims = decomposition.claims if decomposition else None
 
-    # Gemini news (uses signal labels from decomposition)
-    signal_labels = signal_labels_from_claims(claims)
+    # Gemini news uses signal descriptors from the decomposition so focused
+    # searches can include claim/rationale context, not just bare labels.
+    signal_descriptors = signal_search_descriptors_from_claims(claims)
     try:
         gemini_candidates = await collect_news_evidence(
-            holding.ticker, holding.name or holding.ticker, signal_labels
+            holding.ticker, holding.name or holding.ticker, signal_descriptors
         )
         candidates.extend(gemini_candidates)
     except Exception as exc:
@@ -686,11 +687,11 @@ async def _run_historical_audit_with_session(
 
         decomposition = await load_active_decomposition(db, thesis.id)
         claims = decomposition.claims if decomposition else None
-        signal_labels = signal_labels_from_claims(claims)
+        signal_descriptors = signal_search_descriptors_from_claims(claims)
 
         try:
             gemini_candidates = await collect_news_evidence(
-                holding.ticker, holding.name or holding.ticker, signal_labels,
+                holding.ticker, holding.name or holding.ticker, signal_descriptors,
                 days_back=HISTORICAL_AUDIT_LOOKBACK_DAYS,
             )
             candidates.extend(gemini_candidates)

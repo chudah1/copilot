@@ -90,6 +90,30 @@ def signal_labels_from_claims(claims: list[Any] | None) -> list[str]:
     ]
 
 
+def signal_search_descriptors_from_claims(claims: list[Any] | None) -> list[dict[str, str]]:
+    """Extract reusable search descriptors for signal-aware news retrieval."""
+    if not claims:
+        return []
+
+    descriptors: list[dict[str, str]] = []
+    for claim in claims:
+        claim_text = str(getattr(claim, "claim_text", "") or "").strip()
+        for entity in (claim.entities or []):
+            for signal in (entity.signals or []):
+                label = str(getattr(signal, "signal_label", "") or "").strip()
+                if not label:
+                    continue
+                rationale = str(getattr(signal, "rationale", "") or "").strip()
+                descriptors.append(
+                    {
+                        "label": label,
+                        "claim_text": claim_text,
+                        "rationale": rationale,
+                    }
+                )
+    return descriptors
+
+
 def build_claim_signal_lookup(claims: list[Any] | None) -> tuple[dict[str, Any], dict[str, Any]]:
     claims_by_id: dict[str, Any] = {}
     signals_by_id: dict[str, Any] = {}
