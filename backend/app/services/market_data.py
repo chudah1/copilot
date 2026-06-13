@@ -423,6 +423,7 @@ _ROUNDUP_NOISE_PATTERNS: tuple[str, ...] = (
     "roundup",
     "wallstreetbets",
 )
+_GENERIC_NEWS_RELEVANCE_FLOOR = 0.35
 
 
 @dataclass
@@ -995,6 +996,12 @@ def _build_news_candidate(
         return None
 
     event_type, matched_topics = _classify_news_event_type(combined_text)
+    if (
+        event_type == "news_or_earnings_candidate"
+        and item.ticker_relevance is not None
+        and item.ticker_relevance < _GENERIC_NEWS_RELEVANCE_FLOOR
+    ):
+        return None
     topic_context = ", ".join(matched_topics)
 
     return (

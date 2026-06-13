@@ -41,6 +41,7 @@ _ROUNDUP_NOISE_PATTERNS: tuple[str, ...] = (
     "wallstreetbets",
     "buzzing about",
 )
+_LOW_RELEVANCE_VALUES = {"low"}
 
 
 class _NewsArticle(BaseModel):
@@ -70,6 +71,18 @@ def _signal_search_bullets(signal_labels: list[str]) -> str:
 def _looks_like_roundup_noise(headline: str, summary: str) -> bool:
     text = f"{headline} {summary}".lower()
     return any(pattern in text for pattern in _ROUNDUP_NOISE_PATTERNS)
+
+
+def _topic_context_from_relevant_signals(relevant_signals: list[str]) -> tuple[list[str], str]:
+    matched_topics: list[str] = []
+    for label in relevant_signals[:4]:
+        for variant in expand_watch_queries(label)[:2]:
+            cleaned = variant.strip()
+            if cleaned and cleaned not in matched_topics:
+                matched_topics.append(cleaned)
+            if len(matched_topics) >= 6:
+                return matched_topics, ", ".join(matched_topics)
+    return matched_topics, ", ".join(matched_topics)
 
 
 async def collect_news_evidence(
@@ -215,6 +228,13 @@ def _to_candidates(
         relevant_signals = item.get("relevant_signals")
         if not isinstance(relevant_signals, list):
             relevant_signals = []
+        relevant_signals = [signal for signal in relevant_signals if isinstance(signal, str) and signal.strip()]
+        if not relevant_signals:
+            continue
+        relevance = str(item.get("relevance", "medium")).lower().strip() or "medium"
+        if relevance in _LOW_RELEVANCE_VALUES:
+            continue
+        matched_topics, topic_context = _topic_context_from_relevant_signals(relevant_signals)
 
         article_id = hashlib.sha256(f"{headline}{url}".encode()).hexdigest()[:16]
 
@@ -228,9 +248,11 @@ def _to_candidates(
                 "url": url or None,
                 "date": item.get("date"),
                 "relevant_signals": relevant_signals,
-                "relevance": item.get("relevance", "medium"),
+                "relevance": relevance,
                 "source": "gemini_search",
                 "is_grounded": bool(url and url in grounded_urls),
+                "matched_topics": matched_topics,
+                "topic_context": topic_context,
             },
         })
     return candidates

@@ -317,6 +317,35 @@ def test_shortlist_qualitative_candidates_drops_roundup_noise():
     assert candidates == []
 
 
+def test_shortlist_qualitative_candidates_drops_low_relevance_generic_mentions():
+    now = datetime(2026, 6, 13, 12, 0, tzinfo=timezone.utc)
+    items = _parse_alpha_vantage_news(
+        {
+            "feed": [
+                {
+                    "title": "Chip stocks trade mixed as AI optimism cools",
+                    "summary": "AMD was mentioned alongside other peers in a broad sector wrap.",
+                    "time_published": "20260613T0900",
+                    "source": "Reuters",
+                    "url": "https://example.com/chip-wrap",
+                    "overall_sentiment_score": "0.02",
+                    "topics": [{"topic": "technology"}],
+                    "ticker_sentiment": [{"ticker": "AMD", "relevance_score": "0.20"}],
+                }
+            ]
+        },
+        "AMD",
+    )
+    candidates = shortlist_qualitative_candidates(
+        items,
+        recent_earnings_surprise_pct=None,
+        upcoming_earnings_date=None,
+        now=now,
+        ticker="AMD",
+    )
+    assert candidates == []
+
+
 def test_shortlist_qualitative_candidates_marks_funding_updates():
     now = datetime(2026, 5, 11, 12, 0, tzinfo=timezone.utc)
     items = _parse_alpha_vantage_news(
