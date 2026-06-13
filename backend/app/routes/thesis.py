@@ -430,16 +430,23 @@ async def update_thesis(
 
     changed_fields: dict[str, str] = {}
     reason_text_changed = False
+    audit_inputs_changed = False
 
     if body.thesis_kind is not None:
         thesis.thesis_kind = body.thesis_kind
+        audit_inputs_changed = True
     if body.why_own_it is not None and body.why_own_it != thesis.why_own_it:
         changed_fields["why_own_it"] = body.why_own_it
         thesis.why_own_it = body.why_own_it
         reason_text_changed = True
+        audit_inputs_changed = True
     if body.must_remain_true is not None:
+        if body.must_remain_true != thesis.must_remain_true:
+            audit_inputs_changed = True
         thesis.must_remain_true = body.must_remain_true
     if body.what_would_change_my_mind is not None:
+        if body.what_would_change_my_mind != thesis.what_would_change_my_mind:
+            audit_inputs_changed = True
         thesis.what_would_change_my_mind = body.what_would_change_my_mind
     if body.confidence is not None and body.confidence != thesis.confidence:
         changed_fields["confidence"] = body.confidence
@@ -449,11 +456,17 @@ async def update_thesis(
     if body.ai_summary is not None:
         thesis.ai_summary = body.ai_summary
     if body.interpretation is not None:
+        if body.interpretation != thesis.interpretation:
+            audit_inputs_changed = True
         thesis.interpretation = body.interpretation
     if body.source is not None:
         thesis.source = body.source
     if body.status is not None:
         thesis.status = body.status
+
+    if audit_inputs_changed:
+        thesis.historical_audit_status = None
+        thesis.historical_audit_results = None
 
     if reason_text_changed:
         append_log_entry(

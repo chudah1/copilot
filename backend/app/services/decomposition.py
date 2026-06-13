@@ -219,15 +219,29 @@ def _signal_is_direct_and_auto_activatable(
         and confidence >= 0.8
         and bool(config.get("watch_for") or config.get("topic"))
     )
+    explicit_support_news_watch = (
+        signal_type == "news_topic"
+        and held_company_match
+        and relation_type == "validated_by"
+        and confidence >= 0.8
+        and bool(config.get("watch_for") or config.get("topic"))
+    )
 
     return (
-        (held_company_match or explicit_threat_watch or explicit_integration_watch or explicit_transcript_watch)
+        (
+            held_company_match
+            or explicit_threat_watch
+            or explicit_integration_watch
+            or explicit_transcript_watch
+            or explicit_support_news_watch
+        )
         and signal_type in APPROVED_DIRECT_SIGNAL_TYPES
         and confidence >= 0.8
         and (
             explicit_threat_watch
             or explicit_integration_watch
             or explicit_transcript_watch
+            or explicit_support_news_watch
             or not signal_data.get("confirmation_required", True)
         )
         and not bool(config.get("proxy_review_required"))

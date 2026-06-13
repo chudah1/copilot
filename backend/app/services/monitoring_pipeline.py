@@ -496,6 +496,11 @@ async def persist_classified_candidates(
                 continue
             if candidate.get("event_type") == "earnings_surprise":
                 continue
+            if (
+                candidate.get("event_type") in (NEWS_LIKE_EVENT_TYPES - {"edgar_8k", "earnings_call_transcript"})
+                and verdict == "neutral"
+            ):
+                continue
 
         evidence_summary = build_evidence_summary(
             candidate=candidate,

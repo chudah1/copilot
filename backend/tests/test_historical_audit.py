@@ -225,6 +225,35 @@ def test_serialise_audit_results_drops_unlinked_info_noise():
     assert results[0]["claim_text"] == "Merchant growth does not stall for several quarters."
 
 
+def test_serialise_audit_results_drops_unlinked_earnings_surprise():
+    from app.services.check_now import _serialise_audit_results
+
+    mock_thesis = MagicMock()
+    mock_thesis.why_own_it = "Gaming revenue rebounds."
+
+    classified = [
+        (
+            {
+                "description": "Recent earnings surprise was 6.2%.",
+                "event_type": "earnings_surprise",
+                "evidence": {"recent_earnings_surprise_pct": 6.2},
+            },
+            "warning",
+            "",
+        )
+    ]
+
+    results = _serialise_audit_results(
+        classified,
+        thesis=mock_thesis,
+        investor_profile="thesis_driven",
+        claims_by_id={},
+        signals_by_id={},
+    )
+
+    assert results == []
+
+
 def test_build_coverage_gap_items_reports_uncovered_qualitative_signals():
     from app.services.check_now import _build_coverage_gap_items
 

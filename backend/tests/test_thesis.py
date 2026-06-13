@@ -152,7 +152,7 @@ async def test_debug_decompose_returns_provider_and_gateway_results(client, auth
     assert data["gateway_result"]["success"] is True
 
 
-async def test_update_thesis(client, auth_headers, holding):
+async def test_update_thesis(client, auth_headers, holding, db):
     create = await client.post(
         "/api/theses",
         json={
@@ -169,6 +169,12 @@ async def test_update_thesis(client, auth_headers, holding):
     )
     thesis_id = create.json()["id"]
 
+    from app.models.thesis import Thesis
+    thesis = await db.get(Thesis, thesis_id)
+    thesis.historical_audit_status = "ready"
+    thesis.historical_audit_results = [{"description": "old"}]
+    await db.commit()
+
     response = await client.put(
         f"/api/theses/{thesis_id}",
         json={
@@ -184,6 +190,11 @@ async def test_update_thesis(client, auth_headers, holding):
     assert response.json()["status"] == "active"
     assert response.json()["confidence"] == "high"
     assert response.json()["must_remain_true"] == "Demand remains strong."
+
+    await db.refresh(thesis)
+    refreshed = thesis
+    assert refreshed.historical_audit_status is None
+    assert refreshed.historical_audit_results is None
 
 
 async def test_list_current_theses_returns_latest_current_per_holding(client, auth_headers, holding):
@@ -1129,6 +1140,80 @@ async def test_decompose_auto_activates_held_company_news_topic_without_entity_t
     assert signal["active"] is True
     assert signal["user_confirmed"] is True
     assert signal["signal_config_json"]["watch_for"] == "services demand"
+
+
+async def test_decompose_auto_activates_high_confidence_held_company_support_news_topic(client, auth_headers, holding):
+    create = await client.post(
+        "/api/theses",
+        json={
+            "holding_id": holding["id"],
+            "status": "active",
+            "thesis_kind": "company",
+            "why_own_it": "The company should stay in the center of a favorable theme.",
+            "what_would_change_my_mind": "It falls out of the conversation.",
+            "confidence": "high",
+            "review_cadence_days": 7,
+            "source": "user",
+        },
+        headers=auth_headers,
+    )
+    thesis_id = create.json()["id"]
+    gateway_result = ReasoningResult(
+        success=True,
+        status="success",
+        provider="openai",
+        model="gpt-test",
+        prompt_version="v1",
+        normalized_output={
+            "reason_type": "business_performance",
+            "monitorability": "high",
+            "decomposition_confidence": 0.85,
+            "claims": [
+                {
+                    "claim_text": "The company should remain a visible beneficiary of the theme.",
+                    "claim_type": "growth",
+                    "confidence": 0.86,
+                    "entities": [
+                        {
+                            "entity_name": holding["name"],
+                            "entity_ticker": holding["ticker"],
+                            "entity_type": "held_company",
+                            "relation_type": "validated_by",
+                            "rationale": "The market should keep discussing the company as a beneficiary.",
+                            "confidence": 0.92,
+                            "confirmation_required": False,
+                            "signals": [
+                                {
+                                    "signal_type": "news_topic",
+                                    "signal_label": f'{holding["ticker"]} beneficiary mentions',
+                                    "signal_config_json": {
+                                        "topic": f'{holding["ticker"]} beneficiary mentions',
+                                        "watch_for": f'{holding["ticker"]} beneficiary mentions',
+                                        "direction": "supports",
+                                    },
+                                    "rationale": "The company should keep appearing as a clear beneficiary in news coverage.",
+                                    "confidence": 0.82,
+                                    "confirmation_required": True,
+                                }
+                            ],
+                        }
+                    ],
+                }
+            ],
+        },
+        raw_output={"provider": "openai"},
+        confidence=0.85,
+        latency_ms=100,
+        failure_reason=None,
+    )
+
+    with patch("app.services.decomposition.get_reasoning_gateway", return_value=MockGateway(gateway_result)):
+        response = await client.post(f"/api/theses/{thesis_id}/decompose", headers=auth_headers)
+
+    assert response.status_code == 201
+    signal = response.json()["decomposition"]["claims"][0]["entities"][0]["signals"][0]
+    assert signal["active"] is True
+    assert signal["user_confirmed"] is True
 
 
 async def test_decompose_auto_activates_explicit_high_confidence_threat_watch(client, auth_headers, holding):

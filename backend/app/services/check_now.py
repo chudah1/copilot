@@ -431,8 +431,16 @@ def _serialise_audit_results(
         # - stronger warnings/breaks that would have mattered anyway.
         # Generic info-only rows (e.g. broad analyst sentiment with no thesis link)
         # make the feature look busier than it really is.
-        if severity == "info" and claim_obj is None and signal_obj is None:
-            continue
+        if claim_obj is None and signal_obj is None:
+            if candidate.get("event_type") == "earnings_surprise":
+                continue
+            if (
+                severity == "info"
+                and candidate.get("event_type") in {"news_or_earnings_candidate", "product_ramp_update", "contract_renewal_update", "funding_condition_update", "margin_pressure_update", "customer_capex_signal", "gemini_news", "news_keyword_match"}
+            ):
+                continue
+            if severity == "info":
+                continue
 
         raw_date = (
             evidence.get("date")

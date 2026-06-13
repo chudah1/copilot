@@ -391,3 +391,79 @@ async def test_run_check_now_skips_unlinked_analyst_revision_and_unlinked_earnin
 
     events = (await db.execute(MonitoringEvent.__table__.select())).all()
     assert events == []
+
+
+async def test_run_check_now_skips_unlinked_neutral_news_like_candidates(db, test_user):
+    holding = Holding(
+        user_id=test_user.id,
+        ticker="AMD",
+        name="Advanced Micro Devices",
+        quantity=10,
+        average_cost_basis=100,
+        current_price=100,
+        current_value=1000,
+    )
+    db.add(holding)
+    await db.flush()
+
+    thesis = Thesis(
+        user_id=test_user.id,
+        holding_id=holding.id,
+        status="active",
+        thesis_kind="company",
+        why_own_it="AI sentiment should keep helping the stock.",
+        must_remain_true="The company stays in favorable AI conversations.",
+        what_would_change_my_mind="The company falls out of favor.",
+        confidence="medium",
+        review_cadence_days=7,
+        interpretation={"watch_hints": []},
+        source="user",
+    )
+    db.add(thesis)
+    await db.commit()
+
+    company_data = _make_company_data(ticker="AMD", current_price=120.0)
+    candidates = [
+        {
+            "event_type": "contract_renewal_update",
+            "description": "A multi-stock roundup mentioned AMD alongside several unrelated companies.",
+            "evidence": {
+                "headline": "5 Stocks Investors Couldn't Stop Buzzing About This Week",
+                "summary": "This roundup mentioned AMD among several names but did not tie it to a thesis signal.",
+            },
+        },
+    ]
+
+    classification = type("Classification", (), {"severity": "info", "analysis": "Generic mention only."})()
+
+    with patch(
+        "app.services.check_now.fetch_company_data",
+        new_callable=AsyncMock,
+        return_value=company_data,
+    ), patch(
+        "app.services.check_now.generate_monitoring_candidates",
+        return_value=candidates,
+    ), patch(
+        "app.services.check_now.load_active_decomposition",
+        new_callable=AsyncMock,
+        return_value=None,
+    ), patch(
+        "app.services.check_now.collect_news_evidence",
+        new_callable=AsyncMock,
+        return_value=[],
+    ), patch(
+        "app.services.check_now.filter_candidates",
+        new_callable=AsyncMock,
+        side_effect=lambda candidates, *args, **kwargs: candidates,
+    ), patch(
+        "app.services.monitoring_pipeline.classify_event",
+        new_callable=AsyncMock,
+        return_value=classification,
+    ):
+        result = await run_check_now(holding, thesis, db)
+
+    assert result.status == "completed"
+    assert result.events_created == 0
+
+    events = (await db.execute(MonitoringEvent.__table__.select())).all()
+    assert events == []
