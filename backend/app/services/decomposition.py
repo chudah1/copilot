@@ -176,31 +176,32 @@ def _signal_is_direct_and_auto_activatable(
     confidence = signal_data.get("confidence") or 0.0
     relation_type = str(entity_data.get("relation_type") or "").strip()
     entity_type = entity_data.get("entity_type")
-    entity_ticker = str(entity_data.get("entity_ticker") or "").strip().upper()
-    entity_name = str(entity_data.get("entity_name") or "").strip()
-    holding_name = str(holding.name or "").strip()
-
-    def _canonical_name(value: str) -> str:
-        return re.sub(r"[^a-z0-9]+", "", value.lower())
-
-    held_company_match = (
-        entity_type == "held_company"
-        and (
-            entity_ticker == holding.ticker.upper()
-            or (_canonical_name(entity_name) and _canonical_name(entity_name) == _canonical_name(holding_name))
-        )
-    )
+    held_company_match = _entity_matches_holding(holding, entity_data)
     explicit_threat_watch = (
         signal_type == "news_topic"
         and relation_type == "threatened_by"
         and confidence >= 0.85
         and bool(config.get("watch_for") or config.get("topic"))
     )
+    integration_context = " ".join(
+        part
+        for part in (
+            str(config.get("watch_for") or "").strip(),
+            str(config.get("topic") or "").strip(),
+            str(signal_data.get("signal_label") or "").strip(),
+            str(signal_data.get("rationale") or "").strip(),
+            str(entity_data.get("entity_name") or "").strip(),
+        )
+        if part
+    )
     explicit_integration_watch = (
-        signal_type == "news_topic"
-        and relation_type == "validated_by"
+        signal_type in {"news_topic", "transcript_topic"}
+        and relation_type in {"validated_by", "threatened_by"}
         and confidence >= 0.8
-        and bool(config.get("integration_watch"))
+        and (
+            bool(config.get("integration_watch"))
+            or bool(_ACQUISITION_INTEGRATION_KEYWORDS.search(integration_context))
+        )
         and bool(config.get("watch_for") or config.get("topic"))
     )
     explicit_transcript_watch = (
@@ -227,13 +228,14 @@ def _signal_is_direct_and_auto_activatable(
 
 def _build_companion_qualitative_signal(
     *,
+    holding: Holding,
     entity_data: dict,
     signal_data: dict,
     claim_text: str | None,
 ) -> dict[str, Any] | None:
     entity_type = entity_data.get("entity_type")
     relation_type = str(entity_data.get("relation_type") or "").strip()
-    if entity_type == "held_company" or relation_type != "validated_by":
+    if _entity_matches_holding(holding, entity_data) or relation_type != "validated_by":
         return None
 
     signal_type = signal_data.get("signal_type")
@@ -294,6 +296,20 @@ def _build_companion_qualitative_signal(
         }
 
     return None
+
+
+def _canonical_name(value: str) -> str:
+    return re.sub(r"[^a-z0-9]+", "", value.lower())
+
+
+def _entity_matches_holding(holding: Holding, entity_data: dict) -> bool:
+    entity_ticker = str(entity_data.get("entity_ticker") or "").strip().upper()
+    entity_name = str(entity_data.get("entity_name") or "").strip()
+    holding_name = str(holding.name or "").strip()
+    return (
+        entity_ticker == holding.ticker.upper()
+        or (_canonical_name(entity_name) and _canonical_name(entity_name) == _canonical_name(holding_name))
+    )
 
 
 def _watch_hint_from_signal(signal: ThesisSignal, *, override_claim_id: str | None = None) -> dict | None:
@@ -904,8 +920,8 @@ async def _persist_successful_decomposition(
 
         for entity_data in claim_data.get("entities", []):
             entity_confirmed = (
-                entity_data.get("entity_ticker") == holding.ticker.upper()
-                and entity_data.get("entity_type") == "held_company"
+                entity_data.get("entity_type") == "held_company"
+                and _entity_matches_holding(holding, entity_data)
                 and not entity_data.get("confirmation_required", True)
             )
             entity = ThesisEntity(
@@ -933,6 +949,7 @@ async def _persist_successful_decomposition(
             }
             for signal_data in list(signal_payloads):
                 companion_signal = _build_companion_qualitative_signal(
+                    holding=holding,
                     entity_data=entity_data,
                     signal_data=signal_data,
                     claim_text=claim.claim_text,

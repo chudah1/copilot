@@ -1235,7 +1235,8 @@ async def test_decompose_adds_active_integration_companion_watches(client, auth_
                     "entities": [
                         {
                             "entity_name": "TargetCo",
-                            "entity_type": "supplier",
+                            "entity_ticker": "TGCO",
+                            "entity_type": "held_company",
                             "relation_type": "validated_by",
                             "rationale": "The deal must add revenue rather than just overhead.",
                             "confidence": 0.84,
@@ -1279,6 +1280,80 @@ async def test_decompose_adds_active_integration_companion_watches(client, auth_
         "TargetCo integration revenue traction",
         "TargetCo integration overhead drag",
     }
+
+
+async def test_decompose_auto_activates_explicit_integration_topic_on_non_primary_entity(client, auth_headers, holding):
+    create = await client.post(
+        "/api/theses",
+        json={
+            "holding_id": holding["id"],
+            "status": "active",
+            "thesis_kind": "company",
+            "why_own_it": "The acquisition should deepen monetization without integration drag.",
+            "what_would_change_my_mind": "The acquisition fails to deepen monetization or turns into overhead drag.",
+            "confidence": "high",
+            "review_cadence_days": 21,
+            "source": "user",
+        },
+        headers=auth_headers,
+    )
+    thesis_id = create.json()["id"]
+    gateway_result = ReasoningResult(
+        success=True,
+        status="success",
+        provider="anthropic",
+        model="claude-test",
+        prompt_version="v1",
+        normalized_output={
+            "reason_type": "business_performance",
+            "monitorability": "high",
+            "decomposition_confidence": 0.84,
+            "claims": [
+                {
+                    "claim_text": "The acquisition deepens monetization without becoming overhead drag.",
+                    "claim_type": "growth",
+                    "confidence": 0.86,
+                    "entities": [
+                        {
+                            "entity_name": "TargetCo",
+                            "entity_ticker": "TGCO",
+                            "entity_type": "held_company",
+                            "relation_type": "validated_by",
+                            "rationale": "Integration should deepen subscription monetization.",
+                            "confidence": 0.84,
+                            "confirmation_required": False,
+                            "signals": [
+                                {
+                                    "signal_type": "news_topic",
+                                    "signal_label": "TargetCo integration monetization progress",
+                                    "signal_config_json": {
+                                        "topic": "TargetCo integration monetization progress",
+                                        "watch_for": "TargetCo integration monetization progress",
+                                        "direction": "supports",
+                                    },
+                                    "rationale": "Integration progress should show up as clearer monetization traction.",
+                                    "confidence": 0.82,
+                                    "confirmation_required": True,
+                                }
+                            ],
+                        }
+                    ],
+                }
+            ],
+        },
+        raw_output={"provider": "anthropic"},
+        confidence=0.84,
+        latency_ms=120,
+        failure_reason=None,
+    )
+
+    with patch("app.services.decomposition.get_reasoning_gateway", return_value=MockGateway(gateway_result)):
+        response = await client.post(f"/api/theses/{thesis_id}/decompose", headers=auth_headers)
+
+    assert response.status_code == 201
+    signal = response.json()["decomposition"]["claims"][0]["entities"][0]["signals"][0]
+    assert signal["active"] is True
+    assert signal["user_confirmed"] is True
 
 
 async def test_confirm_decomposition_can_reject_active_signal_and_clear_interpretation(client, auth_headers, holding):
