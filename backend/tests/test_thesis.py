@@ -990,6 +990,146 @@ async def test_decompose_auto_activates_strong_held_company_transcript_signal(cl
     assert interpretation["watch_hints"][0]["direction"] == "supports"
 
 
+async def test_decompose_auto_activates_held_company_news_topic_without_entity_ticker(client, auth_headers, holding):
+    create = await client.post(
+        "/api/theses",
+        json={
+            "holding_id": holding["id"],
+            "status": "active",
+            "thesis_kind": "company",
+            "why_own_it": "Demand commentary should keep validating the case.",
+            "what_would_change_my_mind": "Demand weakens materially.",
+            "confidence": "high",
+            "review_cadence_days": 7,
+            "source": "user",
+        },
+        headers=auth_headers,
+    )
+    thesis_id = create.json()["id"]
+    gateway_result = ReasoningResult(
+        success=True,
+        status="success",
+        provider="anthropic",
+        model="claude-test",
+        prompt_version="v1",
+        normalized_output={
+            "reason_type": "business_performance",
+            "monitorability": "high",
+            "decomposition_confidence": 0.88,
+            "claims": [
+                {
+                    "claim_text": "Demand commentary keeps validating the case.",
+                    "claim_type": "growth",
+                    "confidence": 0.9,
+                    "entities": [
+                        {
+                            "entity_name": holding["name"],
+                            "entity_type": "held_company",
+                            "relation_type": "validated_by",
+                            "rationale": "Direct company commentary matters.",
+                            "confidence": 0.95,
+                            "confirmation_required": False,
+                            "signals": [
+                                {
+                                    "signal_type": "news_topic",
+                                    "signal_label": "Apple services demand news",
+                                    "signal_config_json": {"topic": "services demand"},
+                                    "rationale": "News should confirm demand stays healthy.",
+                                    "confidence": 0.86,
+                                    "confirmation_required": False,
+                                }
+                            ],
+                        }
+                    ],
+                }
+            ],
+        },
+        raw_output={"provider": "anthropic"},
+        confidence=0.88,
+        latency_ms=120,
+        failure_reason=None,
+    )
+
+    with patch("app.services.decomposition.get_reasoning_gateway", return_value=MockGateway(gateway_result)):
+        response = await client.post(f"/api/theses/{thesis_id}/decompose", headers=auth_headers)
+
+    assert response.status_code == 201
+    signal = response.json()["decomposition"]["claims"][0]["entities"][0]["signals"][0]
+    assert signal["active"] is True
+    assert signal["user_confirmed"] is True
+    assert signal["signal_config_json"]["watch_for"] == "services demand"
+
+
+async def test_decompose_auto_activates_explicit_high_confidence_threat_watch(client, auth_headers, holding):
+    create = await client.post(
+        "/api/theses",
+        json={
+            "holding_id": holding["id"],
+            "status": "active",
+            "thesis_kind": "company",
+            "why_own_it": "Regulatory access must stay open.",
+            "what_would_change_my_mind": "A direct restriction would break the case.",
+            "confidence": "high",
+            "review_cadence_days": 7,
+            "source": "user",
+        },
+        headers=auth_headers,
+    )
+    thesis_id = create.json()["id"]
+    gateway_result = ReasoningResult(
+        success=True,
+        status="success",
+        provider="anthropic",
+        model="claude-test",
+        prompt_version="v1",
+        normalized_output={
+            "reason_type": "regulatory",
+            "monitorability": "high",
+            "decomposition_confidence": 0.87,
+            "claims": [
+                {
+                    "claim_text": "The FDA does not restrict access.",
+                    "claim_type": "risk",
+                    "confidence": 0.9,
+                    "entities": [
+                        {
+                            "entity_name": "FDA",
+                            "entity_type": "other",
+                            "relation_type": "threatened_by",
+                            "rationale": "Regulatory restriction would directly break the case.",
+                            "confidence": 0.9,
+                            "confirmation_required": False,
+                            "signals": [
+                                {
+                                    "signal_type": "news_topic",
+                                    "signal_label": "FDA restriction news",
+                                    "signal_config_json": {"topic": "FDA restriction"},
+                                    "rationale": "Restriction news would threaten the case.",
+                                    "confidence": 0.86,
+                                    "confirmation_required": False,
+                                }
+                            ],
+                        }
+                    ],
+                }
+            ],
+        },
+        raw_output={"provider": "anthropic"},
+        confidence=0.87,
+        latency_ms=120,
+        failure_reason=None,
+    )
+
+    with patch("app.services.decomposition.get_reasoning_gateway", return_value=MockGateway(gateway_result)):
+        response = await client.post(f"/api/theses/{thesis_id}/decompose", headers=auth_headers)
+
+    assert response.status_code == 201
+    signal = response.json()["decomposition"]["claims"][0]["entities"][0]["signals"][0]
+    assert signal["active"] is True
+    assert signal["user_confirmed"] is True
+    assert signal["signal_config_json"]["direction"] == "threatens"
+
+
 async def test_confirm_decomposition_can_reject_active_signal_and_clear_interpretation(client, auth_headers, holding):
     create = await client.post(
         "/api/theses",

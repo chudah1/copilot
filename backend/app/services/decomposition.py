@@ -167,14 +167,38 @@ def _signal_is_direct_and_auto_activatable(
     signal_data: dict,
     normalized_signal_config: dict[str, Any] | None = None,
 ) -> bool:
-    entity_ticker = entity_data.get("entity_ticker")
+    config = normalized_signal_config or {}
+    signal_type = signal_data.get("signal_type")
+    confidence = signal_data.get("confidence") or 0.0
+    relation_type = str(entity_data.get("relation_type") or "").strip()
+    entity_type = entity_data.get("entity_type")
+    entity_ticker = str(entity_data.get("entity_ticker") or "").strip().upper()
+    entity_name = str(entity_data.get("entity_name") or "").strip()
+    holding_name = str(holding.name or "").strip()
+
+    def _canonical_name(value: str) -> str:
+        return re.sub(r"[^a-z0-9]+", "", value.lower())
+
+    held_company_match = (
+        entity_type == "held_company"
+        and (
+            entity_ticker == holding.ticker.upper()
+            or (_canonical_name(entity_name) and _canonical_name(entity_name) == _canonical_name(holding_name))
+        )
+    )
+    explicit_threat_watch = (
+        signal_type == "news_topic"
+        and relation_type == "threatened_by"
+        and confidence >= 0.85
+        and bool(config.get("watch_for") or config.get("topic"))
+    )
+
     return (
-        entity_ticker == holding.ticker.upper()
-        and entity_data.get("entity_type") == "held_company"
-        and signal_data.get("signal_type") in APPROVED_DIRECT_SIGNAL_TYPES
-        and (signal_data.get("confidence") or 0.0) >= 0.8
+        (held_company_match or explicit_threat_watch)
+        and signal_type in APPROVED_DIRECT_SIGNAL_TYPES
+        and confidence >= 0.8
         and not signal_data.get("confirmation_required", True)
-        and not bool((normalized_signal_config or {}).get("proxy_review_required"))
+        and not bool(config.get("proxy_review_required"))
     )
 
 
