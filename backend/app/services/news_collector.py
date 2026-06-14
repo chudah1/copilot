@@ -91,6 +91,80 @@ class _NewsResponse(BaseModel):
     articles: list[_NewsArticle]
 
 
+def _parse_news_response_tolerant(text: str) -> list[dict]:
+    """Parse a Gemini news-extraction response, salvaging complete articles
+    when the response is truncated mid-string.
+
+    Strict structured output via response_schema usually returns valid JSON,
+    but occasional token-limit-induced truncations leave an unterminated
+    string somewhere in the payload. Letting json.loads raise discards every
+    article in the batch (including all the complete ones before the cut)
+    and writes a monitoring_gap — silently breaking monitoring for the
+    thesis on what should be a recoverable hiccup.
+
+    Strategy: try strict parse first; on failure, scan to the last complete
+    article object boundary and parse only that prefix.
+    """
+    text = (text or "").strip()
+    if not text:
+        return []
+    try:
+        parsed = json.loads(text)
+    except json.JSONDecodeError:
+        parsed = _salvage_truncated_articles(text)
+    if isinstance(parsed, dict):
+        items = parsed.get("articles") or []
+    elif isinstance(parsed, list):
+        items = parsed
+    else:
+        items = []
+    return [item for item in items if isinstance(item, dict)]
+
+
+def _salvage_truncated_articles(text: str) -> dict:
+    """Best-effort recovery: find the `articles` array, walk through complete
+    object boundaries (respecting JSON string escaping), and parse the prefix
+    that ends at the last fully-closed article."""
+    marker_idx = text.find('"articles"')
+    array_start = text.find("[", marker_idx) if marker_idx != -1 else text.find("[")
+    if array_start == -1:
+        return {"articles": []}
+
+    depth = 0
+    in_string = False
+    escape = False
+    last_complete_end = -1
+    for pos in range(array_start + 1, len(text)):
+        ch = text[pos]
+        if escape:
+            escape = False
+            continue
+        if in_string:
+            if ch == "\\":
+                escape = True
+            elif ch == '"':
+                in_string = False
+            continue
+        if ch == '"':
+            in_string = True
+        elif ch == "{":
+            depth += 1
+        elif ch == "}":
+            depth -= 1
+            if depth == 0:
+                last_complete_end = pos
+
+    if last_complete_end == -1:
+        return {"articles": []}
+
+    salvaged = text[array_start : last_complete_end + 1] + "]"
+    try:
+        items = json.loads(salvaged)
+    except json.JSONDecodeError:
+        return {"articles": []}
+    return {"articles": items if isinstance(items, list) else []}
+
+
 def _normalise_signal_search_inputs(signal_inputs: list[Any]) -> list[dict[str, str]]:
     descriptors: list[dict[str, str]] = []
     seen: set[str] = set()
@@ -402,8 +476,7 @@ or clearly a roundup / market-recap / "why the stock moved" explainer where the 
         )
 
         extraction_text = (getattr(extraction_response, "text", "") or "").strip()
-        parsed = json.loads(extraction_text)
-        items = (parsed.get("articles") or []) if isinstance(parsed, dict) else (parsed or [])
+        items = _parse_news_response_tolerant(extraction_text)
 
         return _to_candidates(items, ticker=ticker, name=name, grounded_urls=grounded_urls)
 

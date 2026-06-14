@@ -21,11 +21,33 @@ sys.path.insert(0, str(Path(__file__).resolve().parents[2]))
 from app.config import settings
 os.environ.setdefault("ANTHROPIC_API_KEY", settings.anthropic_api_key)
 os.environ.setdefault("OPENAI_API_KEY", settings.openai_api_key)
+os.environ.setdefault("GEMINI_API_KEY", settings.gemini_api_key)
 
 from tests.eval.monitor_rubric import JUDGE_SYSTEM_PROMPT, JUDGE_USER_TEMPLATE, DIMENSIONS
 
 DATASET_PATH = Path(__file__).parent / "monitor_dataset.json"
 RESULTS_DIR = Path(__file__).parent / "results"
+
+
+def _judge_family(model: str) -> str:
+    m = model.lower()
+    if "claude" in m:
+        return "anthropic"
+    if m.startswith(("gpt", "o1", "o3", "o4")):
+        return "openai"
+    if "gemini" in m:
+        return "gemini"
+    return "anthropic"
+
+
+def _strip_fences(text: str) -> str:
+    text = (text or "").strip()
+    if text.startswith("```"):
+        text = text.split("```", 2)[1]
+        if text.startswith("json"):
+            text = text[4:]
+        text = text.strip()
+    return text
 
 
 async def _judge_output(case: dict, output_severity: str, output_analysis: str, judge_model: str) -> dict:
@@ -43,49 +65,63 @@ async def _judge_output(case: dict, output_severity: str, output_analysis: str, 
         output_analysis=output_analysis,
     )
 
-    anthropic_key = os.environ.get("ANTHROPIC_API_KEY", "")
-    openai_key = os.environ.get("OPENAI_API_KEY", "")
-    raw = None
+    family = _judge_family(judge_model)
 
-    if anthropic_key:
-        try:
-            import anthropic
-            client = anthropic.AsyncAnthropic(api_key=anthropic_key)
-            response = await client.messages.create(
-                model=judge_model if "claude" in judge_model else "claude-sonnet-4-6",
-                max_tokens=1024,
-                system=JUDGE_SYSTEM_PROMPT,
-                messages=[{"role": "user", "content": user_msg}],
-                temperature=0,
-            )
-            text = next((b.text for b in response.content if hasattr(b, "text")), "").strip()
-            if text.startswith("```"):
-                text = text.split("```", 2)[1]
-                if text.startswith("json"):
-                    text = text[4:]
-                text = text.strip()
-            raw = text
-        except Exception:
-            pass
+    if family == "anthropic":
+        key = os.environ.get("ANTHROPIC_API_KEY", "")
+        if not key:
+            raise RuntimeError(f"ANTHROPIC_API_KEY required for judge '{judge_model}'")
+        import anthropic
+        client = anthropic.AsyncAnthropic(api_key=key)
+        response = await client.messages.create(
+            model=judge_model,
+            max_tokens=1024,
+            system=JUDGE_SYSTEM_PROMPT,
+            messages=[{"role": "user", "content": user_msg}],
+            temperature=0,
+        )
+        raw = next((b.text for b in response.content if hasattr(b, "text")), "")
+        return json.loads(_strip_fences(raw))
 
-    if raw is None and openai_key:
+    if family == "openai":
+        key = os.environ.get("OPENAI_API_KEY", "")
+        if not key:
+            raise RuntimeError(f"OPENAI_API_KEY required for judge '{judge_model}'")
         from openai import AsyncOpenAI
-        client = AsyncOpenAI(api_key=openai_key)
-        response = await client.chat.completions.create(
-            model=judge_model if "gpt" in judge_model else "gpt-4o-mini",
-            messages=[
+        client = AsyncOpenAI(api_key=key)
+        is_o_series = judge_model.startswith(("o1", "o3", "o4"))
+        kwargs = {
+            "model": judge_model,
+            "messages": [
                 {"role": "system", "content": JUDGE_SYSTEM_PROMPT},
                 {"role": "user", "content": user_msg},
             ],
-            response_format={"type": "json_object"},
-            temperature=0,
+        }
+        if not is_o_series:
+            kwargs["temperature"] = 0
+            kwargs["response_format"] = {"type": "json_object"}
+        response = await client.chat.completions.create(**kwargs)
+        return json.loads(_strip_fences(response.choices[0].message.content or "{}"))
+
+    if family == "gemini":
+        key = os.environ.get("GEMINI_API_KEY", "")
+        if not key:
+            raise RuntimeError(f"GEMINI_API_KEY required for judge '{judge_model}'")
+        from google import genai
+        from google.genai import types as gtypes
+        client = genai.Client(api_key=key)
+        response = await asyncio.to_thread(
+            client.models.generate_content,
+            model=judge_model,
+            contents=f"{JUDGE_SYSTEM_PROMPT}\n\n{user_msg}",
+            config=gtypes.GenerateContentConfig(
+                response_mime_type="application/json",
+                temperature=0,
+            ),
         )
-        raw = response.choices[0].message.content or "{}"
+        return json.loads(_strip_fences(response.text or "{}"))
 
-    if raw is None:
-        raise RuntimeError("No ANTHROPIC_API_KEY or OPENAI_API_KEY set")
-
-    return json.loads(raw)
+    raise RuntimeError(f"Unknown judge family for model '{judge_model}'")
 
 
 async def _run_classification(case: dict) -> tuple[str, str] | None:

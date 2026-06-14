@@ -1,4 +1,5 @@
 from app.services.news_collector import (
+    _parse_news_response_tolerant,
     _select_focused_signal_labels,
     _signal_search_bullets,
     _to_candidates,
@@ -173,3 +174,51 @@ def test_to_candidates_drops_off_ticker_articles_from_model_output():
 
     assert len(candidates) == 1
     assert candidates[0]["evidence"]["headline"] == "AMD says Radeon channel demand keeps improving"
+
+
+def test_parse_news_response_tolerant_strict_path():
+    """Well-formed JSON is parsed normally — tolerance does not change strict behavior."""
+    payload = '{"articles": [{"headline": "X", "url": "u", "date": "2026-06-01", "summary": "s", "relevant_signals": ["sig"], "relevance": "high"}]}'
+    items = _parse_news_response_tolerant(payload)
+    assert len(items) == 1
+    assert items[0]["headline"] == "X"
+
+
+def test_parse_news_response_tolerant_salvages_truncated_mid_summary():
+    """Gemini sometimes truncates structured output mid-string when nearing
+    the token limit. We must salvage the complete articles before the cut
+    rather than discarding the entire batch and writing a monitoring_gap."""
+    payload = (
+        '{"articles": [\n'
+        '  {"headline": "First", "url": "u1", "date": "2026-06-01", "summary": "complete", "relevant_signals": ["a"], "relevance": "high"},\n'
+        '  {"headline": "Second", "url": "u2", "date": "2026-06-02", "summary": "also complete", "relevant_signals": ["b"], "relevance": "medium"},\n'
+        '  {"headline": "Third", "url": "u3", "date": "2026-06-03", "summary": "truncated mid stri'
+    )
+    items = _parse_news_response_tolerant(payload)
+    assert len(items) == 2, f"Should salvage two complete articles, got {len(items)}"
+    assert items[0]["headline"] == "First"
+    assert items[1]["headline"] == "Second"
+
+
+def test_parse_news_response_tolerant_returns_empty_on_unsalvageable_garbage():
+    """If we can't find a single complete article, return empty instead of
+    raising. Empty is a legitimate signal (no news) — the caller treats it
+    the same as a genuinely empty response."""
+    assert _parse_news_response_tolerant("") == []
+    assert _parse_news_response_tolerant("not json at all") == []
+    assert _parse_news_response_tolerant('{"articles": [{"truncated mid first article') == []
+
+
+def test_parse_news_response_tolerant_accepts_bare_array():
+    """Some Gemini calls return the articles list directly without the wrapper."""
+    payload = '[{"headline": "X", "url": "u", "date": "2026-06-01", "summary": "s", "relevant_signals": ["sig"], "relevance": "high"}]'
+    items = _parse_news_response_tolerant(payload)
+    assert len(items) == 1
+
+
+def test_parse_news_response_tolerant_skips_non_dict_array_entries():
+    """Defensive: if the array contains non-object entries, drop them."""
+    payload = '{"articles": [{"headline": "X", "url": "u", "date": "2026-06-01", "summary": "s", "relevant_signals": ["sig"], "relevance": "high"}, "junk", 42, null]}'
+    items = _parse_news_response_tolerant(payload)
+    assert len(items) == 1
+    assert items[0]["headline"] == "X"

@@ -510,6 +510,75 @@ def test_match_candidates_gemini_news_uses_relevant_signal_label():
     assert result[0]["evidence"]["claim_id"] == str(claim.id)
 
 
+def test_match_candidates_gemini_news_multi_label_binds_to_one_active_signal():
+    """In production, Gemini often tags a single article with multiple
+    relevant_signals (e.g. an AAPL article matching both Services revenue
+    growth AND Services gross margin). The matcher binds the candidate to
+    one signal_id — verify it picks an active matching signal rather than
+    missing the link entirely. relevant_signals is preserved in evidence
+    for digest grouping that wants the full set."""
+    rev_claim, rev_signal = _make_active_signal(
+        "Services revenue grows",
+        signal_type="revenue_growth",
+        signal_label="AAPL Services revenue growth",
+    )
+    margin_claim, margin_signal = _make_active_signal(
+        "Services margin stays above 72%",
+        signal_type="earnings_growth",
+        signal_label="AAPL Services gross margin trend",
+        position=1,
+    )
+    candidate = {
+        "event_type": "gemini_news",
+        "description": "Apple Services posts 16% growth with 75% margin",
+        "evidence": {
+            "headline": "Apple Services Q1 strong on both fronts",
+            "relevant_signals": [
+                "AAPL Services revenue growth",
+                "AAPL Services gross margin trend",
+            ],
+        },
+    }
+
+    result = match_candidates_to_signals([candidate], [rev_claim, margin_claim])
+    evidence = result[0]["evidence"]
+    assert evidence["signal_id"] in {str(rev_signal.id), str(margin_signal.id)}
+    assert evidence["claim_id"] in {str(rev_claim.id), str(margin_claim.id)}
+    # Critically, the multi-label list is preserved so downstream grouping
+    # can use it instead of being capped by the single bound signal_id.
+    assert evidence["relevant_signals"] == [
+        "AAPL Services revenue growth",
+        "AAPL Services gross margin trend",
+    ]
+
+
+def test_match_candidates_gemini_news_label_match_ignores_inactive_signals():
+    """If a label matches an inactive signal but not an active one, the
+    candidate should not be bound. Inactive signals are user-rejected or
+    expired and should not pull evidence through them."""
+    inactive_claim, inactive_signal = _make_active_signal(
+        "Old hardware margin claim",
+        signal_type="earnings_growth",
+        signal_label="AAPL Hardware gross margin trend",
+    )
+    inactive_signal.active = False  # explicitly inactivate
+
+    candidate = {
+        "event_type": "gemini_news",
+        "description": "Hardware margin hits 39%",
+        "evidence": {
+            "headline": "Hardware margin commentary",
+            "relevant_signals": ["AAPL Hardware gross margin trend"],
+        },
+    }
+
+    result = match_candidates_to_signals([candidate], [inactive_claim])
+    # Without an active match, the label-based binding falls through; the
+    # event_type-driven text-overlap fallback may still set a claim_id, but
+    # signal_id stays unset for inactive signals.
+    assert result[0]["evidence"].get("signal_id") is None
+
+
 def test_match_candidates_earnings_family_prefers_active_signal():
     claim, signal = _make_active_signal(
         "Revenue growth must stay strong",
