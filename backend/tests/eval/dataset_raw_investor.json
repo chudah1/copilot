@@ -1,0 +1,410 @@
+[
+  {
+    "id": "rinv_baba_001",
+    "description": "Substack fund letter — China cloud + AI monetization (mixed conviction)",
+    "expected_reason_type": "business_performance",
+    "expected_monitorability": "medium",
+    "complexity": "expensive",
+    "surface": "raw_investor",
+    "source_url": "https://jbglobalfund.substack.com/p/q1-2026-investor-letter",
+    "source_author": "Jack Beiro (JB Global Capital)",
+    "input": {
+      "ticker": "BABA",
+      "name": "Alibaba Group Holding",
+      "why_own_it": "As the largest position in the fund (50%!), we need to discuss Alibaba's latest earnings, which left us genuinely conflicted. On the one hand, the earnings demonstrated the company's strength in Cloud, which grew 36% year-over-year, accelerating from 29% last quarter. In tandem, Alibaba is moving towards aggressive monetization of its AI portfolio by shifting from open-source to a proprietary paid enterprise model for its high-end tools: Qwen3.6-Plus. All of this is good news as it reflects significant momentum in cloud computing and monetization potential for AI products.",
+      "must_remain_true": "",
+      "what_would_change_my_mind": ""
+    }
+  },
+  {
+    "id": "rinv_pypl_002",
+    "description": "Substack fund letter — FCF/ROIC value pitch at $39.84",
+    "expected_reason_type": "valuation",
+    "expected_monitorability": "high",
+    "complexity": "expensive",
+    "surface": "raw_investor",
+    "source_url": "https://jbglobalfund.substack.com/p/q1-2026-investor-letter",
+    "source_author": "Jack Beiro (JB Global Capital)",
+    "input": {
+      "ticker": "PYPL",
+      "name": "PayPal Holdings",
+      "why_own_it": "We initiated a significant position in PayPal (Ticker: PYPL) at $39.84 per share. We first looked at the company in late 2023, shortly after Alex Chriss became CEO, when shares were near $60. The business had most of what we look for, but the valuation did not meet our margin of safety threshold. The roughly 40% price decline since then created a price we found compelling. The market is pricing PayPal as a business in structural erosion. That conclusion is not supported by the fundamentals. The company generates $5.6 billion in annual free cash flow, earns returns on invested capital above 20%, and yields roughly 15% on free cash flow at our purchase price.",
+      "must_remain_true": "",
+      "what_would_change_my_mind": ""
+    }
+  },
+  {
+    "id": "rinv_flo_003",
+    "description": "Substack fund letter — duopoly + DSD moat thesis",
+    "expected_reason_type": "business_performance",
+    "expected_monitorability": "medium",
+    "complexity": "expensive",
+    "surface": "raw_investor",
+    "source_url": "https://jbglobalfund.substack.com/p/q1-2026-investor-letter",
+    "source_author": "Jack Beiro (JB Global Capital)",
+    "input": {
+      "ticker": "FLO",
+      "name": "Flowers Foods",
+      "why_own_it": "Flowers is the second-largest packaged bread manufacturer in the U.S., behind Grupo Bimbo, forming a functional duopoly in a category with meaningful barriers to entry. The most important of these is its direct-store-delivery (DSD) network: nearly 6,000 distributor territories where independent operators own exclusive rights to deliver and merchandise products. This infrastructure is difficult to replicate and costly to rebuild.",
+      "must_remain_true": "",
+      "what_would_change_my_mind": ""
+    }
+  },
+  {
+    "id": "rinv_iii_004",
+    "description": "Substack fund letter — UK private equity, May 2026 sell-off + buyback",
+    "expected_reason_type": "valuation",
+    "expected_monitorability": "medium",
+    "complexity": "expensive",
+    "surface": "raw_investor",
+    "source_url": "https://phenomcapital.substack.com/p/my-2026-collection-of-bets",
+    "source_author": "Phenom Capital",
+    "input": {
+      "ticker": "III.L",
+      "name": "3i Group plc",
+      "why_own_it": "Although I am still analyzing the company's Q4 FY2026 earnings, at first glance, the market punishment 3i Group took on May 14, 2026, seems overblown, and its long-term value-creation prospects remain fully intact. In the meantime, the company can create additional shareholder value by repurchasing shares, which management is currently executing via a £750 million buyback program.",
+      "must_remain_true": "",
+      "what_would_change_my_mind": ""
+    }
+  },
+  {
+    "id": "rinv_nflx_005",
+    "description": "Substack fund letter — Netflix margin expansion + valuation",
+    "expected_reason_type": "business_performance",
+    "expected_monitorability": "high",
+    "complexity": "expensive",
+    "surface": "raw_investor",
+    "source_url": "https://phenomcapital.substack.com/p/my-2026-collection-of-bets",
+    "source_author": "Phenom Capital",
+    "input": {
+      "ticker": "NFLX",
+      "name": "Netflix",
+      "why_own_it": "Looking at the financials, Netflix's trailing twelve-month (TTM) revenue grew by 16.7% year-over-year to $46.9 billion. Alongside this, its TTM operating profit surged by 25.2% year-over-year to $13.9 billion. The company is steadily expanding its profit margins, with the incremental profitability on its revenue growth comfortably outpacing its historical margins. At a share price of $87 and a market capitalization of $366 billion as of May 15, 2026, Netflix is trading at a forward multiple of 22.7x its operating profit (~$3.85 per share for FY2026E). In my view, this is a highly attractive valuation considering the vast runway of opportunities the company has over the coming decade.",
+      "must_remain_true": "",
+      "what_would_change_my_mind": ""
+    }
+  },
+  {
+    "id": "rinv_rell_006",
+    "description": "Substack — messy small-cap deep value pitch, grammar slips intact",
+    "expected_reason_type": "valuation",
+    "expected_monitorability": "medium",
+    "complexity": "expensive",
+    "surface": "raw_investor",
+    "source_url": "https://massivemoats.substack.com/p/investment-letter-april-2026-123505",
+    "source_author": "Massive Moats",
+    "input": {
+      "ticker": "RELL",
+      "name": "Richardson Electronics",
+      "why_own_it": "When I bought shares around $11, RELL presented the best asymmetric opportunity I could find in the market with nearly 80% of its market cap in current assets and 20% net cash. Exposure to semi demand through its relationship with LAM research and a recovering fast growing GES business + a host of moonshot opportunities like their new BES solutions it felt like a no brainer longer. The Q3 numbers basically validated my thesis strongly with the backlog growth and profitability. I think we will see $1-1.50 in run rate earnings potential over the medium to long term. So for a company that has been losing money for the last few years to show that earnings potential while historically trading around 20x+ earnings - you can see where they stock could be headed.",
+      "must_remain_true": "",
+      "what_would_change_my_mind": ""
+    }
+  },
+  {
+    "id": "rinv_tsm_007",
+    "description": "Substack — TSM moat + Taiwan invasion dismissal",
+    "expected_reason_type": "business_performance",
+    "expected_monitorability": "high",
+    "complexity": "expensive",
+    "surface": "raw_investor",
+    "source_url": "https://massivemoats.substack.com/p/investment-letter-april-2026-123505",
+    "source_author": "Massive Moats",
+    "input": {
+      "ticker": "TSM",
+      "name": "Taiwan Semiconductor Manufacturing",
+      "why_own_it": "The backbone of the AI trade, as they pretty much manufacture everyone's chips. By far the market leader and pretty much the only company that can make the most advanced chips they have a strong moat. Based on forward EPS, of $15.35 and expected to grow 20-25% over the next 5 years - 27x forward earnings feels cheap. I think all the Taiwan invasion stuff is overblown - it helps that they have been actively diversifying geographically too.",
+      "must_remain_true": "",
+      "what_would_change_my_mind": ""
+    }
+  },
+  {
+    "id": "rinv_brid_008",
+    "description": "Substack — Bridgford Foods Q1 commentary, grammar errors",
+    "expected_reason_type": "business_performance",
+    "expected_monitorability": "medium",
+    "complexity": "expensive",
+    "surface": "raw_investor",
+    "source_url": "https://massivemoats.substack.com/p/investment-letter-april-2026-123505",
+    "source_author": "Massive Moats",
+    "input": {
+      "ticker": "BRID",
+      "name": "Bridgford Foods Corp",
+      "why_own_it": "I actually been adding more to my position after seeing the Q1 results, pretty substantial improvements to costs and sales even with rising beef prices. Their recent shareholder meeting was a great listen as they are planning further cost cuts and another price increase which I believe should swing them into profit in the upcoming quarters. They are pretty confident that even in this inflationary environment they can be profitable. I think the rate of increase of beef will start to slow down this year and hopefully when it starts coming down they should really start seeing benefits.",
+      "must_remain_true": "",
+      "what_would_change_my_mind": ""
+    }
+  },
+  {
+    "id": "rinv_pdex_009",
+    "description": "Substack — PDEX dual-catalyst Zimmer/Monogram supply deal",
+    "expected_reason_type": "business_performance",
+    "expected_monitorability": "high",
+    "complexity": "expensive",
+    "surface": "raw_investor",
+    "source_url": "https://massivemoats.substack.com/p/investment-letter-april-2026-123505",
+    "source_author": "Massive Moats",
+    "input": {
+      "ticker": "PDEX",
+      "name": "Pro-Dex Inc",
+      "why_own_it": "When Zimmer acquired Monogram, PDEX effectively stumbled into becoming the exclusive supplier for Zimmer's new robotics product line, which is expected to start generating revenue by early 2027. This acquisition created a massive dual-catalyst for PDEX. First, as an early Monogram shareholder, they are receiving millions in upfront and ongoing cash payouts through Zimmer's CVR milestone structure. Second, through their supplier agreement, PDEX stands to realize >$100M+ in recurring annual sales as the robotics program ramps up—at gross margins substantially higher than their current portfolio average.",
+      "must_remain_true": "",
+      "what_would_change_my_mind": ""
+    }
+  },
+  {
+    "id": "rinv_ccld_010",
+    "description": "Substack — CareCloud FCF turnaround, new CEO trust",
+    "expected_reason_type": "valuation",
+    "expected_monitorability": "medium",
+    "complexity": "expensive",
+    "surface": "raw_investor",
+    "source_url": "https://massivemoats.substack.com/p/investment-letter-april-2026-123505",
+    "source_author": "Massive Moats",
+    "input": {
+      "ticker": "CCLD",
+      "name": "CareCloud",
+      "why_own_it": "I feel fundamental developments and stock price continue to diverge with this stock. Lowered cost of capital by replacing their CCLDO prefs with bank debt and are projecting 25+M in free cash flow on a 97M market cap. Even using the fully diluted share count accounting for warrants, that's 4-5x FCF for a growing company with strong ROIC on further acquisitions. Just way too cheap and new CEO feels like he's been consistently executing and turning the company around since the start of his tenure.",
+      "must_remain_true": "",
+      "what_would_change_my_mind": ""
+    }
+  },
+  {
+    "id": "rinv_crmt_011",
+    "description": "Substack — short bearish wait-and-see thesis (CarMart)",
+    "expected_reason_type": "unclear",
+    "expected_monitorability": "low",
+    "complexity": "cheap",
+    "surface": "raw_investor",
+    "source_url": "https://stockforester.substack.com/p/investment-themes-for-the-year-ahead",
+    "source_author": "Stock Forester",
+    "input": {
+      "ticker": "CRMT",
+      "name": "America's CarMart",
+      "why_own_it": "I believe the company will see an increased default rate over the next year, even worse than the current situation. I do believe this could present an opportunity if it dips a bit lower than current levels.",
+      "must_remain_true": "",
+      "what_would_change_my_mind": ""
+    }
+  },
+  {
+    "id": "rinv_pay_012",
+    "description": "Stockopedia — UK contrarian small-cap, self-aware risk",
+    "expected_reason_type": "valuation",
+    "expected_monitorability": "low",
+    "complexity": "cheap",
+    "surface": "raw_investor",
+    "source_url": "https://www.stockopedia.com/content/ten-small-cap-value-and-growth-ideas-for-2026-1042231/",
+    "source_author": "Graham Neary (Stockopedia)",
+    "input": {
+      "ticker": "PAY.L",
+      "name": "PayPoint plc",
+      "why_own_it": "The worst-performing share in my watchlist in 2025, I'm going to give it another chance. Don't try this at home! This is a very contrarian pick - and the share is indeed categorised as Contrarian by Stockopedia's algorithms. But I can't resist it at this valuation, especially as it's buying its own shares.",
+      "must_remain_true": "",
+      "what_would_change_my_mind": ""
+    }
+  },
+  {
+    "id": "rinv_nicl_013",
+    "description": "Stockopedia — UK boring quality stock thesis (Vimto)",
+    "expected_reason_type": "portfolio_role",
+    "expected_monitorability": "low",
+    "complexity": "cheap",
+    "surface": "raw_investor",
+    "source_url": "https://www.stockopedia.com/content/ten-small-cap-value-and-growth-ideas-for-2026-1042231/",
+    "source_author": "Graham Neary (Stockopedia)",
+    "input": {
+      "ticker": "NICL.L",
+      "name": "Nichols plc",
+      "why_own_it": "This Vimto maker might be the least exciting stock in the watchlist, but I like to have a boring, high-quality anchor. I also don't want to sell it out of the watchlist at a moment when it offers more value than it usually does. And it's not as if it has been failing to maintain its earnings forecasts.",
+      "must_remain_true": "",
+      "what_would_change_my_mind": ""
+    }
+  },
+  {
+    "id": "rinv_peel_014",
+    "description": "Stockopedia — UK Peel Hunt, market is missing earnings beat",
+    "expected_reason_type": "business_performance",
+    "expected_monitorability": "medium",
+    "complexity": "expensive",
+    "surface": "raw_investor",
+    "source_url": "https://www.stockopedia.com/content/ten-small-cap-value-and-growth-ideas-for-2026-1042231/",
+    "source_author": "Graham Neary (Stockopedia)",
+    "input": {
+      "ticker": "PEEL.L",
+      "name": "Peel Hunt",
+      "why_own_it": "As noted in the 2025 review article, I don't understand why the market is treating this so suspiciously. Profits in H1 were enormous relative to forecasts (more than 100% of the full-year forecast was already achieved!) and the estimates in the market are struggling to keep up: I don't think this one is priced correctly, so it's staying on my watchlist.",
+      "must_remain_true": "",
+      "what_would_change_my_mind": ""
+    }
+  },
+  {
+    "id": "rinv_googl_015",
+    "description": "Substack — emotional 15-year hold, forever-hold framing",
+    "expected_reason_type": "behavioral",
+    "expected_monitorability": "low",
+    "complexity": "cheap",
+    "surface": "raw_investor",
+    "source_url": "https://hatedmoats.substack.com/p/portfolio-reveal-performance-and",
+    "source_author": "Hated Moats",
+    "input": {
+      "ticker": "GOOGL",
+      "name": "Alphabet Inc",
+      "why_own_it": "Google is my largest holding and the second oldest one. I bought with high conviction in 2011 and ever since, I still believe it's the greatest company and business model in the world. I could write multiple articles about Google (and maybe I will :), but it's the main driver of my portfolio throughout the years and it's been the epitome of my long-term strategy described above, i.e. buy broad index funds all the time and buy individual stocks when they are ridiculously cheap. This stock treated me extremely well, virtually never disappointing me and currently is even rewarding me for just holding it via selling covered calls on it. The best company in the world, the best stock I hold and the best investment I've ever done. The forever hold type of stock.",
+      "must_remain_true": "",
+      "what_would_change_my_mind": ""
+    }
+  },
+  {
+    "id": "rinv_ccj_016",
+    "description": "Substack — Cameco uranium long-term hold, behavioral framing",
+    "expected_reason_type": "behavioral",
+    "expected_monitorability": "low",
+    "complexity": "cheap",
+    "surface": "raw_investor",
+    "source_url": "https://hatedmoats.substack.com/p/portfolio-reveal-performance-and",
+    "source_author": "Hated Moats",
+    "input": {
+      "ticker": "CCJ",
+      "name": "Cameco Corporation",
+      "why_own_it": "Cameco is my second largest position as of publishing this, and the stock has treated me extremely well. I'm a proud holder of this fantastic company and also proud of recognising its potential early on. This was the first company where I conducted real and proper deep fundamental research in extent of tens of hours. And it's paid off. Unless something happens, this is another forever hold stock for me.",
+      "must_remain_true": "",
+      "what_would_change_my_mind": ""
+    }
+  },
+  {
+    "id": "rinv_meta_017",
+    "description": "Substack — Meta 2022 turnaround narrative, philosophy of investing",
+    "expected_reason_type": "behavioral",
+    "expected_monitorability": "low",
+    "complexity": "cheap",
+    "surface": "raw_investor",
+    "source_url": "https://hatedmoats.substack.com/p/portfolio-reveal-performance-and",
+    "source_author": "Hated Moats",
+    "input": {
+      "ticker": "META",
+      "name": "Meta Platforms Inc",
+      "why_own_it": "Meta lives dearly in my investing heart because the stock was the first proper impulse to initiate a Hated Moat philosophy. We all know the story of Meta in 2022, how it was a dead company, and what happened next. Epitome of Hated Moats and a result I'll strive to replicate in the future.",
+      "must_remain_true": "",
+      "what_would_change_my_mind": ""
+    }
+  },
+  {
+    "id": "rinv_asml_018",
+    "description": "Substack — extremely sparse one-line behavioral thesis",
+    "expected_reason_type": "behavioral",
+    "expected_monitorability": "low",
+    "complexity": "cheap",
+    "surface": "raw_investor",
+    "source_url": "https://hatedmoats.substack.com/p/portfolio-reveal-performance-and",
+    "source_author": "Hated Moats",
+    "input": {
+      "ticker": "ASML",
+      "name": "ASML Holding",
+      "why_own_it": "From the moment I started researching Broadcom till today, it's still one of the most exceptional businesses ever. Happy, most likely a forever owner.",
+      "must_remain_true": "",
+      "what_would_change_my_mind": ""
+    }
+  },
+  {
+    "id": "rinv_isrg_019",
+    "description": "Substack — Intuitive Surgical, anecdotal-driven personal experience thesis",
+    "expected_reason_type": "behavioral",
+    "expected_monitorability": "low",
+    "complexity": "cheap",
+    "surface": "raw_investor",
+    "source_url": "https://hatedmoats.substack.com/p/portfolio-reveal-performance-and",
+    "source_author": "Hated Moats",
+    "input": {
+      "ticker": "ISRG",
+      "name": "Intuitive Surgical",
+      "why_own_it": "I bought ISRG the very same day I saw its DaVinchi in action at work, and never looked back. Just as its product impressed me, the stock has treated me equally well. The only regret is buying at the time I saw it with my own eyes in my hospital, and not when I saw it first on Grey's Anatomy. :)",
+      "must_remain_true": "",
+      "what_would_change_my_mind": ""
+    }
+  },
+  {
+    "id": "rinv_tff_020",
+    "description": "Substack — European microcap, family-owned narrative",
+    "expected_reason_type": "behavioral",
+    "expected_monitorability": "low",
+    "complexity": "cheap",
+    "surface": "raw_investor",
+    "source_url": "https://valueandopportunity.substack.com/p/my-23-investments-for-2026",
+    "source_author": "Memyselfandi007 (Value and Opportunity)",
+    "input": {
+      "ticker": "TFI.PA",
+      "name": "TFF Group",
+      "why_own_it": "TFF is the 'Last stock standing' from the initial portfolio 15 years ago. It is the world leading, family owned & run oak barrel manufacturer.",
+      "must_remain_true": "",
+      "what_would_change_my_mind": ""
+    }
+  },
+  {
+    "id": "rinv_perr_021",
+    "description": "Substack — French nuclear maintenance specialist, niche thesis",
+    "expected_reason_type": "business_performance",
+    "expected_monitorability": "low",
+    "complexity": "cheap",
+    "surface": "raw_investor",
+    "source_url": "https://valueandopportunity.substack.com/p/my-23-investments-for-2026",
+    "source_author": "Memyselfandi007 (Value and Opportunity)",
+    "input": {
+      "ticker": "PERR.PA",
+      "name": "G. Perrier",
+      "why_own_it": "French, family owned & run small cap, specialist for electric installations with a strong position in Nuclear maintenance.",
+      "must_remain_true": "",
+      "what_would_change_my_mind": ""
+    }
+  },
+  {
+    "id": "rinv_six2_022",
+    "description": "Substack — Sixt admiration + Covid buy timing",
+    "expected_reason_type": "behavioral",
+    "expected_monitorability": "low",
+    "complexity": "cheap",
+    "surface": "raw_investor",
+    "source_url": "https://valueandopportunity.substack.com/p/my-23-investments-for-2026",
+    "source_author": "Memyselfandi007 (Value and Opportunity)",
+    "input": {
+      "ticker": "SIX2.DE",
+      "name": "Sixt SE",
+      "why_own_it": "Sixt is a company I have been admiring for a long time but never managed to 'pull the trigger' to buy. Finally, during the dark days of Covid-19, I managed to build up a position in the cheaper pref shares.",
+      "must_remain_true": "",
+      "what_would_change_my_mind": ""
+    }
+  },
+  {
+    "id": "rinv_euk3_023",
+    "description": "Substack — replacement trade after takeover, brief mention",
+    "expected_reason_type": "portfolio_role",
+    "expected_monitorability": "low",
+    "complexity": "cheap",
+    "surface": "raw_investor",
+    "source_url": "https://valueandopportunity.substack.com/p/my-23-investments-for-2026",
+    "source_author": "Memyselfandi007 (Value and Opportunity)",
+    "input": {
+      "ticker": "EUK3.DE",
+      "name": "Eurokai",
+      "why_own_it": "Eurokai, the German, family owned operator of various Container terminals was basically a replacement trade as Logistec, my Canadian Port operator got taken over. It was also my best purchase in 2024.",
+      "must_remain_true": "",
+      "what_would_change_my_mind": ""
+    }
+  },
+  {
+    "id": "rinv_evs_024",
+    "description": "Substack — niche live-sports tech market leader",
+    "expected_reason_type": "business_performance",
+    "expected_monitorability": "medium",
+    "complexity": "expensive",
+    "surface": "raw_investor",
+    "source_url": "https://valueandopportunity.substack.com/p/my-23-investments-for-2026",
+    "source_author": "Memyselfandi007 (Value and Opportunity)",
+    "input": {
+      "ticker": "EVS.BR",
+      "name": "EVS Broadcast Equipment",
+      "why_own_it": "EVS, a market leader in equipment required to produce live sports television/streaming has been gaining market shares in its market over the past years and has made some smart acquisitions.",
+      "must_remain_true": "",
+      "what_would_change_my_mind": ""
+    }
+  }
+]
