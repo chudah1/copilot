@@ -27,14 +27,31 @@ class OpenAIReasoningProvider:
         if not self.schema_strict:
             return DECOMPOSITION_JSON_SCHEMA
         # OpenAI Structured Outputs strict mode requires every key in properties
-        # to appear in required. signal_config_json is an open object, so we
-        # collapse it to a closed empty object for strict-mode providers.
+        # to appear in `required`. Optional fields are expressed as nullable
+        # types instead of omission. Previously we collapsed signal_config_json
+        # to a closed empty object — which silently destroyed every quantitative
+        # threshold (metric/operator/threshold/threshold_pct/segment/topic
+        # could not be emitted at all). Keep the fields and make them nullable.
         schema = copy.deepcopy(DECOMPOSITION_JSON_SCHEMA)
         signal_config_json = (
             schema["properties"]["claims"]["items"]["properties"]["entities"]["items"]["properties"]["signals"]["items"]["properties"]["signal_config_json"]
         )
-        signal_config_json["properties"] = {}
-        signal_config_json["required"] = []
+        original_properties = signal_config_json.get("properties", {}) or {}
+        nullable_properties: dict = {}
+        for field, definition in original_properties.items():
+            adapted = copy.deepcopy(definition)
+            original_type = adapted.get("type")
+            if isinstance(original_type, str):
+                adapted["type"] = [original_type, "null"]
+            elif isinstance(original_type, list) and "null" not in original_type:
+                adapted["type"] = list(original_type) + ["null"]
+            # If the field is an enum, strict mode requires `null` to be a
+            # legal enum value when the type allows null.
+            if "enum" in adapted and None not in adapted["enum"]:
+                adapted["enum"] = list(adapted["enum"]) + [None]
+            nullable_properties[field] = adapted
+        signal_config_json["properties"] = nullable_properties
+        signal_config_json["required"] = list(nullable_properties.keys())
         signal_config_json["additionalProperties"] = False
         return schema
 
