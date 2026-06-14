@@ -169,5 +169,20 @@ def output_needs_escalation(
         if entity.get("entity_type") not in {None, "held_company", "other"}
     ]
     if proxy_entities and (confidence is None or confidence < 0.65):
-        return True, "Proxy-heavy decomposition requires higher confidence"
+        # If the LLM has already flagged every signal as needing user
+        # confirmation, the gate is double-counting humility — surface the
+        # claims for explicit confirmation instead of discarding them to the
+        # baseline floor. The relaxation is narrow: a single unflagged signal
+        # (or no flag at all) still escalates.
+        all_signals = [
+            signal
+            for claim in claims
+            for entity in claim.get("entities", [])
+            for signal in entity.get("signals", [])
+        ]
+        every_signal_self_flagged = bool(all_signals) and all(
+            signal.get("confirmation_required") is True for signal in all_signals
+        )
+        if not every_signal_self_flagged:
+            return True, "Proxy-heavy decomposition requires higher confidence"
     return False, None

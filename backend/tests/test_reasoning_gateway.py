@@ -1,5 +1,6 @@
 from app.services.reasoning.gateway import ThesisReasoningGateway
 from app.services.reasoning.types import ReasoningRequest, ReasoningResult, ReasoningTaskType
+from app.services.reasoning.validators import output_needs_escalation
 
 
 class StubProvider:
@@ -344,3 +345,71 @@ async def test_gateway_allows_earnings_growth_for_demand_claims():
     result = await gateway.run(_request("AI demand continues to drive strong datacenter GPU sales growth."))
     assert result.success is True
     assert result.provider == "openai"
+
+
+def _proxy_heavy_output(confidence: float, *, all_signals_require_confirmation: bool, include_unflagged_signal: bool = False) -> dict:
+    signal = {
+        "signal_type": "news_topic",
+        "signal_label": "competitor product launch",
+        "confirmation_required": all_signals_require_confirmation,
+    }
+    extra_signals = []
+    if include_unflagged_signal:
+        extra_signals.append({
+            "signal_type": "news_topic",
+            "signal_label": "second signal without flag",
+        })
+    return {
+        "reason_type": "mixed",
+        "monitorability": "low",
+        "decomposition_confidence": confidence,
+        "claims": [
+            {
+                "claim_text": "Competitor erodes market share.",
+                "claim_type": "growth",
+                "entities": [
+                    {
+                        "entity_type": "competitor",
+                        "signals": [signal] + extra_signals,
+                    }
+                ],
+            }
+        ],
+    }
+
+
+def test_proxy_gate_skipped_when_every_signal_self_flagged_for_confirmation():
+    """Proxy-heavy output with confidence below 0.65 normally escalates, but if
+    the LLM has already marked every signal `confirmation_required: true` the
+    gate is double-counting humility — surface the claims for user confirmation
+    instead of dropping them to baseline floor."""
+    output = _proxy_heavy_output(0.6, all_signals_require_confirmation=True)
+    escalate, reason = output_needs_escalation(output, original_text="some messy diary thesis")
+    assert escalate is False, f"Should not escalate when self-flagged; reason={reason}"
+
+
+def test_proxy_gate_still_fires_when_any_signal_not_self_flagged():
+    """If the LLM mixed flagged and unflagged signals, treat it as
+    insufficiently humble — gate still fires."""
+    output = _proxy_heavy_output(0.6, all_signals_require_confirmation=True, include_unflagged_signal=True)
+    escalate, reason = output_needs_escalation(output, original_text="some messy diary thesis")
+    assert escalate is True
+    assert reason == "Proxy-heavy decomposition requires higher confidence"
+
+
+def test_proxy_gate_still_fires_when_signal_lacks_confirmation_field_entirely():
+    """Older outputs without the confirmation_required field must not silently
+    bypass the gate."""
+    output = _proxy_heavy_output(0.6, all_signals_require_confirmation=False)
+    escalate, reason = output_needs_escalation(output, original_text="some messy diary thesis")
+    assert escalate is True
+    assert reason == "Proxy-heavy decomposition requires higher confidence"
+
+
+def test_low_confidence_gate_still_fires_regardless_of_self_flagging():
+    """The proxy-heavy relaxation is narrow — confidence below 0.55 still
+    escalates even if every signal is self-flagged."""
+    output = _proxy_heavy_output(0.4, all_signals_require_confirmation=True)
+    escalate, reason = output_needs_escalation(output, original_text="some messy diary thesis")
+    assert escalate is True
+    assert reason == "Decomposition confidence too low"
