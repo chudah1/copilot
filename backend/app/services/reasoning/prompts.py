@@ -1,4 +1,4 @@
-DECOMPOSITION_PROMPT_VERSION = "v6"
+DECOMPOSITION_PROMPT_VERSION = "v7"
 
 DECOMPOSITION_JSON_SCHEMA = {
     "type": "object",
@@ -177,6 +177,7 @@ Rules:
 - Do not invent numeric thresholds unless the user text clearly implies them. Do not hallucinate entities not grounded in the thesis.
 - Mark speculative mappings with lower confidence and confirmation_required=true.
 - Sparse inputs (vague one-liners, no must_remain_true, no what_would_change_my_mind): set monitorability="low", decomposition_confidence<0.7, confirmation_required=true on all entities.
+- Qualitative-only inputs (rationale primarily about CEO/founder trust, brand affinity, following another investor, or portfolio role — no observable metric thresholds or concrete events to watch): cap monitorability at "medium", and use "low" when the only signals you could extract are vague reputation/sentiment topics. Set confirmation_required=true on every claim, entity, and signal. Reason_type must reflect the underlying *motivation*, not just topics mentioned — "behavioral" for trust in people, "social_proof" for following another investor, "portfolio_role" for diversification/allocation. Do not default to "business_performance" just because a company is named.
 - Extract as many distinct falsifiable claims as genuinely exist, up to 5. Use at most 3 entities per claim, 3 signals per entity. Do not pad to reach 5 — if the thesis has 2 strong claims, return 2.
 
 Example input:

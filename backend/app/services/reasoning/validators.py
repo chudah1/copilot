@@ -149,6 +149,23 @@ def validate_decomposition_output(
     return True, None
 
 
+def _every_signal_self_flagged(claims: list[dict[str, Any]]) -> bool:
+    """True iff every signal across every claim/entity is marked
+    confirmation_required: true — i.e. the LLM has already told the UI to
+    request user confirmation on everything it produced. Used to relax
+    confidence gates that would otherwise discard humble-but-honest output
+    to the baseline floor."""
+    all_signals = [
+        signal
+        for claim in claims
+        for entity in claim.get("entities", [])
+        for signal in entity.get("signals", [])
+    ]
+    if not all_signals:
+        return False
+    return all(signal.get("confirmation_required") is True for signal in all_signals)
+
+
 def output_needs_escalation(
     normalized_output: dict[str, Any] | None,
     *,
@@ -160,8 +177,16 @@ def output_needs_escalation(
     if not claims and not is_vague_thesis(original_text):
         return True, "No claims extracted from non-vague thesis"
     confidence = normalized_output.get("decomposition_confidence")
-    if confidence is not None and confidence < 0.55:
+    # Hard floor: outputs below 0.4 confidence are too unreliable to surface
+    # even with confirmation flags, so the gate fires regardless. Between 0.4
+    # and the soft floor of 0.55, accept the output if the LLM has self-flagged
+    # every signal — confirmation prompts in the UI absorb the residual
+    # uncertainty better than the generic baseline floor would.
+    if confidence is not None and confidence < 0.4:
         return True, "Decomposition confidence too low"
+    if confidence is not None and confidence < 0.55:
+        if not _every_signal_self_flagged(claims):
+            return True, "Decomposition confidence too low"
     proxy_entities = [
         entity
         for claim in claims
@@ -174,15 +199,6 @@ def output_needs_escalation(
         # claims for explicit confirmation instead of discarding them to the
         # baseline floor. The relaxation is narrow: a single unflagged signal
         # (or no flag at all) still escalates.
-        all_signals = [
-            signal
-            for claim in claims
-            for entity in claim.get("entities", [])
-            for signal in entity.get("signals", [])
-        ]
-        every_signal_self_flagged = bool(all_signals) and all(
-            signal.get("confirmation_required") is True for signal in all_signals
-        )
-        if not every_signal_self_flagged:
+        if not _every_signal_self_flagged(claims):
             return True, "Proxy-heavy decomposition requires higher confidence"
     return False, None

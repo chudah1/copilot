@@ -406,10 +406,29 @@ def test_proxy_gate_still_fires_when_signal_lacks_confirmation_field_entirely():
     assert reason == "Proxy-heavy decomposition requires higher confidence"
 
 
-def test_low_confidence_gate_still_fires_regardless_of_self_flagging():
-    """The proxy-heavy relaxation is narrow — confidence below 0.55 still
-    escalates even if every signal is self-flagged."""
-    output = _proxy_heavy_output(0.4, all_signals_require_confirmation=True)
-    escalate, reason = output_needs_escalation(output, original_text="some messy diary thesis")
+def test_low_confidence_in_soft_band_passes_when_every_signal_self_flagged():
+    """Qualitative-only inputs produce honest low-confidence output (e.g. 0.5).
+    The confidence-too-low gate used to discard those to the baseline floor;
+    self-flagged signals absorb the residual uncertainty via UI confirmation,
+    so the soft band (0.4 - 0.55) is now passable."""
+    output = _proxy_heavy_output(0.5, all_signals_require_confirmation=True)
+    escalate, reason = output_needs_escalation(output, original_text="qualitative thesis text")
+    assert escalate is False, f"Soft-band confidence with self-flagged signals should pass; reason={reason}"
+
+
+def test_low_confidence_in_soft_band_fails_when_not_self_flagged():
+    """Without self-flagged signals there's no UI confirmation backstop, so
+    the soft band still escalates."""
+    output = _proxy_heavy_output(0.5, all_signals_require_confirmation=False)
+    escalate, reason = output_needs_escalation(output, original_text="qualitative thesis text")
+    assert escalate is True
+    assert reason == "Decomposition confidence too low"
+
+
+def test_low_confidence_below_hard_floor_always_escalates():
+    """Confidence below the hard 0.4 floor escalates even when self-flagged —
+    UI confirmation can't compensate for output that unreliable."""
+    output = _proxy_heavy_output(0.35, all_signals_require_confirmation=True)
+    escalate, reason = output_needs_escalation(output, original_text="qualitative thesis text")
     assert escalate is True
     assert reason == "Decomposition confidence too low"
