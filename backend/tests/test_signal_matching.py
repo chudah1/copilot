@@ -359,21 +359,66 @@ def _make_claim(claim_type: str, claim_text: str, position: int = 0) -> MagicMoc
     return claim
 
 
-def test_match_candidates_earnings_surprise():
+def test_match_candidates_earnings_surprise_binds_to_eps_claim_when_available():
+    """Walkthrough on 2026-06-14 found earnings_surprise events binding to
+    revenue/growth claims that don't share a metric. EPS surprise should
+    prefer claims that are actually about earnings/profit/margin."""
     claims = [
         _make_claim("growth", "Revenue keeps growing driven by iPhone demand", position=0),
-        _make_claim("valuation", "PE ratio is reasonable at current levels", position=1),
+        _make_claim("margins", "Operating margin holds above 30%", position=1),
+        _make_claim("valuation", "PE ratio is reasonable at current levels", position=2),
     ]
     candidates = [
         {
             "event_type": "earnings_surprise",
-            "description": "Recent earnings surprise was -8.2%.",
+            "description": "Recent earnings missed expectations by 8.2%.",
             "evidence": {"recent_earnings_surprise_pct": -8.2},
         }
     ]
     result = match_candidates_to_signals(candidates, claims)
-    assert result[0]["evidence"]["claim_id"] == str(claims[0].id)
+    # The margin claim is the EPS-flavored one (margin → earnings), so it wins.
+    assert result[0]["evidence"]["claim_id"] == str(claims[1].id)
     assert result[0]["evidence"].get("signal_id") is None
+
+
+def test_match_candidates_earnings_surprise_leaves_unbound_when_only_revenue_claims():
+    """If the thesis has only revenue claims (no EPS/profit/margin), the
+    earnings_surprise event should stay unbound rather than misattribute to
+    a top-line revenue claim. False attribution is the bug we're fixing."""
+    claims = [
+        _make_claim("growth", "Data center revenue grows above 20% YoY", position=0),
+        _make_claim("growth", "Services revenue keeps growing", position=1),
+    ]
+    candidates = [
+        {
+            "event_type": "earnings_surprise",
+            "description": "Recent earnings beat expectations by 5.6%.",
+            "evidence": {"recent_earnings_surprise_pct": 5.6},
+        }
+    ]
+    result = match_candidates_to_signals(candidates, claims)
+    assert result[0]["evidence"].get("claim_id") is None
+    assert result[0]["evidence"].get("signal_id") is None
+
+
+def test_match_candidates_earnings_surprise_does_not_family_bonus_revenue_growth_signal():
+    """Even when there's a revenue_growth signal and an earnings_surprise
+    event, the family_bonus shouldn't bind them — different metrics."""
+    revenue_claim, revenue_signal = _make_active_signal(
+        "Data center revenue grows above 20% YoY",
+        signal_type="revenue_growth",
+        signal_label="NVDA data center revenue growth",
+    )
+    candidates = [
+        {
+            "event_type": "earnings_surprise",
+            "description": "Recent earnings beat expectations by 5.6%.",
+            "evidence": {"recent_earnings_surprise_pct": 5.6},
+        }
+    ]
+    result = match_candidates_to_signals(candidates, [revenue_claim])
+    assert result[0]["evidence"].get("signal_id") is None
+    assert result[0]["evidence"].get("claim_id") is None
 
 
 def test_match_candidates_upcoming_earnings():
@@ -460,11 +505,17 @@ def test_match_candidates_no_claims():
 
 
 def test_match_candidates_creates_missing_evidence_dict():
-    claims = [_make_claim("growth", "Revenue keeps growing", position=0)]
+    """Test name purpose: a candidate that arrives without an `evidence` dict
+    should still have one created. Originally also asserted that
+    earnings_surprise binds to a revenue claim — that was the bug surfaced in
+    the 2026-06-14 walkthrough; the matcher now correctly leaves it unbound.
+    Switched to an EPS-flavored claim so the binding still demonstrates the
+    evidence-dict creation."""
+    claims = [_make_claim("margins", "Operating margin stays above 30%", position=0)]
     candidates = [
         {
             "event_type": "earnings_surprise",
-            "description": "Recent earnings surprise was -8.2%.",
+            "description": "Recent earnings missed expectations by 8.2%.",
         }
     ]
     result = match_candidates_to_signals(candidates, claims)
@@ -580,16 +631,21 @@ def test_match_candidates_gemini_news_label_match_ignores_inactive_signals():
 
 
 def test_match_candidates_earnings_family_prefers_active_signal():
+    """An earnings_surprise event should prefer an active signal over the
+    keyword fallback — but only when the signal is itself in the EPS family
+    (earnings_growth, earnings_surprise, guidance_change). The 2026-06-14
+    walkthrough surfaced that a revenue_growth signal was getting the
+    family-bonus on earnings events, which is wrong (top-line vs bottom-line)."""
     claim, signal = _make_active_signal(
-        "Revenue growth must stay strong",
-        signal_type="revenue_growth",
-        signal_label="AAPL revenue growth",
-        rationale="Revenue growth should remain healthy.",
+        "Earnings growth must stay strong",
+        signal_type="earnings_growth",
+        signal_label="AAPL earnings growth",
+        rationale="EPS growth should remain healthy.",
     )
     candidates = [
         {
             "event_type": "earnings_surprise",
-            "description": "Recent earnings surprise was -8.2%.",
+            "description": "Recent earnings missed expectations by 8.2%.",
             "evidence": {"recent_earnings_surprise_pct": -8.2},
         }
     ]

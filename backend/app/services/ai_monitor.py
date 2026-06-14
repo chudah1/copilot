@@ -237,8 +237,14 @@ async def classify_event(
         try:
             from openai import AsyncOpenAI
             oa_client = AsyncOpenAI(api_key=settings.openai_api_key)
+            # Side-by-side test on the NVDA "+5.6% surprise" walkthrough case
+            # showed gpt-4o-mini classifies the beat as a warning regardless of
+            # how unambiguous the description is (tried three description
+            # variants — all wrong on mini, all correct on gpt-4o). gpt-4o is
+            # the cheapest model that handles event-against-thesis judgments
+            # reliably.
             oa_response = await oa_client.chat.completions.create(
-                model="gpt-4o-mini",
+                model="gpt-4o",
                 max_tokens=1024,
                 messages=[
                     {"role": "system", "content": _CLASSIFY_SYSTEM},

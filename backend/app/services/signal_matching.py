@@ -13,9 +13,23 @@ from app.models.thesis_decomposition import ThesisDecomposition
 from app.models.thesis_entity import ThesisEntity
 from app.models.thesis_signal import ThesisSignal
 
+# Used by upcoming_earnings + earnings_call_transcript events, which reveal
+# both top-line (revenue) and bottom-line (EPS) results.
 EARNINGS_CLAIM_KEYWORDS = {"earnings", "growth", "revenue", "profit", "income", "sales"}
-MANAGEMENT_CLAIM_KEYWORDS = {"management", "governance", "leadership", "ceo", "founder", "insider"}
 EARNINGS_SIGNAL_TYPES = {"revenue_growth", "earnings_growth", "earnings_surprise", "guidance_change"}
+
+# Narrower set for `earnings_surprise` events specifically. The +5.6% surprise
+# is an EPS surprise (bottom-line), not a revenue surprise (top-line), so it
+# shouldn't be evidence for a "segment revenue grows X%" claim — different
+# metric. Walkthrough on 2026-06-14 found the broader pool was misattributing
+# beats to revenue claims. See [[project_e2e_walkthrough_2026_06_14]].
+# Short keywords like "eps" would substring-match inside common words like
+# "keeps" or "depositary"; the matcher does a plain `in` check, not a word-
+# boundary one. Stick to keywords long enough to be safe.
+EPS_CLAIM_KEYWORDS = {"earnings", "profit", "income", "margin"}
+EPS_SIGNAL_TYPES = {"earnings_growth", "earnings_surprise", "guidance_change"}
+
+MANAGEMENT_CLAIM_KEYWORDS = {"management", "governance", "leadership", "ceo", "founder", "insider"}
 MANAGEMENT_SIGNAL_TYPES = {"insider_transaction"}
 NEWS_SIGNAL_TYPES = {"news_topic", "news_watch"}
 
@@ -65,7 +79,9 @@ def match_candidates_to_signals(
         if matched_signal is not None:
             matched_claim, signal = matched_signal
             evidence["signal_id"] = str(signal.id)
-        elif event_type in ("earnings_surprise", "upcoming_earnings", "earnings_call_transcript"):
+        elif event_type == "earnings_surprise":
+            matched_claim = _find_claim_by_type_keywords(claims, EPS_CLAIM_KEYWORDS)
+        elif event_type in ("upcoming_earnings", "earnings_call_transcript"):
             matched_claim = _find_claim_by_type_keywords(claims, EARNINGS_CLAIM_KEYWORDS)
         elif event_type in {"news_or_earnings_candidate", "product_ramp_update", "gemini_news", "news_keyword_match", "edgar_8k"}:
             headline = evidence.get("headline") or candidate.get("description", "")
@@ -73,7 +89,12 @@ def match_candidates_to_signals(
         elif event_type == "insider_transaction":
             matched_claim = _find_claim_by_type_keywords(claims, MANAGEMENT_CLAIM_KEYWORDS)
 
-        if matched_claim is None and event_type in ("earnings_surprise", "upcoming_earnings", "earnings_call_transcript", "insider_transaction"):
+        # Fallback to first claim is acceptable for events whose attribution is
+        # naturally fuzzy (an upcoming-earnings event or a transcript covers
+        # everything), but earnings_surprise is metric-specific: if there is no
+        # EPS/profit/margin claim, leaving claim_id unset is better than
+        # falsely binding it to a top-line revenue claim.
+        if matched_claim is None and event_type in ("upcoming_earnings", "earnings_call_transcript", "insider_transaction"):
             sorted_claims = sorted(claims, key=lambda c: c.position)
             if sorted_claims:
                 matched_claim = sorted_claims[0]
@@ -160,7 +181,12 @@ def _signal_match_score(
     candidate_words = _words(candidate_text)
     overlap = len(signal_words & candidate_words)
 
-    if event_type in {"earnings_surprise", "upcoming_earnings", "earnings_call_transcript"}:
+    if event_type == "earnings_surprise":
+        # Narrow family: an EPS surprise is bottom-line evidence, not top-line.
+        family_bonus = 4 if signal_type in EPS_SIGNAL_TYPES else 1 if overlap > 0 else 0
+        return family_bonus + overlap * 10
+
+    if event_type in {"upcoming_earnings", "earnings_call_transcript"}:
         family_bonus = 4 if signal_type in EARNINGS_SIGNAL_TYPES else 1 if overlap > 0 else 0
         return family_bonus + overlap * 10
 

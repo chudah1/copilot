@@ -304,6 +304,51 @@ def test_shortlist_qualitative_candidates_filters_noise():
     assert candidates[0]["event_type"] == "earnings_surprise"
     assert candidates[1]["event_type"] == "upcoming_earnings"
     assert candidates[2]["event_type"] == "news_or_earnings_candidate"
+    # Description must spell out the direction — a +6% beat read as ambiguous
+    # by downstream LLM classifiers (especially the gpt-4o-mini fallback) and
+    # routinely got misclassified as a "potential miss". The walkthrough on
+    # 2026-06-14 surfaced this end-to-end.
+    assert "beat" in candidates[0]["description"].lower()
+    assert "6.0%" in candidates[0]["description"]
+
+
+def test_earnings_surprise_candidate_describes_misses_explicitly():
+    """Negative surprises must call out the miss, not just a signed number."""
+    from app.services.market_data import _build_earnings_surprise_candidate
+
+    miss = _build_earnings_surprise_candidate(-7.5)
+    assert miss is not None
+    desc = miss["description"].lower()
+    assert "miss" in desc
+    assert "7.5%" in desc
+    # Sign already consumed by the wording; the raw evidence keeps the signed value.
+    assert "-" not in desc.replace("\n", " ")
+    assert miss["evidence"]["recent_earnings_surprise_pct"] == -7.5
+
+
+def test_earnings_surprise_candidate_describes_beats_explicitly():
+    """Positive surprises must call out the beat to remove classifier ambiguity."""
+    from app.services.market_data import _build_earnings_surprise_candidate
+
+    beat = _build_earnings_surprise_candidate(5.6)
+    assert beat is not None
+    desc = beat["description"].lower()
+    assert "beat" in desc
+    assert "5.6%" in desc
+    assert beat["evidence"]["recent_earnings_surprise_pct"] == 5.6
+
+
+def test_earnings_surprise_candidate_drops_below_threshold():
+    """Surprises within +/- 5% are noise — the existing 5%-threshold filter
+    stays in place; verify the new wording doesn't accidentally remove it."""
+    from app.services.market_data import _build_earnings_surprise_candidate
+
+    assert _build_earnings_surprise_candidate(None) is None
+    assert _build_earnings_surprise_candidate(4.9) is None
+    assert _build_earnings_surprise_candidate(-4.9) is None
+    # Boundary: filter is `abs(x) < 5`, so exactly 5.0 surfaces a candidate.
+    assert _build_earnings_surprise_candidate(5.0) is not None
+    assert _build_earnings_surprise_candidate(5.1) is not None
 
 
 def test_shortlist_qualitative_candidates_marks_product_ramp_updates():

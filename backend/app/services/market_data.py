@@ -923,9 +923,14 @@ def _candidate_sort_key(candidate: dict[str, Any]) -> float:
 def _build_earnings_surprise_candidate(recent_earnings_surprise_pct: float | None) -> dict[str, Any] | None:
     if recent_earnings_surprise_pct is None or abs(recent_earnings_surprise_pct) < 5:
         return None
+    # "surprise was 5.6%" is ambiguous downstream — a beat reads identical to a
+    # miss. Spell out the direction so both the LLM classifier and a human
+    # reading the conviction log know which way the news cuts.
+    direction = "beat" if recent_earnings_surprise_pct > 0 else "missed"
+    magnitude = abs(recent_earnings_surprise_pct)
     return {
         "event_type": "earnings_surprise",
-        "description": f"Recent earnings surprise was {recent_earnings_surprise_pct:.1f}%.",
+        "description": f"Recent earnings {direction} expectations by {magnitude:.1f}%.",
         "evidence": {"recent_earnings_surprise_pct": recent_earnings_surprise_pct},
     }
 
