@@ -24,6 +24,7 @@ sys.path.insert(0, str(Path(__file__).resolve().parents[2]))
 from app.config import settings
 os.environ.setdefault("ANTHROPIC_API_KEY", settings.anthropic_api_key)
 os.environ.setdefault("OPENAI_API_KEY", settings.openai_api_key)
+os.environ.setdefault("GEMINI_API_KEY", settings.gemini_api_key)
 
 from tests.eval.rubric import JUDGE_SYSTEM_PROMPT, JUDGE_USER_TEMPLATE, DIMENSIONS
 
@@ -41,8 +42,22 @@ def _strip_fences(raw: str) -> str:
     return raw
 
 
+def _judge_family(model: str) -> str:
+    """Route a judge model name to the right provider family."""
+    m = model.lower()
+    if "claude" in m:
+        return "anthropic"
+    if m.startswith("gpt") or m.startswith("o3") or m.startswith("o1") or m.startswith("o4"):
+        return "openai"
+    if "gemini" in m:
+        return "gemini"
+    return "anthropic"
+
+
 async def _judge_output(input_case: dict, output: dict, judge_model: str) -> dict:
-    """Send output to judge model, return scores dict. Tries Anthropic → OpenAI → Gemini."""
+    """Send output to the requested judge model. Routes by model family — does
+    not silently fall back to a different family. If the requested family is
+    unavailable, raise so we never grade with Sonnet by accident."""
     import json as _json
 
     user_msg = JUDGE_USER_TEMPLATE.format(
@@ -54,66 +69,65 @@ async def _judge_output(input_case: dict, output: dict, judge_model: str) -> dic
         output_json=_json.dumps(output, indent=2),
     )
 
-    anthropic_key = os.environ.get("ANTHROPIC_API_KEY", "")
-    openai_key = os.environ.get("OPENAI_API_KEY", "")
-    gemini_key = os.environ.get("GEMINI_API_KEY", "")
+    family = _judge_family(judge_model)
 
-    # Anthropic
-    if anthropic_key:
-        try:
-            import anthropic
-            client = anthropic.AsyncAnthropic(api_key=anthropic_key)
-            response = await client.messages.create(
-                model=judge_model if "claude" in judge_model else "claude-sonnet-4-6",
-                max_tokens=1024,
-                system=JUDGE_SYSTEM_PROMPT,
-                messages=[{"role": "user", "content": user_msg}],
+    if family == "anthropic":
+        key = os.environ.get("ANTHROPIC_API_KEY", "")
+        if not key:
+            raise RuntimeError(f"ANTHROPIC_API_KEY required for judge '{judge_model}'")
+        import anthropic
+        client = anthropic.AsyncAnthropic(api_key=key)
+        response = await client.messages.create(
+            model=judge_model,
+            max_tokens=1024,
+            system=JUDGE_SYSTEM_PROMPT,
+            messages=[{"role": "user", "content": user_msg}],
+            temperature=0,
+        )
+        raw = next((b.text for b in response.content if hasattr(b, "text")), "")
+        return json.loads(_strip_fences(raw))
+
+    if family == "openai":
+        key = os.environ.get("OPENAI_API_KEY", "")
+        if not key:
+            raise RuntimeError(f"OPENAI_API_KEY required for judge '{judge_model}'")
+        from openai import AsyncOpenAI
+        client = AsyncOpenAI(api_key=key)
+        # o-series models reject temperature=0 and response_format
+        is_o_series = judge_model.startswith(("o1", "o3", "o4"))
+        kwargs = {
+            "model": judge_model,
+            "messages": [
+                {"role": "system", "content": JUDGE_SYSTEM_PROMPT},
+                {"role": "user", "content": user_msg},
+            ],
+        }
+        if not is_o_series:
+            kwargs["temperature"] = 0
+            kwargs["response_format"] = {"type": "json_object"}
+        response = await client.chat.completions.create(**kwargs)
+        raw = response.choices[0].message.content or "{}"
+        return json.loads(_strip_fences(raw))
+
+    if family == "gemini":
+        key = os.environ.get("GEMINI_API_KEY", "")
+        if not key:
+            raise RuntimeError(f"GEMINI_API_KEY required for judge '{judge_model}'")
+        from google import genai
+        from google.genai import types as gtypes
+        client = genai.Client(api_key=key)
+        response = await asyncio.to_thread(
+            client.models.generate_content,
+            model=judge_model,
+            contents=f"{JUDGE_SYSTEM_PROMPT}\n\n{user_msg}",
+            config=gtypes.GenerateContentConfig(
+                response_mime_type="application/json",
                 temperature=0,
-            )
-            raw = next((b.text for b in response.content if hasattr(b, "text")), "")
-            return json.loads(_strip_fences(raw))
-        except Exception:
-            pass
+            ),
+        )
+        return json.loads(_strip_fences(response.text or "{}"))
 
-    # OpenAI
-    if openai_key:
-        try:
-            from openai import AsyncOpenAI
-            client = AsyncOpenAI(api_key=openai_key)
-            response = await client.chat.completions.create(
-                model=judge_model if "gpt" in judge_model else "gpt-4o-mini",
-                messages=[
-                    {"role": "system", "content": JUDGE_SYSTEM_PROMPT},
-                    {"role": "user", "content": user_msg},
-                ],
-                response_format={"type": "json_object"},
-                temperature=0,
-            )
-            raw = response.choices[0].message.content or "{}"
-            return json.loads(raw)
-        except Exception:
-            pass
-
-    # Gemini
-    if gemini_key:
-        try:
-            from google import genai
-            from google.genai import types as gtypes
-            client = genai.Client(api_key=gemini_key)
-            response = await asyncio.to_thread(
-                client.models.generate_content,
-                model="gemini-2.5-flash",
-                contents=f"{JUDGE_SYSTEM_PROMPT}\n\n{user_msg}",
-                config=gtypes.GenerateContentConfig(
-                    response_mime_type="application/json",
-                    temperature=0,
-                ),
-            )
-            return json.loads(_strip_fences(response.text or "{}"))
-        except Exception:
-            pass
-
-    raise RuntimeError("No ANTHROPIC_API_KEY, OPENAI_API_KEY, or GEMINI_API_KEY available for judging")
+    raise RuntimeError(f"Unknown judge family for model '{judge_model}'")
 
 
 def _build_providers(decompose_provider: str) -> list | None:
@@ -197,6 +211,7 @@ async def run_eval(
     decompose_provider: str = "auto",
     skip_decomposition: bool = False,
     precomputed_outputs: dict | None = None,
+    dataset_path: Path | None = None,
 ) -> list[dict]:
     """
     Run eval on the dataset. Returns list of result dicts.
@@ -207,8 +222,9 @@ async def run_eval(
         judge_model: model to use for judging
         skip_decomposition: if True, precomputed_outputs must be provided
         precomputed_outputs: {case_id: output_dict} to use instead of live decomposition
+        dataset_path: dataset JSON file; defaults to dataset.json
     """
-    with open(DATASET_PATH) as f:
+    with open(dataset_path or DATASET_PATH) as f:
         dataset = json.load(f)
 
     if case_ids:
@@ -323,7 +339,7 @@ def save_results(results: list[dict], prompt_version: str) -> Path:
 
 async def _main():
     parser = argparse.ArgumentParser(description="Run decomposition prompt evals")
-    parser.add_argument("--case", help="Run a single case by ID")
+    parser.add_argument("--case", help="Run case(s) by ID. Accepts a single ID or comma-separated list.")
     parser.add_argument("--prompt-version", default="unknown", help="Prompt version tag (e.g. v5)")
     parser.add_argument("--judge", default="claude-sonnet-4-6", help="Judge model")
     parser.add_argument(
@@ -332,16 +348,19 @@ async def _main():
         help="Provider for decomposition (auto=complexity routing, default: auto)",
     )
     parser.add_argument("--no-save", action="store_true", help="Don't save results to file")
+    parser.add_argument("--dataset", default=None, help="Path to dataset JSON (defaults to dataset.json)")
     args = parser.parse_args()
 
-    case_ids = [args.case] if args.case else None
-    print(f"\nRunning decomposition evals (prompt={args.prompt_version}, judge={args.judge}, provider={args.provider})...")
+    case_ids = [c.strip() for c in args.case.split(",")] if args.case else None
+    dataset_path = Path(args.dataset) if args.dataset else None
+    print(f"\nRunning decomposition evals (prompt={args.prompt_version}, judge={args.judge}, provider={args.provider}, dataset={args.dataset or 'dataset.json'})...")
 
     results = await run_eval(
         case_ids=case_ids,
         prompt_version=args.prompt_version,
         judge_model=args.judge,
         decompose_provider=args.provider,
+        dataset_path=dataset_path,
     )
 
     print_table(results, args.prompt_version)

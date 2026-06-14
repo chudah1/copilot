@@ -1,0 +1,194 @@
+[
+  {
+    "id": "growth_nvda_001__raw",
+    "description": "AI GPU dominance with explicit thresholds and competitor threat (rawified)",
+    "expected_reason_type": "business_performance",
+    "expected_monitorability": "high",
+    "complexity": "expensive",
+    "surface": "raw",
+    "source_id": "growth_nvda_001",
+    "input": {
+      "ticker": "NVDA",
+      "name": "NVIDIA Corporation",
+      "why_own_it": "ok so nvidia dominates ai training gpu market and hyperscalers pour billions into data $NVDA centers and nvda takes the lion's share with cuda lock-in data center revenue keeps growing above 20% yoy and gross margins stay above 70% amd gains real gpu market share and export restrictions gut china revenue significantly",
+      "must_remain_true": "",
+      "what_would_change_my_mind": ""
+    }
+  },
+  {
+    "id": "margins_aapl_005__raw",
+    "description": "Apple Services with explicit margin thresholds (rawified)",
+    "expected_reason_type": "margins",
+    "expected_monitorability": "high",
+    "complexity": "expensive",
+    "surface": "raw",
+    "source_id": "margins_aapl_005",
+    "input": {
+      "ticker": "AAPL",
+      "name": "Apple Inc",
+      "why_own_it": "tbh apple services is a high-margin recurring revenue stream attached to an installed $AAPL base of 2 billion devices services gross margin stays above 72% and hardware gross margin stays above 35% regulatory action forces app store fee cuts and services revenue growth slows below 12% yoy",
+      "must_remain_true": "",
+      "what_would_change_my_mind": ""
+    }
+  },
+  {
+    "id": "competitor_googl_008__raw",
+    "description": "Google search dominance vs Bing AI (rawified)",
+    "expected_reason_type": "business_performance",
+    "expected_monitorability": "medium",
+    "complexity": "expensive",
+    "surface": "raw",
+    "source_id": "competitor_googl_008",
+    "input": {
+      "ticker": "GOOGL",
+      "name": "Alphabet Inc",
+      "why_own_it": "ok so google search has structural habit lock-in and the best ad targeting data $GOOGL and ai overviews will keep users on google google search market share stays above 80% globally bing ai or chatgpt search takes meaningful query share and apple switches safari default search",
+      "must_remain_true": "",
+      "what_would_change_my_mind": ""
+    }
+  },
+  {
+    "id": "income_o_012__raw",
+    "description": "Realty Income monthly dividend with occupancy floor (rawified)",
+    "expected_reason_type": "income",
+    "expected_monitorability": "high",
+    "complexity": "expensive",
+    "surface": "raw",
+    "source_id": "income_o_012",
+    "input": {
+      "ticker": "O",
+      "name": "Realty Income Corporation",
+      "why_own_it": "tbh realty income is the monthly dividend company and net lease structure passes $O costs to tenants and affo growth funds dividend increases occupancy stays above 96% and affo per share grows at least 3% annually occupancy drops below 95% for two consecutive quarters and tenant bankruptcies increase materially",
+      "must_remain_true": "",
+      "what_would_change_my_mind": ""
+    }
+  },
+  {
+    "id": "qualitative_meta_016__raw",
+    "description": "CEO trust thesis \u2014 behavioural, no metrics (rawified)",
+    "expected_reason_type": "behavioral",
+    "expected_monitorability": "low",
+    "complexity": "cheap",
+    "surface": "raw",
+    "source_id": "qualitative_meta_016",
+    "input": {
+      "ticker": "META",
+      "name": "Meta Platforms Inc",
+      "why_own_it": "ok so mark zuckerberg has demonstrated he can pivot the company and his track $META record on instagram and reels shows he can execute against competition zuckerberg stays in control of the company evidence of major strategic blunder or loss of control",
+      "must_remain_true": "",
+      "what_would_change_my_mind": ""
+    }
+  },
+  {
+    "id": "mixed_pltr_018__raw",
+    "description": "Multi-theme mixed thesis \u2014 AI, government, enterprise (rawified)",
+    "expected_reason_type": "mixed",
+    "expected_monitorability": "medium",
+    "complexity": "expensive",
+    "surface": "raw",
+    "source_id": "mixed_pltr_018",
+    "input": {
+      "ticker": "PLTR",
+      "name": "Palantir Technologies",
+      "why_own_it": "tbh ai data analytics play but also government contracts plus palantir platform for $PLTR enterprise seems well positioned in multiple areas with aip gaining traction us government contracts renew and aip commercial revenue keeps growing government budget cuts reduce palantir contracts and aip commercial adoption stalls below expectations",
+      "must_remain_true": "",
+      "what_would_change_my_mind": ""
+    }
+  },
+  {
+    "id": "uk_shel_021__raw",
+    "description": "Shell energy transition with explicit yield and buyback thresholds (UK/NYSE cross-listed) (rawified)",
+    "expected_reason_type": "income",
+    "expected_monitorability": "high",
+    "complexity": "expensive",
+    "surface": "raw",
+    "source_id": "uk_shel_021",
+    "input": {
+      "ticker": "SHEL",
+      "name": "Shell plc",
+      "why_own_it": "ok so shell generates $40b+ free cash flow annually and is returning capital aggressively $SHEL via buybacks and the energy transition is slower than the market prices in giving shell a long cash harvest runway annual dividend yield stays above 4% and share buyback programme stays at least $3b per quarter and brent crude stays above $60 brent oil drops below $60 and stays there for two quarters and shell accelerates lng exit or cuts buyback guidance materially",
+      "must_remain_true": "",
+      "what_would_change_my_mind": ""
+    }
+  },
+  {
+    "id": "rambling_ba_028__raw",
+    "description": "Overlong meandering Boeing turnaround thesis (rawified)",
+    "expected_reason_type": "business_performance",
+    "expected_monitorability": "medium",
+    "complexity": "expensive",
+    "surface": "raw",
+    "source_id": "rambling_ba_028",
+    "input": {
+      "ticker": "BA",
+      "name": "The Boeing Company",
+      "why_own_it": "tbh boeing is a duopoly with airbus and the 737 max issues are $BA mostly behind them after the door plug incident they have a new ceo who is fixing the quality culture the backlog is massive at over 5000 aircraft which gives years of revenue visibility airlines are desperate for new fuel-efficient jets and there are only two suppliers defense contracts provide a floor and eventually they will get back to positive free cash flow as production ramps probably by 2026 or so the valuation is cheap relative to where it should be once they fix manufacturing 737 max and 787 production ramp continues without new safety incidents and free cash flow turns positive another major safety incident grounding the 737 max and new ceo fails to fix quality culture and 787 program faces further regulatory delays",
+      "must_remain_true": "",
+      "what_would_change_my_mind": ""
+    }
+  },
+  {
+    "id": "reddit_googl_031__raw",
+    "description": "Berkshire institutional social proof + relative P/E valuation \u2014 the classic Reddit 'smart money followed, but is it overvalued?' pattern (rawified)",
+    "expected_reason_type": "mixed",
+    "expected_monitorability": "medium",
+    "complexity": "expensive",
+    "surface": "raw",
+    "source_id": "reddit_googl_031",
+    "input": {
+      "ticker": "GOOGL",
+      "name": "Alphabet Inc",
+      "why_own_it": "ok so berkshire recently increased their investment in google by 200% which is very $GOOGL uncharacteristic of berkshire and shows serious conviction and google trades at a p/e of 29.57 which looks high but is actually cheap compared to meta and msft on a like-for-like basis given google's ai infrastructure and search dominance berkshire maintains or grows their alphabet position and google p/e stays below 35 and search market share stays above 80% berkshire exits the position entirely and p/e expands above 40 without proportional earnings growth and bing ai or chatgpt meaningfully erodes search query share",
+      "must_remain_true": "",
+      "what_would_change_my_mind": ""
+    }
+  },
+  {
+    "id": "reddit_nvda_032__raw",
+    "description": "Moonshot price target thesis with hardware-to-software narrative shift \u2014 tests whether decomposer extracts falsifiable claims or hallucinates thresholds from a $20T target (rawified)",
+    "expected_reason_type": "business_performance",
+    "expected_monitorability": "medium",
+    "complexity": "expensive",
+    "surface": "raw",
+    "source_id": "reddit_nvda_032",
+    "input": {
+      "ticker": "NVDA",
+      "name": "NVIDIA Corporation",
+      "why_own_it": "tbh nvidia will reach $20 trillion market cap by 2030 \u2014 310% upside $NVDA from here and they're evolving from pure hardware into one of the largest ai software companies and forward p/e of 40.7 is 26% below their 3-year median of 55 and the inference era is only beginning and cuda lock-in means nobody can switch data center revenue keeps accelerating and cuda ecosystem remains the default for ai workloads custom silicon from google tpus or aws trainium meaningfully displaces nvidia in inference workloads and forward p/e re-rates below 30 from multiple compression not earnings growth",
+      "must_remain_true": "",
+      "what_would_change_my_mind": ""
+    }
+  },
+  {
+    "id": "reddit_diary_bidu_039__raw",
+    "description": "Diary-entry style \u2014 qualitative management skepticism + geopolitical drift, no metrics, written like a personal journal. Tests whether decomposer extracts signals from prose or hallucinates thresholds. (rawified)",
+    "expected_reason_type": "mixed",
+    "expected_monitorability": "low",
+    "complexity": "cheap",
+    "surface": "raw",
+    "source_id": "reddit_diary_bidu_039",
+    "input": {
+      "ticker": "BIDU",
+      "name": "Baidu Inc",
+      "why_own_it": "ok so bought because i believed baidu's ai and apollo autonomous driving represented serious $BIDU optionality at a cheap valuation and michael burry also held a position which gave me early conviction and but i'm growing sceptical of management \u2014 the founder feels increasingly out of touch the shareholder value track record is poor and the projects are scattered moonshots that don't coalesce into a clear strategy and starting to wonder if this is an aging utility company with a low-probability ai option rather than a genuine ai compounder apollo robotaxi deployment accelerates meaningfully and baidu ai cloud grows faster than domestic competitors a domestic ai competitor clearly displaces baidu on its core search turf and geopolitical chip sanctions materially constrain baidu's ai training capacity and founder continues ignoring shareholder returns with no buyback or dividend progress",
+      "must_remain_true": "",
+      "what_would_change_my_mind": ""
+    }
+  },
+  {
+    "id": "reddit_bear_first_intc_041__raw",
+    "description": "Bear-case-first thesis construction \u2014 investor explicitly writes the kill case before the bull case as discipline. Tests whether decomposer handles inverted framing and still extracts falsifiable claims. (rawified)",
+    "expected_reason_type": "business_performance",
+    "expected_monitorability": "high",
+    "complexity": "expensive",
+    "surface": "raw",
+    "source_id": "reddit_bear_first_intc_041",
+    "input": {
+      "ticker": "INTC",
+      "name": "Intel Corporation",
+      "why_own_it": "tbh bear case first as discipline requires: intel lost process leadership to tsmc $INTC and foundry loses money and amd has been taking server share for years and ai accelerators went to nvidia and management execution has been poor for a decade and now the bull case i am testing: new ceo is cutting costs aggressively the foundry strategy could work with us chips act subsidies and intel still has entrenched x86 installed base in enterprise and if foundry reaches breakeven by 2026 and server share stabilises the valuation is pricing in permanent failure gross margin stabilises above 40% and foundry external customer revenue grows each quarter and server cpu market share stops declining foundry business requires further impairment write-downs and key foundry customer wins fail to materialise by end of 2025 and amd continues taking server share and intel falls below 70% x86 data centre share",
+      "must_remain_true": "",
+      "what_would_change_my_mind": ""
+    }
+  }
+]
