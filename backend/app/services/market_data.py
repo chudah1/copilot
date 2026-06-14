@@ -437,6 +437,7 @@ class NewsItem:
     sentiment: float | None
     topics: list[str]
     ticker_relevance: float | None
+    primary_ticker: str | None = None
 
 
 @dataclass
@@ -451,8 +452,13 @@ class TranscriptSignal:
 
 
 def _classify_news_event_type(combined_text: str) -> tuple[str, list[str]]:
+    def _matches_keyword(keyword: str) -> bool:
+        escaped = re.escape(keyword.lower())
+        pattern = rf"(?<![a-z0-9]){escaped}(?![a-z0-9])"
+        return re.search(pattern, combined_text) is not None
+
     for event_type, keywords in _NEWS_EVENT_PATTERNS:
-        found = [keyword for keyword in keywords if keyword in combined_text]
+        found = [keyword for keyword in keywords if _matches_keyword(keyword)]
         if found:
             return event_type, found[:4]
     return "news_or_earnings_candidate", []
@@ -464,6 +470,7 @@ def _looks_like_roundup_noise(headline: str, summary: str) -> bool:
 
 
 MAX_CURRENT_TRANSCRIPT_AGE_DAYS = 120
+MAX_RECENT_TRANSCRIPT_QUARTERS = 2
 
 
 @dataclass
@@ -498,7 +505,9 @@ class CompanyData:
     news_items: list[NewsItem]
     provider_payload: dict[str, Any] = field(default_factory=dict)
     recent_fiscal_quarter: str | None = None
+    recent_fiscal_quarters: list[str] = field(default_factory=list)
     earnings_call: TranscriptSignal | None = None
+    earnings_calls: list[TranscriptSignal] = field(default_factory=list)
     insider_transactions: list[InsiderTransaction] = field(default_factory=list)
     country: str = "Unknown"
     currency: str | None = None  # ISO 4217 as reported by the data provider (authoritative)
@@ -598,6 +607,17 @@ def _parse_alpha_vantage_earnings(payload: dict[str, Any]) -> dict[str, Any]:
         "recent_earnings_surprise_pct": surprise_pct,
         "recent_reported_at": report_date,
         "recent_fiscal_quarter": _quarter_string(fiscal_date_ending or report_date),
+        "recent_fiscal_quarters": [
+            quarter
+            for quarter in (
+                _quarter_string(
+                    _to_datetime(row.get("fiscalDateEnding")) or _to_datetime(row.get("reportedDate"))
+                )
+                for row in quarters[:MAX_RECENT_TRANSCRIPT_QUARTERS]
+                if isinstance(row, dict)
+            )
+            if quarter
+        ],
     }
 
 
@@ -710,6 +730,24 @@ def _extract_ticker_relevance(article: dict[str, Any], ticker: str) -> float | N
     return None
 
 
+def _extract_primary_ticker(article: dict[str, Any]) -> str | None:
+    sentiment = article.get("ticker_sentiment", [])
+    if not isinstance(sentiment, list):
+        return None
+
+    best_ticker: str | None = None
+    best_score = float("-inf")
+    for item in sentiment:
+        raw_ticker = str(item.get("ticker") or "").strip().upper()
+        score = _to_float(item.get("relevance_score"))
+        if not raw_ticker or score is None:
+            continue
+        if score > best_score:
+            best_ticker = raw_ticker
+            best_score = score
+    return best_ticker
+
+
 def _parse_alpha_vantage_news_item(article: dict[str, Any], ticker: str) -> NewsItem | None:
     published_at = _to_datetime(article.get("time_published"))
     if published_at is None:
@@ -728,6 +766,7 @@ def _parse_alpha_vantage_news_item(article: dict[str, Any], ticker: str) -> News
         sentiment=overall_sentiment,
         topics=topics,
         ticker_relevance=_extract_ticker_relevance(article, ticker),
+        primary_ticker=_extract_primary_ticker(article),
     )
 
 
@@ -780,6 +819,40 @@ def _parse_alpha_vantage_transcript(payload: dict[str, Any]) -> TranscriptSignal
         excerpt=excerpt,
         full_text=transcript_text[:30_000] if transcript_text else None,
     )
+
+
+def _current_earnings_calls(
+    transcripts: list[TranscriptSignal],
+    *,
+    now: datetime | None = None,
+    recent_fiscal_quarters: list[str] | None = None,
+    recent_fiscal_quarter: str | None = None,
+) -> list[TranscriptSignal]:
+    reference_now = now or datetime.now(timezone.utc)
+    recent_quarters = [quarter for quarter in (recent_fiscal_quarters or []) if quarter]
+    if recent_fiscal_quarter and recent_fiscal_quarter not in recent_quarters:
+        recent_quarters.append(recent_fiscal_quarter)
+
+    current = [
+        transcript
+        for transcript in transcripts
+        if is_current_earnings_call(
+            transcript,
+            now=reference_now,
+            recent_fiscal_quarter=recent_fiscal_quarter,
+        )
+    ]
+    if recent_quarters:
+        quarter_rank = {quarter: index for index, quarter in enumerate(recent_quarters)}
+        current.sort(
+            key=lambda transcript: (
+                quarter_rank.get(transcript.quarter, 99),
+                -(transcript.call_date or datetime.min.replace(tzinfo=timezone.utc)).timestamp(),
+            ),
+        )
+    else:
+        current.sort(key=lambda transcript: transcript.call_date or datetime.min.replace(tzinfo=timezone.utc), reverse=True)
+    return current
 
 
 def _parse_alpha_vantage_insider_transactions(payload: dict[str, Any]) -> list[InsiderTransaction]:
@@ -983,13 +1056,22 @@ def _build_news_candidate(
     if not (topic_match or keyword_match):
         return None
 
+    ticker_text_mentioned = bool(ticker and ticker.lower() in combined_text)
+    if (
+        ticker
+        and item.primary_ticker
+        and item.primary_ticker != ticker.upper()
+        and not ticker_text_mentioned
+    ):
+        return None
+
     if item.ticker_relevance is not None:
         # Alpha Vantage provides a relevance score — use it
         if item.ticker_relevance < 0.1:
             return None
     else:
         # yfinance news has no relevance score; require the ticker to appear in the text
-        if ticker and ticker.lower() not in combined_text:
+        if ticker and not ticker_text_mentioned:
             return None
 
     if _looks_like_roundup_noise(item.headline, item.summary):
@@ -1132,6 +1214,7 @@ def shortlist_qualitative_candidates(
     recent_earnings_surprise_pct: float | None,
     upcoming_earnings_date: datetime | None,
     earnings_call: TranscriptSignal | None = None,
+    earnings_calls: list[TranscriptSignal] | None = None,
     insider_transactions: list[InsiderTransaction] | None = None,
     *,
     now: datetime | None = None,
@@ -1161,8 +1244,27 @@ def shortlist_qualitative_candidates(
     if upcoming_earnings_candidate is not None:
         candidates.append(upcoming_earnings_candidate)
 
-    transcript_candidate = _build_transcript_candidate(earnings_call, now=reference_now, transcript_max_age_days=transcript_max_age_days)
-    if transcript_candidate is not None:
+    transcript_pool = list(earnings_calls or [])
+    if earnings_call is not None and not any(
+        transcript.quarter == earnings_call.quarter and transcript.call_date == earnings_call.call_date
+        for transcript in transcript_pool
+    ):
+        transcript_pool.append(earnings_call)
+
+    seen_transcript_ids: set[str] = set()
+    for transcript in transcript_pool:
+        transcript_candidate = _build_transcript_candidate(
+            transcript,
+            now=reference_now,
+            transcript_max_age_days=transcript_max_age_days,
+        )
+        if transcript_candidate is None:
+            continue
+        transcript_id = str(transcript_candidate[1].get("evidence", {}).get("transcript_id") or "")
+        if transcript_id and transcript_id in seen_transcript_ids:
+            continue
+        if transcript_id:
+            seen_transcript_ids.add(transcript_id)
         qualitative_candidates.append(transcript_candidate)
 
     for transaction in insider_transactions or []:
@@ -1386,7 +1488,9 @@ async def _fetch_yfinance_company_data(ticker: str, _retried: bool = False) -> C
         recent_earnings_surprise_pct=recent_earnings_surprise_pct,
         news_items=news_items,
         recent_fiscal_quarter=recent_fiscal_quarter,
+        recent_fiscal_quarters=[recent_fiscal_quarter] if recent_fiscal_quarter else [],
         earnings_call=None,  # yfinance doesn't provide transcripts
+        earnings_calls=[],
         insider_transactions=[],  # yfinance doesn't provide insider data
         provider_payload={"provider": "yfinance", "info": info},
         currency=_normalize_currency(info.get("currency")),
@@ -1477,11 +1581,13 @@ async def _fetch_alpha_vantage_payloads(ticker: str) -> dict[str, Any]:
         )
         provider_payload["news"] = news_payload
 
-        recent_quarter = _parse_alpha_vantage_earnings(
+        recent_quarters = _parse_alpha_vantage_earnings(
             earnings_payload if isinstance(earnings_payload, dict) else {}
-        ).get("recent_fiscal_quarter")
-        transcript_payload: dict[str, Any] = {}
-        if recent_quarter:
+        ).get("recent_fiscal_quarters") or []
+        transcript_payloads: list[dict[str, Any]] = []
+        for recent_quarter in recent_quarters:
+            if not recent_quarter:
+                continue
             transcript_payload = await _safe_cached_request(
                 client,
                 "EARNINGS_CALL_TRANSCRIPT",
@@ -1490,7 +1596,10 @@ async def _fetch_alpha_vantage_payloads(ticker: str) -> dict[str, Any]:
                 symbol=ticker,
                 quarter=recent_quarter,
             )
-        provider_payload["earnings_call_transcript"] = transcript_payload
+            if isinstance(transcript_payload, dict) and transcript_payload:
+                transcript_payloads.append(transcript_payload)
+        provider_payload["earnings_call_transcripts"] = transcript_payloads
+        provider_payload["earnings_call_transcript"] = transcript_payloads[0] if transcript_payloads else {}
 
         insiders_payload = await _safe_cached_request(
             client,
@@ -1511,7 +1620,9 @@ def _build_company_data_from_alpha_vantage(ticker: str, provider_payload: dict[s
     earnings_payload = provider_payload.get("earnings", {})
     earnings_calendar_payload = provider_payload.get("earnings_calendar", "")
     news_payload = provider_payload.get("news", {"feed": []})
-    transcript_payload = provider_payload.get("earnings_call_transcript", {})
+    transcript_payloads = provider_payload.get("earnings_call_transcripts", [])
+    if not transcript_payloads and isinstance(provider_payload.get("earnings_call_transcript"), dict):
+        transcript_payloads = [provider_payload.get("earnings_call_transcript")]
     insiders_payload = provider_payload.get("insider_transactions", {"data": []})
 
     overview = _parse_alpha_vantage_overview(overview_payload if isinstance(overview_payload, dict) else {})
@@ -1521,15 +1632,21 @@ def _build_company_data_from_alpha_vantage(ticker: str, provider_payload: dict[s
         ticker,
     )
     news_items = _parse_alpha_vantage_news(news_payload if isinstance(news_payload, dict) else {"feed": []}, ticker)
-    transcript = _parse_alpha_vantage_transcript(
-        transcript_payload if isinstance(transcript_payload, dict) else {}
-    )
-    if not is_current_earnings_call(
-        transcript,
+    transcripts = [
+        transcript
+        for transcript in (
+            _parse_alpha_vantage_transcript(payload if isinstance(payload, dict) else {})
+            for payload in (transcript_payloads if isinstance(transcript_payloads, list) else [])
+        )
+        if transcript is not None
+    ]
+    current_transcripts = _current_earnings_calls(
+        transcripts,
         now=datetime.now(timezone.utc),
+        recent_fiscal_quarters=earnings.get("recent_fiscal_quarters") or [],
         recent_fiscal_quarter=earnings["recent_fiscal_quarter"],
-    ):
-        transcript = None
+    )
+    transcript = current_transcripts[0] if current_transcripts else None
     insider_transactions = _parse_alpha_vantage_insider_transactions(
         insiders_payload if isinstance(insiders_payload, dict) else {"data": []}
     )
@@ -1552,7 +1669,9 @@ def _build_company_data_from_alpha_vantage(ticker: str, provider_payload: dict[s
         recent_earnings_surprise_pct=earnings["recent_earnings_surprise_pct"],
         news_items=news_items,
         recent_fiscal_quarter=earnings["recent_fiscal_quarter"],
+        recent_fiscal_quarters=earnings.get("recent_fiscal_quarters") or [],
         earnings_call=transcript,
+        earnings_calls=current_transcripts,
         insider_transactions=insider_transactions,
         provider_payload=provider_payload,
         currency=_normalize_currency(overview["currency"]),

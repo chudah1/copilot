@@ -343,7 +343,7 @@ async def test_run_monitoring_creates_multiple_events_and_flags_review(db, job_s
                     await run_monitoring()
 
     events = (await db.execute(MonitoringEvent.__table__.select())).all()
-    assert len(events) == 5
+    assert len(events) == 4
     await db.refresh(thesis)
     assert thesis.status == "needs_review"
 

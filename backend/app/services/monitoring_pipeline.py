@@ -548,6 +548,7 @@ async def persist_classified_candidates(
     for candidate, severity, ai_analysis in classified:
         evidence = candidate.get("evidence", {})
         source_url = evidence.get("url")
+        has_proxy_context = bool(evidence.get("proxy_ticker"))
 
         evidence_signal_id = evidence.get("signal_id")
         evidence_claim_id = evidence.get("claim_id")
@@ -558,7 +559,7 @@ async def persist_classified_candidates(
         if claim_obj is None and signal_obj is None:
             if candidate.get("event_type") == "analyst_revision":
                 continue
-            if candidate.get("event_type") == "earnings_surprise":
+            if candidate.get("event_type") == "earnings_surprise" and not has_proxy_context:
                 continue
             if (
                 candidate.get("event_type") in (NEWS_LIKE_EVENT_TYPES - {"edgar_8k", "earnings_call_transcript"})

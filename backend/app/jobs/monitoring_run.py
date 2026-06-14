@@ -111,6 +111,7 @@ def _generate_proxy_candidates(
         proxy_data.recent_earnings_surprise_pct,
         proxy_data.upcoming_earnings_date,
         getattr(proxy_data, "earnings_call", None),
+        getattr(proxy_data, "earnings_calls", []),
         getattr(proxy_data, "insider_transactions", []),
         now=now,
         ticker=proxy_data.ticker,

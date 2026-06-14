@@ -211,6 +211,7 @@ def generate_monitoring_candidates(
             company_data.recent_earnings_surprise_pct,
             company_data.upcoming_earnings_date,
             getattr(company_data, "earnings_call", None),
+            getattr(company_data, "earnings_calls", []),
             getattr(company_data, "insider_transactions", []),
             now=normalized_now,
             ticker=company_data.ticker,

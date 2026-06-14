@@ -16,6 +16,7 @@ import hashlib
 import json
 import logging
 from datetime import datetime, timedelta, timezone
+import re
 from typing import Any
 
 from pydantic import BaseModel, Field
@@ -61,6 +62,20 @@ _FOCUSED_SIGNAL_HINTS: tuple[str, ...] = (
     "payoff",
     "customer",
 )
+_COMPANY_SUFFIX_TOKENS = {
+    "inc",
+    "incorporated",
+    "corp",
+    "corporation",
+    "co",
+    "company",
+    "plc",
+    "llc",
+    "ltd",
+    "limited",
+    "holdings",
+    "group",
+}
 
 
 class _NewsArticle(BaseModel):
@@ -200,6 +215,28 @@ def _topic_context_from_relevant_signals(relevant_signals: list[str]) -> tuple[l
             if len(matched_topics) >= 6:
                 return matched_topics, ", ".join(matched_topics)
     return matched_topics, ", ".join(matched_topics)
+
+
+def _mentions_target_company(
+    *,
+    headline: str,
+    summary: str,
+    ticker: str,
+    name: str,
+) -> bool:
+    text = f"{headline} {summary}".lower()
+    ticker_lower = ticker.strip().lower()
+    if ticker_lower and re.search(rf"(?<![a-z0-9]){re.escape(ticker_lower)}(?![a-z0-9])", text):
+        return True
+
+    normalized_name = re.sub(r"[^a-z0-9 ]+", " ", name.lower())
+    name_tokens = [token for token in normalized_name.split() if token and token not in _COMPANY_SUFFIX_TOKENS]
+    full_name = " ".join(name_tokens).strip()
+    if full_name and full_name in text:
+        return True
+    if len(name_tokens) == 1 and name_tokens[0] in text:
+        return True
+    return False
 
 
 async def _run_grounded_search(
@@ -368,7 +405,7 @@ or clearly a roundup / market-recap / "why the stock moved" explainer where the 
         parsed = json.loads(extraction_text)
         items = (parsed.get("articles") or []) if isinstance(parsed, dict) else (parsed or [])
 
-        return _to_candidates(items, grounded_urls)
+        return _to_candidates(items, ticker=ticker, name=name, grounded_urls=grounded_urls)
 
     except Exception as exc:
         logger.warning("Gemini news collection failed for %s: %s", ticker, exc)
@@ -377,6 +414,9 @@ or clearly a roundup / market-recap / "why the stock moved" explainer where the 
 
 def _to_candidates(
     items: list[dict],
+    *,
+    ticker: str | None = None,
+    name: str | None = None,
     grounded_urls: set[str] | None = None,
 ) -> list[dict[str, Any]]:
     if grounded_urls is None:
@@ -392,6 +432,13 @@ def _to_candidates(
             continue
         url = item.get("url") or item.get("source_url") or ""
         summary = (item.get("summary") or "").strip()
+        if ticker and name and not _mentions_target_company(
+            headline=headline,
+            summary=summary,
+            ticker=ticker,
+            name=name,
+        ):
+            continue
         if _looks_like_roundup_noise(headline, summary):
             continue
         relevant_signals = item.get("relevant_signals")

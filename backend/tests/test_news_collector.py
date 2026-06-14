@@ -62,7 +62,9 @@ def test_to_candidates_drops_roundup_noise():
                 "relevant_signals": ["AMD AI beneficiary news flow"],
                 "relevance": "high",
             },
-        ]
+        ],
+        ticker="AMD",
+        name="Advanced Micro Devices, Inc.",
     )
 
     assert len(candidates) == 1
@@ -88,7 +90,9 @@ def test_to_candidates_drops_low_relevance_and_requires_signal_match():
                 "relevant_signals": [],
                 "relevance": "high",
             },
-        ]
+        ],
+        ticker="AMD",
+        name="Advanced Micro Devices, Inc.",
     )
 
     assert candidates == []
@@ -105,7 +109,9 @@ def test_to_candidates_adds_topic_context_from_relevant_signals():
                 "relevant_signals": ["AMD MI350 Instinct ramp commentary"],
                 "relevance": "high",
             }
-        ]
+        ],
+        ticker="AMD",
+        name="Advanced Micro Devices, Inc.",
     )
 
     assert len(candidates) == 1
@@ -133,7 +139,37 @@ def test_to_candidates_dedupes_duplicate_articles_from_overlapping_searches():
                 "relevant_signals": ["AMD AI accelerator demand commentary"],
                 "relevance": "high",
             },
-        ]
+        ],
+        ticker="AMD",
+        name="Advanced Micro Devices, Inc.",
     )
 
     assert len(candidates) == 1
+
+
+def test_to_candidates_drops_off_ticker_articles_from_model_output():
+    candidates = _to_candidates(
+        [
+            {
+                "headline": "NVIDIA Corporation $NVDA Position Cut by ROI Financial Advisors LLC",
+                "summary": "ROI Financial Advisors reduced its stake in NVIDIA after strong quarterly results.",
+                "url": "https://example.com/nvda-only",
+                "date": "2026-06-13",
+                "relevant_signals": ["AMD Radeon consumer GPU share"],
+                "relevance": "high",
+            },
+            {
+                "headline": "AMD says Radeon channel demand keeps improving",
+                "summary": "Management pointed to better gamer demand and healthier sell-through.",
+                "url": "https://example.com/amd-radeon",
+                "date": "2026-06-13",
+                "relevant_signals": ["AMD Radeon consumer GPU share"],
+                "relevance": "high",
+            },
+        ],
+        ticker="AMD",
+        name="Advanced Micro Devices, Inc.",
+    )
+
+    assert len(candidates) == 1
+    assert candidates[0]["evidence"]["headline"] == "AMD says Radeon channel demand keeps improving"

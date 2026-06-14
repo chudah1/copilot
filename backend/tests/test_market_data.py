@@ -55,6 +55,32 @@ def test_parse_alpha_vantage_earnings():
     assert earnings["recent_earnings_surprise_pct"] == 7.25
     assert earnings["recent_reported_at"] == datetime(2026, 5, 1, tzinfo=timezone.utc)
     assert earnings["recent_fiscal_quarter"] == "2026Q1"
+    assert earnings["recent_fiscal_quarters"] == ["2026Q1"]
+
+
+def test_parse_alpha_vantage_earnings_includes_multiple_recent_quarters():
+    payload = {
+        "quarterlyEarnings": [
+            {
+                "reportedDate": "2026-05-01",
+                "fiscalDateEnding": "2026-03-31",
+                "surprisePercentage": "7.25",
+            },
+                    {
+                        "reportedDate": "2026-03-01",
+                        "fiscalDateEnding": "2025-12-31",
+                        "surprisePercentage": "5.10",
+                    },
+            {
+                "reportedDate": "2025-11-01",
+                "fiscalDateEnding": "2025-09-30",
+                "surprisePercentage": "3.80",
+            },
+        ]
+    }
+
+    earnings = _parse_alpha_vantage_earnings(payload)
+    assert earnings["recent_fiscal_quarters"] == ["2026Q1", "2025Q4"]
 
 
 def test_parse_alpha_vantage_earnings_calendar():
@@ -162,6 +188,59 @@ def test_build_company_data_drops_stale_transcript_from_live_payload():
 
     assert data.recent_fiscal_quarter == "2026Q1"
     assert data.earnings_call is None
+
+
+def test_build_company_data_keeps_multiple_current_transcripts():
+    data = _build_company_data_from_alpha_vantage(
+        "AAPL",
+        {
+            "quote": {"Global Quote": {"05. price": "210.15"}},
+            "overview": {
+                "Name": "Apple Inc",
+                "Sector": "Technology",
+                "Industry": "Consumer Electronics",
+                "Description": "Makes devices",
+                "MarketCapitalization": "4500000000000",
+                "PERatio": "37.2",
+                "QuarterlyRevenueGrowthYOY": "0.17",
+                "QuarterlyEarningsGrowthYOY": "0.22",
+            },
+            "earnings": {
+                "quarterlyEarnings": [
+                    {
+                        "reportedDate": "2026-05-01",
+                        "fiscalDateEnding": "2026-03-31",
+                        "surprisePercentage": "4.5",
+                    },
+                    {
+                        "reportedDate": "2026-02-01",
+                        "fiscalDateEnding": "2025-12-31",
+                        "surprisePercentage": "5.1",
+                    },
+                ]
+            },
+            "earnings_calendar": "",
+            "news": {"feed": []},
+            "earnings_call_transcripts": [
+                {
+                    "quarter": "2026Q1",
+                    "date": "2026-05-01",
+                    "transcript": "Services demand was solid and margins improved.",
+                },
+                {
+                    "quarter": "2025Q4",
+                    "date": "2026-03-01",
+                    "transcript": "Product demand improved and channel inventory normalized.",
+                },
+            ],
+            "insider_transactions": {"data": []},
+        },
+    )
+
+    assert data.recent_fiscal_quarters == ["2026Q1", "2025Q4"]
+    assert data.earnings_call is not None
+    assert data.earnings_call.quarter == "2026Q1"
+    assert [transcript.quarter for transcript in data.earnings_calls] == ["2026Q1", "2025Q4"]
 
 
 def test_parse_alpha_vantage_insider_transactions():
@@ -346,6 +425,67 @@ def test_shortlist_qualitative_candidates_drops_low_relevance_generic_mentions()
     assert candidates == []
 
 
+def test_shortlist_qualitative_candidates_drops_articles_where_target_is_not_primary_ticker():
+    now = datetime(2026, 6, 13, 12, 0, tzinfo=timezone.utc)
+    items = _parse_alpha_vantage_news(
+        {
+            "feed": [
+                {
+                    "title": "NVIDIA Corporation $NVDA Position Cut by ROI Financial Advisors LLC",
+                    "summary": "ROI Financial Advisors reduced its NVIDIA stake after strong quarterly results.",
+                    "time_published": "20260613T0944",
+                    "source": "MarketBeat",
+                    "url": "https://example.com/nvda-position-cut",
+                    "overall_sentiment_score": "0.05",
+                    "topics": [{"topic": "financial_markets"}],
+                    "ticker_sentiment": [
+                        {"ticker": "NVDA", "relevance_score": "0.75"},
+                        {"ticker": "AMD", "relevance_score": "0.20"},
+                    ],
+                }
+            ]
+        },
+        "AMD",
+    )
+
+    candidates = shortlist_qualitative_candidates(
+        items,
+        recent_earnings_surprise_pct=None,
+        upcoming_earnings_date=None,
+        now=now,
+        ticker="AMD",
+    )
+
+    assert candidates == []
+
+
+def test_build_news_candidate_does_not_match_rpo_inside_corporation():
+    now = datetime(2026, 6, 13, 12, 0, tzinfo=timezone.utc)
+    items = _parse_alpha_vantage_news(
+        {
+            "feed": [
+                {
+                    "title": "NVIDIA Corporation $NVDA Position Cut by ROI Financial Advisors LLC",
+                    "summary": "ROI Financial Advisors reduced its stake in NVIDIA after strong quarterly results.",
+                    "time_published": "20260613T0944",
+                    "source": "MarketBeat",
+                    "url": "https://example.com/nvda-position-cut",
+                    "overall_sentiment_score": "0.05",
+                    "topics": [{"topic": "earnings"}],
+                    "ticker_sentiment": [{"ticker": "NVDA", "relevance_score": "0.75"}],
+                }
+            ]
+        },
+        "NVDA",
+    )
+
+    candidate = _build_news_candidate(items[0], now=now, ticker="NVDA")
+
+    assert candidate is not None
+    assert candidate[1]["event_type"] == "news_or_earnings_candidate"
+    assert candidate[1]["evidence"]["matched_topics"] == []
+
+
 def test_shortlist_qualitative_candidates_marks_funding_updates():
     now = datetime(2026, 5, 11, 12, 0, tzinfo=timezone.utc)
     items = _parse_alpha_vantage_news(
@@ -414,6 +554,36 @@ def test_shortlist_qualitative_candidates_includes_transcript_and_insider_signal
     event_types = [candidate["event_type"] for candidate in candidates]
     assert "earnings_call_transcript" in event_types
     assert "insider_transaction" in event_types
+
+
+def test_shortlist_qualitative_candidates_includes_multiple_transcripts():
+    now = datetime(2026, 6, 14, 12, 0, tzinfo=timezone.utc)
+    transcript_one = _parse_alpha_vantage_transcript(
+        {
+            "quarter": "2026Q1",
+            "date": "2026-05-05",
+            "transcript": "Management said data center demand remained strong.",
+        }
+    )
+    transcript_two = _parse_alpha_vantage_transcript(
+        {
+            "quarter": "2025Q4",
+            "date": "2026-03-01",
+            "transcript": "Management said gaming demand improved and inventory normalized.",
+        }
+    )
+
+    candidates = shortlist_qualitative_candidates(
+        [],
+        recent_earnings_surprise_pct=None,
+        upcoming_earnings_date=None,
+        earnings_calls=[transcript_one, transcript_two],
+        now=now,
+        transcript_max_age_days=120,
+    )
+
+    transcript_candidates = [candidate for candidate in candidates if candidate["event_type"] == "earnings_call_transcript"]
+    assert len(transcript_candidates) == 2
 
 
 def test_ttl_cache_stores_and_expires():
