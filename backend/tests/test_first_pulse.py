@@ -160,6 +160,28 @@ async def test_one_failure_does_not_stop_the_rest(db, test_user):
     assert checked == 1  # MSFT still got checked
 
 
+async def test_first_pulse_rolls_back_after_failed_check(db, test_user):
+    h1 = await _add_holding(db, test_user.id, ticker="AAPL", value=2000)
+    h2 = await _add_holding(db, test_user.id, ticker="MSFT", value=1000)
+    await _add_thesis(db, test_user.id, h1.id)
+    await _add_thesis(db, test_user.id, h2.id)
+    await db.commit()
+
+    async def _flaky(holding, thesis, db):
+        if holding.ticker == "AAPL":
+            raise RuntimeError("provider outage")
+
+    with patch(f"{_CHECK_NOW}.run_check_now", side_effect=_flaky), patch.object(
+        db, "rollback", new_callable=AsyncMock, wraps=db.rollback
+    ) as m_rollback:
+        checked = await _run_first_pulse_with_session(
+            db, user_id=test_user.id, holding_id=None, limit=5
+        )
+
+    assert checked == 1
+    m_rollback.assert_awaited_once()
+
+
 async def test_run_first_pulse_respects_kill_switch(db, test_user):
     holding = await _add_holding(db, test_user.id)
     await _add_thesis(db, test_user.id, holding.id)

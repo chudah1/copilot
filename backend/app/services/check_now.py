@@ -412,15 +412,25 @@ async def _run_first_pulse_with_session(
     pairs = await _holdings_needing_first_pulse(
         db, user_id=user_id, holding_id=holding_id, limit=limit
     )
+    pair_ids = [(holding.id, thesis.id) for holding, thesis in pairs]
     checked = 0
-    for holding, thesis in pairs:
+    for holding_id, thesis_id in pair_ids:
         try:
+            holding = (
+                await db.execute(select(Holding).where(Holding.id == holding_id))
+            ).scalar_one_or_none()
+            thesis = (
+                await db.execute(select(Thesis).where(Thesis.id == thesis_id))
+            ).scalar_one_or_none()
+            if holding is None or thesis is None:
+                continue
             await run_check_now(holding, thesis, db)
             checked += 1
         except Exception:
             # One holding failing (bad ticker, market data outage) must not stop
             # the rest — the first pulse is best-effort.
-            logger.exception("First pulse: check failed for holding %s", holding.id)
+            await db.rollback()
+            logger.exception("First pulse: check failed for holding %s", holding_id)
     return checked
 
 

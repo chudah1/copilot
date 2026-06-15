@@ -6,6 +6,7 @@ import { AnimatePresence, motion } from "framer-motion";
 import { AuthGuard } from "@/components/layout/auth-guard";
 import { Button } from "@/components/ui/button";
 import { api } from "@/lib/api";
+import { buildOnboardingAutoConfirmPayload } from "@/lib/onboarding-decomposition";
 import { getErrorMessage } from "@/lib/errors";
 import type {
   CandidateSignal,
@@ -13,6 +14,7 @@ import type {
   Holding,
   HoldingContext,
   SynthesisResponse,
+  ThesisDecompositionEnvelope,
   Thesis,
 } from "@/types";
 
@@ -346,11 +348,23 @@ function WizardInner() {
         review_cadence_days: 7,
         source: "ai_assisted",
       });
+      const chosenSignals = selectedCandidateSignals();
       // Decompose first, THEN attach the watches the user chose in the climb, so
       // they are the final active state — a later decompose would otherwise
-      // re-sync the interpretation and overwrite them.
-      await api.post("/api/theses/" + thesisId + "/decompose").catch(() => null);
-      const chosenSignals = selectedCandidateSignals();
+      // re-sync the interpretation and overwrite them. On the clean path (no
+      // climb selections), immediately confirm the safe auto-active draft
+      // signals so first pulse and historical audit can use the structured map.
+      const decomposition = await api
+        .post<ThesisDecompositionEnvelope>("/api/theses/" + thesisId + "/decompose")
+        .catch(() => null);
+      if (chosenSignals.length === 0) {
+        const autoConfirmPayload = buildOnboardingAutoConfirmPayload(decomposition);
+        if (autoConfirmPayload) {
+          await api
+            .post(`/api/theses/${thesisId}/decomposition/confirm`, autoConfirmPayload)
+            .catch(() => null);
+        }
+      }
       if (chosenSignals.length > 0) {
         await api
           .post("/api/onboarding/confirm-signals", { thesis_id: thesisId, signals: chosenSignals })
