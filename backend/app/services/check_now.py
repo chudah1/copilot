@@ -262,6 +262,20 @@ async def run_check_now(
         await write_monitoring_gap(db, thesis.id, "gemini_news", str(exc), check_run_id)
     candidates = match_candidates_to_signals(candidates, claims)
 
+    # Thesis-aware relevance filter for news-style candidates. When Gemini
+    # is up this trims polished noise (13F filings, fund-flow updates); when
+    # Gemini is down it's the floor that keeps yfinance/AV news from
+    # surfacing as info-tier noise. Cheap (gpt-4o-mini) per-candidate check
+    # before the expensive severity classification downstream.
+    if claims:
+        from app.services.thesis_relevance_filter import filter_candidates_by_thesis_relevance
+        candidates = await filter_candidates_by_thesis_relevance(
+            candidates,
+            signal_descriptors=signal_descriptors,
+            ticker=holding.ticker,
+            why_own_it=thesis.why_own_it or "",
+        )
+
     # Drop candidates predating this thesis — same guard as the daily batch run,
     # critical here because run_first_pulse fires immediately after onboarding.
     candidates = apply_thesis_floor(candidates, thesis.created_at)
