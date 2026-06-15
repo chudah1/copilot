@@ -22,6 +22,7 @@ from app.services.noise_filter import (
     apply_thesis_floor,
     filter_candidates,
 )
+from app.services.monitoring_gap_writer import write_monitoring_gap
 from app.services.monitoring_pipeline import (
     build_claim_signal_lookup,
     classify_candidates_for_thesis,
@@ -222,12 +223,20 @@ async def run_check_now(
         now=now,
     )
 
+    # check-now is a single user-initiated pass; tag retrieval-source failures
+    # with a per-call run_id so the gap rows are grouped the same way as the
+    # batch job's daily-run rows. Without this, a Gemini outage or EDGAR
+    # error during an on-demand check disappears into the logs and the user
+    # silently gets thinner evidence with no visibility into why.
+    check_run_id = f"check_now:{uuid.uuid4()}"
+
     # EDGAR 8-K candidates (US tickers only; silently skipped for non-US)
     try:
         edgar_filings = await get_recent_8k_filings(holding.ticker)
         candidates.extend(build_edgar_candidates(holding.ticker, edgar_filings))
     except Exception as exc:
         logger.warning("EDGAR fetch failed for %s during check-now — skipping: %s", holding.ticker, exc)
+        await write_monitoring_gap(db, thesis.id, "edgar", str(exc), check_run_id)
 
     # EDGAR Form 4 insider transactions
     form4_txns = await get_recent_form4_transactions(holding.ticker)
@@ -250,6 +259,7 @@ async def run_check_now(
         candidates.extend(gemini_candidates)
     except Exception as exc:
         logger.warning("Gemini news failed for %s during check-now — skipping: %s", holding.ticker, exc)
+        await write_monitoring_gap(db, thesis.id, "gemini_news", str(exc), check_run_id)
     candidates = match_candidates_to_signals(candidates, claims)
 
     # Drop candidates predating this thesis — same guard as the daily batch run,
@@ -678,12 +688,17 @@ async def _run_historical_audit_with_session(
             transcript_max_age_days=MAX_CURRENT_TRANSCRIPT_AGE_DAYS,
         )
 
+        # Tag retrieval failures with a per-audit run_id so users see the gap
+        # rows the same way as for live check-now / daily jobs.
+        audit_run_id = f"historical_audit:{uuid.uuid4()}"
+
         try:
             audit_since = (now - timedelta(days=HISTORICAL_AUDIT_LOOKBACK_DAYS)).date()
             edgar_filings = await get_recent_8k_filings(holding.ticker, since=audit_since)
             candidates.extend(build_edgar_candidates(holding.ticker, edgar_filings))
         except Exception as exc:
             logger.warning("EDGAR fetch failed for %s in historical audit: %s", holding.ticker, exc)
+            await write_monitoring_gap(db, thesis.id, "edgar", str(exc), audit_run_id)
 
         decomposition = await load_active_decomposition(db, thesis.id)
         claims = decomposition.claims if decomposition else None
@@ -697,6 +712,7 @@ async def _run_historical_audit_with_session(
             candidates.extend(gemini_candidates)
         except Exception as exc:
             logger.warning("Gemini news failed for %s in historical audit: %s", holding.ticker, exc)
+            await write_monitoring_gap(db, thesis.id, "gemini_news", str(exc), audit_run_id)
 
         # Form 4 insider transactions and earnings enrichment are intentionally omitted —
         # they add LLM cost per filing over a 90-day window. The live pipeline handles them.

@@ -4,6 +4,7 @@ from unittest.mock import AsyncMock, patch
 
 from app.models.holding import Holding
 from app.models.monitoring_event import MonitoringEvent
+from app.models.monitoring_gap import MonitoringGap
 from app.models.thesis import Thesis
 from app.services.check_now import run_check_now
 from app.services.market_data import CompanyData
@@ -467,3 +468,86 @@ async def test_run_check_now_skips_unlinked_neutral_news_like_candidates(db, tes
 
     events = (await db.execute(MonitoringEvent.__table__.select())).all()
     assert events == []
+
+
+async def test_check_now_records_gemini_failure_as_monitoring_gap(db, test_user):
+    """The walkthrough on 2026-06-15 found Gemini 429s during check-now were
+    silently swallowed — the user got thinner evidence with no visibility into
+    why. Mirror the daily-job behavior: a Gemini failure during a user-
+    initiated check writes a monitoring_gap row tagged with source='gemini_news'."""
+    holding = Holding(
+        user_id=test_user.id,
+        ticker="NVDA",
+        name="NVIDIA",
+        sector="Technology",
+        quantity=10,
+        average_cost_basis=100.0,
+        current_price=200.0,
+        current_value=2000.0,
+    )
+    db.add(holding)
+    await db.flush()
+
+    thesis = Thesis(
+        user_id=test_user.id,
+        holding_id=holding.id,
+        status="active",
+        thesis_kind="company",
+        why_own_it="AI GPU dominance.",
+        confidence="high",
+        review_cadence_days=7,
+        interpretation={},
+        source="user",
+    )
+    db.add(thesis)
+    await db.commit()
+
+    company_data = _make_company_data(ticker="NVDA", current_price=200.0)
+
+    with patch(
+        "app.services.check_now.fetch_company_data",
+        new_callable=AsyncMock,
+        return_value=company_data,
+    ), patch(
+        "app.services.check_now.load_active_decomposition",
+        new_callable=AsyncMock,
+        return_value=None,
+    ), patch(
+        "app.services.check_now.collect_news_evidence",
+        new_callable=AsyncMock,
+        side_effect=RuntimeError("429 RESOURCE_EXHAUSTED prepayment credits depleted"),
+    ), patch(
+        "app.services.check_now.match_thesis_news_watches",
+        new_callable=AsyncMock,
+        return_value={},
+    ), patch(
+        "app.services.check_now.filter_candidates",
+        new_callable=AsyncMock,
+        side_effect=lambda candidates, *args, **kwargs: candidates,
+    ), patch(
+        "app.services.check_now.classify_candidates_for_thesis",
+        new_callable=AsyncMock,
+        return_value=[],
+    ), patch(
+        "app.services.check_now.persist_classified_candidates",
+        new_callable=AsyncMock,
+        return_value=[],
+    ):
+        result = await run_check_now(holding, thesis, db)
+
+    # check-now should not crash on a Gemini failure — it just loses that
+    # candidate source.
+    assert result.status == "completed"
+
+    # A monitoring_gap row should now exist for this thesis with the right
+    # source and a non-empty error message.
+    gaps = (
+        await db.execute(
+            MonitoringGap.__table__.select().where(MonitoringGap.thesis_id == thesis.id)
+        )
+    ).all()
+    assert len(gaps) == 1, f"Expected one gap row, got {len(gaps)}"
+    gap = gaps[0]
+    assert gap.source == "gemini_news"
+    assert "RESOURCE_EXHAUSTED" in gap.error_message
+    assert gap.run_id.startswith("check_now:")
