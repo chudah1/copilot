@@ -210,7 +210,21 @@ async def run_eval(
         try:
             judgment = await _judge_output(case, output_severity, output_analysis, judge_model)
         except Exception as exc:
-            print(f"    Judge error: {exc}", flush=True)
+            print(f"    Judge error (recording severity only): {exc}", flush=True)
+            results.append({
+                "id": cid,
+                "description": case["description"],
+                "expected_severity": case["expected_severity"],
+                "actual_severity": output_severity,
+                "severity_match": severity_match,
+                "classification_success": True,
+                "judge_failed": True,
+                "judge_error": str(exc)[:200],
+                "scores": {"severity_accuracy": 2 if severity_match else 0},
+                "reasons": {},
+                "total": 2 if severity_match else 0,
+                "normalised_10": (2 / 8 * 10) if severity_match else 0.0,
+            })
             continue
 
         result = {
