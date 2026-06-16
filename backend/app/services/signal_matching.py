@@ -70,6 +70,10 @@ def match_candidates_to_signals(
             evidence = {}
             candidate["evidence"] = evidence
         if evidence.get("signal_id"):
+            # Already pre-bound by upstream (e.g. metric_threshold breach).
+            # Record the single signal in the multi-binding list too so
+            # downstream readers can rely on the list consistently.
+            _ensure_multi_binding_includes_primary(evidence, active_signals)
             continue
 
         event_type = candidate.get("event_type", "")
@@ -79,6 +83,11 @@ def match_candidates_to_signals(
         if matched_signal is not None:
             matched_claim, signal = matched_signal
             evidence["signal_id"] = str(signal.id)
+            # Multi-binding: a Gemini article often carries 3-4 relevant_signals
+            # labels that all touch the thesis. Surface them all so the
+            # conviction log / digest / dashboard can attribute the event to
+            # every signal it actually touches, instead of just the primary.
+            _record_all_matching_signals(evidence, active_signals, candidate, signal)
         elif event_type == "earnings_surprise":
             matched_claim = _find_claim_by_type_keywords(claims, EPS_CLAIM_KEYWORDS)
         elif event_type in ("upcoming_earnings", "earnings_call_transcript"):
@@ -115,6 +124,84 @@ def _collect_active_signals(
                 if getattr(signal, "active", False):
                     active_signals.append((claim, signal))
     return active_signals
+
+
+def _record_all_matching_signals(
+    evidence: dict[str, Any],
+    active_signals: list[tuple[ThesisClaim, ThesisSignal]],
+    candidate: dict[str, Any],
+    primary_signal: ThesisSignal,
+) -> None:
+    """Surface every active signal this candidate touches into matched_signal_ids
+    and matched_signal_labels. The primary signal_id stays as the single 'best
+    match' anchor for backward-compat readers; the list captures the multi-pillar
+    attribution that single-valued binding throws away."""
+    matched_pairs: list[tuple[str, str]] = []
+    seen_ids: set[str] = set()
+
+    # 1. Start with the primary so it appears first in the list.
+    primary_id = str(primary_signal.id)
+    primary_label = str(getattr(primary_signal, "signal_label", None) or "").strip()
+    matched_pairs.append((primary_id, primary_label))
+    seen_ids.add(primary_id)
+
+    # 2. Add every active signal whose label appears in evidence.relevant_signals
+    # (Gemini's explicit per-signal attribution, when available).
+    relevant_labels = evidence.get("relevant_signals")
+    if isinstance(relevant_labels, list):
+        wanted = {_normalize_text(str(lbl)) for lbl in relevant_labels if str(lbl).strip()}
+        if wanted:
+            for _, signal in active_signals:
+                sid = str(signal.id)
+                if sid in seen_ids:
+                    continue
+                label = str(getattr(signal, "signal_label", None) or "").strip()
+                if label and _normalize_text(label) in wanted:
+                    matched_pairs.append((sid, label))
+                    seen_ids.add(sid)
+
+    # 3. Add every other active signal whose word-overlap score exceeds the
+    # same floor used by _find_best_signal_match. Threshold > 0 keeps this
+    # to genuine matches, not "any signal shares a stopword with the headline".
+    event_type = candidate.get("event_type", "")
+    candidate_text = _candidate_match_text(candidate)
+    for claim, signal in active_signals:
+        sid = str(signal.id)
+        if sid in seen_ids:
+            continue
+        score = _signal_match_score(event_type, candidate_text, claim, signal)
+        if score <= 0:
+            continue
+        label = str(getattr(signal, "signal_label", None) or "").strip()
+        matched_pairs.append((sid, label))
+        seen_ids.add(sid)
+
+    evidence["matched_signal_ids"] = [sid for sid, _ in matched_pairs]
+    evidence["matched_signal_labels"] = [label for _, label in matched_pairs if label]
+
+
+def _ensure_multi_binding_includes_primary(
+    evidence: dict[str, Any],
+    active_signals: list[tuple[ThesisClaim, ThesisSignal]],
+) -> None:
+    """When evidence.signal_id was set by an upstream stage (e.g. price_move,
+    watch_hint_breach, news_watch), the multi-binding list may not be present
+    yet. Ensure it includes at minimum the primary so downstream readers can
+    rely on the list."""
+    primary_id = evidence.get("signal_id")
+    if not primary_id:
+        return
+    existing_ids = evidence.get("matched_signal_ids")
+    if isinstance(existing_ids, list) and str(primary_id) in {str(x) for x in existing_ids}:
+        return
+    primary_label = ""
+    for _, signal in active_signals:
+        if str(signal.id) == str(primary_id):
+            primary_label = str(getattr(signal, "signal_label", None) or "").strip()
+            break
+    evidence["matched_signal_ids"] = [str(primary_id)]
+    if primary_label:
+        evidence["matched_signal_labels"] = [primary_label]
 
 
 def _find_best_signal_match(

@@ -956,3 +956,132 @@ async def test_check_now_creates_events_with_signal_linking(
     assert "You said:" in price_event.evidence_summary
     assert "iPhone demand remains strong" in price_event.evidence_summary
     assert price_event.verdict is not None
+
+
+def test_multi_signal_binding_records_all_gemini_labels():
+    """When Gemini tags an article with multiple relevant_signals, the matcher
+    used to bind to one signal_id and drop the rest. Multi-binding preserves
+    the full set in matched_signal_ids / matched_signal_labels so downstream
+    consumers can attribute the event to every pillar it touches."""
+    rev_claim, rev_signal = _make_active_signal(
+        "Services revenue grows",
+        signal_type="revenue_growth",
+        signal_label="AAPL Services revenue growth",
+    )
+    margin_claim, margin_signal = _make_active_signal(
+        "Services margin above 72%",
+        signal_type="earnings_growth",
+        signal_label="AAPL Services gross margin trend",
+        position=1,
+    )
+    candidate = {
+        "event_type": "gemini_news",
+        "description": "Apple Services growth and margin both strong",
+        "evidence": {
+            "headline": "Apple Services Q1 strong on growth and margin",
+            "relevant_signals": [
+                "AAPL Services revenue growth",
+                "AAPL Services gross margin trend",
+            ],
+        },
+    }
+
+    result = match_candidates_to_signals([candidate], [rev_claim, margin_claim])
+    evidence = result[0]["evidence"]
+
+    # signal_id remains as the primary anchor for backward-compat readers.
+    assert evidence["signal_id"] in {str(rev_signal.id), str(margin_signal.id)}
+
+    matched_ids = evidence["matched_signal_ids"]
+    matched_labels = evidence["matched_signal_labels"]
+    assert str(rev_signal.id) in matched_ids
+    assert str(margin_signal.id) in matched_ids
+    assert "AAPL Services revenue growth" in matched_labels
+    assert "AAPL Services gross margin trend" in matched_labels
+    # The primary should appear first so consumers ranking by position get
+    # the same ordering as the single-binding fallback.
+    assert matched_ids[0] == evidence["signal_id"]
+
+
+def test_multi_signal_binding_skips_inactive_signals_even_in_relevant_labels():
+    """A user-rejected signal should not be in the multi-binding list, even if
+    the Gemini relevant_signals payload still references its label."""
+    active_claim, active_signal = _make_active_signal(
+        "Active claim",
+        signal_type="revenue_growth",
+        signal_label="AAPL Services revenue growth",
+    )
+    inactive_claim, inactive_signal = _make_active_signal(
+        "Old claim",
+        signal_type="earnings_growth",
+        signal_label="AAPL Services gross margin trend",
+        position=1,
+    )
+    inactive_signal.active = False
+
+    candidate = {
+        "event_type": "gemini_news",
+        "description": "Apple Services Q1",
+        "evidence": {
+            "headline": "Apple Services strong",
+            "relevant_signals": [
+                "AAPL Services revenue growth",
+                "AAPL Services gross margin trend",
+            ],
+        },
+    }
+    result = match_candidates_to_signals([candidate], [active_claim, inactive_claim])
+    evidence = result[0]["evidence"]
+    matched_ids = evidence["matched_signal_ids"]
+    assert str(active_signal.id) in matched_ids
+    assert str(inactive_signal.id) not in matched_ids
+
+
+def test_multi_signal_binding_unions_with_word_overlap_matches():
+    """Even without explicit relevant_signals, a candidate that scores
+    positively against several signals via word overlap should bind to all of
+    them. Today's loss is the same: one primary, list ignored."""
+    rev_claim, rev_signal = _make_active_signal(
+        "Data center revenue grows above 20% YoY",
+        signal_type="revenue_growth",
+        signal_label="NVDA data center revenue growth",
+    )
+    margin_claim, margin_signal = _make_active_signal(
+        "Gross margin stays above 70%",
+        signal_type="earnings_growth",
+        signal_label="NVDA gross margin trend",
+        position=1,
+    )
+    candidate = {
+        "event_type": "gemini_news",
+        "description": "Strong NVDA data center revenue growth with healthy gross margin",
+        "evidence": {
+            "headline": "NVDA reports strong data center revenue growth and gross margin",
+        },
+    }
+    result = match_candidates_to_signals([candidate], [rev_claim, margin_claim])
+    evidence = result[0]["evidence"]
+    matched_ids = evidence["matched_signal_ids"]
+    assert str(rev_signal.id) in matched_ids
+    assert str(margin_signal.id) in matched_ids
+
+
+def test_multi_signal_binding_records_primary_when_upstream_pre_bound():
+    """Some events arrive pre-bound (price_move, watch_hint_breach, news_watch)
+    with signal_id already set. The multi-binding list should still get
+    populated so consumers can rely on it being present, even if it only
+    contains the primary."""
+    claim, signal = _make_active_signal(
+        "Price holds above floor",
+        signal_type="price_move",
+        signal_label="NVDA price floor",
+    )
+    candidate = {
+        "event_type": "price_move",
+        "description": "NVDA down 12%",
+        "evidence": {"signal_id": str(signal.id), "price_change_pct": -12.0},
+    }
+    result = match_candidates_to_signals([candidate], [claim])
+    evidence = result[0]["evidence"]
+    assert evidence["matched_signal_ids"] == [str(signal.id)]
+    assert evidence["matched_signal_labels"] == ["NVDA price floor"]
