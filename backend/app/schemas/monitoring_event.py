@@ -35,6 +35,11 @@ class MonitoringEventResponse(BaseModel):
     claim_id: uuid.UUID | None = None
     signal_id: uuid.UUID | None = None
     signal_label: str | None = None
+    # All signals this event touches — Gemini often tags an article with 3-4
+    # relevant signals and the single primary signal_id throws away the rest.
+    # The primary is always included as the first element.
+    matched_signal_ids: list[uuid.UUID] = []
+    matched_signal_labels: list[str] = []
     evidence_type: str | None = None
     evidence_summary: str | None = None
     verdict: str | None = None

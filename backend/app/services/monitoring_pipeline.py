@@ -601,7 +601,21 @@ async def persist_classified_candidates(
         )
         db.add(event)
         events.append(event)
-        await record_signal_fired(evidence_signal_id, signals_by_id, now=now)
+        # Mark cooldown on every matched signal, not just the primary, so a
+        # multi-pillar article doesn't fire warnings on the same Services
+        # margin signal again next pass just because it was a "secondary"
+        # binding this time.
+        matched_signal_ids = evidence.get("matched_signal_ids")
+        fired_ids = list(matched_signal_ids) if isinstance(matched_signal_ids, list) else []
+        if not fired_ids and evidence_signal_id:
+            fired_ids = [evidence_signal_id]
+        seen_fired: set[str] = set()
+        for fired_id in fired_ids:
+            fired_id_str = str(fired_id)
+            if not fired_id_str or fired_id_str in seen_fired:
+                continue
+            seen_fired.add(fired_id_str)
+            await record_signal_fired(fired_id_str, signals_by_id, now=now)
         append_log_entry(
             db,
             thesis_id=thesis.id,

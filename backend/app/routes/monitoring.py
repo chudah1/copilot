@@ -39,12 +39,39 @@ def _latest_review(event: MonitoringEvent):
     return event.reviews[0] if event.reviews else None
 
 
+def _multi_binding_from_raw(event: MonitoringEvent) -> tuple[list[uuid.UUID], list[str]]:
+    """Pull matched_signal_ids / matched_signal_labels out of the event's raw
+    evidence payload. Falls back to the single primary signal_id when the
+    multi-binding isn't present (e.g. for events persisted before this
+    field rolled out)."""
+    raw = event.raw_data or {}
+    evidence = raw.get("evidence") if isinstance(raw, dict) else None
+    matched_ids_raw = evidence.get("matched_signal_ids") if isinstance(evidence, dict) else None
+    matched_labels_raw = evidence.get("matched_signal_labels") if isinstance(evidence, dict) else None
+    matched_ids: list[uuid.UUID] = []
+    if isinstance(matched_ids_raw, list):
+        for value in matched_ids_raw:
+            try:
+                matched_ids.append(uuid.UUID(str(value)))
+            except (ValueError, TypeError):
+                continue
+    matched_labels = [str(lbl) for lbl in (matched_labels_raw or []) if isinstance(lbl, str)] if isinstance(matched_labels_raw, list) else []
+    if not matched_ids and event.signal_id is not None:
+        matched_ids = [event.signal_id]
+    return matched_ids, matched_labels
+
+
 def _to_event_response(
     event: MonitoringEvent,
     *,
     signal_labels: dict[uuid.UUID, str | None],
 ) -> MonitoringEventResponse:
     latest_review = _latest_review(event)
+    matched_ids, matched_labels = _multi_binding_from_raw(event)
+    # If the persisted labels list is empty but we have ids and a label cache,
+    # populate from the cache so the UI can render labels without re-querying.
+    if not matched_labels and matched_ids:
+        matched_labels = [signal_labels[sid] for sid in matched_ids if signal_labels.get(sid)]
     return MonitoringEventResponse(
         id=event.id,
         holding_id=event.holding_id,
@@ -60,6 +87,8 @@ def _to_event_response(
         claim_id=event.claim_id,
         signal_id=event.signal_id,
         signal_label=signal_labels.get(event.signal_id) if event.signal_id else None,
+        matched_signal_ids=matched_ids,
+        matched_signal_labels=matched_labels,
         evidence_type=event.evidence_type,
         evidence_summary=event.evidence_summary,
         verdict=event.verdict,
@@ -72,7 +101,14 @@ async def _load_signal_labels(
     *,
     events: list[MonitoringEvent],
 ) -> dict[uuid.UUID, str | None]:
-    signal_ids = {event.signal_id for event in events if event.signal_id is not None}
+    # Collect the primary signal_id and every id from the multi-binding list so
+    # we can resolve labels for the full set in one query.
+    signal_ids: set[uuid.UUID] = set()
+    for event in events:
+        if event.signal_id is not None:
+            signal_ids.add(event.signal_id)
+        matched_ids, _ = _multi_binding_from_raw(event)
+        signal_ids.update(matched_ids)
     if not signal_ids:
         return {}
 

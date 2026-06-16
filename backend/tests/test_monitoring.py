@@ -1109,3 +1109,96 @@ async def test_get_events_for_holding_includes_latest_review_state(client, auth_
     data = response.json()
     assert data[0]["review_action"] == "ignored"
     assert data[0]["review_notes"] == "Noise for now."
+
+
+async def test_get_events_for_holding_returns_multi_signal_binding(client, auth_headers, db, test_user):
+    """The event API surfaces matched_signal_ids and matched_signal_labels so
+    the UI can show every pillar an event touches, not just the primary
+    signal_id. Backfills from the single signal_id when raw_data doesn't
+    carry the list (events from before multi-binding rolled out)."""
+    from app.models.thesis_claim import ThesisClaim
+    from app.models.thesis_entity import ThesisEntity
+    from app.models.thesis_signal import ThesisSignal
+    from app.models.thesis_decomposition import ThesisDecomposition
+
+    holding_row = Holding(
+        user_id=test_user.id,
+        ticker="AAPL",
+        name="Apple",
+        quantity=10,
+        average_cost_basis=100,
+        current_price=100,
+        current_value=1000,
+    )
+    db.add(holding_row)
+    await db.flush()
+
+    thesis = Thesis(
+        user_id=test_user.id,
+        holding_id=holding_row.id,
+        status="active",
+        thesis_kind="company",
+        why_own_it="Services flywheel.",
+        confidence="medium",
+        review_cadence_days=7,
+        source="user",
+    )
+    db.add(thesis)
+    await db.flush()
+
+    decomp = ThesisDecomposition(thesis_id=thesis.id, status="confirmed", version=1)
+    db.add(decomp)
+    await db.flush()
+    claim = ThesisClaim(decomposition_id=decomp.id, claim_text="Services revenue grows", claim_type="growth", position=0)
+    db.add(claim)
+    await db.flush()
+    entity = ThesisEntity(claim_id=claim.id, entity_name="Apple Inc", entity_type="held_company")
+    db.add(entity)
+    await db.flush()
+    revenue_signal = ThesisSignal(
+        entity_id=entity.id,
+        signal_type="revenue_growth",
+        signal_label="AAPL Services revenue growth",
+        signal_config_json={},
+        active=True,
+    )
+    margin_signal = ThesisSignal(
+        entity_id=entity.id,
+        signal_type="earnings_growth",
+        signal_label="AAPL Services gross margin trend",
+        signal_config_json={},
+        active=True,
+    )
+    db.add_all([revenue_signal, margin_signal])
+    await db.flush()
+
+    event = MonitoringEvent(
+        holding_id=holding_row.id,
+        thesis_id=thesis.id,
+        event_type="gemini_news",
+        severity="info",
+        title="Apple Services Q1 strong on growth and margin",
+        summary="Services revenue up 16%, margin 75%.",
+        signal_id=revenue_signal.id,
+        raw_data={
+            "evidence": {
+                "matched_signal_ids": [str(revenue_signal.id), str(margin_signal.id)],
+                "matched_signal_labels": [
+                    "AAPL Services revenue growth",
+                    "AAPL Services gross margin trend",
+                ],
+            }
+        },
+    )
+    db.add(event)
+    await db.commit()
+
+    response = await client.get(f"/api/monitoring/holdings/{holding_row.id}/events", headers=auth_headers)
+    assert response.status_code == 200
+    payload = response.json()[0]
+    assert payload["signal_id"] == str(revenue_signal.id)
+    assert payload["matched_signal_ids"] == [str(revenue_signal.id), str(margin_signal.id)]
+    assert payload["matched_signal_labels"] == [
+        "AAPL Services revenue growth",
+        "AAPL Services gross margin trend",
+    ]
