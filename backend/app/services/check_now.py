@@ -43,6 +43,7 @@ from app.services.edgar_extractor import enrich_earnings_candidates
 from app.services.news_collector import collect_news_evidence
 from app.services.signal_matching import (
     build_evidence_summary,
+    enrich_candidates_with_embedding_matches,
     load_active_decomposition,
     match_candidates_to_signals,
 )
@@ -261,6 +262,14 @@ async def run_check_now(
         logger.warning("Gemini news failed for %s during check-now — skipping: %s", holding.ticker, exc)
         await write_monitoring_gap(db, thesis.id, "gemini_news", str(exc), check_run_id)
     candidates = match_candidates_to_signals(candidates, claims)
+
+    # Semantic ranking layer: union embedding-based matches into the multi-
+    # binding list so a candidate that didn't share words with the signal
+    # label can still bind ("Pricing Dilemma" → "Services gross margin").
+    # Falls back to word-overlap inside build_embedding_similarity if the
+    # OpenAI embedding call fails, so this never makes the pipeline less
+    # resilient than before.
+    candidates = await enrich_candidates_with_embedding_matches(candidates, claims)
 
     # Thesis-aware relevance filter for news-style candidates. When Gemini
     # is up this trims polished noise (13F filings, fund-flow updates); when

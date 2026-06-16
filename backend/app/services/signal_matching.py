@@ -180,6 +180,136 @@ def _record_all_matching_signals(
     evidence["matched_signal_labels"] = [label for _, label in matched_pairs if label]
 
 
+# Event types whose candidate text is meaningful to compare against signal
+# labels via embeddings. Quantitative events (price_move, watch_hint_breach,
+# metric_threshold, earnings_surprise) are already pre-bound to a specific
+# signal; embeddings can't add anything useful there.
+_EMBEDDING_MATCH_EVENT_TYPES = {
+    "news_or_earnings_candidate",
+    "product_ramp_update",
+    "news_keyword_match",
+    "edgar_8k",
+    "gemini_news",
+    "contract_renewal_update",
+    "funding_condition_update",
+    "margin_pressure_update",
+    "customer_capex_signal",
+    "earnings_call_transcript",
+}
+
+# Cosine floor for the embedding pre-filter. Tuned to be conservative:
+# embeddings between two random pieces of text typically sit around 0.2-0.3;
+# 0.6 catches semantic matches even when there's no word overlap (e.g. "Apple
+# Pricing Dilemma" vs "Services gross margin trend") while staying well above
+# random-noise territory.
+DEFAULT_EMBEDDING_SIMILARITY_FLOOR = 0.6
+
+
+def _candidate_embedding_text(candidate: dict[str, Any]) -> str:
+    """Compact text representation used for embedding a candidate. Falls back
+    through headline, summary, and description to handle the various event
+    shapes (Gemini news, yfinance items, EDGAR filings, transcripts)."""
+    evidence = candidate.get("evidence") or {}
+    parts = [
+        evidence.get("headline"),
+        evidence.get("summary"),
+        evidence.get("description"),
+        candidate.get("description"),
+    ]
+    text = " ".join(str(p).strip() for p in parts if p).strip()
+    # Hard-cap to keep the embedding token budget bounded on very long
+    # transcript chunks; 1500 chars is plenty for semantic similarity.
+    return text[:1500]
+
+
+def _signal_embedding_text(signal: "ThesisSignal", claim: "ThesisClaim") -> str:
+    """Compose the text used to embed a signal — the label plus claim
+    context so 'AAPL Services gross margin trend' is anchored to 'Services
+    gross margin stays above 72%'."""
+    parts = [
+        getattr(signal, "signal_label", None),
+        getattr(claim, "claim_text", None),
+        getattr(signal, "rationale", None),
+    ]
+    return " ".join(str(p).strip() for p in parts if p).strip()
+
+
+async def enrich_candidates_with_embedding_matches(
+    candidates: list[dict[str, Any]],
+    claims: list[Any] | None,
+    *,
+    similarity_floor: float = DEFAULT_EMBEDDING_SIMILARITY_FLOOR,
+) -> list[dict[str, Any]]:
+    """Add embedding-based signal matches to candidates that match_candidates_to_signals
+    has already processed. The union of (Gemini explicit labels) ∪ (word-overlap
+    matches) ∪ (embedding matches above floor) becomes the final multi-binding.
+
+    Designed as an on-demand layer:
+    - no persisted signal embeddings (build_embedding_similarity in news_watch.py
+      embeds on the fly via OpenAI), so no schema migration required
+    - falls back to word-overlap if the embedding call fails, so a provider
+      outage degrades gracefully
+    - skipped for event types where embeddings can't add value (price_move,
+      watch_hint_breach, etc — already pre-bound).
+    """
+    if not candidates or not claims:
+        return candidates
+    active_signals = _collect_active_signals(claims)
+    if not active_signals:
+        return candidates
+
+    targets = [
+        c for c in candidates
+        if c.get("event_type") in _EMBEDDING_MATCH_EVENT_TYPES
+        and _candidate_embedding_text(c)
+    ]
+    if not targets:
+        return candidates
+
+    # Build the embedding similarity function once for the full text corpus
+    # (signal texts + candidate texts). Single embeddings call for the whole
+    # batch, then sync similarity lookups.
+    from app.services.news_watch import build_embedding_similarity
+
+    signal_texts = {
+        str(signal.id): _signal_embedding_text(signal, claim)
+        for claim, signal in active_signals
+    }
+    candidate_texts = {id(c): _candidate_embedding_text(c) for c in targets}
+    all_texts = list(signal_texts.values()) + list(candidate_texts.values())
+    similarity = await build_embedding_similarity(all_texts)
+
+    signal_by_id = {str(signal.id): (claim, signal) for claim, signal in active_signals}
+
+    for candidate in targets:
+        evidence = candidate.setdefault("evidence", {})
+        cand_text = candidate_texts[id(candidate)]
+        existing_ids = set(evidence.get("matched_signal_ids") or [])
+        added: list[tuple[str, str]] = []
+        for sig_id, sig_text in signal_texts.items():
+            if sig_id in existing_ids or not sig_text:
+                continue
+            score = similarity(cand_text, sig_text)
+            if score < similarity_floor:
+                continue
+            _, signal = signal_by_id[sig_id]
+            label = str(getattr(signal, "signal_label", "") or "").strip()
+            added.append((sig_id, label))
+            existing_ids.add(sig_id)
+        if not added:
+            continue
+        evidence["matched_signal_ids"] = list(evidence.get("matched_signal_ids") or []) + [sid for sid, _ in added]
+        existing_labels = list(evidence.get("matched_signal_labels") or [])
+        evidence["matched_signal_labels"] = existing_labels + [label for _, label in added if label]
+        # If the candidate had nothing bound before, pick the highest-similarity
+        # new match as the primary signal_id so downstream readers that still
+        # use the single anchor get something useful.
+        if not evidence.get("signal_id"):
+            evidence["signal_id"] = added[0][0]
+
+    return candidates
+
+
 def _ensure_multi_binding_includes_primary(
     evidence: dict[str, Any],
     active_signals: list[tuple[ThesisClaim, ThesisSignal]],

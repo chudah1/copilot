@@ -1066,6 +1066,129 @@ def test_multi_signal_binding_unions_with_word_overlap_matches():
     assert str(margin_signal.id) in matched_ids
 
 
+async def test_embedding_enrichment_binds_semantic_matches_without_word_overlap():
+    """Semantic ranking catches matches the word-overlap matcher misses.
+    'Pricing Dilemma' and 'Services gross margin' share no words but are
+    semantically the same concern."""
+    from unittest.mock import patch
+    from app.services.signal_matching import enrich_candidates_with_embedding_matches
+
+    rev_claim, rev_signal = _make_active_signal(
+        "Services revenue grows",
+        signal_type="revenue_growth",
+        signal_label="AAPL Services revenue growth",
+    )
+    margin_claim, margin_signal = _make_active_signal(
+        "Services gross margin stays above 72%",
+        signal_type="earnings_growth",
+        signal_label="AAPL Services gross margin trend",
+        position=1,
+    )
+
+    candidate = {
+        "event_type": "news_or_earnings_candidate",
+        "description": "Apple Faces a No-Win Pricing Dilemma",
+        "evidence": {"headline": "Apple Faces a No-Win Pricing Dilemma"},
+    }
+
+    async def fake_build_similarity(texts):
+        margin_text = next(t for t in texts if "gross margin" in t.lower())
+        rev_text = next(t for t in texts if "revenue grows" in t.lower())
+
+        def _sim(a: str, b: str) -> float:
+            if "Pricing Dilemma" in a and b == margin_text:
+                return 0.72
+            if "Pricing Dilemma" in a and b == rev_text:
+                return 0.30
+            return 0.0
+        return _sim
+
+    with patch("app.services.news_watch.build_embedding_similarity", new=fake_build_similarity):
+        result = await enrich_candidates_with_embedding_matches([candidate], [rev_claim, margin_claim])
+
+    evidence = result[0]["evidence"]
+    matched_ids = evidence.get("matched_signal_ids", [])
+    assert str(margin_signal.id) in matched_ids
+    assert str(rev_signal.id) not in matched_ids
+    assert evidence.get("signal_id") == str(margin_signal.id)
+
+
+async def test_embedding_enrichment_unions_with_existing_multi_binding():
+    """When match_candidates_to_signals already bound one signal via Gemini
+    labels, the embedding pass adds further semantic matches on top — not
+    replacing them."""
+    from unittest.mock import patch
+    from app.services.signal_matching import enrich_candidates_with_embedding_matches
+
+    rev_claim, rev_signal = _make_active_signal(
+        "Services revenue grows",
+        signal_type="revenue_growth",
+        signal_label="AAPL Services revenue growth",
+    )
+    margin_claim, margin_signal = _make_active_signal(
+        "Services gross margin stays above 72%",
+        signal_type="earnings_growth",
+        signal_label="AAPL Services gross margin trend",
+        position=1,
+    )
+
+    candidate = {
+        "event_type": "gemini_news",
+        "description": "Apple Services Q1 strong",
+        "evidence": {
+            "headline": "Apple Services Q1 strong",
+            "signal_id": str(rev_signal.id),
+            "matched_signal_ids": [str(rev_signal.id)],
+            "matched_signal_labels": ["AAPL Services revenue growth"],
+        },
+    }
+
+    async def fake_build_similarity(texts):
+        def _sim(a: str, b: str) -> float:
+            return 0.80 if "gross margin" in b.lower() else 0.10
+        return _sim
+
+    with patch("app.services.news_watch.build_embedding_similarity", new=fake_build_similarity):
+        result = await enrich_candidates_with_embedding_matches([candidate], [rev_claim, margin_claim])
+
+    evidence = result[0]["evidence"]
+    assert evidence["signal_id"] == str(rev_signal.id)
+    assert str(rev_signal.id) in evidence["matched_signal_ids"]
+    assert str(margin_signal.id) in evidence["matched_signal_ids"]
+
+
+async def test_embedding_enrichment_skips_quantitative_event_types():
+    """price_move, watch_hint_breach, metric_threshold etc. are already
+    pre-bound to specific signals; the embedding pass should not pull in
+    semantically-near other signals on top."""
+    from unittest.mock import patch
+    from app.services.signal_matching import enrich_candidates_with_embedding_matches
+
+    claim, signal = _make_active_signal(
+        "Price holds floor",
+        signal_type="price_move",
+        signal_label="NVDA price floor",
+    )
+
+    candidate = {
+        "event_type": "price_move",
+        "description": "NVDA down 12%",
+        "evidence": {"signal_id": str(signal.id), "price_change_pct": -12.0},
+    }
+
+    called = {"build": False}
+
+    async def fake_build_similarity(texts):
+        called["build"] = True
+        return lambda a, b: 0.9
+
+    with patch("app.services.news_watch.build_embedding_similarity", new=fake_build_similarity):
+        result = await enrich_candidates_with_embedding_matches([candidate], [claim])
+
+    assert called["build"] is False
+    assert result[0]["evidence"]["signal_id"] == str(signal.id)
+
+
 def test_multi_signal_binding_records_primary_when_upstream_pre_bound():
     """Some events arrive pre-bound (price_move, watch_hint_breach, news_watch)
     with signal_id already set. The multi-binding list should still get
