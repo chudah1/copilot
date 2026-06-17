@@ -11,3 +11,6 @@ backend/tests/eval/results/
 node_modules/
 .next/
 .env.local
+.vercel
+.env*
+!backend/.env.example

@@ -486,12 +486,14 @@ async def adjudicate_signal_matches(
             confidence_map[sid] = round(confidence, 3)
         if confidence < drop_threshold:
             ids = evidence.get("matched_signal_ids")
-            labels = evidence.get("matched_signal_labels")
-            label = label_by_signal.get(sid, "")
             if isinstance(ids, list):
-                evidence["matched_signal_ids"] = [str(x) for x in ids if str(x) != sid]
-            if isinstance(labels, list) and label:
-                evidence["matched_signal_labels"] = [lbl for lbl in labels if lbl != label]
+                remaining_ids = [str(x) for x in ids if str(x) != sid]
+                evidence["matched_signal_ids"] = remaining_ids
+                evidence["matched_signal_labels"] = [
+                    label_by_signal.get(remaining_sid, "")
+                    for remaining_sid in remaining_ids
+                    if label_by_signal.get(remaining_sid, "")
+                ]
             if isinstance(confidence_map, dict):
                 confidence_map.pop(sid, None)
             # If we just dropped the primary signal_id, promote the next-best

@@ -2,6 +2,7 @@ import uuid
 from decimal import Decimal
 from datetime import datetime, timedelta, timezone
 from unittest.mock import AsyncMock, patch
+from types import SimpleNamespace
 
 from app.jobs.monitoring_run import (
     _extract_proxy_tickers,
@@ -455,6 +456,82 @@ async def test_run_monitoring_skips_vague_thesis_without_candidates(db, job_sess
 
     events = (await db.execute(MonitoringEvent.__table__.select())).all()
     assert events == []
+
+
+async def test_run_monitoring_applies_thesis_relevance_filter(db, job_session_factory):
+    user = User(email="relevance@example.com", password_hash=hash_password("testpass123"))
+    db.add(user)
+    await db.flush()
+
+    holding = Holding(
+        user_id=user.id,
+        ticker="AAPL",
+        name="Apple",
+        quantity=5,
+        average_cost_basis=100,
+        current_price=110,
+        current_value=550,
+    )
+    db.add(holding)
+    await db.flush()
+
+    thesis = Thesis(
+        user_id=user.id,
+        holding_id=holding.id,
+        status="active",
+        thesis_kind="company",
+        why_own_it="Services flywheel stays strong.",
+        confidence="medium",
+        review_cadence_days=7,
+        interpretation={"watch_hints": []},
+        source="user",
+    )
+    db.add(thesis)
+    await db.commit()
+
+    company_data = CompanyData(
+        ticker="AAPL",
+        name="Apple",
+        sector="Technology",
+        industry="Consumer Electronics",
+        current_price=110.0,
+        market_cap=None,
+        pe_ratio=None,
+        revenue_growth_yoy=None,
+        earnings_growth_yoy=None,
+        dividend_yield=None,
+        description="",
+        recent_news=[],
+        upcoming_earnings_date=None,
+        recent_earnings_surprise_pct=None,
+        news_items=[],
+        provider_payload={},
+    )
+    candidate = {
+        "event_type": "news_or_earnings_candidate",
+        "description": "Apple Services article",
+        "evidence": {"headline": "Apple Services article"},
+    }
+    fake_claim = SimpleNamespace(claim_text="Services revenue grows", entities=[])
+    fake_decomposition = SimpleNamespace(claims=[fake_claim])
+
+    with patch("app.jobs.monitoring_run.settings") as mock_settings:
+        mock_settings.alpha_vantage_api_key = "test-key"
+        mock_settings.market_data_provider = "alpha_vantage"
+        with patch("app.jobs.monitoring_run.async_session", job_session_factory), \
+             patch("app.jobs.monitoring_run.fetch_company_data", new_callable=AsyncMock, return_value=company_data), \
+             patch("app.jobs.monitoring_run.get_recent_8k_filings", new_callable=AsyncMock, return_value=[]), \
+             patch("app.jobs.monitoring_run.get_recent_form4_transactions", new_callable=AsyncMock, return_value=[]), \
+             patch("app.jobs.monitoring_run.collect_news_evidence", new_callable=AsyncMock, return_value=[]), \
+             patch("app.jobs.monitoring_run.generate_monitoring_candidates", return_value=[candidate]), \
+             patch("app.jobs.monitoring_run.load_active_decomposition", new_callable=AsyncMock, return_value=fake_decomposition), \
+             patch("app.jobs.monitoring_run.match_candidates_to_signals", side_effect=lambda candidates, claims: candidates), \
+             patch("app.jobs.monitoring_run.enrich_candidates_with_embedding_matches", new_callable=AsyncMock, side_effect=lambda candidates, claims: candidates), \
+             patch("app.jobs.monitoring_run.adjudicate_signal_matches", new_callable=AsyncMock, side_effect=lambda candidates, claims: candidates), \
+             patch("app.jobs.monitoring_run.filter_candidates_by_thesis_relevance", new_callable=AsyncMock, return_value=[] ) as mock_relevance:
+            await run_monitoring()
+
+    mock_relevance.assert_awaited_once()
 
 
 def test_default_watch_hints_triggers_price_move_for_thesis_without_interpretation():

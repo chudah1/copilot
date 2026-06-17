@@ -17,6 +17,7 @@ from app.services.monitoring_pipeline import (
     load_investor_profile,
     match_thesis_news_watches,
     persist_classified_candidates,
+    signal_search_descriptors_from_claims,
 )
 from app.services.noise_filter import apply_priority_suppression, apply_thesis_floor, filter_candidates
 from app.services.signal_matching import (
@@ -25,6 +26,7 @@ from app.services.signal_matching import (
     load_active_decomposition,
     match_candidates_to_signals,
 )
+from app.services.thesis_relevance_filter import filter_candidates_by_thesis_relevance
 
 logger = logging.getLogger(__name__)
 
@@ -71,9 +73,20 @@ async def run_edgar_watch():
 
             decomposition = await load_active_decomposition(db, thesis.id)
             claims = decomposition.claims if decomposition else None
+            signal_descriptors = signal_search_descriptors_from_claims(claims)
             candidates = match_candidates_to_signals(candidates, claims)
             candidates = await enrich_candidates_with_embedding_matches(candidates, claims)
             candidates = await adjudicate_signal_matches(candidates, claims)
+            if claims:
+                candidates = await filter_candidates_by_thesis_relevance(
+                    candidates,
+                    signal_descriptors=signal_descriptors,
+                    ticker=holding.ticker,
+                    why_own_it=thesis.why_own_it or "",
+                )
+                candidates = match_candidates_to_signals(candidates, claims)
+                candidates = await enrich_candidates_with_embedding_matches(candidates, claims)
+                candidates = await adjudicate_signal_matches(candidates, claims)
 
             # News-watch matching — must run before noise filtering
             news_watches = extract_news_watches(claims)

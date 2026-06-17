@@ -1213,6 +1213,62 @@ async def test_adjudicator_drops_false_positive_below_drop_threshold():
     assert evidence["signal_id"] == str(rev_signal.id)
 
 
+async def test_adjudicator_rebuilds_labels_from_remaining_ids_when_labels_repeat():
+    """Dropping one signal should not wipe out every identical display label.
+    Rebuild labels from the surviving ids so matched_signal_labels stays aligned
+    even when two signals share the same text."""
+    from unittest.mock import patch, MagicMock
+    import json
+    from app.services.signal_matching import adjudicate_signal_matches
+
+    first_claim, first_signal = _make_active_signal(
+        "Services margin holds",
+        signal_type="earnings_growth",
+        signal_label="AAPL Services margin",
+    )
+    second_claim, second_signal = _make_active_signal(
+        "Another margin angle",
+        signal_type="earnings_growth",
+        signal_label="AAPL Services margin",
+        position=1,
+    )
+    candidate = {
+        "event_type": "gemini_news",
+        "description": "Apple Services profitability mixed",
+        "evidence": {
+            "headline": "Apple Services profitability mixed",
+            "signal_id": str(first_signal.id),
+            "matched_signal_ids": [str(first_signal.id), str(second_signal.id)],
+            "matched_signal_labels": ["AAPL Services margin", "AAPL Services margin"],
+            "match_confidence_by_signal": {
+                str(first_signal.id): 0.62,
+                str(second_signal.id): 0.78,
+            },
+        },
+    }
+
+    def fake_response(confidence):
+        return MagicMock(choices=[MagicMock(message=MagicMock(content=json.dumps({"confidence": confidence})))])
+
+    async def fake_create(**kwargs):
+        prompt = kwargs["messages"][0]["content"]
+        if "Services margin" in prompt and "Services margin holds" in prompt:
+            return fake_response(0.20)
+        return fake_response(0.86)
+
+    fake_client = MagicMock()
+    fake_client.chat.completions.create = fake_create
+
+    with patch("app.services.signal_matching.settings.openai_api_key", "test-key", create=True), \
+         patch("openai.AsyncOpenAI", return_value=fake_client):
+        result = await adjudicate_signal_matches([candidate], [first_claim, second_claim])
+
+    evidence = result[0]["evidence"]
+    assert evidence["matched_signal_ids"] == [str(second_signal.id)]
+    assert evidence["matched_signal_labels"] == ["AAPL Services margin"]
+    assert evidence["signal_id"] == str(second_signal.id)
+
+
 async def test_adjudicator_skips_high_cosine_confident_matches():
     """Matches above the ceiling (default 0.85) are confident enough on cosine
     alone; the LLM should never be called for them."""

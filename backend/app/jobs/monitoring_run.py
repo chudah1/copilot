@@ -44,6 +44,7 @@ from app.services.signal_matching import (
     match_candidates_to_signals,
 )
 from app.services.monitoring_gap_writer import write_monitoring_gap
+from app.services.thesis_relevance_filter import filter_candidates_by_thesis_relevance
 
 logger = logging.getLogger(__name__)
 
@@ -322,6 +323,16 @@ async def run_monitoring():
                 candidates = match_candidates_to_signals(candidates, claims)
                 candidates = await enrich_candidates_with_embedding_matches(candidates, claims)
                 candidates = await adjudicate_signal_matches(candidates, claims)
+                if claims:
+                    candidates = await filter_candidates_by_thesis_relevance(
+                        candidates,
+                        signal_descriptors=signal_descriptors,
+                        ticker=holding.ticker,
+                        why_own_it=thesis.why_own_it or "",
+                    )
+                    candidates = match_candidates_to_signals(candidates, claims)
+                    candidates = await enrich_candidates_with_embedding_matches(candidates, claims)
+                    candidates = await adjudicate_signal_matches(candidates, claims)
 
                 # Drop candidates whose event date predates this thesis — guards
                 # new users against stale evidence (transcript window is 120 days).
