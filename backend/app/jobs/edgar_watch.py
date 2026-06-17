@@ -19,7 +19,11 @@ from app.services.monitoring_pipeline import (
     persist_classified_candidates,
 )
 from app.services.noise_filter import apply_priority_suppression, apply_thesis_floor, filter_candidates
-from app.services.signal_matching import load_active_decomposition, match_candidates_to_signals
+from app.services.signal_matching import (
+    enrich_candidates_with_embedding_matches,
+    load_active_decomposition,
+    match_candidates_to_signals,
+)
 
 logger = logging.getLogger(__name__)
 
@@ -67,6 +71,7 @@ async def run_edgar_watch():
             decomposition = await load_active_decomposition(db, thesis.id)
             claims = decomposition.claims if decomposition else None
             candidates = match_candidates_to_signals(candidates, claims)
+            candidates = await enrich_candidates_with_embedding_matches(candidates, claims)
 
             # News-watch matching — must run before noise filtering
             news_watches = extract_news_watches(claims)
