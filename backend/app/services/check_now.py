@@ -42,6 +42,7 @@ from app.services.edgar import (
 from app.services.edgar_extractor import enrich_earnings_candidates
 from app.services.news_collector import collect_news_evidence
 from app.services.signal_matching import (
+    adjudicate_signal_matches,
     build_evidence_summary,
     enrich_candidates_with_embedding_matches,
     load_active_decomposition,
@@ -270,6 +271,10 @@ async def run_check_now(
     # OpenAI embedding call fails, so this never makes the pipeline less
     # resilient than before.
     candidates = await enrich_candidates_with_embedding_matches(candidates, claims)
+    # Adjudicate borderline embedding matches with a cheap LLM call so a
+    # cosine-0.65 "maybe" becomes a concrete keep-or-drop with a real
+    # confidence score the UI can show.
+    candidates = await adjudicate_signal_matches(candidates, claims)
 
     # Thesis-aware relevance filter for news-style candidates. When Gemini
     # is up this trims polished noise (13F filings, fund-flow updates); when
@@ -284,6 +289,12 @@ async def run_check_now(
             ticker=holding.ticker,
             why_own_it=thesis.why_own_it or "",
         )
+        # The relevance filter can attach matched signal labels after the first
+        # binding pass. Re-run light signal enrichment so those new labels and
+        # any semantic matches flow into multi-binding instead of getting lost.
+        candidates = match_candidates_to_signals(candidates, claims)
+        candidates = await enrich_candidates_with_embedding_matches(candidates, claims)
+        candidates = await adjudicate_signal_matches(candidates, claims)
 
     # Drop candidates predating this thesis — same guard as the daily batch run,
     # critical here because run_first_pulse fires immediately after onboarding.
@@ -750,6 +761,8 @@ async def _run_historical_audit_with_session(
         # Form 4 insider transactions and earnings enrichment are intentionally omitted —
         # they add LLM cost per filing over a 90-day window. The live pipeline handles them.
         candidates = match_candidates_to_signals(candidates, claims)
+        candidates = await enrich_candidates_with_embedding_matches(candidates, claims)
+        candidates = await adjudicate_signal_matches(candidates, claims)
         candidates = apply_thesis_floor(candidates, audit_floor_anchor)
 
         claims_by_id, signals_by_id = build_claim_signal_lookup(claims)

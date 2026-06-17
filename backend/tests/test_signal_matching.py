@@ -1113,6 +1113,165 @@ async def test_embedding_enrichment_binds_semantic_matches_without_word_overlap(
     assert evidence.get("signal_id") == str(margin_signal.id)
 
 
+async def test_adjudicator_keeps_high_llm_confidence_match_and_overrides_cosine():
+    """LLM adjudication on borderline cosine matches replaces the cosine score
+    with the LLM's judgment in match_confidence_by_signal."""
+    from unittest.mock import patch, MagicMock
+    import json
+    from app.services.signal_matching import adjudicate_signal_matches
+
+    claim, signal = _make_active_signal(
+        "Services revenue grows",
+        signal_type="revenue_growth",
+        signal_label="AAPL Services revenue growth",
+    )
+    candidate = {
+        "event_type": "news_or_earnings_candidate",
+        "description": "Apple Services Q1 sales detail",
+        "evidence": {
+            "headline": "Apple Services Q1 sales detail",
+            "matched_signal_ids": [str(signal.id)],
+            "matched_signal_labels": ["AAPL Services revenue growth"],
+            "match_confidence_by_signal": {str(signal.id): 0.65},  # borderline band
+        },
+    }
+
+    response_msg = MagicMock(message=MagicMock(content=json.dumps({"confidence": 0.92})))
+    response = MagicMock(choices=[response_msg])
+
+    async def fake_create(**kwargs):
+        return response
+
+    fake_client = MagicMock()
+    fake_client.chat.completions.create = fake_create
+
+    with patch("app.services.signal_matching.settings.openai_api_key", "test-key", create=True), \
+         patch("openai.AsyncOpenAI", return_value=fake_client):
+        result = await adjudicate_signal_matches([candidate], [claim])
+
+    evidence = result[0]["evidence"]
+    assert evidence["match_confidence_by_signal"][str(signal.id)] == 0.92
+    assert str(signal.id) in evidence["matched_signal_ids"]
+
+
+async def test_adjudicator_drops_false_positive_below_drop_threshold():
+    """When the LLM judges the borderline match as a false positive, it gets
+    dropped from matched_signal_ids and the confidence map."""
+    from unittest.mock import patch, MagicMock
+    import json
+    from app.services.signal_matching import adjudicate_signal_matches
+
+    rev_claim, rev_signal = _make_active_signal(
+        "Services revenue grows",
+        signal_type="revenue_growth",
+        signal_label="AAPL Services revenue growth",
+    )
+    margin_claim, margin_signal = _make_active_signal(
+        "Hardware margin holds",
+        signal_type="earnings_growth",
+        signal_label="AAPL Hardware gross margin trend",
+        position=1,
+    )
+    candidate = {
+        "event_type": "gemini_news",
+        "description": "Apple Services Q1 sales detail",
+        "evidence": {
+            "headline": "Apple Services Q1 sales detail",
+            "signal_id": str(margin_signal.id),
+            "matched_signal_ids": [str(margin_signal.id), str(rev_signal.id)],
+            "matched_signal_labels": ["AAPL Hardware gross margin trend", "AAPL Services revenue growth"],
+            "match_confidence_by_signal": {
+                str(margin_signal.id): 0.62,
+                str(rev_signal.id): 0.78,
+            },
+        },
+    }
+
+    def fake_response(confidence):
+        return MagicMock(choices=[MagicMock(message=MagicMock(content=json.dumps({"confidence": confidence})))])
+
+    async def fake_create(**kwargs):
+        prompt = kwargs["messages"][0]["content"]
+        # margin signal — LLM judges no real connection
+        if "Hardware gross margin" in prompt:
+            return fake_response(0.20)
+        return fake_response(0.85)
+
+    fake_client = MagicMock()
+    fake_client.chat.completions.create = fake_create
+
+    with patch("app.services.signal_matching.settings.openai_api_key", "test-key", create=True), \
+         patch("openai.AsyncOpenAI", return_value=fake_client):
+        result = await adjudicate_signal_matches([candidate], [rev_claim, margin_claim])
+
+    evidence = result[0]["evidence"]
+    assert str(margin_signal.id) not in evidence["matched_signal_ids"]
+    assert str(margin_signal.id) not in evidence["match_confidence_by_signal"]
+    assert str(rev_signal.id) in evidence["matched_signal_ids"]
+    # Primary signal_id should have been promoted to the surviving match
+    # since the dropped margin signal was the previous primary.
+    assert evidence["signal_id"] == str(rev_signal.id)
+
+
+async def test_adjudicator_skips_high_cosine_confident_matches():
+    """Matches above the ceiling (default 0.85) are confident enough on cosine
+    alone; the LLM should never be called for them."""
+    from unittest.mock import patch, MagicMock
+    from app.services.signal_matching import adjudicate_signal_matches
+
+    claim, signal = _make_active_signal(
+        "Services revenue grows",
+        signal_type="revenue_growth",
+        signal_label="AAPL Services revenue growth",
+    )
+    candidate = {
+        "event_type": "news_or_earnings_candidate",
+        "evidence": {
+            "headline": "AAPL Services revenue grew 15%",
+            "matched_signal_ids": [str(signal.id)],
+            "match_confidence_by_signal": {str(signal.id): 0.92},  # above ceiling
+        },
+    }
+
+    called = {"count": 0}
+
+    async def fake_create(**kwargs):
+        called["count"] += 1
+        raise AssertionError("LLM should not be called for above-ceiling matches")
+
+    fake_client = MagicMock()
+    fake_client.chat.completions.create = fake_create
+
+    with patch("app.services.signal_matching.settings.openai_api_key", "test-key", create=True), \
+         patch("openai.AsyncOpenAI", return_value=fake_client):
+        result = await adjudicate_signal_matches([candidate], [claim])
+
+    assert called["count"] == 0
+    assert result[0]["evidence"]["match_confidence_by_signal"][str(signal.id)] == 0.92
+
+
+async def test_adjudicator_no_op_without_openai_key():
+    """No API key → don't try, don't crash, don't change anything."""
+    from unittest.mock import patch
+    from app.services.signal_matching import adjudicate_signal_matches
+
+    claim, signal = _make_active_signal(
+        "x",
+        signal_type="revenue_growth",
+        signal_label="X",
+    )
+    candidate = {
+        "event_type": "news_or_earnings_candidate",
+        "evidence": {
+            "matched_signal_ids": [str(signal.id)],
+            "match_confidence_by_signal": {str(signal.id): 0.70},
+        },
+    }
+    with patch("app.services.signal_matching.settings.openai_api_key", "", create=True):
+        result = await adjudicate_signal_matches([candidate], [claim])
+    assert result[0]["evidence"]["match_confidence_by_signal"][str(signal.id)] == 0.70
+
+
 async def test_embedding_enrichment_records_cosine_confidence_per_signal():
     """Cosine scores from the embedding pass land in
     evidence.match_confidence_by_signal so the UI can render strong matches

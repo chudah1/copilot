@@ -39,6 +39,7 @@ from app.services.edgar_extractor import enrich_earnings_candidates
 from app.services.news_collector import collect_news_evidence
 from app.services.signal_matching import (
     load_active_decomposition,
+    adjudicate_signal_matches,
     enrich_candidates_with_embedding_matches,
     match_candidates_to_signals,
 )
@@ -320,6 +321,7 @@ async def run_monitoring():
                     await write_monitoring_gap(db, thesis.id, "gemini_news", str(exc), run_id)
                 candidates = match_candidates_to_signals(candidates, claims)
                 candidates = await enrich_candidates_with_embedding_matches(candidates, claims)
+                candidates = await adjudicate_signal_matches(candidates, claims)
 
                 # Drop candidates whose event date predates this thesis — guards
                 # new users against stale evidence (transcript window is 120 days).

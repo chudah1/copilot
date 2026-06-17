@@ -8,6 +8,7 @@ from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.orm import selectinload
 
+from app.config import settings
 from app.models.thesis_claim import ThesisClaim
 from app.models.thesis_decomposition import ThesisDecomposition
 from app.models.thesis_entity import ThesisEntity
@@ -317,6 +318,188 @@ async def enrich_candidates_with_embedding_matches(
         # use the single anchor get something useful.
         if not evidence.get("signal_id"):
             evidence["signal_id"] = added[0][0]
+
+    return candidates
+
+
+# LLM adjudication runs on the middle cosine band: above the ceiling we trust
+# the embedding match outright (huge cosine on dense text == clear semantic
+# overlap), below the floor we trust the rejection (too far apart to be worth
+# the LLM call). The band is where the call adds the most signal — borderline
+# matches that semantic similarity alone can't reliably decide.
+ADJUDICATION_FLOOR = 0.50
+ADJUDICATION_CEILING = 0.85
+
+# Bound the LLM cost. A busy news day shouldn't fan out into an unbounded
+# number of paid calls; the user can always re-run check-now if they want
+# deeper coverage.
+DEFAULT_MAX_ADJUDICATIONS_PER_CANDIDATE = 5
+DEFAULT_MAX_ADJUDICATIONS_PER_BATCH = 25
+
+_ADJUDICATION_MODEL = "gpt-4o-mini"
+
+_ADJUDICATION_PROMPT = """You are scoring whether a news item provides evidence about a specific watch signal an investor cares about.
+
+Watch signal: "{signal_label}"
+From the claim: "{claim_text}"
+
+News item:
+"{headline}: {summary}"
+
+Score 0.0 to 1.0:
+- 1.0 = clear, direct evidence the watch signal is being tested
+- 0.7 = news touches the signal's topic and is meaningfully relevant
+- 0.4 = tangentially related; could be relevant but not direct
+- 0.0 = no real connection to this specific watch signal
+
+Return a single JSON object: {{"confidence": 0.0-1.0}}. No prose."""
+
+
+async def _adjudicate_one(client, *, signal_label: str, claim_text: str, headline: str, summary: str) -> float | None:
+    """Single LLM call. Returns confidence 0-1 on success, None on failure
+    (caller keeps the cosine score in that case)."""
+    import json
+
+    prompt = _ADJUDICATION_PROMPT.format(
+        signal_label=(signal_label or "").strip(),
+        claim_text=(claim_text or "").strip()[:200],
+        headline=(headline or "").strip()[:200],
+        summary=(summary or "").strip()[:400],
+    )
+    try:
+        response = await client.chat.completions.create(
+            model=_ADJUDICATION_MODEL,
+            messages=[{"role": "user", "content": prompt}],
+            temperature=0,
+            max_tokens=64,
+            response_format={"type": "json_object"},
+            timeout=15.0,
+        )
+        raw = (response.choices[0].message.content or "{}").strip()
+        parsed = json.loads(raw)
+    except Exception:
+        return None
+    confidence = parsed.get("confidence")
+    try:
+        confidence = float(confidence)
+    except (TypeError, ValueError):
+        return None
+    return max(0.0, min(1.0, confidence))
+
+
+async def adjudicate_signal_matches(
+    candidates: list[dict[str, Any]],
+    claims: list[Any] | None,
+    *,
+    floor: float = ADJUDICATION_FLOOR,
+    ceiling: float = ADJUDICATION_CEILING,
+    drop_threshold: float = 0.45,
+    max_per_candidate: int = DEFAULT_MAX_ADJUDICATIONS_PER_CANDIDATE,
+    max_per_batch: int = DEFAULT_MAX_ADJUDICATIONS_PER_BATCH,
+) -> list[dict[str, Any]]:
+    """LLM-refine the borderline embedding matches.
+
+    For each candidate, finds matches whose cosine sits in the medium band
+    [floor, ceiling] and asks gpt-4o-mini whether the evidence really touches
+    that signal. The LLM's confidence replaces the cosine score in
+    match_confidence_by_signal. Matches that come back below drop_threshold
+    are removed from matched_signal_ids and matched_signal_labels.
+
+    Bounded by max_per_candidate and max_per_batch so a busy thesis can't fan
+    out into unbounded LLM cost. Falls back to existing cosine bindings on any
+    LLM failure (None confidence from _adjudicate_one is treated as no-op).
+    """
+    if not candidates or not claims or not settings.openai_api_key:
+        return candidates
+
+    # Collect per-candidate work items in the cosine band, capped per candidate.
+    work: list[tuple[dict[str, Any], str, str, str]] = []  # (evidence, sig_id, label, claim_text_for_prompt)
+    claim_by_signal: dict[str, str] = {}
+    label_by_signal: dict[str, str] = {}
+    active_signals = _collect_active_signals(claims)
+    for claim, signal in active_signals:
+        sid = str(signal.id)
+        claim_by_signal[sid] = str(getattr(claim, "claim_text", "") or "")
+        label_by_signal[sid] = str(getattr(signal, "signal_label", "") or "")
+
+    for candidate in candidates:
+        if candidate.get("event_type") not in _EMBEDDING_MATCH_EVENT_TYPES:
+            continue
+        evidence = candidate.get("evidence") or {}
+        if not isinstance(evidence, dict):
+            continue
+        confidence_map = evidence.get("match_confidence_by_signal")
+        if not isinstance(confidence_map, dict):
+            continue
+        # Identify borderline signals — sorted by cosine descending so the
+        # per-candidate cap takes the closest-to-confident ones first.
+        band_pairs = sorted(
+            (
+                (sid, float(score))
+                for sid, score in confidence_map.items()
+                if floor <= float(score) < ceiling
+            ),
+            key=lambda row: row[1],
+            reverse=True,
+        )[:max_per_candidate]
+        if not band_pairs:
+            continue
+        headline = str((evidence.get("headline") or candidate.get("description") or "")).strip()
+        summary = str(evidence.get("summary") or "").strip()
+        for sid, _ in band_pairs:
+            work.append((evidence, sid, headline, summary))
+            if len(work) >= max_per_batch:
+                break
+        if len(work) >= max_per_batch:
+            break
+
+    if not work:
+        return candidates
+
+    try:
+        from openai import AsyncOpenAI
+    except ImportError:
+        return candidates
+    client = AsyncOpenAI(api_key=settings.openai_api_key)
+
+    import asyncio as _asyncio
+    judgments = await _asyncio.gather(
+        *(
+            _adjudicate_one(
+                client,
+                signal_label=label_by_signal.get(sid, ""),
+                claim_text=claim_by_signal.get(sid, ""),
+                headline=headline,
+                summary=summary,
+            )
+            for _, sid, headline, summary in work
+        ),
+        return_exceptions=False,
+    )
+
+    # Apply each judgment back onto the corresponding candidate.
+    for (evidence, sid, _, _), confidence in zip(work, judgments):
+        if confidence is None:
+            continue
+        confidence_map = evidence.get("match_confidence_by_signal")
+        if isinstance(confidence_map, dict):
+            confidence_map[sid] = round(confidence, 3)
+        if confidence < drop_threshold:
+            ids = evidence.get("matched_signal_ids")
+            labels = evidence.get("matched_signal_labels")
+            label = label_by_signal.get(sid, "")
+            if isinstance(ids, list):
+                evidence["matched_signal_ids"] = [str(x) for x in ids if str(x) != sid]
+            if isinstance(labels, list) and label:
+                evidence["matched_signal_labels"] = [lbl for lbl in labels if lbl != label]
+            if isinstance(confidence_map, dict):
+                confidence_map.pop(sid, None)
+            # If we just dropped the primary signal_id, promote the next-best
+            # match (highest remaining cosine/LLM confidence) so consumers
+            # still get an anchor.
+            if evidence.get("signal_id") == sid:
+                remaining = evidence.get("matched_signal_ids") or []
+                evidence["signal_id"] = remaining[0] if remaining else None
 
     return candidates
 
