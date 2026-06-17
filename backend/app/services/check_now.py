@@ -41,6 +41,18 @@ from app.services.edgar import (
 )
 from app.services.edgar_extractor import enrich_earnings_candidates
 from app.services.news_collector import collect_news_evidence
+from app.services.coverage import (
+    STAGE_AFTER_CLASSIFICATION,
+    STAGE_AFTER_EMBEDDING_ENRICH,
+    STAGE_AFTER_LLM_ADJUDICATION,
+    STAGE_AFTER_MATCH,
+    STAGE_AFTER_NOISE_FILTER,
+    STAGE_AFTER_RELEVANCE_FILTER,
+    STAGE_AFTER_THESIS_FLOOR,
+    STAGE_CANDIDATES_GENERATED,
+    STAGE_EVENTS_PERSISTED,
+    CoveragePassBuilder,
+)
 from app.services.signal_matching import (
     adjudicate_signal_matches,
     build_evidence_summary,
@@ -232,17 +244,33 @@ async def run_check_now(
     # silently gets thinner evidence with no visibility into why.
     check_run_id = f"check_now:{uuid.uuid4()}"
 
+    # Coverage funnel: per-source query results and per-stage candidate counts.
+    # Persisted at the end of the pass so the diagnostics endpoint can answer
+    # "where did our 10 candidates go?" instead of just "we created 4 events."
+    coverage = CoveragePassBuilder(
+        thesis_id=thesis.id,
+        holding_id=holding.id,
+        run_id=check_run_id,
+        triggered_by="check_now",
+    )
+    coverage.record_source("qualitative_market_data", candidates_returned=len(candidates))
+
     # EDGAR 8-K candidates (US tickers only; silently skipped for non-US)
+    before_edgar = len(candidates)
     try:
         edgar_filings = await get_recent_8k_filings(holding.ticker)
         candidates.extend(build_edgar_candidates(holding.ticker, edgar_filings))
+        coverage.record_source("edgar_8k", candidates_returned=len(candidates) - before_edgar)
     except Exception as exc:
         logger.warning("EDGAR fetch failed for %s during check-now — skipping: %s", holding.ticker, exc)
         await write_monitoring_gap(db, thesis.id, "edgar", str(exc), check_run_id)
+        coverage.record_source("edgar_8k", candidates_returned=0, error=str(exc))
 
     # EDGAR Form 4 insider transactions
+    before_form4 = len(candidates)
     form4_txns = await get_recent_form4_transactions(holding.ticker)
     candidates.extend(build_form4_candidates(holding.ticker, form4_txns, now=now))
+    coverage.record_source("edgar_form4", candidates_returned=len(candidates) - before_form4)
 
     # Enrich earnings 8-Ks (item 2.02) with LLM-extracted content
     candidates = await enrich_earnings_candidates(candidates, thesis)
@@ -254,15 +282,20 @@ async def run_check_now(
     # Gemini news uses signal descriptors from the decomposition so focused
     # searches can include claim/rationale context, not just bare labels.
     signal_descriptors = signal_search_descriptors_from_claims(claims)
+    before_gemini = len(candidates)
     try:
         gemini_candidates = await collect_news_evidence(
             holding.ticker, holding.name or holding.ticker, signal_descriptors
         )
         candidates.extend(gemini_candidates)
+        coverage.record_source("gemini_news", candidates_returned=len(candidates) - before_gemini)
     except Exception as exc:
         logger.warning("Gemini news failed for %s during check-now — skipping: %s", holding.ticker, exc)
         await write_monitoring_gap(db, thesis.id, "gemini_news", str(exc), check_run_id)
+        coverage.record_source("gemini_news", candidates_returned=0, error=str(exc))
+    coverage.record_stage(STAGE_CANDIDATES_GENERATED, len(candidates))
     candidates = match_candidates_to_signals(candidates, claims)
+    coverage.record_stage(STAGE_AFTER_MATCH, len(candidates))
 
     # Semantic ranking layer: union embedding-based matches into the multi-
     # binding list so a candidate that didn't share words with the signal
@@ -271,10 +304,12 @@ async def run_check_now(
     # OpenAI embedding call fails, so this never makes the pipeline less
     # resilient than before.
     candidates = await enrich_candidates_with_embedding_matches(candidates, claims)
+    coverage.record_stage(STAGE_AFTER_EMBEDDING_ENRICH, len(candidates))
     # Adjudicate borderline embedding matches with a cheap LLM call so a
     # cosine-0.65 "maybe" becomes a concrete keep-or-drop with a real
     # confidence score the UI can show.
     candidates = await adjudicate_signal_matches(candidates, claims)
+    coverage.record_stage(STAGE_AFTER_LLM_ADJUDICATION, len(candidates))
 
     # Thesis-aware relevance filter for news-style candidates. When Gemini
     # is up this trims polished noise (13F filings, fund-flow updates); when
@@ -289,6 +324,7 @@ async def run_check_now(
             ticker=holding.ticker,
             why_own_it=thesis.why_own_it or "",
         )
+        coverage.record_stage(STAGE_AFTER_RELEVANCE_FILTER, len(candidates))
         # The relevance filter can attach matched signal labels after the first
         # binding pass. Re-run light signal enrichment so those new labels and
         # any semantic matches flow into multi-binding instead of getting lost.
@@ -299,6 +335,7 @@ async def run_check_now(
     # Drop candidates predating this thesis — same guard as the daily batch run,
     # critical here because run_first_pulse fires immediately after onboarding.
     candidates = apply_thesis_floor(candidates, thesis.created_at)
+    coverage.record_stage(STAGE_AFTER_THESIS_FLOOR, len(candidates))
 
     # Build lookup tables for narrative generation
     claims_by_id, signals_by_id = build_claim_signal_lookup(claims)
@@ -329,6 +366,7 @@ async def run_check_now(
 
     # Noise suppression: filter before classification (rules 1, 2, 4)
     candidates = await filter_candidates(candidates, holding.id, signals_by_id, db, now=now)
+    coverage.record_stage(STAGE_AFTER_NOISE_FILTER, len(candidates))
 
     classified = await classify_candidates_for_thesis(
         thesis,
@@ -344,6 +382,7 @@ async def run_check_now(
     suppressed = apply_priority_suppression([(c, s) for c, s, _ in classified])
     surviving_set = {id(c) for c, _ in suppressed}
     classified = [(c, s, a) for c, s, a in classified if id(c) in surviving_set]
+    coverage.record_stage(STAGE_AFTER_CLASSIFICATION, len(classified))
 
     created_event_ids = await persist_classified_candidates(
         db,
@@ -355,6 +394,9 @@ async def run_check_now(
         now=now,
         investor_profile=investor_profile,
     )
+    coverage.record_stage(STAGE_EVENTS_PERSISTED, len(created_event_ids))
+    coverage.record_events_persisted(len(created_event_ids))
+    await coverage.persist(db)
 
     await db.commit()
 

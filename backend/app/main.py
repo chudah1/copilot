@@ -21,6 +21,7 @@ from app.models import (  # noqa: F401
     thesis_signal,
     thesis_review,
     monitoring_event,
+    coverage_pass,
     digest,
     quarterly_review,
     quarterly_review_response,

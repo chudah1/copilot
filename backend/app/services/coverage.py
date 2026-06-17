@@ -23,6 +23,7 @@ from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.orm import selectinload
 
+from app.models.coverage_pass import CoveragePass
 from app.models.monitoring_event import MonitoringEvent
 from app.models.thesis_claim import ThesisClaim
 from app.models.thesis_decomposition import ThesisDecomposition
@@ -227,3 +228,98 @@ async def compute_thesis_coverage(
 
     report.signals = list(coverages.values())
     return report
+
+
+# Pipeline stage names — defined as constants so call sites match exactly and
+# we can render diffs ("after_relevance_filter dropped 6") without grepping.
+STAGE_CANDIDATES_GENERATED = "candidates_generated"
+STAGE_AFTER_MATCH = "after_match"
+STAGE_AFTER_EMBEDDING_ENRICH = "after_embedding_enrich"
+STAGE_AFTER_LLM_ADJUDICATION = "after_llm_adjudication"
+STAGE_AFTER_RELEVANCE_FILTER = "after_relevance_filter"
+STAGE_AFTER_THESIS_FLOOR = "after_thesis_floor"
+STAGE_AFTER_NOISE_FILTER = "after_noise_filter"
+STAGE_AFTER_CLASSIFICATION = "after_classification"
+STAGE_EVENTS_PERSISTED = "events_persisted"
+
+
+@dataclass
+class CoveragePassBuilder:
+    """Collects source query results and stage counts during a single pipeline
+    pass, persists once at the end. Designed to be cheap on the hot path —
+    record_source / record_stage are O(1) dict / list inserts."""
+
+    thesis_id: uuid.UUID
+    holding_id: uuid.UUID
+    run_id: str
+    triggered_by: str  # "check_now" | "monitoring_run" | "edgar_watch" | "historical_audit"
+    started_at: datetime = field(default_factory=lambda: datetime.now(timezone.utc))
+    sources: dict[str, dict[str, Any]] = field(default_factory=dict)
+    stage_counts: list[tuple[str, int]] = field(default_factory=list)
+    events_persisted: int = 0
+
+    def record_source(
+        self,
+        name: str,
+        *,
+        queried: bool = True,
+        candidates_returned: int | None = None,
+        error: str | None = None,
+    ) -> None:
+        entry: dict[str, Any] = {"queried": queried}
+        if candidates_returned is not None:
+            entry["candidates_returned"] = candidates_returned
+        if error:
+            entry["error"] = str(error)[:500]
+        # Multiple calls for the same source name (e.g. EDGAR queried twice
+        # over the pass) are merged by keeping the worst error and summing
+        # candidates so the funnel matches reality.
+        existing = self.sources.get(name)
+        if existing is None:
+            self.sources[name] = entry
+            return
+        merged = dict(existing)
+        merged["queried"] = bool(existing.get("queried") or queried)
+        if "candidates_returned" in entry or "candidates_returned" in existing:
+            merged["candidates_returned"] = int(existing.get("candidates_returned", 0)) + int(entry.get("candidates_returned", 0))
+        if "error" in entry:
+            merged["error"] = entry["error"]
+        self.sources[name] = merged
+
+    def record_stage(self, stage: str, count: int) -> None:
+        self.stage_counts.append((stage, int(count)))
+
+    def record_events_persisted(self, count: int) -> None:
+        self.events_persisted = int(count)
+
+    async def persist(self, db: AsyncSession) -> None:
+        finished_at = datetime.now(timezone.utc)
+        row = CoveragePass(
+            thesis_id=self.thesis_id,
+            holding_id=self.holding_id,
+            run_id=self.run_id,
+            triggered_by=self.triggered_by,
+            started_at=self.started_at,
+            finished_at=finished_at,
+            payload={
+                "sources": self.sources,
+                "stages": [[name, count] for name, count in self.stage_counts],
+                "events_persisted": self.events_persisted,
+            },
+        )
+        db.add(row)
+
+
+async def latest_coverage_passes(
+    db: AsyncSession, thesis_id: uuid.UUID, *, limit: int = 10
+) -> list[CoveragePass]:
+    """Return the most recent coverage passes for the thesis, newest first.
+    Limit defaults to 10 — enough to see a few daily runs + the user's manual
+    re-checks without flooding the UI."""
+    result = await db.execute(
+        select(CoveragePass)
+        .where(CoveragePass.thesis_id == thesis_id)
+        .order_by(CoveragePass.started_at.desc())
+        .limit(limit)
+    )
+    return list(result.scalars().all())

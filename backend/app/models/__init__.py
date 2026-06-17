@@ -6,6 +6,7 @@ from app.models.thesis_decomposition import ThesisDecomposition
 from app.models.thesis_claim import ThesisClaim
 from app.models.thesis_entity import ThesisEntity
 from app.models.thesis_signal import ThesisSignal
+from app.models.coverage_pass import CoveragePass
 from app.models.monitoring_event import MonitoringEvent
 from app.models.monitoring_gap import MonitoringGap
 from app.models.thesis_review import ThesisReview
@@ -30,6 +31,7 @@ __all__ = [
     "ThesisClaim",
     "ThesisEntity",
     "ThesisSignal",
+    "CoveragePass",
     "MonitoringEvent",
     "MonitoringGap",
     "ThesisReview",

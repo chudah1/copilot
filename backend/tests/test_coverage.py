@@ -231,6 +231,97 @@ async def test_coverage_handles_thesis_without_decomposition(db, test_user):
     assert report.signals == []
 
 
+async def test_coverage_pass_builder_records_sources_and_stages(db, test_user):
+    """The builder accumulates source results and stage counts during a pass
+    and writes a single CoveragePass row. This is the data behind 'which
+    stage failed' for Codex's diagnostic question."""
+    from app.models.coverage_pass import CoveragePass
+    from app.models.thesis import Thesis
+    from app.services.coverage import CoveragePassBuilder
+
+    holding = Holding(
+        user_id=test_user.id, ticker="NVDA", name="NVIDIA",
+        quantity=1, average_cost_basis=100, current_price=100, current_value=100,
+    )
+    db.add(holding)
+    await db.flush()
+    thesis = Thesis(
+        user_id=test_user.id, holding_id=holding.id, status="active",
+        thesis_kind="company", why_own_it="GPU dominance.",
+        confidence="medium", review_cadence_days=7, source="user",
+    )
+    db.add(thesis)
+    await db.flush()
+
+    builder = CoveragePassBuilder(
+        thesis_id=thesis.id,
+        holding_id=holding.id,
+        run_id="check_now:test-run",
+        triggered_by="check_now",
+    )
+    builder.record_source("qualitative_market_data", candidates_returned=8)
+    builder.record_source("edgar_8k", candidates_returned=2)
+    builder.record_source("gemini_news", candidates_returned=0, error="429 RESOURCE_EXHAUSTED")
+    builder.record_stage("candidates_generated", 10)
+    builder.record_stage("after_match", 10)
+    builder.record_stage("after_relevance_filter", 4)
+    builder.record_stage("after_classification", 4)
+    builder.record_events_persisted(4)
+
+    await builder.persist(db)
+    await db.commit()
+
+    result = await db.execute(
+        CoveragePass.__table__.select().where(CoveragePass.thesis_id == thesis.id)
+    )
+    rows = result.all()
+    assert len(rows) == 1
+    row = rows[0]
+    assert row.run_id == "check_now:test-run"
+    assert row.triggered_by == "check_now"
+    payload = row.payload
+    # Sources record both success counts and failure errors.
+    assert payload["sources"]["gemini_news"]["error"].startswith("429")
+    assert payload["sources"]["qualitative_market_data"]["candidates_returned"] == 8
+    # Stages preserve order — the funnel reads top-to-bottom.
+    stage_names = [row[0] for row in payload["stages"]]
+    assert stage_names == [
+        "candidates_generated", "after_match",
+        "after_relevance_filter", "after_classification",
+    ]
+    assert payload["events_persisted"] == 4
+
+
+async def test_coverage_passes_route_returns_recent_passes(client, auth_headers, db, test_user):
+    """API surfaces the funnel data so the UI can answer 'where did our
+    candidates go' on the last check-now pass."""
+    from app.models.coverage_pass import CoveragePass
+    from datetime import datetime, timezone
+
+    thesis, holding, _claim, _rev, _margin = await _setup_thesis_with_two_signals(db, test_user)
+    db.add(CoveragePass(
+        thesis_id=thesis.id,
+        holding_id=holding.id,
+        run_id="check_now:1",
+        triggered_by="check_now",
+        started_at=datetime.now(timezone.utc),
+        finished_at=datetime.now(timezone.utc),
+        payload={
+            "sources": {"gemini_news": {"queried": True, "candidates_returned": 5}},
+            "stages": [["candidates_generated", 10], ["after_classification", 4]],
+            "events_persisted": 4,
+        },
+    ))
+    await db.commit()
+
+    response = await client.get(f"/api/monitoring/theses/{thesis.id}/coverage/passes", headers=auth_headers)
+    assert response.status_code == 200
+    body = response.json()
+    assert len(body) == 1
+    assert body[0]["run_id"] == "check_now:1"
+    assert body[0]["payload"]["events_persisted"] == 4
+
+
 async def test_coverage_route_returns_per_signal_report(client, auth_headers, db, test_user):
     """End-to-end through the API route to make sure schema + auth checks
     line up. The UI shells out to this for the 'thin coverage' display."""

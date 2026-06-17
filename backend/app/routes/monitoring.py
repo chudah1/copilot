@@ -23,11 +23,15 @@ from app.schemas.monitoring_event import (
     MonitoringEventReviewResponse,
     ReviewMonitoringEventRequest,
 )
-from app.schemas.coverage import SignalCoverageResponse, ThesisCoverageResponse
+from app.schemas.coverage import CoveragePassResponse, SignalCoverageResponse, ThesisCoverageResponse
 from app.schemas.monitoring_gap import MonitoringGapResponse
 from app.services.check_now import run_check_now
 from app.services.conviction_log import REASON_CREATED
-from app.services.coverage import DEFAULT_COVERAGE_WINDOW_DAYS, compute_thesis_coverage
+from app.services.coverage import (
+    DEFAULT_COVERAGE_WINDOW_DAYS,
+    compute_thesis_coverage,
+    latest_coverage_passes,
+)
 from app.services.monitoring_review import review_monitoring_event
 
 router = APIRouter(prefix="/api/monitoring", tags=["monitoring"])
@@ -379,6 +383,39 @@ async def get_thesis_coverage(
             for s in report.signals
         ],
     )
+
+
+@router.get("/theses/{thesis_id}/coverage/passes", response_model=list[CoveragePassResponse])
+async def get_thesis_coverage_passes(
+    thesis_id: uuid.UUID,
+    limit: int = Query(default=10, ge=1, le=100),
+    user: User = Depends(get_current_user),
+    db: AsyncSession = Depends(get_db),
+):
+    """Per-pass funnel diagnostics — for each recent pipeline pass against
+    this thesis, the source query results and stage-by-stage candidate
+    counts. Answers Codex's 'which stage failed' question concretely."""
+    thesis_result = await db.execute(
+        select(Thesis).where(Thesis.id == thesis_id, Thesis.user_id == user.id)
+    )
+    if thesis_result.scalar_one_or_none() is None:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="thesis not found")
+
+    passes = await latest_coverage_passes(db, thesis_id, limit=limit)
+    return [
+        CoveragePassResponse(
+            id=p.id,
+            thesis_id=p.thesis_id,
+            holding_id=p.holding_id,
+            run_id=p.run_id,
+            triggered_by=p.triggered_by,
+            started_at=p.started_at,
+            finished_at=p.finished_at,
+            payload=p.payload,
+            created_at=p.created_at,
+        )
+        for p in passes
+    ]
 
 
 @router.get("/relevance")

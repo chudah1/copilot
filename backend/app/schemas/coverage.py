@@ -30,3 +30,18 @@ class ThesisCoverageResponse(BaseModel):
     inactive_signal_count: int
     no_decomposition: bool
     signals: list[SignalCoverageResponse]
+
+
+class CoveragePassResponse(BaseModel):
+    """One pipeline pass — the funnel that answers 'where did the candidates
+    go?' for a specific check-now / daily run / EDGAR-watch pass."""
+
+    id: uuid.UUID
+    thesis_id: uuid.UUID
+    holding_id: uuid.UUID
+    run_id: str
+    triggered_by: str
+    started_at: datetime
+    finished_at: datetime | None
+    payload: dict
+    created_at: datetime
