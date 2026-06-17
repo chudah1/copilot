@@ -979,6 +979,49 @@ async def _call_anthropic_json(
     raise ValueError(f"No tool_use block in Anthropic response for '{schema_name}'")
 
 
+def _make_openai_strict_compatible(schema: Any) -> Any:
+    """OpenAI strict-mode JSON schemas require every property in `required`
+    and don't permit "optional" via omission. Recursively transform a schema
+    so each object's `required` includes every property; previously-optional
+    properties become nullable (type list includes "null", enums include None).
+    Same pattern as the day-1 fix in openai_provider._response_schema —
+    centralised here because thesis_assist hit the same bug from the OpenAI
+    fallback path."""
+    import copy
+    if not isinstance(schema, dict):
+        return schema
+    out = copy.deepcopy(schema)
+
+    def _walk(node: Any) -> None:
+        if not isinstance(node, dict):
+            return
+        if node.get("type") == "object" and isinstance(node.get("properties"), dict):
+            props = node["properties"]
+            existing_required = set(node.get("required", []) or [])
+            for prop_name, prop_schema in props.items():
+                if prop_name not in existing_required:
+                    _make_nullable(prop_schema)
+                _walk(prop_schema)
+            node["required"] = list(props.keys())
+            node.setdefault("additionalProperties", False)
+        if isinstance(node.get("items"), dict):
+            _walk(node["items"])
+
+    def _make_nullable(prop_schema: Any) -> None:
+        if not isinstance(prop_schema, dict):
+            return
+        t = prop_schema.get("type")
+        if isinstance(t, str) and t != "null":
+            prop_schema["type"] = [t, "null"]
+        elif isinstance(t, list) and "null" not in t:
+            prop_schema["type"] = list(t) + ["null"]
+        if "enum" in prop_schema and None not in prop_schema["enum"]:
+            prop_schema["enum"] = list(prop_schema["enum"]) + [None]
+
+    _walk(out)
+    return out
+
+
 async def _call_openai_json(
     *,
     prompt: str,
@@ -990,6 +1033,15 @@ async def _call_openai_json(
     from openai import AsyncOpenAI
 
     client = AsyncOpenAI(api_key=settings.openai_api_key)
+    # gpt-5 (and other newer OpenAI models) deprecated `max_tokens` in favour
+    # of `max_completion_tokens`. Without this, the Anthropic-failure fallback
+    # was hard-broken — caught during the onboarding walkthrough when the
+    # assist endpoint returned a generic 502 because credits were depleted.
+    token_param_key = "max_completion_tokens" if model.startswith(("gpt-5", "o1", "o3", "o4")) else "max_tokens"
+    # gpt-5 reasoning models on strict-mode complex schemas can run past the
+    # 30s default; observed in the onboarding walkthrough. 90s gives headroom
+    # without blocking the user for unreasonable time.
+    timeout_seconds = 90.0 if model.startswith(("gpt-5", "o1", "o3", "o4")) else 30.0
     request_kwargs: dict[str, Any] = {
         "model": model,
         "response_format": {
@@ -997,14 +1049,14 @@ async def _call_openai_json(
             "json_schema": {
                 "name": schema_name,
                 "strict": True,
-                "schema": schema,
+                "schema": _make_openai_strict_compatible(schema),
             },
         },
         "messages": [{"role": "user", "content": prompt}],
-        "timeout": 30.0,
-        "max_tokens": max_tokens,
+        "timeout": timeout_seconds,
+        token_param_key: max_tokens,
     }
-    if not model.startswith("gpt-5"):
+    if not model.startswith(("gpt-5", "o1", "o3", "o4")):
         request_kwargs["temperature"] = 0
     response = await client.chat.completions.create(**request_kwargs)
     return json.loads(strip_code_fences(response.choices[0].message.content or "{}"))
