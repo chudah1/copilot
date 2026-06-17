@@ -23,9 +23,11 @@ from app.schemas.monitoring_event import (
     MonitoringEventReviewResponse,
     ReviewMonitoringEventRequest,
 )
+from app.schemas.coverage import SignalCoverageResponse, ThesisCoverageResponse
 from app.schemas.monitoring_gap import MonitoringGapResponse
 from app.services.check_now import run_check_now
 from app.services.conviction_log import REASON_CREATED
+from app.services.coverage import DEFAULT_COVERAGE_WINDOW_DAYS, compute_thesis_coverage
 from app.services.monitoring_review import review_monitoring_event
 
 router = APIRouter(prefix="/api/monitoring", tags=["monitoring"])
@@ -331,6 +333,52 @@ async def get_monitoring_gaps(
 
     result = await db.execute(stmt)
     return result.scalars().all()
+
+
+@router.get("/theses/{thesis_id}/coverage", response_model=ThesisCoverageResponse)
+async def get_thesis_coverage(
+    thesis_id: uuid.UUID,
+    window_days: int = Query(default=DEFAULT_COVERAGE_WINDOW_DAYS, ge=1, le=90),
+    user: User = Depends(get_current_user),
+    db: AsyncSession = Depends(get_db),
+):
+    """Per-signal coverage diagnostics: for each active signal on the thesis,
+    did any monitoring event in the window touch it? Surfaces "thin coverage"
+    as concrete uncovered-signal counts instead of vibes."""
+    thesis_result = await db.execute(
+        select(Thesis).where(Thesis.id == thesis_id, Thesis.user_id == user.id)
+    )
+    thesis = thesis_result.scalar_one_or_none()
+    if thesis is None:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="thesis not found")
+
+    report = await compute_thesis_coverage(db, thesis_id, window_days=window_days)
+    return ThesisCoverageResponse(
+        thesis_id=report.thesis_id,
+        window_start=report.window_start,
+        window_end=report.window_end,
+        covered_count=report.covered_count,
+        uncovered_count=report.uncovered_count,
+        inactive_signal_count=report.inactive_signal_count,
+        no_decomposition=report.no_decomposition,
+        signals=[
+            SignalCoverageResponse(
+                signal_id=s.signal_id,
+                signal_label=s.signal_label,
+                signal_type=s.signal_type,
+                claim_id=s.claim_id,
+                claim_text=s.claim_text,
+                covered=s.covered,
+                matched_event_count=s.matched_event_count,
+                last_matched_at=s.last_matched_at,
+                last_event_id=s.last_event_id,
+                last_event_severity=s.last_event_severity,
+                max_confidence=s.max_confidence,
+                is_strong_binding=s.is_strong_binding,
+            )
+            for s in report.signals
+        ],
+    )
 
 
 @router.get("/relevance")
