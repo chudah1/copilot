@@ -56,6 +56,14 @@ def _event_title(ticker: str, candidate: dict[str, Any], claim_obj: Any | None) 
         return f"{clean}: {metric} threshold breached" if metric else f"{clean} metric alert"
 
     if event_type in ("news_or_earnings_candidate", "product_ramp_update", "news_keyword_match"):
+        # Prefer the actual headline so two events about different articles
+        # look different in the UI. The previous "news touches '{claim_text}'"
+        # template made every news event for the same claim look identical —
+        # caught during the onboarding walkthrough where 4 different articles
+        # rendered with the same title and confused dedup at-a-glance.
+        headline = (evidence.get("headline") or "").strip()
+        if headline:
+            return f"{clean}: {headline[:80]}"
         if claim_obj:
             return f"{clean}: news touches '{claim_obj.claim_text[:50]}'"
         return f"{clean}: relevant news"
