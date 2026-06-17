@@ -1113,6 +1113,50 @@ async def test_embedding_enrichment_binds_semantic_matches_without_word_overlap(
     assert evidence.get("signal_id") == str(margin_signal.id)
 
 
+async def test_embedding_enrichment_records_cosine_confidence_per_signal():
+    """Cosine scores from the embedding pass land in
+    evidence.match_confidence_by_signal so the UI can render strong matches
+    differently from weakly-inferred ones. Gemini explicit-label matches and
+    pre-bound signals are intentionally absent — their omission is the signal
+    that the match was high-confidence by other means."""
+    from unittest.mock import patch
+    from app.services.signal_matching import enrich_candidates_with_embedding_matches
+
+    rev_claim, rev_signal = _make_active_signal(
+        "Services revenue grows",
+        signal_type="revenue_growth",
+        signal_label="AAPL Services revenue growth",
+    )
+    margin_claim, margin_signal = _make_active_signal(
+        "Services gross margin stays above 72%",
+        signal_type="earnings_growth",
+        signal_label="AAPL Services gross margin trend",
+        position=1,
+    )
+
+    candidate = {
+        "event_type": "news_or_earnings_candidate",
+        "description": "Apple Faces a No-Win Pricing Dilemma",
+        "evidence": {"headline": "Apple Faces a No-Win Pricing Dilemma"},
+    }
+
+    async def fake_build_similarity(texts):
+        def _sim(a: str, b: str) -> float:
+            if "gross margin" in b.lower():
+                return 0.78
+            if "revenue grows" in b.lower():
+                return 0.65
+            return 0.0
+        return _sim
+
+    with patch("app.services.news_watch.build_embedding_similarity", new=fake_build_similarity):
+        result = await enrich_candidates_with_embedding_matches([candidate], [rev_claim, margin_claim])
+
+    confidence = result[0]["evidence"]["match_confidence_by_signal"]
+    assert confidence[str(margin_signal.id)] == 0.78
+    assert confidence[str(rev_signal.id)] == 0.65
+
+
 async def test_embedding_enrichment_unions_with_existing_multi_binding():
     """When match_candidates_to_signals already bound one signal via Gemini
     labels, the embedding pass adds further semantic matches on top — not
@@ -1208,3 +1252,111 @@ def test_multi_signal_binding_records_primary_when_upstream_pre_bound():
     evidence = result[0]["evidence"]
     assert evidence["matched_signal_ids"] == [str(signal.id)]
     assert evidence["matched_signal_labels"] == ["NVDA price floor"]
+
+
+def test_multi_signal_binding_does_not_bind_unrelated_news_signals_by_family_only():
+    """A generic news-topic family bonus should not bind unrelated qualitative
+    signals when there is zero text overlap with the candidate."""
+    demand_claim, demand_signal = _make_active_signal(
+        "MI350 demand stays strong",
+        signal_type="news_topic",
+        signal_label="AMD MI350 demand commentary",
+    )
+    gaming_claim, gaming_signal = _make_active_signal(
+        "Gaming demand stabilizes",
+        signal_type="news_topic",
+        signal_label="AMD Radeon gaming demand commentary",
+        position=1,
+    )
+    candidate = {
+        "event_type": "news_or_earnings_candidate",
+        "description": "AMD adds new enterprise sales leader",
+        "evidence": {"headline": "AMD appoints new enterprise sales leader"},
+    }
+
+    result = match_candidates_to_signals([candidate], [demand_claim, gaming_claim])
+    evidence = result[0]["evidence"]
+    assert evidence.get("signal_id") is None
+    assert evidence.get("matched_signal_ids") is None
+    assert evidence.get("matched_signal_labels") is None
+
+
+def test_multi_signal_binding_merges_relevance_labels_for_prebound_candidates():
+    """If an upstream stage pre-bound signal_id and a later LLM stage adds
+    relevant_signals, the matcher should widen the multi-binding list instead
+    of freezing at the primary only."""
+    rev_claim, rev_signal = _make_active_signal(
+        "Services revenue grows",
+        signal_type="revenue_growth",
+        signal_label="AAPL Services revenue growth",
+    )
+    margin_claim, margin_signal = _make_active_signal(
+        "Services margin above 72%",
+        signal_type="earnings_growth",
+        signal_label="AAPL Services gross margin trend",
+        position=1,
+    )
+    candidate = {
+        "event_type": "gemini_news",
+        "description": "Apple Services strong on growth and margin",
+        "evidence": {
+            "signal_id": str(rev_signal.id),
+            "relevant_signals": [
+                "AAPL Services revenue growth",
+                "AAPL Services gross margin trend",
+            ],
+        },
+    }
+
+    result = match_candidates_to_signals([candidate], [rev_claim, margin_claim])
+    evidence = result[0]["evidence"]
+    assert evidence["matched_signal_ids"] == [str(rev_signal.id), str(margin_signal.id)]
+    assert evidence["matched_signal_labels"] == [
+        "AAPL Services revenue growth",
+        "AAPL Services gross margin trend",
+    ]
+
+
+async def test_embedding_enrichment_sets_primary_to_highest_similarity_match():
+    """When a candidate has no primary signal yet, the embedding pass should
+    anchor signal_id to the strongest semantic match, not whichever signal was
+    iterated first."""
+    from unittest.mock import patch
+    from app.services.signal_matching import enrich_candidates_with_embedding_matches
+
+    lower_claim, lower_signal = _make_active_signal(
+        "Services revenue grows",
+        signal_type="revenue_growth",
+        signal_label="AAPL Services revenue growth",
+    )
+    higher_claim, higher_signal = _make_active_signal(
+        "Services gross margin stays above 72%",
+        signal_type="earnings_growth",
+        signal_label="AAPL Services gross margin trend",
+        position=1,
+    )
+
+    candidate = {
+        "event_type": "news_or_earnings_candidate",
+        "description": "Apple faces pricing pressure in Services",
+        "evidence": {"headline": "Apple faces pricing pressure in Services"},
+    }
+
+    async def fake_build_similarity(texts):
+        low_text = next(t for t in texts if "revenue grows" in t.lower())
+        high_text = next(t for t in texts if "gross margin" in t.lower())
+
+        def _sim(a: str, b: str) -> float:
+            if "pricing pressure" in a.lower() and b == low_text:
+                return 0.62
+            if "pricing pressure" in a.lower() and b == high_text:
+                return 0.81
+            return 0.0
+        return _sim
+
+    with patch("app.services.news_watch.build_embedding_similarity", new=fake_build_similarity):
+        result = await enrich_candidates_with_embedding_matches([candidate], [lower_claim, higher_claim])
+
+    evidence = result[0]["evidence"]
+    assert evidence["signal_id"] == str(higher_signal.id)
+    assert evidence["matched_signal_ids"] == [str(higher_signal.id), str(lower_signal.id)]

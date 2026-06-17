@@ -284,8 +284,8 @@ async def enrich_candidates_with_embedding_matches(
     for candidate in targets:
         evidence = candidate.setdefault("evidence", {})
         cand_text = candidate_texts[id(candidate)]
-        existing_ids = set(evidence.get("matched_signal_ids") or [])
-        added: list[tuple[str, str]] = []
+        existing_ids = {str(value) for value in (evidence.get("matched_signal_ids") or [])}
+        added: list[tuple[str, str, float]] = []
         for sig_id, sig_text in signal_texts.items():
             if sig_id in existing_ids or not sig_text:
                 continue
@@ -294,13 +294,24 @@ async def enrich_candidates_with_embedding_matches(
                 continue
             _, signal = signal_by_id[sig_id]
             label = str(getattr(signal, "signal_label", "") or "").strip()
-            added.append((sig_id, label))
+            added.append((sig_id, label, score))
             existing_ids.add(sig_id)
         if not added:
             continue
-        evidence["matched_signal_ids"] = list(evidence.get("matched_signal_ids") or []) + [sid for sid, _ in added]
+        added.sort(key=lambda row: row[2], reverse=True)
+        evidence["matched_signal_ids"] = list(evidence.get("matched_signal_ids") or []) + [sid for sid, _, _ in added]
         existing_labels = list(evidence.get("matched_signal_labels") or [])
-        evidence["matched_signal_labels"] = existing_labels + [label for _, label in added if label]
+        evidence["matched_signal_labels"] = existing_labels + [label for _, label, _ in added if label]
+        # Preserve the cosine score so the UI can render high-confidence
+        # (Gemini explicit label or strong semantic match) differently from
+        # weakly-inferred matches. Cosine sits in [0,1] for unit vectors which
+        # is the contract OpenAI's text-embedding-3-small returns.
+        confidence_map = evidence.setdefault("match_confidence_by_signal", {})
+        if not isinstance(confidence_map, dict):
+            confidence_map = {}
+            evidence["match_confidence_by_signal"] = confidence_map
+        for sig_id, _, score in added:
+            confidence_map[sig_id] = round(float(score), 3)
         # If the candidate had nothing bound before, pick the highest-similarity
         # new match as the primary signal_id so downstream readers that still
         # use the single anchor get something useful.
@@ -321,17 +332,40 @@ def _ensure_multi_binding_includes_primary(
     primary_id = evidence.get("signal_id")
     if not primary_id:
         return
-    existing_ids = evidence.get("matched_signal_ids")
-    if isinstance(existing_ids, list) and str(primary_id) in {str(x) for x in existing_ids}:
-        return
+    existing_ids_raw = evidence.get("matched_signal_ids")
+    existing_labels_raw = evidence.get("matched_signal_labels")
+    merged_ids = [str(x) for x in existing_ids_raw] if isinstance(existing_ids_raw, list) else []
+    merged_labels = [str(x) for x in existing_labels_raw if isinstance(x, str)] if isinstance(existing_labels_raw, list) else []
     primary_label = ""
     for _, signal in active_signals:
         if str(signal.id) == str(primary_id):
             primary_label = str(getattr(signal, "signal_label", None) or "").strip()
             break
-    evidence["matched_signal_ids"] = [str(primary_id)]
+    primary_id_str = str(primary_id)
+    if primary_id_str in merged_ids:
+        merged_ids = [sid for sid in merged_ids if sid != primary_id_str]
+    merged_ids.insert(0, primary_id_str)
     if primary_label:
-        evidence["matched_signal_labels"] = [primary_label]
+        merged_labels = [label for label in merged_labels if label != primary_label]
+        merged_labels.insert(0, primary_label)
+
+    relevant_labels = evidence.get("relevant_signals")
+    if isinstance(relevant_labels, list):
+        wanted = {_normalize_text(str(lbl)) for lbl in relevant_labels if str(lbl).strip()}
+        if wanted:
+            for _, signal in active_signals:
+                sid = str(signal.id)
+                label = str(getattr(signal, "signal_label", None) or "").strip()
+                if not label or _normalize_text(label) not in wanted:
+                    continue
+                if sid not in merged_ids:
+                    merged_ids.append(sid)
+                if label not in merged_labels:
+                    merged_labels.append(label)
+
+    evidence["matched_signal_ids"] = merged_ids
+    if merged_labels:
+        evidence["matched_signal_labels"] = merged_labels
 
 
 def _find_best_signal_match(
@@ -412,6 +446,8 @@ def _signal_match_score(
         return family_bonus + overlap * 10
 
     if event_type in {"news_or_earnings_candidate", "product_ramp_update", "gemini_news", "news_keyword_match", "edgar_8k"}:
+        if overlap <= 0:
+            return 0
         family_bonus = 2 if signal_type in NEWS_SIGNAL_TYPES else 0
         return family_bonus + overlap * 10
 
@@ -419,8 +455,10 @@ def _signal_match_score(
 
 
 def _signal_match_text(claim: ThesisClaim, signal: ThesisSignal) -> str:
+    signal_label = getattr(signal, "signal_label", None)
+    signal_label = _strip_leading_ticker_token(str(signal_label).strip()) if signal_label else None
     parts = [
-        getattr(signal, "signal_label", None),
+        signal_label,
         getattr(signal, "rationale", None),
         getattr(claim, "claim_text", None),
         str(getattr(signal, "signal_type", "") or "").replace("_", " "),
@@ -434,6 +472,15 @@ def _words(text: str) -> set[str]:
 
 def _normalize_text(text: str) -> str:
     return " ".join(_words(text))
+
+
+def _strip_leading_ticker_token(text: str) -> str:
+    if not text:
+        return text
+    parts = text.split()
+    if parts and re.fullmatch(r"[A-Z0-9._-]{1,5}", parts[0]):
+        return " ".join(parts[1:]).strip()
+    return text
 
 
 def _has_management_words(words: set[str]) -> bool:

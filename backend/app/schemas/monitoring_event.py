@@ -40,6 +40,11 @@ class MonitoringEventResponse(BaseModel):
     # The primary is always included as the first element.
     matched_signal_ids: list[uuid.UUID] = []
     matched_signal_labels: list[str] = []
+    # Cosine similarity per matched signal (0-1). Gemini explicit-label matches
+    # and pre-bound signals don't appear here — only the embedding-inferred
+    # ones do, so a missing entry means "we know this is the right signal
+    # because the source attributed it explicitly."
+    match_confidence_by_signal: dict[uuid.UUID, float] = {}
     evidence_type: str | None = None
     evidence_summary: str | None = None
     verdict: str | None = None
