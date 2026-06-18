@@ -456,6 +456,86 @@ async def _expand_transcript_candidates_for_watches(
     return expanded
 
 
+async def expand_transcript_candidates_for_signals(
+    candidates: list[dict[str, Any]],
+    claims: list[Any] | None,
+) -> list[dict[str, Any]]:
+    """Mirror _expand_transcript_candidates_for_watches but for every active
+    signal — not just news_watch ones. AMD-style segment-commentary theses
+    have signals like 'NVDA data center revenue growth' (revenue_growth type,
+    no news_watch) that never used to get their own transcript candidates;
+    transcript coverage of those signals was effectively zero. Now each active
+    signal gets a transcript candidate seeded with its label + claim text +
+    rationale and pre-bound to the signal via signal_id and matched_signal_ids,
+    so downstream binding and confidence tracking don't have to re-discover
+    the link.
+
+    Designed as an addition on top of the existing watch expansion: a signal
+    that already has a news_watch will get a candidate from both paths, and
+    the cross-source dedup in noise_filter handles the duplicate.
+    """
+    if not claims:
+        return candidates
+
+    transcript_candidates = [
+        c for c in candidates if c.get("event_type") == "earnings_call_transcript"
+    ]
+    if not transcript_candidates:
+        return candidates
+
+    # Active signal pairs (claim, signal) — flattened.
+    active_pairs: list[tuple[Any, Any]] = []
+    for claim in claims:
+        for entity in getattr(claim, "entities", []) or []:
+            for signal in getattr(entity, "signals", []) or []:
+                if getattr(signal, "active", False):
+                    active_pairs.append((claim, signal))
+    if not active_pairs:
+        return candidates
+
+    expanded = list(candidates)
+    for candidate in transcript_candidates:
+        evidence = candidate.get("evidence") or {}
+        full_text = evidence.get("full_transcript")
+        if not isinstance(full_text, str) or not full_text.strip():
+            continue
+
+        for claim, signal in active_pairs:
+            label = str(getattr(signal, "signal_label", "") or "").strip()
+            claim_text = str(getattr(claim, "claim_text", "") or "").strip()
+            rationale = str(getattr(signal, "rationale", "") or "").strip()
+            focus_texts = [t for t in (label, claim_text, rationale) if t]
+            if not focus_texts:
+                continue
+            smart = await _relevant_transcript_highlights(full_text, focus_texts)
+            if not smart:
+                continue
+
+            sig_id = str(signal.id)
+            topic_context_parts = [label or claim_text]
+            topic_context_parts.extend(smart[1:3])
+            expanded.append(
+                {
+                    **candidate,
+                    "description": (
+                        f"{evidence.get('quarter') or 'Latest'} earnings call on "
+                        f"{label or claim_text[:60]}: {' '.join(smart[:2])}"
+                    ).strip(),
+                    "evidence": {
+                        **evidence,
+                        "signal_id": sig_id,
+                        "claim_id": str(claim.id),
+                        "matched_signal_ids": [sig_id],
+                        "matched_signal_labels": [label] if label else [],
+                        "highlights": smart,
+                        "excerpt": " ".join(smart[:2]),
+                        "topic_context": " ".join(part for part in topic_context_parts if part),
+                    },
+                }
+            )
+    return expanded
+
+
 async def classify_candidates_for_thesis(
     thesis: Thesis,
     candidates: list[dict[str, Any]],

@@ -26,6 +26,7 @@ from app.services.monitoring_gap_writer import write_monitoring_gap
 from app.services.monitoring_pipeline import (
     build_claim_signal_lookup,
     classify_candidates_for_thesis,
+    expand_transcript_candidates_for_signals,
     extract_news_watches,
     extract_provisional_news_watches,
     load_investor_profile,
@@ -363,6 +364,15 @@ async def run_check_now(
     if not news_watches:
         news_watches = extract_provisional_news_watches(thesis.interpretation)
     nw_matched = await match_thesis_news_watches(candidates, news_watches)
+
+    # Per-active-signal transcript expansion: every active signal gets its
+    # own transcript candidate seeded with claim + label + rationale,
+    # pre-bound to the signal. This is the AMD-style segment-commentary
+    # path Codex called out — previously only news_watch signals got
+    # transcript candidates of their own, leaving revenue_growth /
+    # earnings_growth / news_topic signals with effectively zero transcript
+    # coverage even when relevant Q&A existed in the call.
+    candidates = await expand_transcript_candidates_for_signals(candidates, claims)
 
     # Noise suppression: filter before classification (rules 1, 2, 4)
     candidates = await filter_candidates(candidates, holding.id, signals_by_id, db, now=now)

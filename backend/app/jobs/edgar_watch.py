@@ -25,6 +25,7 @@ from app.services.monitoring_gap_writer import write_monitoring_gap
 from app.services.monitoring_pipeline import (
     build_claim_signal_lookup,
     classify_candidates_for_thesis,
+    expand_transcript_candidates_for_signals,
     extract_news_watches,
     load_investor_profile,
     match_thesis_news_watches,
@@ -136,6 +137,7 @@ async def run_edgar_watch():
             # News-watch matching — must run before noise filtering
             news_watches = extract_news_watches(claims)
             nw_matched = await match_thesis_news_watches(candidates, news_watches)
+            candidates = await expand_transcript_candidates_for_signals(candidates, claims)
 
             candidates = apply_thesis_floor(candidates, thesis.created_at)
             coverage.record_stage(STAGE_AFTER_THESIS_FLOOR, len(candidates))

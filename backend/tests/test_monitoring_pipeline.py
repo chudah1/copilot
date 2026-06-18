@@ -8,6 +8,7 @@ from app.services.monitoring_pipeline import (
     _expand_transcript_candidates_for_watches,
     _relevant_transcript_highlights,
     _thesis_aware_highlights,
+    expand_transcript_candidates_for_signals,
 )
 from app.services.news_watch import NewsWatch
 
@@ -143,3 +144,119 @@ async def test_expand_transcript_candidates_for_watches_creates_topic_specific_c
         "MI350 demand is strong and customer deployments are accelerating." in highlight
         for highlight in watch_specific["evidence"]["highlights"]
     )
+
+
+@pytest.mark.asyncio
+async def test_expand_transcript_candidates_for_signals_creates_per_signal_candidates(monkeypatch):
+    """Every active signal — not just news_watch ones — should get its own
+    transcript candidate pre-bound to that signal. AMD-style segment-commentary
+    theses with revenue_growth signals previously had effectively zero
+    transcript coverage because only news_watches drove the expansion."""
+    monkeypatch.setattr(
+        "app.services.monitoring_pipeline.settings.openai_api_key",
+        None,
+        raising=False,
+    )
+
+    transcript = (
+        "Analyst: How is data center revenue trending this quarter? "
+        "CEO: Data center revenue grew 50% year over year and demand keeps accelerating. "
+        "Analyst: Any update on margins? "
+        "CEO: Gross margin stayed above 75% on operating leverage."
+    )
+    transcript_candidate = {
+        "event_type": "earnings_call_transcript",
+        "description": "Earnings call",
+        "evidence": {
+            "quarter": "2026Q2",
+            "full_transcript": transcript,
+        },
+    }
+
+    # Two active signals on one claim — revenue and margin. Both should
+    # produce a transcript candidate keyed to that signal.
+    rev_signal = SimpleNamespace(
+        id="rev-sig",
+        signal_label="NVDA data center revenue growth",
+        rationale="Data center growth is the main pillar.",
+        active=True,
+    )
+    margin_signal = SimpleNamespace(
+        id="margin-sig",
+        signal_label="NVDA gross margin trend",
+        rationale="Margin compression would weaken the case.",
+        active=True,
+    )
+    entity = SimpleNamespace(signals=[rev_signal, margin_signal])
+    claim = SimpleNamespace(
+        id="claim-1",
+        claim_text="NVDA data center revenue grows above 20% YoY with margin holding above 70%",
+        entities=[entity],
+    )
+
+    expanded = await expand_transcript_candidates_for_signals(
+        [transcript_candidate], [claim]
+    )
+
+    assert len(expanded) == 3  # original + 2 signal-keyed
+    revenue_specific = expanded[1]
+    margin_specific = expanded[2]
+    # Each new candidate carries the signal_id and a single-entry multi-binding
+    # list so downstream coverage + cooldown attribute correctly.
+    assert revenue_specific["evidence"]["signal_id"] == "rev-sig"
+    assert revenue_specific["evidence"]["matched_signal_ids"] == ["rev-sig"]
+    assert margin_specific["evidence"]["signal_id"] == "margin-sig"
+    # The transcript excerpt for the revenue-focused candidate should be the
+    # revenue-related sentence, not the margin one.
+    assert "data center revenue" in revenue_specific["evidence"]["excerpt"].lower()
+    assert "margin" in margin_specific["evidence"]["excerpt"].lower()
+
+
+@pytest.mark.asyncio
+async def test_expand_transcript_candidates_for_signals_skips_inactive_signals(monkeypatch):
+    """Inactive signals (user-rejected) should not produce transcript
+    candidates — they don't bind to events anywhere else either."""
+    monkeypatch.setattr(
+        "app.services.monitoring_pipeline.settings.openai_api_key",
+        None,
+        raising=False,
+    )
+    transcript_candidate = {
+        "event_type": "earnings_call_transcript",
+        "description": "Earnings call",
+        "evidence": {
+            "quarter": "2026Q2",
+            "full_transcript": "Revenue accelerated this quarter.",
+        },
+    }
+    inactive = SimpleNamespace(
+        id="inactive-sig",
+        signal_label="X",
+        rationale="",
+        active=False,
+    )
+    entity = SimpleNamespace(signals=[inactive])
+    claim = SimpleNamespace(id="c", claim_text="x", entities=[entity])
+
+    expanded = await expand_transcript_candidates_for_signals(
+        [transcript_candidate], [claim]
+    )
+    assert len(expanded) == 1
+
+
+@pytest.mark.asyncio
+async def test_expand_transcript_candidates_for_signals_noop_without_transcripts():
+    """If the candidate set has no transcripts, the expansion is a no-op
+    (we can't extract from text that isn't there). Important so the
+    pipeline can call this unconditionally without paying for embedding
+    calls on news-only passes."""
+    candidates = [{"event_type": "news_or_earnings_candidate", "evidence": {}}]
+    claim = SimpleNamespace(
+        id="c",
+        claim_text="x",
+        entities=[SimpleNamespace(signals=[SimpleNamespace(
+            id="s", signal_label="X", rationale="", active=True,
+        )])],
+    )
+    expanded = await expand_transcript_candidates_for_signals(candidates, [claim])
+    assert expanded == candidates
