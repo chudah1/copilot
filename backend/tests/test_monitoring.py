@@ -534,6 +534,94 @@ async def test_run_monitoring_applies_thesis_relevance_filter(db, job_session_fa
     mock_relevance.assert_awaited_once()
 
 
+async def test_run_monitoring_persists_coverage_pass_for_eventful_run(db, job_session_factory):
+    from app.models.coverage_pass import CoveragePass
+
+    user = User(email="coverage-pass@example.com", password_hash=hash_password("testpass123"))
+    db.add(user)
+    await db.flush()
+
+    holding = Holding(
+        user_id=user.id,
+        ticker="AAPL",
+        name="Apple",
+        quantity=5,
+        average_cost_basis=100,
+        current_price=100,
+        current_value=500,
+    )
+    db.add(holding)
+    await db.flush()
+
+    thesis = Thesis(
+        user_id=user.id,
+        holding_id=holding.id,
+        status="active",
+        thesis_kind="company",
+        why_own_it="The business stays resilient.",
+        confidence="medium",
+        review_cadence_days=7,
+        interpretation={"watch_hints": [{"kind": "price_move_pct", "threshold": 10.0}]},
+        source="user",
+    )
+    db.add(thesis)
+    await db.commit()
+
+    company_data = CompanyData(
+        ticker="AAPL",
+        name="Apple",
+        sector="Technology",
+        industry="Consumer Electronics",
+        current_price=120.0,
+        market_cap=None,
+        pe_ratio=None,
+        revenue_growth_yoy=None,
+        earnings_growth_yoy=None,
+        dividend_yield=None,
+        description="",
+        recent_news=[],
+        upcoming_earnings_date=None,
+        recent_earnings_surprise_pct=None,
+        news_items=[],
+        provider_payload={},
+    )
+
+    with patch("app.jobs.monitoring_run.settings") as mock_settings:
+        mock_settings.alpha_vantage_api_key = "test-key"
+        mock_settings.market_data_provider = "alpha_vantage"
+        with patch("app.jobs.monitoring_run.async_session", job_session_factory), \
+             patch("app.jobs.monitoring_run.fetch_company_data", new_callable=AsyncMock, return_value=company_data), \
+             patch("app.jobs.monitoring_run.get_recent_8k_filings", new_callable=AsyncMock, return_value=[]), \
+             patch("app.jobs.monitoring_run.get_recent_form4_transactions", new_callable=AsyncMock, return_value=[]), \
+             patch("app.jobs.monitoring_run.collect_news_evidence", new_callable=AsyncMock, return_value=[]), \
+             patch("app.jobs.monitoring_run.classify_candidates_for_thesis", new_callable=AsyncMock, return_value=[
+                 (
+                     {
+                         "event_type": "price_move",
+                         "description": "Price moved materially.",
+                         "evidence": {
+                             "current_price": 120.0,
+                             "previous_price": 100.0,
+                             "pct_change": 20.0,
+                         },
+                     },
+                     "warning",
+                     "Price move matters.",
+                 )
+             ]):
+            await run_monitoring()
+
+    result = await db.execute(
+        CoveragePass.__table__.select().where(CoveragePass.thesis_id == thesis.id)
+    )
+    rows = result.all()
+    assert len(rows) == 1
+    payload = rows[0].payload
+    assert payload["events_persisted"] == 1
+    assert payload["stages"][-1] == ["events_persisted", 1]
+    assert rows[0].triggered_by == "monitoring_run"
+
+
 def test_default_watch_hints_triggers_price_move_for_thesis_without_interpretation():
     """A thesis with no interpretation still gets price move monitoring via defaults."""
     company_data = CompanyData(

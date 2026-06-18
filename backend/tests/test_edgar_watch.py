@@ -24,6 +24,7 @@ async def test_edgar_watch_writes_gap_on_failure():
         mock_db = AsyncMock()
         mock_db.__aenter__ = AsyncMock(return_value=mock_db)
         mock_db.__aexit__ = AsyncMock(return_value=None)
+        mock_db.add = MagicMock()
         mock_result = MagicMock()
         mock_result.all.return_value = [(mock_thesis, mock_holding)]
         mock_db.execute = AsyncMock(return_value=mock_result)
@@ -82,6 +83,7 @@ async def test_edgar_watch_applies_thesis_relevance_filter():
         mock_db = AsyncMock()
         mock_db.__aenter__ = AsyncMock(return_value=mock_db)
         mock_db.__aexit__ = AsyncMock(return_value=None)
+        mock_db.add = MagicMock()
         mock_result = MagicMock()
         mock_result.all.return_value = [(mock_thesis, mock_holding)]
         mock_db.execute = AsyncMock(return_value=mock_result)
@@ -90,3 +92,53 @@ async def test_edgar_watch_applies_thesis_relevance_filter():
         await run_edgar_watch()
 
     mock_relevance.assert_awaited_once()
+
+
+@pytest.mark.asyncio
+async def test_edgar_watch_persists_coverage_pass_on_quiet_path():
+    from app.jobs.edgar_watch import run_edgar_watch
+
+    mock_thesis = MagicMock()
+    mock_thesis.id = uuid.uuid4()
+    mock_thesis.status = "active"
+    mock_thesis.created_at = datetime.now(timezone.utc)
+    mock_thesis.why_own_it = "Services flywheel."
+    mock_thesis.user_id = uuid.uuid4()
+
+    mock_holding = MagicMock()
+    mock_holding.ticker = "AAPL"
+    mock_holding.name = "Apple"
+    mock_holding.id = uuid.uuid4()
+    mock_holding.sector = "Technology"
+
+    fake_claim = SimpleNamespace(id=uuid.uuid4(), claim_text="Services revenue grows", entities=[])
+    fake_decomposition = SimpleNamespace(claims=[fake_claim])
+
+    filing = MagicMock()
+    filing.items = ["2.02"]
+
+    with patch("app.jobs.edgar_watch.async_session") as mock_session_ctx, \
+         patch("app.jobs.edgar_watch.get_recent_8k_filings", new_callable=AsyncMock, return_value=[filing]), \
+         patch("app.jobs.edgar_watch.build_edgar_candidates", return_value=[{"event_type": "edgar_8k", "description": "8-K", "evidence": {"headline": "8-K"}}]), \
+         patch("app.jobs.edgar_watch.load_active_decomposition", new_callable=AsyncMock, return_value=fake_decomposition), \
+         patch("app.jobs.edgar_watch.match_candidates_to_signals", side_effect=lambda candidates, claims: candidates), \
+         patch("app.jobs.edgar_watch.enrich_candidates_with_embedding_matches", new_callable=AsyncMock, side_effect=lambda candidates, claims: candidates), \
+         patch("app.jobs.edgar_watch.adjudicate_signal_matches", new_callable=AsyncMock, side_effect=lambda candidates, claims: candidates), \
+         patch("app.jobs.edgar_watch.filter_candidates_by_thesis_relevance", new_callable=AsyncMock, return_value=[]), \
+         patch("app.jobs.edgar_watch.match_thesis_news_watches", new_callable=AsyncMock, return_value={}), \
+         patch("app.jobs.edgar_watch.filter_candidates", new_callable=AsyncMock, return_value=[]), \
+         patch("app.jobs.edgar_watch.CoveragePassBuilder.persist", new_callable=AsyncMock) as mock_persist:
+
+        mock_db = AsyncMock()
+        mock_db.__aenter__ = AsyncMock(return_value=mock_db)
+        mock_db.__aexit__ = AsyncMock(return_value=None)
+        mock_db.add = MagicMock()
+        mock_result = MagicMock()
+        mock_result.all.return_value = [(mock_thesis, mock_holding)]
+        mock_db.execute = AsyncMock(return_value=mock_result)
+        mock_session_ctx.return_value = mock_db
+
+        await run_edgar_watch()
+
+    mock_persist.assert_awaited_once()
+    mock_db.commit.assert_awaited()

@@ -777,35 +777,66 @@ async def _run_historical_audit_with_session(
         # Tag retrieval failures with a per-audit run_id so users see the gap
         # rows the same way as for live check-now / daily jobs.
         audit_run_id = f"historical_audit:{uuid.uuid4()}"
+        coverage = CoveragePassBuilder(
+            thesis_id=thesis.id,
+            holding_id=holding.id,
+            run_id=audit_run_id,
+            triggered_by="historical_audit",
+        )
+        coverage.record_source("qualitative_market_data", candidates_returned=len(candidates))
 
         try:
             audit_since = (now - timedelta(days=HISTORICAL_AUDIT_LOOKBACK_DAYS)).date()
             edgar_filings = await get_recent_8k_filings(holding.ticker, since=audit_since)
+            before_edgar = len(candidates)
             candidates.extend(build_edgar_candidates(holding.ticker, edgar_filings))
+            coverage.record_source("edgar_8k", candidates_returned=len(candidates) - before_edgar)
         except Exception as exc:
             logger.warning("EDGAR fetch failed for %s in historical audit: %s", holding.ticker, exc)
             await write_monitoring_gap(db, thesis.id, "edgar", str(exc), audit_run_id)
+            coverage.record_source("edgar_8k", candidates_returned=0, error=str(exc))
 
         decomposition = await load_active_decomposition(db, thesis.id)
         claims = decomposition.claims if decomposition else None
         signal_descriptors = signal_search_descriptors_from_claims(claims)
 
         try:
+            before_gemini = len(candidates)
             gemini_candidates = await collect_news_evidence(
                 holding.ticker, holding.name or holding.ticker, signal_descriptors,
                 days_back=HISTORICAL_AUDIT_LOOKBACK_DAYS,
             )
             candidates.extend(gemini_candidates)
+            coverage.record_source("gemini_news", candidates_returned=len(candidates) - before_gemini)
         except Exception as exc:
             logger.warning("Gemini news failed for %s in historical audit: %s", holding.ticker, exc)
             await write_monitoring_gap(db, thesis.id, "gemini_news", str(exc), audit_run_id)
+            coverage.record_source("gemini_news", candidates_returned=0, error=str(exc))
 
         # Form 4 insider transactions and earnings enrichment are intentionally omitted —
         # they add LLM cost per filing over a 90-day window. The live pipeline handles them.
+        coverage.record_stage(STAGE_CANDIDATES_GENERATED, len(candidates))
         candidates = match_candidates_to_signals(candidates, claims)
+        coverage.record_stage(STAGE_AFTER_MATCH, len(candidates))
         candidates = await enrich_candidates_with_embedding_matches(candidates, claims)
+        coverage.record_stage(STAGE_AFTER_EMBEDDING_ENRICH, len(candidates))
         candidates = await adjudicate_signal_matches(candidates, claims)
+        coverage.record_stage(STAGE_AFTER_LLM_ADJUDICATION, len(candidates))
+        if claims:
+            from app.services.thesis_relevance_filter import filter_candidates_by_thesis_relevance
+
+            candidates = await filter_candidates_by_thesis_relevance(
+                candidates,
+                signal_descriptors=signal_descriptors,
+                ticker=holding.ticker,
+                why_own_it=thesis.why_own_it or "",
+            )
+            coverage.record_stage(STAGE_AFTER_RELEVANCE_FILTER, len(candidates))
+            candidates = match_candidates_to_signals(candidates, claims)
+            candidates = await enrich_candidates_with_embedding_matches(candidates, claims)
+            candidates = await adjudicate_signal_matches(candidates, claims)
         candidates = apply_thesis_floor(candidates, audit_floor_anchor)
+        coverage.record_stage(STAGE_AFTER_THESIS_FLOOR, len(candidates))
 
         claims_by_id, signals_by_id = build_claim_signal_lookup(claims)
         investor_profile = await load_investor_profile(db, thesis.user_id)
@@ -818,6 +849,7 @@ async def _run_historical_audit_with_session(
         candidates = await filter_candidates(
             candidates, holding.id, signals_by_id, db, now=now, skip_cooldown=True
         )
+        coverage.record_stage(STAGE_AFTER_NOISE_FILTER, len(candidates))
 
         classified = await classify_candidates_for_thesis(
             thesis,
@@ -832,6 +864,10 @@ async def _run_historical_audit_with_session(
         suppressed = apply_priority_suppression([(c, s) for c, s, _ in classified])
         surviving_set = {id(c) for c, _ in suppressed}
         classified = [(c, s, a) for c, s, a in classified if id(c) in surviving_set]
+        coverage.record_stage(STAGE_AFTER_CLASSIFICATION, len(classified))
+        coverage.record_stage(STAGE_EVENTS_PERSISTED, 0)
+        coverage.record_events_persisted(0)
+        await coverage.persist(db)
 
         results = _serialise_audit_results(
             classified,

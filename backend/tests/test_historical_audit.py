@@ -62,13 +62,14 @@ async def test_run_historical_audit_sets_status_empty_when_no_classified():
         patch("app.services.check_now.filter_candidates", return_value=[]),
         patch("app.services.check_now.classify_candidates_for_thesis", return_value=[]),
         patch("app.services.check_now.apply_priority_suppression", return_value=[]),
-        patch("app.services.check_now.signal_labels_from_claims", return_value=[]),
+        patch("app.services.check_now.CoveragePassBuilder.persist", new_callable=AsyncMock) as mock_persist,
     ):
         from app.services.check_now import _run_historical_audit_with_session
         await _run_historical_audit_with_session(mock_db, thesis_id=thesis_id)
 
     assert mock_thesis.historical_audit_status == "empty"
     mock_db.commit.assert_called()
+    mock_persist.assert_awaited_once()
 
 
 @pytest.mark.asyncio
@@ -158,6 +159,79 @@ async def test_run_historical_audit_skips_when_already_ready():
         from app.services.check_now import _run_historical_audit_with_session
         await _run_historical_audit_with_session(mock_db, thesis_id=thesis_id)
         mock_fetch.assert_not_called()
+
+
+@pytest.mark.asyncio
+async def test_run_historical_audit_applies_thesis_relevance_filter_when_claims_exist():
+    thesis_id = uuid.uuid4()
+
+    mock_thesis = MagicMock()
+    mock_thesis.id = thesis_id
+    mock_thesis.holding_id = uuid.uuid4()
+    mock_thesis.interpretation = {}
+    mock_thesis.user_id = uuid.uuid4()
+    mock_thesis.created_at = datetime.now(timezone.utc)
+    mock_thesis.why_own_it = "Services flywheel."
+
+    mock_holding = MagicMock()
+    mock_holding.id = mock_thesis.holding_id
+    mock_holding.ticker = "AAPL"
+    mock_holding.name = "Apple Inc"
+    mock_holding.current_price = 150.0
+    mock_holding.sector = "Tech"
+
+    mock_company_data = MagicMock()
+    mock_company_data.current_price = 155.0
+    mock_company_data.news_items = []
+
+    def execute_side_effect(query):
+        result = MagicMock()
+        query_text = str(query)
+        result.scalar_one_or_none.return_value = mock_thesis if "FROM theses" in query_text else mock_holding
+        return result
+
+    mock_db = AsyncMock()
+    mock_db.execute = AsyncMock(side_effect=execute_side_effect)
+
+    candidate = {
+        "event_type": "news_or_earnings_candidate",
+        "description": "Apple Services article",
+        "evidence": {"headline": "Apple Services article"},
+    }
+    fake_claim = MagicMock()
+    fake_claim.id = uuid.uuid4()
+    fake_claim.claim_text = "Services revenue grows"
+    fake_claim.entities = []
+    fake_decomposition = MagicMock()
+    fake_decomposition.claims = [fake_claim]
+
+    with (
+        patch("app.services.check_now.fetch_company_data", return_value=mock_company_data),
+        patch("app.services.check_now.generate_monitoring_candidates", return_value=[candidate]),
+        patch("app.services.check_now.get_recent_8k_filings", return_value=[]),
+        patch("app.services.check_now.build_edgar_candidates", return_value=[]),
+        patch("app.services.check_now.load_active_decomposition", return_value=fake_decomposition),
+        patch("app.services.check_now.collect_news_evidence", return_value=[]),
+        patch("app.services.check_now.match_candidates_to_signals", side_effect=lambda candidates, claims: candidates),
+        patch("app.services.check_now.enrich_candidates_with_embedding_matches", new_callable=AsyncMock, side_effect=lambda candidates, claims: candidates),
+        patch("app.services.check_now.adjudicate_signal_matches", new_callable=AsyncMock, side_effect=lambda candidates, claims: candidates),
+        patch("app.services.thesis_relevance_filter.filter_candidates_by_thesis_relevance", new_callable=AsyncMock, return_value=[] ) as mock_relevance,
+        patch("app.services.check_now.apply_thesis_floor", return_value=[]),
+        patch("app.services.check_now.build_claim_signal_lookup", return_value=({}, {})),
+        patch("app.services.check_now.load_investor_profile", return_value=None),
+        patch("app.services.check_now.extract_news_watches", return_value=[]),
+        patch("app.services.check_now.extract_provisional_news_watches", return_value=[]),
+        patch("app.services.check_now.match_thesis_news_watches", return_value=set()),
+        patch("app.services.check_now.filter_candidates", return_value=[]),
+        patch("app.services.check_now.classify_candidates_for_thesis", return_value=[]),
+        patch("app.services.check_now.apply_priority_suppression", return_value=[]),
+        patch("app.services.check_now.CoveragePassBuilder.persist", new_callable=AsyncMock),
+    ):
+        from app.services.check_now import _run_historical_audit_with_session
+
+        await _run_historical_audit_with_session(mock_db, thesis_id=thesis_id)
+
+    mock_relevance.assert_awaited_once()
 
 
 @pytest.mark.asyncio

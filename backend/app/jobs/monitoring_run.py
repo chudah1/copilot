@@ -37,6 +37,18 @@ from app.services.edgar import (
 )
 from app.services.edgar_extractor import enrich_earnings_candidates
 from app.services.news_collector import collect_news_evidence
+from app.services.coverage import (
+    STAGE_AFTER_CLASSIFICATION,
+    STAGE_AFTER_EMBEDDING_ENRICH,
+    STAGE_AFTER_LLM_ADJUDICATION,
+    STAGE_AFTER_MATCH,
+    STAGE_AFTER_NOISE_FILTER,
+    STAGE_AFTER_RELEVANCE_FILTER,
+    STAGE_AFTER_THESIS_FLOOR,
+    STAGE_CANDIDATES_GENERATED,
+    STAGE_EVENTS_PERSISTED,
+    CoveragePassBuilder,
+)
 from app.services.signal_matching import (
     load_active_decomposition,
     adjudicate_signal_matches,
@@ -265,6 +277,16 @@ async def run_monitoring():
                     logger.warning("No market data for %s — skipping thesis %s", holding.ticker, thesis.id)
                     continue
 
+                # Per-thesis coverage funnel — recorded throughout the pass and
+                # persisted with the events. Mirrors check_now so the same
+                # diagnostics endpoint surfaces both manual and daily runs.
+                coverage = CoveragePassBuilder(
+                    thesis_id=thesis.id,
+                    holding_id=holding.id,
+                    run_id=run_id,
+                    triggered_by="monitoring_run",
+                )
+
                 # Direct ticker candidates
                 candidates = generate_monitoring_candidates(
                     thesis.interpretation,
@@ -272,8 +294,10 @@ async def run_monitoring():
                     float(holding.current_price) if holding.current_price is not None else None,
                     now=now,
                 )
+                coverage.record_source("qualitative_market_data", candidates_returned=len(candidates))
 
                 # Proxy ticker candidates
+                proxy_before = len(candidates)
                 for proxy in _extract_proxy_tickers(thesis.interpretation):
                     proxy_ticker = proxy["ticker"].upper()
                     if proxy_ticker == holding.ticker:
@@ -290,17 +314,25 @@ async def run_monitoring():
                         )
                     )
 
+                if len(candidates) > proxy_before:
+                    coverage.record_source("proxy_tickers", candidates_returned=len(candidates) - proxy_before)
+
                 # EDGAR 8-K candidates (US tickers only; silently skipped for non-US)
+                before_edgar = len(candidates)
                 try:
                     edgar_filings = await get_recent_8k_filings(holding.ticker)
                     candidates.extend(build_edgar_candidates(holding.ticker, edgar_filings))
+                    coverage.record_source("edgar_8k", candidates_returned=len(candidates) - before_edgar)
                 except Exception as exc:
                     logger.warning("EDGAR gap for thesis %s: %s", thesis.id, exc)
                     await write_monitoring_gap(db, thesis.id, "edgar", str(exc), run_id)
+                    coverage.record_source("edgar_8k", candidates_returned=0, error=str(exc))
 
                 # EDGAR Form 4 insider transactions
+                before_form4 = len(candidates)
                 form4_txns = await get_recent_form4_transactions(holding.ticker)
                 candidates.extend(build_form4_candidates(holding.ticker, form4_txns, now=now))
+                coverage.record_source("edgar_form4", candidates_returned=len(candidates) - before_form4)
 
                 # Enrich earnings 8-Ks (item 2.02) with LLM-extracted content
                 candidates = await enrich_earnings_candidates(candidates, thesis)
@@ -312,17 +344,24 @@ async def run_monitoring():
                 # Gemini news uses signal descriptors from decomposition so
                 # focused retrieval can include claim/rationale context.
                 signal_descriptors = signal_search_descriptors_from_claims(claims)
+                before_gemini = len(candidates)
                 try:
                     gemini_candidates = await collect_news_evidence(
                         holding.ticker, holding.name or holding.ticker, signal_descriptors
                     )
                     candidates.extend(gemini_candidates)
+                    coverage.record_source("gemini_news", candidates_returned=len(candidates) - before_gemini)
                 except Exception as exc:
                     logger.warning("Gemini gap for thesis %s: %s", thesis.id, exc)
                     await write_monitoring_gap(db, thesis.id, "gemini_news", str(exc), run_id)
+                    coverage.record_source("gemini_news", candidates_returned=0, error=str(exc))
+                coverage.record_stage(STAGE_CANDIDATES_GENERATED, len(candidates))
                 candidates = match_candidates_to_signals(candidates, claims)
+                coverage.record_stage(STAGE_AFTER_MATCH, len(candidates))
                 candidates = await enrich_candidates_with_embedding_matches(candidates, claims)
+                coverage.record_stage(STAGE_AFTER_EMBEDDING_ENRICH, len(candidates))
                 candidates = await adjudicate_signal_matches(candidates, claims)
+                coverage.record_stage(STAGE_AFTER_LLM_ADJUDICATION, len(candidates))
                 if claims:
                     candidates = await filter_candidates_by_thesis_relevance(
                         candidates,
@@ -330,6 +369,7 @@ async def run_monitoring():
                         ticker=holding.ticker,
                         why_own_it=thesis.why_own_it or "",
                     )
+                    coverage.record_stage(STAGE_AFTER_RELEVANCE_FILTER, len(candidates))
                     candidates = match_candidates_to_signals(candidates, claims)
                     candidates = await enrich_candidates_with_embedding_matches(candidates, claims)
                     candidates = await adjudicate_signal_matches(candidates, claims)
@@ -337,6 +377,7 @@ async def run_monitoring():
                 # Drop candidates whose event date predates this thesis — guards
                 # new users against stale evidence (transcript window is 120 days).
                 candidates = apply_thesis_floor(candidates, thesis.created_at)
+                coverage.record_stage(STAGE_AFTER_THESIS_FLOOR, len(candidates))
 
                 # Update price and timestamp — always runs, even on quiet passes.
                 if company_data and company_data.current_price is not None:
@@ -349,6 +390,13 @@ async def run_monitoring():
                 holding.last_monitored_at = now
 
                 if not candidates:
+                    # Persist the funnel even on quiet passes so the user can
+                    # see "we tried these sources, they had nothing today."
+                    coverage.record_stage(STAGE_AFTER_NOISE_FILTER, 0)
+                    coverage.record_stage(STAGE_AFTER_CLASSIFICATION, 0)
+                    coverage.record_stage(STAGE_EVENTS_PERSISTED, 0)
+                    coverage.record_events_persisted(0)
+                    await coverage.persist(db)
                     score, new_label, prev_label = await refresh_thesis_health(
                         db, thesis, claims, decomposition, now=now
                     )
@@ -372,6 +420,7 @@ async def run_monitoring():
 
                 # Noise suppression: filter before classification (rules 1, 2, 4)
                 candidates = await filter_candidates(candidates, holding.id, signals_by_id, db, now=now)
+                coverage.record_stage(STAGE_AFTER_NOISE_FILTER, len(candidates))
 
                 classified = await classify_candidates_for_thesis(
                     thesis,
@@ -387,9 +436,10 @@ async def run_monitoring():
                 suppressed = apply_priority_suppression([(c, s) for c, s, _ in classified])
                 surviving_set = {id(c) for c, _ in suppressed}
                 classified = [(c, s, a) for c, s, a in classified if id(c) in surviving_set]
+                coverage.record_stage(STAGE_AFTER_CLASSIFICATION, len(classified))
 
                 status_before = thesis.status
-                await persist_classified_candidates(
+                created_event_ids = await persist_classified_candidates(
                     db,
                     thesis=thesis,
                     holding=holding,
@@ -399,6 +449,9 @@ async def run_monitoring():
                     now=now,
                     investor_profile=investor_profile,
                 )
+                coverage.record_stage(STAGE_EVENTS_PERSISTED, len(created_event_ids))
+                coverage.record_events_persisted(len(created_event_ids))
+                await coverage.persist(db)
 
                 # Real-time break alert: the moment a thesis flips to needs_review on
                 # a breaking signal, email the user instead of waiting for the digest.
