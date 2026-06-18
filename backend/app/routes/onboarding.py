@@ -424,7 +424,7 @@ async def synthesize_thesis(
     thesis = Thesis(
         holding_id=holding.id,
         user_id=current_user.id,
-        status="draft",
+        status="active",
         source="wizard",
         confidence="medium",
         why_own_it=output.why_own_it,

@@ -103,6 +103,41 @@ async def test_onboarding_profile_can_be_saved_and_loaded(client, auth_headers):
     assert state_response.json()["investor_profile"] == "hearsay_driven"
 
 
+async def test_onboarding_synthesize_creates_active_wizard_thesis(client, auth_headers):
+    holding = await client.post("/api/portfolio/holdings", json={
+        "ticker": "AAPL", "name": "Apple", "quantity": 10, "average_cost_basis": 150,
+    }, headers=auth_headers)
+    assert holding.status_code == 201
+
+    create = await client.post(
+        "/api/onboarding/synthesize",
+        json={
+            "holding_id": holding.json()["id"],
+            "investor_profile": "thesis_driven",
+            "question1": "What is the core thesis behind owning this position?",
+            "answer1": "Services keeps compounding.",
+            "question2": "What would break the thesis?",
+            "answer2": "If Services growth breaks and regulation changes the economics.",
+        },
+        headers=auth_headers,
+    )
+    assert create.status_code == 201
+    thesis_id = create.json()["thesis_id"]
+
+    before = await client.get("/api/theses/current", headers=auth_headers)
+    assert before.status_code == 200
+    assert before.json()[0]["id"] == thesis_id
+    assert before.json()[0]["status"] == "active"
+
+    complete = await client.post("/api/onboarding/complete", headers=auth_headers)
+    assert complete.status_code == 204
+
+    after = await client.get("/api/theses/current", headers=auth_headers)
+    assert after.status_code == 200
+    assert after.json()[0]["id"] == thesis_id
+    assert after.json()[0]["status"] == "active"
+
+
 async def test_synthesize_uses_investor_profile_from_request(client, auth_headers):
     holding = await client.post("/api/portfolio/holdings", json={
         "ticker": "NVDA", "name": "NVIDIA", "quantity": 2, "average_cost_basis": 900,
