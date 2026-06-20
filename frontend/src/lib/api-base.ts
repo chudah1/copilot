@@ -2,7 +2,10 @@ const DEFAULT_API_PORT = "8000";
 
 export function getApiBaseUrl() {
   const configured = process.env.NEXT_PUBLIC_API_URL?.trim();
-  if (configured) return configured;
+  if (configured) {
+    if (configured.startsWith("http://") || configured.startsWith("https://")) return configured;
+    return `https://${configured}`;
+  }
 
   if (typeof window !== "undefined") {
     const { protocol, hostname } = window.location;
