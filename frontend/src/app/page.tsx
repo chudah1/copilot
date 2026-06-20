@@ -260,7 +260,7 @@ export default function LandingPage() {
                   margin: "0 0 clamp(28px, 4vw, 40px)",
                 }}
               >
-                Earnings calls, filings, and news — read daily against what you wrote.
+                Every earnings call, SEC filing, analyst note, and news event. We read all of it, and ignore everything that doesn&apos;t touch what you wrote.
               </p>
 
               <div style={{ display: "flex", alignItems: "center", gap: 14, flexWrap: "wrap" }}>
