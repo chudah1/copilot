@@ -2,10 +2,11 @@ import uuid
 from datetime import datetime, timezone
 
 import httpx
-from fastapi import APIRouter, BackgroundTasks, Depends, HTTPException, UploadFile, File, status
+from fastapi import APIRouter, BackgroundTasks, Depends, HTTPException, Request, UploadFile, File, status
 from sqlalchemy import select, and_
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from app.limiter import limiter
 from app.database import get_db
 from app.config import settings
 from app.dependencies import get_current_user
@@ -39,7 +40,8 @@ router = APIRouter(prefix="/api/portfolio", tags=["portfolio"])
 
 
 @router.get("/search")
-async def search_tickers(q: str):
+@limiter.limit("30/minute")
+async def search_tickers(request: Request, q: str):
     """Proxy Yahoo Finance ticker search for the manual add holding flow."""
     if not q or len(q.strip()) < 1:
         return []
