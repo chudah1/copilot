@@ -39,7 +39,7 @@ router = APIRouter(prefix="/api/portfolio", tags=["portfolio"])
 
 
 @router.get("/search")
-async def search_tickers(q: str, user: User = Depends(get_current_user)):
+async def search_tickers(q: str):
     """Proxy Yahoo Finance ticker search for the manual add holding flow."""
     if not q or len(q.strip()) < 1:
         return []
