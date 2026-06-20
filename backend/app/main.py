@@ -38,6 +38,8 @@ def _cors_origins() -> list[str]:
         "http://localhost:3001",
         "http://127.0.0.1:3000",
         "http://127.0.0.1:3001",
+        "https://penkeep.io",
+        "https://www.penkeep.io",
     }
     for url in filter(None, [settings.frontend_url, settings.app_url]):
         origins.add(url.rstrip("/"))
@@ -72,7 +74,7 @@ app.add_exception_handler(RateLimitExceeded, _rate_limit_exceeded_handler)
 app.add_middleware(
     CORSMiddleware,
     allow_origins=_cors_origins(),
-    allow_origin_regex=r"https?://(localhost|127\.0\.0\.1)(:\d+)?",
+    allow_origin_regex=r"https?://(localhost|127\.0\.0\.1)(:\d+)?|https://(.+\.)?penkeep\.io|https://[a-z0-9-]+-chudah1\.vercel\.app",
     allow_credentials=True,
     allow_methods=["*"],
     allow_headers=["*"],
