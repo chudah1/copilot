@@ -8,7 +8,7 @@ router = APIRouter(prefix="/api/research", tags=["research"])
 
 
 @router.post("/stress-test", response_model=StressTestResponse)
-@limiter.limit("5/hour")
+@limiter.limit("2/hour")
 async def stress_test(request: Request, body: StressTestRequest):
     ticker = body.ticker.upper().strip()
 
