@@ -251,6 +251,18 @@ export default function LandingPage() {
                 <em style={{ color: mk.accent }}>we tell you.</em>
               </p>
 
+              <p
+                style={{
+                  fontFamily: mk.sans,
+                  fontSize: "clamp(13px, 1.3vw, 15px)",
+                  color: mk.pencil,
+                  letterSpacing: "0.01em",
+                  margin: "0 0 clamp(28px, 4vw, 40px)",
+                }}
+              >
+                Earnings calls, filings, and news — read daily against what you wrote.
+              </p>
+
               <div style={{ display: "flex", alignItems: "center", gap: 14, flexWrap: "wrap" }}>
                 <Link
                   href="/register"
