@@ -226,34 +226,29 @@ export default function LandingPage() {
                 style={{
                   fontFamily: mk.display,
                   fontWeight: 500,
-                  fontSize: "clamp(72px, 9.5vw, 100px)",
-                  lineHeight: 0.98,
-                  letterSpacing: "-0.03em",
-                  margin: "0 0 clamp(20px, 3vw, 30px)",
+                  fontSize: "clamp(44px, 5.8vw, 72px)",
+                  lineHeight: 1.05,
+                  letterSpacing: "-0.025em",
+                  margin: "0 0 clamp(16px, 2vw, 22px)",
                   color: mk.ink,
                 }}
               >
-                The reason
-                <br />
-                you hold it,
-                <br />
-                <span style={{ fontStyle: "italic", color: mk.accent }}>kept honest.</span>
+                We watch your stocks against the reason you bought them.
               </h1>
 
               <p
                 style={{
                   fontFamily: mk.display,
                   fontWeight: 500,
-                  fontSize: "clamp(18px, 1.9vw, 21px)",
-                  lineHeight: 1.5,
+                  fontSize: "clamp(24px, 3vw, 36px)",
+                  lineHeight: 1.2,
+                  letterSpacing: "-0.015em",
                   color: mk.inkSoft,
-                  maxWidth: 460,
                   margin: "0 0 clamp(28px, 4vw, 40px)",
                 }}
               >
-                Write the reason you bought each position. We read the earnings, filings and news
-                against it. When it starts to break,{" "}
-                <em style={{ color: mk.ink }}>we tell you that day.</em>
+                When that reason starts to break,{" "}
+                <em style={{ color: mk.accent }}>we tell you.</em>
               </p>
 
               <div style={{ display: "flex", alignItems: "center", gap: 14, flexWrap: "wrap" }}>
