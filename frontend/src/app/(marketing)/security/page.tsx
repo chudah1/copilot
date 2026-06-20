@@ -52,13 +52,11 @@ export default function SecurityPage() {
 
         <div
           style={{
-            display: "grid",
-            gridTemplateColumns: "repeat(3, minmax(0, 1fr))",
             gap: 12,
             marginTop: "clamp(24px,3vw,32px)",
             maxWidth: 980,
           }}
-          className="max-md:grid-cols-1"
+          className="grid grid-cols-1 md:grid-cols-3"
         >
           {TOP_POINTS.map(([label, value]) => (
             <div
@@ -90,7 +88,7 @@ export default function SecurityPage() {
           borderBottom: `1px solid ${mk.pencilLight}`,
         }}
       >
-        <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: "clamp(28px,5vw,60px)" }} className="max-md:grid-cols-1">
+        <div style={{ gap: "clamp(28px,5vw,60px)" }} className="grid grid-cols-1 md:grid-cols-2">
           <div>
             <div style={{ fontFamily: mk.mono, fontSize: 11, letterSpacing: "0.14em", textTransform: "uppercase", color: mk.green, marginBottom: 14 }}>
               ✓ What we store
@@ -141,8 +139,8 @@ export default function SecurityPage() {
         </div>
 
         <div
-          style={{ display: "grid", gridTemplateColumns: "repeat(3, minmax(0, 1fr))", gap: 14 }}
-          className="max-md:grid-cols-1"
+          style={{ gap: 14 }}
+          className="grid grid-cols-1 md:grid-cols-3"
         >
           {SECURITY_PROMISES.map((item) => (
             <div
@@ -180,8 +178,8 @@ export default function SecurityPage() {
           This is the practical layer: how credentials, hosting, access, and disclosure are handled around the core product.
         </p>
         <div
-          style={{ display: "grid", gridTemplateColumns: "repeat(2, 1fr)", gap: 14, marginTop: "clamp(28px,3vw,40px)" }}
-          className="max-md:grid-cols-1"
+          style={{ gap: 14, marginTop: "clamp(28px,3vw,40px)" }}
+          className="grid grid-cols-1 md:grid-cols-2"
         >
           {[
             ["Encryption", "Broker API keys encrypted at rest (Fernet AES). TLS in transit."],
@@ -214,8 +212,8 @@ export default function SecurityPage() {
           Export everything. Delete anything. <span style={{ color: mk.accent }}>It&apos;s yours.</span>
         </h2>
         <div
-          style={{ display: "grid", gridTemplateColumns: "repeat(3, 1fr)", gap: 12, marginTop: "clamp(24px,3vw,36px)" }}
-          className="max-md:grid-cols-1"
+          style={{ gap: 12, marginTop: "clamp(24px,3vw,36px)" }}
+          className="grid grid-cols-1 md:grid-cols-3"
         >
           {[
             ["Export", "We're building export to Markdown and JSON. Contact us if you need your data before that ships."],

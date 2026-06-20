@@ -39,12 +39,8 @@ export function MarketingFooter() {
       }}
     >
       <div
-        style={{
-          display: "grid",
-          gridTemplateColumns: "minmax(0, 1.2fr) minmax(0, 0.8fr) minmax(0, 0.8fr) minmax(0, 0.8fr)",
-          gap: 28,
-        }}
-        className="max-lg:grid-cols-1"
+        style={{ gap: 28 }}
+        className="grid grid-cols-1 lg:grid-cols-[1.2fr_0.8fr_0.8fr_0.8fr]"
       >
         <div style={{ display: "flex", flexDirection: "column", gap: 10 }}>
           <div style={{ display: "flex", alignItems: "center", gap: 10 }}>

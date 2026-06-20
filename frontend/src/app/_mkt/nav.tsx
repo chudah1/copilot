@@ -1,7 +1,9 @@
 "use client";
 
+import { useState } from "react";
 import Link from "next/link";
 import { usePathname } from "next/navigation";
+import { Menu, X } from "lucide-react";
 import { useAuth } from "@/lib/auth";
 import { mk } from "./tokens";
 import { PenKeepMark } from "./mark";
@@ -13,6 +15,7 @@ interface MarketingNavProps {
 export function MarketingNav({ active }: MarketingNavProps) {
   const { isAuthenticated } = useAuth();
   const pathname = usePathname();
+  const [mobileOpen, setMobileOpen] = useState(false);
 
   const derivedActive =
     pathname.startsWith("/blog") ? "blog" :
@@ -100,6 +103,24 @@ export function MarketingNav({ active }: MarketingNavProps) {
             </Link>
           ))}
 
+          <button
+            onClick={() => setMobileOpen((v) => !v)}
+            className="sm:hidden"
+            aria-label={mobileOpen ? "Close menu" : "Open menu"}
+            style={{
+              background: "none",
+              border: `1px solid ${mk.pencilLight}`,
+              borderRadius: 6,
+              padding: "6px 8px",
+              cursor: "pointer",
+              color: mk.ink,
+              display: "flex",
+              alignItems: "center",
+            }}
+          >
+            {mobileOpen ? <X size={18} /> : <Menu size={18} />}
+          </button>
+
           {isAuthenticated ? (
             <Link
               href="/dashboard"
@@ -135,6 +156,57 @@ export function MarketingNav({ active }: MarketingNavProps) {
           )}
         </div>
       </div>
+
+      {mobileOpen && (
+        <div
+          className="sm:hidden"
+          style={{
+            position: "absolute",
+            top: "100%",
+            left: 0,
+            right: 0,
+            background: `${mk.paper}f8`,
+            backdropFilter: "blur(12px)",
+            borderBottom: `1px solid ${mk.pencilLight}`,
+            padding: "8px clamp(22px, 4.5vw, 56px) 20px",
+            fontFamily: mk.sans,
+            zIndex: 50,
+          }}
+        >
+          <div style={{ display: "flex", flexDirection: "column" }}>
+            <Link
+              href="/#how-it-works"
+              onClick={() => setMobileOpen(false)}
+              style={{
+                padding: "13px 0",
+                color: mk.pencil,
+                textDecoration: "none",
+                fontSize: 15,
+                borderBottom: `1px solid ${mk.pencilLight}`,
+              }}
+            >
+              How it works
+            </Link>
+            {links.map((link) => (
+              <Link
+                key={link.href}
+                href={link.href}
+                onClick={() => setMobileOpen(false)}
+                style={{
+                  padding: "13px 0",
+                  color: currentActive === link.page ? mk.ink : mk.pencil,
+                  textDecoration: "none",
+                  fontSize: 15,
+                  fontWeight: currentActive === link.page ? 500 : 400,
+                  borderBottom: `1px solid ${mk.pencilLight}`,
+                }}
+              >
+                {link.label}
+              </Link>
+            ))}
+          </div>
+        </div>
+      )}
     </nav>
   );
 }

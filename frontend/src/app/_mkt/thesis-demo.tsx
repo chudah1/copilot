@@ -146,15 +146,12 @@ export function ThesisDemo() {
       {/* Demo card */}
       <div
         style={{
-          display: "grid",
-          gridTemplateColumns: "1.05fr 1fr",
-          gap: 0,
           background: mk.ink,
           borderRadius: 18,
           overflow: "hidden",
           boxShadow: "0 30px 80px -40px rgba(0,0,0,0.4)",
         }}
-        className="max-sm:grid-cols-1"
+        className="grid grid-cols-1 sm:grid-cols-[1.05fr_1fr]"
       >
         {/* Input side */}
         <div

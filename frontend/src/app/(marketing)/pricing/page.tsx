@@ -89,13 +89,11 @@ export default function PricingPage() {
 
         <div
           style={{
-            display: "grid",
-            gridTemplateColumns: "repeat(3, minmax(0, 1fr))",
             gap: 12,
             marginTop: "clamp(24px,3vw,32px)",
             maxWidth: 860,
           }}
-          className="max-md:grid-cols-1"
+          className="grid grid-cols-1 md:grid-cols-3"
         >
           {[
             ["Access", "Free tier live now"],
@@ -126,12 +124,10 @@ export default function PricingPage() {
       <section style={{ padding: `0 ${pad} clamp(60px,8vw,100px)` }}>
         <div
           style={{
-            display: "grid",
-            gridTemplateColumns: "repeat(2, 1fr)",
             gap: 16,
             maxWidth: 900,
           }}
-          className="max-md:grid-cols-1"
+          className="grid grid-cols-1 md:grid-cols-2"
         >
           {/* Free */}
           <div
@@ -317,12 +313,10 @@ export default function PricingPage() {
 
         <div
           style={{
-            display: "grid",
-            gridTemplateColumns: "repeat(3, minmax(0, 1fr))",
             gap: 14,
             maxWidth: 980,
           }}
-          className="max-md:grid-cols-1"
+          className="grid grid-cols-1 md:grid-cols-3"
         >
           {SHARED_PROMISES.map((item) => (
             <div

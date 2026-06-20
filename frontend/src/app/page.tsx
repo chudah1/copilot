@@ -202,15 +202,13 @@ export default function LandingPage() {
         >
           <div
             style={{
-              display: "grid",
-              gridTemplateColumns: "1.02fr 0.98fr",
               gap: "clamp(40px, 5vw, 56px)",
               alignItems: "center",
               minHeight: 720,
               paddingTop: 36,
               paddingBottom: 36,
             }}
-            className="max-lg:grid-cols-1"
+            className="grid grid-cols-1 lg:grid-cols-[1.02fr_0.98fr]"
           >
             {/* Left */}
             <div>
@@ -494,14 +492,12 @@ export default function LandingPage() {
               <div
                 key={n}
                 style={{
-                  display: "grid",
-                  gridTemplateColumns: "100px 1fr 1.1fr",
                   gap: "clamp(20px, 3vw, 40px)",
                   alignItems: "baseline",
                   padding: "40px 0",
                   borderTop: `1px solid ${mk.rule}`,
                 }}
-                className="max-md:grid-cols-1 max-md:gap-3"
+                className="grid grid-cols-1 md:grid-cols-[100px_1fr_1.1fr]"
               >
                 <div
                   style={{
@@ -569,12 +565,10 @@ export default function LandingPage() {
         <div style={{ maxWidth: 1180, margin: "0 auto", position: "relative" }}>
           <div
             style={{
-              display: "grid",
-              gridTemplateColumns: "1fr 1fr",
               gap: "clamp(48px, 7vw, 96px)",
               alignItems: "center",
             }}
-            className="max-lg:grid-cols-1"
+            className="grid grid-cols-1 lg:grid-cols-2"
           >
             <div>
               <Kicker>When it matters</Kicker>
@@ -788,14 +782,12 @@ export default function LandingPage() {
               <div
                 key={label}
                 style={{
-                  display: "grid",
-                  gridTemplateColumns: "1fr 1.7fr",
                   gap: "clamp(20px, 3vw, 40px)",
                   padding: "26px 0",
                   borderTop: `1px solid ${mk.rule}`,
                   alignItems: "baseline",
                 }}
-                className="max-md:grid-cols-1 max-md:gap-2"
+                className="grid grid-cols-1 md:grid-cols-[1fr_1.7fr]"
               >
                 <div
                   style={{
@@ -983,12 +975,10 @@ export default function LandingPage() {
           <Kicker>Questions</Kicker>
           <div
             style={{
-              display: "grid",
-              gridTemplateColumns: "1fr 1fr",
               gap: "40px 64px",
               marginTop: 12,
             }}
-            className="max-md:grid-cols-1"
+            className="grid grid-cols-1 md:grid-cols-2"
           >
             {(
               [

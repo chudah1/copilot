@@ -104,12 +104,8 @@ export default function BlogPage() {
         </p>
 
         <div
-          style={{
-            display: "grid",
-            gridTemplateColumns: "repeat(3, minmax(0, 1fr))",
-            gap: 14,
-          }}
-          className="max-md:grid-cols-1"
+          style={{ gap: 14 }}
+          className="grid grid-cols-1 md:grid-cols-3"
         >
           {STORY_POINTS.map((item) => (
             <div
@@ -231,12 +227,8 @@ export default function BlogPage() {
         </div>
 
         <div
-          style={{
-            display: "grid",
-            gridTemplateColumns: "repeat(2, minmax(0, 1fr))",
-            gap: 14,
-          }}
-          className="max-md:grid-cols-1"
+          style={{ gap: 14 }}
+          className="grid grid-cols-1 md:grid-cols-2"
         >
           {CONTRAST.map(([title, body], index) => (
             <div
@@ -277,13 +269,8 @@ export default function BlogPage() {
 
         {/* Principles */}
         <div
-          style={{
-            marginTop: "clamp(20px,3vw,40px)",
-            display: "grid",
-            gridTemplateColumns: "repeat(3, 1fr)",
-            gap: 14,
-          }}
-          className="max-md:grid-cols-1"
+          style={{ marginTop: "clamp(20px,3vw,40px)", gap: 14 }}
+          className="grid grid-cols-1 md:grid-cols-3"
         >
           {[
             [

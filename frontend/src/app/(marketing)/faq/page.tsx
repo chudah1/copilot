@@ -157,13 +157,11 @@ export default function FAQPage() {
 
         <div
           style={{
-            display: "grid",
-            gridTemplateColumns: "repeat(3, minmax(0, 1fr))",
             gap: 12,
             marginTop: "clamp(24px,3vw,32px)",
             maxWidth: 920,
           }}
-          className="max-md:grid-cols-1"
+          className="grid grid-cols-1 md:grid-cols-3"
         >
           {[
             ["No stock tips", "The product never tells you what to buy."],
