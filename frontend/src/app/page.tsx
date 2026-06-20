@@ -387,7 +387,7 @@ export default function LandingPage() {
               You bought it for a reason.
               <br />
               <span style={{ fontStyle: "italic", color: mk.accent }}>
-                Can you still remember it?
+                Since then, you&apos;ve been checking the price.
               </span>
             </h2>
             <div
@@ -400,18 +400,12 @@ export default function LandingPage() {
               }}
             >
               <p style={{ margin: "0 0 22px", color: mk.ink }}>
-                You had a reason when you bought.{" "}
-                <em>
-                  &ldquo;AI is the next decade.&rdquo; &ldquo;The market has completely mispriced
-                  this.&rdquo;
-                </em>{" "}
-                Later, events happen but you are not sure if they are relevant to your reason.
+                Green feels like being right. Red feels like being wrong. Neither tells you whether
+                the reason you bought still holds.
               </p>
               <p style={{ margin: 0, color: mk.inkSoft }}>
-                So you check the price instead. Green feels like being right. Red feels like being
-                wrong. Neither one tells you whether{" "}
-                <strong style={{ color: mk.ink, fontWeight: 600 }}>the reason you bought</strong>{" "}
-                still holds. penKeep checks that for you, and tells you when it doesn&apos;t.
+                An earnings miss. A CEO departure. A competitor move. You see it happen. You just
+                can&apos;t tell if it touches the reason you own it.
               </p>
             </div>
           </div>
