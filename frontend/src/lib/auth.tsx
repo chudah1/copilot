@@ -63,15 +63,15 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   const login = async (email: string, password: string) => {
     const tokens = await api.post<TokenResponse>("/api/auth/login", { email, password });
     storeTokens(tokens);
-    setIsAuthenticated(true);
+    startTransition(() => { setIsAuthenticated(true); });
     router.push("/dashboard");
   };
 
   const register = async (email: string, password: string) => {
     const tokens = await api.post<TokenResponse>("/api/auth/register", { email, password });
     storeTokens(tokens);
-    setIsAuthenticated(true);
-    router.push("/connect");
+    startTransition(() => { setIsAuthenticated(true); });
+    router.push("/onboarding");
   };
 
   const logout = async () => {
