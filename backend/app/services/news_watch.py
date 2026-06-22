@@ -24,6 +24,7 @@ from typing import Any, Awaitable, Callable
 
 from app.config import settings
 from app.services.ai_utils import strip_code_fences
+from app.services.embeddings import embed_text_map
 
 logger = logging.getLogger(__name__)
 
@@ -63,7 +64,6 @@ EVENT_TYPE_SIMILARITY_THRESHOLDS = {
 # Hard cap on judge LLM calls per thesis per run, so a busy news day can't fan
 # out into an unbounded number of paid calls.
 MAX_JUDGE_CALLS = 25
-_EMBED_MODEL = "text-embedding-3-small"
 _QUERY_REPLACEMENTS: tuple[tuple[re.Pattern[str], tuple[str, ...]], ...] = (
     (re.compile(r"\bdeployment\b", re.I), ("rollout", "ramp", "shipments")),
     (re.compile(r"\brollout\b", re.I), ("deployment", "ramp", "availability")),
@@ -200,14 +200,9 @@ async def build_embedding_similarity(texts: list[str]) -> Callable[[str, str], f
     if not unique or not settings.openai_api_key:
         return _word_overlap_similarity
 
-    try:
-        from openai import AsyncOpenAI
-
-        client = AsyncOpenAI(api_key=settings.openai_api_key)
-        resp = await client.embeddings.create(model=_EMBED_MODEL, input=unique)
-        vecs = {t: d.embedding for t, d in zip(unique, resp.data)}
-    except Exception as exc:  # pragma: no cover - network/SDK failure path
-        logger.warning("news_watch embedding failed, falling back to word overlap: %s", exc)
+    vecs = await embed_text_map(unique)
+    if not vecs:
+        logger.warning("news_watch embedding failed, falling back to word overlap")
         return _word_overlap_similarity
 
     def _similarity(a: str, b: str) -> float:

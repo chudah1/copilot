@@ -1,6 +1,7 @@
 import logging
 import re
 from dataclasses import dataclass
+from datetime import datetime, timezone
 from typing import Any
 
 from sqlalchemy import func, select
@@ -20,6 +21,7 @@ from app.services.conviction_log import (
     SIGNALS_GENERATED,
     append_log_entry,
 )
+from app.services.embeddings import embed_text_map
 from app.services.monitoring import DEFAULT_PRICE_THRESHOLD_PCT
 from app.services.reasoning.gateway import ThesisReasoningGateway
 from app.services.reasoning.normalizers import normalize_decomposition_output, to_float
@@ -332,6 +334,47 @@ def _entity_matches_holding(holding: Holding, entity_data: dict) -> bool:
         entity_ticker == holding.ticker.upper()
         or (_canonical_name(entity_name) and _canonical_name(entity_name) == _canonical_name(holding_name))
     )
+
+
+def _claim_embedding_text(claim: ThesisClaim) -> str:
+    parts: list[str] = [str(claim.claim_text or "").strip()]
+    active_labels: list[str] = []
+    for entity in claim.entities:
+        for signal in entity.signals:
+            if not signal.active:
+                continue
+            label = str(signal.signal_label or signal.signal_type or "").strip()
+            if label and label not in active_labels:
+                active_labels.append(label)
+    if active_labels:
+        parts.append("Signals: " + "; ".join(active_labels))
+    return "\n".join(part for part in parts if part).strip()
+
+
+async def _sync_claim_embeddings(decomposition: ThesisDecomposition) -> None:
+    should_embed = decomposition.status in {"confirmed", "partially_confirmed"}
+    claim_texts: dict[str, str] = {}
+    for claim in decomposition.claims:
+        text = _claim_embedding_text(claim) if should_embed else ""
+        claim.embedding_text = text or None
+        if not should_embed or not text:
+            claim.embedding = None
+            claim.embedded_at = None
+            continue
+        claim_texts[str(claim.id)] = text
+
+    if not claim_texts:
+        return
+
+    embedded = await embed_text_map(list(claim_texts.values()))
+    now = datetime.now(timezone.utc)
+    for claim in decomposition.claims:
+        text = claim.embedding_text
+        if not text:
+            continue
+        vector = embedded.get(text)
+        claim.embedding = vector
+        claim.embedded_at = now if vector else None
 
 
 def _watch_hint_from_signal(signal: ThesisSignal, *, override_claim_id: str | None = None) -> dict | None:
@@ -1351,6 +1394,7 @@ async def confirm_decomposition_for_thesis(
     # respect it (interpretation clears). The floor is for *inability* to produce
     # signals (decomposition failure), not *unwillingness* to keep them.
 
+    await _sync_claim_embeddings(decomposition)
     await db.commit()
     await db.refresh(decomposition)
     return decomposition

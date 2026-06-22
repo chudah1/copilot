@@ -7,7 +7,6 @@ from typing import Any
 
 logger = logging.getLogger(__name__)
 
-_EMBED_MODEL = "text-embedding-3-small"
 _SCORE_THRESHOLD = 0.30
 _MAX_SENTENCES = 8
 _TRANSCRIPT_LOOKBACK = 2
@@ -26,6 +25,7 @@ from app.models.onboarding_state import OnboardingState
 from app.models.thesis import Thesis
 from app.services.ai_monitor import classify_event
 from app.services.conviction_log import EVIDENCE_RECEIVED, append_log_entry
+from app.services.embeddings import embed_texts
 from app.services.news_watch import (
     NEWS_LIKE_EVENT_TYPES,
     NewsWatch,
@@ -218,14 +218,9 @@ async def _relevant_transcript_highlights(
                     break
             return ordered or None
 
-        from openai import AsyncOpenAI
-
-        client = AsyncOpenAI(api_key=settings.openai_api_key)
-        resp = await client.embeddings.create(
-            model=_EMBED_MODEL,
-            input=focus_texts + [window for _, window in windows],
-        )
-        vecs = [d.embedding for d in resp.data]
+        vecs = await embed_texts(focus_texts + [window for _, window in windows])
+        if any(vec is None for vec in vecs):
+            raise RuntimeError("missing transcript embeddings")
 
         claim_vecs = vecs[: len(focus_texts)]
         window_vecs = vecs[len(focus_texts):]

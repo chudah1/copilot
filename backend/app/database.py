@@ -114,6 +114,54 @@ class TZDateTime(types.TypeDecorator):
         return value
 
 
+EMBEDDING_DIMENSION = 1536
+
+
+class _PostgresVector(types.UserDefinedType):
+    cache_ok = True
+
+    def __init__(self, dimension: int = EMBEDDING_DIMENSION):
+        self.dimension = dimension
+
+    def get_col_spec(self, **kw):
+        return f"vector({self.dimension})"
+
+
+class EmbeddingType(types.TypeDecorator):
+    """Cross-database embedding storage.
+
+    PostgreSQL stores embeddings in the pgvector extension type.
+    SQLite stores them as JSON arrays so local tests/dev keep working without
+    the extension.
+    """
+
+    impl = types.JSON
+    cache_ok = True
+
+    def load_dialect_impl(self, dialect):
+        if dialect.name == "postgresql":
+            return dialect.type_descriptor(_PostgresVector())
+        return dialect.type_descriptor(types.JSON())
+
+    def process_bind_param(self, value, dialect):
+        if value is None:
+            return value
+        normalized = [float(item) for item in value]
+        if dialect.name == "postgresql":
+            return "[" + ",".join(f"{item:.12g}" for item in normalized) + "]"
+        return normalized
+
+    def process_result_value(self, value, dialect):
+        if value is None:
+            return value
+        if dialect.name == "postgresql" and isinstance(value, str):
+            stripped = value.strip().strip("[]")
+            if not stripped:
+                return []
+            return [float(item.strip()) for item in stripped.split(",") if item.strip()]
+        return [float(item) for item in value]
+
+
 class Base(DeclarativeBase):
     pass
 

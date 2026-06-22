@@ -46,6 +46,18 @@ def ensure_sqlite_dev_compatibility(conn) -> None:
             conn.execute(text("ALTER TABLE thesis_signals ADD COLUMN label_refreshed_at DATETIME"))
             logger.info("Added missing thesis_signals.label_refreshed_at column for local SQLite compatibility")
 
+    if "thesis_claims" in tables:
+        thesis_claim_columns = {column["name"] for column in inspector.get_columns("thesis_claims")}
+        if "embedding_text" not in thesis_claim_columns:
+            conn.execute(text("ALTER TABLE thesis_claims ADD COLUMN embedding_text TEXT"))
+            logger.info("Added missing thesis_claims.embedding_text column for local SQLite compatibility")
+        if "embedding" not in thesis_claim_columns:
+            conn.execute(text("ALTER TABLE thesis_claims ADD COLUMN embedding JSON"))
+            logger.info("Added missing thesis_claims.embedding column for local SQLite compatibility")
+        if "embedded_at" not in thesis_claim_columns:
+            conn.execute(text("ALTER TABLE thesis_claims ADD COLUMN embedded_at DATETIME"))
+            logger.info("Added missing thesis_claims.embedded_at column for local SQLite compatibility")
+
     if "theses" in tables:
         thesis_columns = {column["name"] for column in inspector.get_columns("theses")}
         if "health_score" not in thesis_columns:
@@ -92,6 +104,30 @@ def ensure_sqlite_dev_compatibility(conn) -> None:
             "created_at DATETIME NOT NULL)"
         ))
         logger.info("Created founding_reservations table for local SQLite compatibility")
+
+    if "evidence_chunks" not in tables:
+        conn.execute(text(
+            "CREATE TABLE IF NOT EXISTS evidence_chunks ("
+            "id TEXT PRIMARY KEY, "
+            "thesis_id TEXT REFERENCES theses(id), "
+            "holding_id TEXT REFERENCES holdings(id), "
+            "ticker VARCHAR(20), "
+            "source_type VARCHAR(50) NOT NULL, "
+            "source_id VARCHAR(255), "
+            "chunk_type VARCHAR(50) NOT NULL, "
+            "chunk_index INTEGER NOT NULL DEFAULT 0, "
+            "chunk_text TEXT NOT NULL, "
+            "metadata_json JSON, "
+            "embedding JSON, "
+            "embedded_at DATETIME, "
+            "created_at DATETIME DEFAULT CURRENT_TIMESTAMP)"
+        ))
+        conn.execute(text("CREATE INDEX IF NOT EXISTS ix_evidence_chunks_holding_id ON evidence_chunks(holding_id)"))
+        conn.execute(text("CREATE INDEX IF NOT EXISTS ix_evidence_chunks_source_id ON evidence_chunks(source_id)"))
+        conn.execute(text("CREATE INDEX IF NOT EXISTS ix_evidence_chunks_source_type ON evidence_chunks(source_type)"))
+        conn.execute(text("CREATE INDEX IF NOT EXISTS ix_evidence_chunks_thesis_id ON evidence_chunks(thesis_id)"))
+        conn.execute(text("CREATE INDEX IF NOT EXISTS ix_evidence_chunks_ticker ON evidence_chunks(ticker)"))
+        logger.info("Created evidence_chunks table for local SQLite compatibility")
 
     if "onboarding_states" in tables:
         ob_columns = {column["name"] for column in inspector.get_columns("onboarding_states")}
