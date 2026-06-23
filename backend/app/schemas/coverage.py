@@ -45,3 +45,54 @@ class CoveragePassResponse(BaseModel):
     finished_at: datetime | None
     payload: dict
     created_at: datetime
+
+
+class RetrievalChunkResponse(BaseModel):
+    chunk_id: uuid.UUID
+    source_type: str
+    source_id: str | None
+    chunk_type: str
+    score: float
+    chunk_text: str
+    embedded_at: datetime | None
+    created_at: datetime
+
+
+class ClaimRetrievalResponse(BaseModel):
+    claim_id: uuid.UUID
+    claim_text: str
+    embedding_text: str | None
+    hits: list[RetrievalChunkResponse]
+
+
+class ThesisCoverageRetrievalResponse(BaseModel):
+    thesis_id: uuid.UUID
+    window_start: datetime
+    window_end: datetime
+    chunk_pool_size: int
+    no_decomposition: bool
+    claim_results: list[ClaimRetrievalResponse]
+
+
+class ClaimRetrievalComparisonResponse(BaseModel):
+    claim_id: uuid.UUID
+    claim_text: str
+    embedding_text: str | None
+    signal_labels: list[str]
+    covered_signal_count: int
+    uncovered_signal_count: int
+    matched_event_count: int
+    retrieval_hit_count: int
+    top_hit_score: float | None
+    hits: list[RetrievalChunkResponse]
+
+
+class ThesisCoverageComparisonResponse(BaseModel):
+    thesis_id: uuid.UUID
+    window_start: datetime
+    window_end: datetime
+    chunk_pool_size: int
+    no_decomposition: bool
+    covered_count: int
+    uncovered_count: int
+    claim_results: list[ClaimRetrievalComparisonResponse]

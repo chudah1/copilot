@@ -23,7 +23,16 @@ from app.schemas.monitoring_event import (
     MonitoringEventReviewResponse,
     ReviewMonitoringEventRequest,
 )
-from app.schemas.coverage import CoveragePassResponse, SignalCoverageResponse, ThesisCoverageResponse
+from app.schemas.coverage import (
+    ClaimRetrievalComparisonResponse,
+    ClaimRetrievalResponse,
+    CoveragePassResponse,
+    RetrievalChunkResponse,
+    SignalCoverageResponse,
+    ThesisCoverageComparisonResponse,
+    ThesisCoverageResponse,
+    ThesisCoverageRetrievalResponse,
+)
 from app.schemas.monitoring_gap import MonitoringGapResponse
 from app.services.check_now import run_check_now
 from app.services.conviction_log import REASON_CREATED
@@ -32,6 +41,7 @@ from app.services.coverage import (
     compute_thesis_coverage,
     latest_coverage_passes,
 )
+from app.services.evidence_retrieval import retrieve_similar_chunks_for_thesis
 from app.services.monitoring_review import review_monitoring_event
 
 router = APIRouter(prefix="/api/monitoring", tags=["monitoring"])
@@ -416,6 +426,126 @@ async def get_thesis_coverage_passes(
         )
         for p in passes
     ]
+
+
+@router.get("/theses/{thesis_id}/coverage/retrieval", response_model=ThesisCoverageRetrievalResponse)
+async def get_thesis_coverage_retrieval(
+    thesis_id: uuid.UUID,
+    top_k_per_claim: int = Query(default=10, ge=1, le=25),
+    window_days: int = Query(default=30, ge=1, le=180),
+    user: User = Depends(get_current_user),
+    db: AsyncSession = Depends(get_db),
+):
+    """Shadow retrieval diagnostics: top embedded evidence chunks per active
+    claim. Read-only benchmark surface before ANN becomes a live gate."""
+    thesis_result = await db.execute(
+        select(Thesis).where(Thesis.id == thesis_id, Thesis.user_id == user.id)
+    )
+    if thesis_result.scalar_one_or_none() is None:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="thesis not found")
+
+    report = await retrieve_similar_chunks_for_thesis(
+        db,
+        thesis_id,
+        top_k_per_claim=top_k_per_claim,
+        window_days=window_days,
+    )
+    return ThesisCoverageRetrievalResponse(
+        thesis_id=report.thesis_id,
+        window_start=report.window_start,
+        window_end=report.window_end,
+        chunk_pool_size=report.chunk_pool_size,
+        no_decomposition=report.no_decomposition,
+        claim_results=[
+            ClaimRetrievalResponse(
+                claim_id=result.claim_id,
+                claim_text=result.claim_text,
+                embedding_text=result.embedding_text,
+                hits=[
+                    RetrievalChunkResponse(
+                        chunk_id=hit.chunk_id,
+                        source_type=hit.source_type,
+                        source_id=hit.source_id,
+                        chunk_type=hit.chunk_type,
+                        score=hit.score,
+                        chunk_text=hit.chunk_text,
+                        embedded_at=hit.embedded_at,
+                        created_at=hit.created_at,
+                    )
+                    for hit in result.hits
+                ],
+            )
+            for result in report.claim_results
+        ],
+    )
+
+
+@router.get("/theses/{thesis_id}/coverage/retrieval/compare", response_model=ThesisCoverageComparisonResponse)
+async def get_thesis_coverage_retrieval_compare(
+    thesis_id: uuid.UUID,
+    top_k_per_claim: int = Query(default=10, ge=1, le=25),
+    window_days: int = Query(default=30, ge=1, le=180),
+    user: User = Depends(get_current_user),
+    db: AsyncSession = Depends(get_db),
+):
+    """Compare the live monitoring coverage view with the shadow retrieval
+    shortlist per claim, without affecting event generation."""
+    thesis_result = await db.execute(
+        select(Thesis).where(Thesis.id == thesis_id, Thesis.user_id == user.id)
+    )
+    if thesis_result.scalar_one_or_none() is None:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="thesis not found")
+
+    coverage_report = await compute_thesis_coverage(db, thesis_id, window_days=window_days)
+    retrieval_report = await retrieve_similar_chunks_for_thesis(
+        db,
+        thesis_id,
+        top_k_per_claim=top_k_per_claim,
+        window_days=window_days,
+    )
+    coverage_by_claim: dict[uuid.UUID, list] = {}
+    for signal in coverage_report.signals:
+        coverage_by_claim.setdefault(signal.claim_id, []).append(signal)
+
+    return ThesisCoverageComparisonResponse(
+        thesis_id=thesis_id,
+        window_start=retrieval_report.window_start,
+        window_end=retrieval_report.window_end,
+        chunk_pool_size=retrieval_report.chunk_pool_size,
+        no_decomposition=retrieval_report.no_decomposition,
+        covered_count=coverage_report.covered_count,
+        uncovered_count=coverage_report.uncovered_count,
+        claim_results=[
+            ClaimRetrievalComparisonResponse(
+                claim_id=result.claim_id,
+                claim_text=result.claim_text,
+                embedding_text=result.embedding_text,
+                signal_labels=[
+                    signal.signal_label or signal.signal_type or "signal"
+                    for signal in coverage_by_claim.get(result.claim_id, [])
+                ],
+                covered_signal_count=sum(1 for signal in coverage_by_claim.get(result.claim_id, []) if signal.covered),
+                uncovered_signal_count=sum(1 for signal in coverage_by_claim.get(result.claim_id, []) if not signal.covered),
+                matched_event_count=sum(signal.matched_event_count for signal in coverage_by_claim.get(result.claim_id, [])),
+                retrieval_hit_count=len(result.hits),
+                top_hit_score=result.hits[0].score if result.hits else None,
+                hits=[
+                    RetrievalChunkResponse(
+                        chunk_id=hit.chunk_id,
+                        source_type=hit.source_type,
+                        source_id=hit.source_id,
+                        chunk_type=hit.chunk_type,
+                        score=hit.score,
+                        chunk_text=hit.chunk_text,
+                        embedded_at=hit.embedded_at,
+                        created_at=hit.created_at,
+                    )
+                    for hit in result.hits
+                ],
+            )
+            for result in retrieval_report.claim_results
+        ],
+    )
 
 
 @router.get("/relevance")
