@@ -7,7 +7,7 @@ from app.models.monitoring_event import MonitoringEvent
 from app.models.monitoring_gap import MonitoringGap
 from app.models.thesis import Thesis
 from app.services.check_now import run_check_now
-from app.services.market_data import CompanyData
+from app.services.market_data import CompanyData, MAX_CURRENT_TRANSCRIPT_AGE_DAYS
 
 
 def _make_company_data(ticker="AAPL", current_price=120.0):
@@ -229,6 +229,60 @@ async def test_run_check_now_returns_created_event_ids(db, test_user):
     assert result.events_created == len(result.created_event_ids)
     assert result.created_event_ids
     assert all(event_id is not None for event_id in result.created_event_ids)
+
+
+async def test_run_check_now_uses_broader_current_transcript_window(db, test_user):
+    holding = Holding(
+        user_id=test_user.id,
+        ticker="AAPL",
+        name="Apple",
+        quantity=10,
+        average_cost_basis=100,
+        current_price=100,
+        current_value=1000,
+    )
+    db.add(holding)
+    await db.flush()
+
+    thesis = Thesis(
+        user_id=test_user.id,
+        holding_id=holding.id,
+        status="active",
+        thesis_kind="company",
+        why_own_it="Strong ecosystem.",
+        confidence="high",
+        review_cadence_days=7,
+        interpretation={"watch_hints": []},
+        source="user",
+    )
+    db.add(thesis)
+    await db.commit()
+
+    company_data = _make_company_data(current_price=120.0)
+    with patch(
+        "app.services.check_now.fetch_company_data",
+        new_callable=AsyncMock,
+        return_value=company_data,
+    ), patch(
+        "app.services.check_now.generate_monitoring_candidates",
+        return_value=[],
+    ) as mock_generate, patch(
+        "app.services.check_now.load_active_decomposition",
+        new_callable=AsyncMock,
+        return_value=None,
+    ), patch(
+        "app.services.check_now.collect_news_evidence",
+        new_callable=AsyncMock,
+        return_value=[],
+    ), patch(
+        "app.services.check_now.filter_candidates",
+        new_callable=AsyncMock,
+        side_effect=lambda candidates, *args, **kwargs: candidates,
+    ):
+        result = await run_check_now(holding, thesis, db)
+
+    assert result.status == "completed"
+    assert mock_generate.call_args.kwargs["transcript_max_age_days"] == MAX_CURRENT_TRANSCRIPT_AGE_DAYS
 
 
 async def test_run_check_now_uses_provisional_news_watches_without_decomposition(db, test_user):

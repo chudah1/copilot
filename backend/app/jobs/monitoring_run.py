@@ -13,7 +13,12 @@ from app.models.thesis import Thesis
 from app.models.monitoring_event import MonitoringEvent
 from app.services.monitoring import check_metric_watch_hints, generate_monitoring_candidates
 from app.services.thesis_health import maybe_notify_band_drop, refresh_thesis_health
-from app.services.market_data import CompanyData, fetch_company_data, shortlist_qualitative_candidates
+from app.services.market_data import (
+    MAX_CURRENT_TRANSCRIPT_AGE_DAYS,
+    CompanyData,
+    fetch_company_data,
+    shortlist_qualitative_candidates,
+)
 from app.services.valuation import apply_market_price
 from app.services.noise_filter import (
     apply_priority_suppression,
@@ -295,6 +300,7 @@ async def run_monitoring():
                     company_data,
                     float(holding.current_price) if holding.current_price is not None else None,
                     now=now,
+                    transcript_max_age_days=MAX_CURRENT_TRANSCRIPT_AGE_DAYS,
                 )
                 coverage.record_source("qualitative_market_data", candidates_returned=len(candidates))
 

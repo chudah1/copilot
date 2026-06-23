@@ -237,6 +237,7 @@ async def run_check_now(
         company_data,
         previous_price,
         now=now,
+        transcript_max_age_days=MAX_CURRENT_TRANSCRIPT_AGE_DAYS,
     )
 
     # check-now is a single user-initiated pass; tag retrieval-source failures

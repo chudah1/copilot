@@ -15,7 +15,14 @@ from app.models.thesis import Thesis
 from app.models.thesis_review import ThesisReview
 from app.models.user import User
 from app.services.auth import hash_password
-from app.services.market_data import CompanyData, InsiderTransaction, NewsItem, TranscriptSignal, shortlist_qualitative_candidates
+from app.services.market_data import (
+    MAX_CURRENT_TRANSCRIPT_AGE_DAYS,
+    CompanyData,
+    InsiderTransaction,
+    NewsItem,
+    TranscriptSignal,
+    shortlist_qualitative_candidates,
+)
 from app.services.monitoring import (
     DEFAULT_PRICE_THRESHOLD_PCT,
     MIN_PRICE_MOVE_ALERT_PCT,
@@ -620,6 +627,72 @@ async def test_run_monitoring_persists_coverage_pass_for_eventful_run(db, job_se
     assert payload["events_persisted"] == 1
     assert payload["stages"][-1] == ["events_persisted", 1]
     assert rows[0].triggered_by == "monitoring_run"
+
+
+async def test_run_monitoring_uses_broader_current_transcript_window(db, job_session_factory):
+    user = User(email="transcript-window@example.com", password_hash=hash_password("testpass123"))
+    db.add(user)
+    await db.flush()
+
+    holding = Holding(
+        user_id=user.id,
+        ticker="AAPL",
+        name="Apple",
+        quantity=5,
+        average_cost_basis=100,
+        current_price=100,
+        current_value=500,
+    )
+    db.add(holding)
+    await db.flush()
+
+    thesis = Thesis(
+        user_id=user.id,
+        holding_id=holding.id,
+        status="active",
+        thesis_kind="company",
+        why_own_it="Services momentum remains strong.",
+        confidence="medium",
+        review_cadence_days=7,
+        interpretation={"watch_hints": []},
+        source="user",
+    )
+    db.add(thesis)
+    await db.commit()
+
+    company_data = CompanyData(
+        ticker="AAPL",
+        name="Apple",
+        sector="Technology",
+        industry="Consumer Electronics",
+        current_price=175.0,
+        market_cap=None,
+        pe_ratio=None,
+        revenue_growth_yoy=None,
+        earnings_growth_yoy=None,
+        dividend_yield=None,
+        description="",
+        recent_news=[],
+        upcoming_earnings_date=None,
+        recent_earnings_surprise_pct=None,
+        news_items=[],
+        provider_payload={},
+    )
+
+    with patch("app.jobs.monitoring_run.settings") as mock_settings:
+        mock_settings.alpha_vantage_api_key = "test-key"
+        mock_settings.market_data_provider = "alpha_vantage"
+        with patch("app.jobs.monitoring_run.async_session", job_session_factory), \
+             patch("app.jobs.monitoring_run.fetch_company_data", new_callable=AsyncMock, return_value=company_data), \
+             patch("app.jobs.monitoring_run.get_recent_8k_filings", new_callable=AsyncMock, return_value=[]), \
+             patch("app.jobs.monitoring_run.get_recent_form4_transactions", new_callable=AsyncMock, return_value=[]), \
+             patch("app.jobs.monitoring_run.collect_news_evidence", new_callable=AsyncMock, return_value=[]), \
+             patch("app.jobs.monitoring_run.generate_monitoring_candidates", return_value=[]) as mock_generate, \
+             patch("app.jobs.monitoring_run.load_active_decomposition", new_callable=AsyncMock, return_value=None), \
+             patch("app.jobs.monitoring_run.filter_candidates", new_callable=AsyncMock, side_effect=lambda candidates, *args, **kwargs: candidates):
+            await run_monitoring()
+
+    assert mock_generate.call_args.kwargs["transcript_max_age_days"] == MAX_CURRENT_TRANSCRIPT_AGE_DAYS
 
 
 def test_default_watch_hints_triggers_price_move_for_thesis_without_interpretation():
