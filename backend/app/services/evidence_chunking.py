@@ -35,6 +35,34 @@ def _split_sentences(text: str) -> list[str]:
     return [part.strip() for part in re.split(r"(?<=[.!?])\s+", text or "") if len(part.strip()) > 25]
 
 
+def _dedupe_chunks(chunks: list[tuple[str, str]], *, limit: int) -> list[tuple[str, str]]:
+    deduped: list[tuple[str, str]] = []
+    seen: set[tuple[str, str]] = set()
+    for chunk_type, chunk_text in chunks:
+        normalized = " ".join(chunk_text.split())
+        key = (chunk_type, normalized)
+        if not normalized or key in seen:
+            continue
+        seen.add(key)
+        deduped.append((chunk_type, chunk_text))
+        if len(deduped) >= limit:
+            break
+    return deduped
+
+
+def _transcript_qa_chunks(sentences: list[str]) -> list[tuple[str, str]]:
+    chunks: list[tuple[str, str]] = []
+    for idx, sentence in enumerate(sentences):
+        if not sentence.endswith("?"):
+            continue
+        start = max(0, idx - 1)
+        end = min(len(sentences), idx + 3)
+        window = " ".join(sentences[start:end]).strip()
+        if window:
+            chunks.append(("transcript_qa", window[:1800]))
+    return chunks
+
+
 def _transcript_chunks(candidate: dict[str, Any]) -> list[tuple[str, str]]:
     evidence = candidate.get("evidence", {})
     chunks: list[tuple[str, str]] = []
@@ -46,11 +74,17 @@ def _transcript_chunks(candidate: dict[str, Any]) -> list[tuple[str, str]]:
         focus_parts.append(f"Topic context: {topic_context}")
     if excerpt:
         focus_parts.append(excerpt)
+        chunks.append(("transcript_highlight", excerpt[:1200]))
     elif isinstance(highlights, list):
         focus_parts.extend(str(item).strip() for item in highlights[:3] if str(item).strip())
     focus_text = "\n".join(part for part in focus_parts if part).strip()
     if focus_text:
         chunks.append(("transcript_focus", focus_text[:1500]))
+    if isinstance(highlights, list):
+        for highlight in highlights[:4]:
+            highlight_text = str(highlight).strip()
+            if highlight_text:
+                chunks.append(("transcript_highlight", highlight_text[:1200]))
 
     full_text = str(evidence.get("full_transcript") or "").strip()
     if not full_text:
@@ -63,14 +97,15 @@ def _transcript_chunks(candidate: dict[str, Any]) -> list[tuple[str, str]]:
     if not sentences and full_text:
         if not chunks:
             chunks.append(("transcript_excerpt", full_text[:1500]))
-        return chunks
+        return _dedupe_chunks(chunks, limit=12)
+    chunks.extend(_transcript_qa_chunks(sentences))
     for idx, sentence in enumerate(sentences):
         start = max(0, idx - _TRANSCRIPT_WINDOW)
         end = min(len(sentences), idx + _TRANSCRIPT_WINDOW + 1)
         window = " ".join(sentences[start:end]).strip()
         if window:
             chunks.append(("transcript_window", window[:2000]))
-    return chunks[:12]
+    return _dedupe_chunks(chunks, limit=12)
 
 
 def _edgar_chunks(candidate: dict[str, Any]) -> list[tuple[str, str]]:

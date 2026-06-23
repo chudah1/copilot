@@ -89,8 +89,10 @@ def test_build_candidate_chunks_from_signal_focused_transcript():
     chunks = build_candidate_chunks(candidate)
 
     assert chunks
-    assert chunks[0][0] == "transcript_focus"
-    assert "Topic context: NVDA Blackwell supply commentary" in chunks[0][1]
+    focus_chunks = [chunk_text for chunk_type, chunk_text in chunks if chunk_type == "transcript_focus"]
+    assert focus_chunks
+    assert "Topic context: NVDA Blackwell supply commentary" in focus_chunks[0]
+    assert any(chunk_type == "transcript_highlight" for chunk_type, _chunk_text in chunks)
     assert any(chunk_type == "transcript_window" for chunk_type, _chunk_text in chunks)
 
 
@@ -111,6 +113,27 @@ def test_build_candidate_chunks_skips_untrusted_generic_news():
     chunks = build_candidate_chunks(candidate)
 
     assert chunks == []
+
+
+def test_build_candidate_chunks_adds_question_answer_transcript_windows():
+    candidate = {
+        "event_type": "earnings_call_transcript",
+        "evidence": {
+            "transcript_id": "transcript:Q2",
+            "full_transcript": (
+                "Analyst: How is cloud demand trending with large customers? "
+                "CEO: Cloud demand remains strong and backlog is expanding. "
+                "CFO: Capacity buildout is converting into signed demand."
+            ),
+        },
+    }
+
+    chunks = build_candidate_chunks(candidate)
+
+    qa_chunks = [text for chunk_type, text in chunks if chunk_type == "transcript_qa"]
+    assert qa_chunks
+    assert "How is cloud demand trending with large customers?" in qa_chunks[0]
+    assert "Cloud demand remains strong and backlog is expanding." in qa_chunks[0]
 
 
 @pytest.mark.asyncio
