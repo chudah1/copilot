@@ -116,6 +116,18 @@ async def _setup_retrieval_fixture(db, *, user: User | None = None):
                 chunk_text="A generic AI market roundup.",
                 embedding=[0.1, 0.9],
             ),
+            EvidenceChunk(
+                thesis_id=thesis.id,
+                holding_id=holding.id,
+                ticker=holding.ticker,
+                source_type="news_or_earnings_candidate",
+                source_id="news-generic-1",
+                chunk_type="news_summary",
+                chunk_index=0,
+                chunk_text="A weak investor sentiment roundup mentioned Oracle in passing.",
+                metadata_json={},
+                embedding=[0.95, 0.05],
+            ),
         ]
     )
     await db.commit()

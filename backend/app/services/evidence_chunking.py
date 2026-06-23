@@ -27,6 +27,8 @@ _NEWS_EVENT_TYPES = {
     "news_keyword_match",
 }
 _TRANSCRIPT_WINDOW = 2
+_NEWS_TRUSTED_SOURCES = {"gemini_search"}
+_GENERIC_NEWS_MIN_RELEVANCE = 0.35
 
 
 def _split_sentences(text: str) -> list[str]:
@@ -35,18 +37,33 @@ def _split_sentences(text: str) -> list[str]:
 
 def _transcript_chunks(candidate: dict[str, Any]) -> list[tuple[str, str]]:
     evidence = candidate.get("evidence", {})
+    chunks: list[tuple[str, str]] = []
+    excerpt = str(evidence.get("excerpt") or "").strip()
+    topic_context = str(evidence.get("topic_context") or "").strip()
+    highlights = evidence.get("highlights")
+    focus_parts: list[str] = []
+    if topic_context:
+        focus_parts.append(f"Topic context: {topic_context}")
+    if excerpt:
+        focus_parts.append(excerpt)
+    elif isinstance(highlights, list):
+        focus_parts.extend(str(item).strip() for item in highlights[:3] if str(item).strip())
+    focus_text = "\n".join(part for part in focus_parts if part).strip()
+    if focus_text:
+        chunks.append(("transcript_focus", focus_text[:1500]))
+
     full_text = str(evidence.get("full_transcript") or "").strip()
     if not full_text:
         highlights = evidence.get("highlights")
         if isinstance(highlights, list):
             full_text = " ".join(str(item).strip() for item in highlights if str(item).strip())
     if not full_text:
-        excerpt = str(evidence.get("excerpt") or "").strip()
         full_text = excerpt
     sentences = _split_sentences(full_text)
     if not sentences and full_text:
-        return [("transcript_excerpt", full_text[:1500])]
-    chunks: list[tuple[str, str]] = []
+        if not chunks:
+            chunks.append(("transcript_excerpt", full_text[:1500]))
+        return chunks
     for idx, sentence in enumerate(sentences):
         start = max(0, idx - _TRANSCRIPT_WINDOW)
         end = min(len(sentences), idx + _TRANSCRIPT_WINDOW + 1)
@@ -83,6 +100,8 @@ def _edgar_chunks(candidate: dict[str, Any]) -> list[tuple[str, str]]:
 
 
 def _news_chunks(candidate: dict[str, Any]) -> list[tuple[str, str]]:
+    if not _should_persist_news_candidate(candidate):
+        return []
     evidence = candidate.get("evidence", {})
     headline = str(evidence.get("headline") or "").strip()
     summary = str(evidence.get("summary") or "").strip()
@@ -93,6 +112,38 @@ def _news_chunks(candidate: dict[str, Any]) -> list[tuple[str, str]]:
     if not body:
         return []
     return [("news_summary", body[:1500])]
+
+
+def _should_persist_news_candidate(candidate: dict[str, Any]) -> bool:
+    event_type = str(candidate.get("event_type") or "")
+    evidence = candidate.get("evidence", {})
+    source = str(evidence.get("source") or "").strip().lower()
+    relevance = str(evidence.get("relevance") or "").strip().lower()
+    grounded = bool(evidence.get("is_grounded"))
+    ticker_relevance = evidence.get("ticker_relevance")
+    try:
+        ticker_relevance_value = float(ticker_relevance) if ticker_relevance is not None else None
+    except (TypeError, ValueError):
+        ticker_relevance_value = None
+
+    relevant_signals = evidence.get("relevant_signals")
+    matched_signal_ids = evidence.get("matched_signal_ids")
+    matched_topics = evidence.get("matched_topics")
+    topic_context = str(evidence.get("topic_context") or "").strip()
+
+    explicitly_bound = bool(isinstance(relevant_signals, list) and relevant_signals)
+    semantically_bound = bool(isinstance(matched_signal_ids, list) and matched_signal_ids)
+    topic_shaped = bool(isinstance(matched_topics, list) and matched_topics) or bool(topic_context)
+    trusted_source = source in _NEWS_TRUSTED_SOURCES or grounded
+    strong_relevance = relevance == "high" or (
+        ticker_relevance_value is not None and ticker_relevance_value >= _GENERIC_NEWS_MIN_RELEVANCE
+    )
+
+    if event_type == "gemini_news":
+        return explicitly_bound or trusted_source
+    if event_type == "news_or_earnings_candidate":
+        return explicitly_bound or semantically_bound or trusted_source or strong_relevance
+    return explicitly_bound or semantically_bound or topic_shaped or trusted_source or strong_relevance
 
 
 def build_candidate_chunks(candidate: dict[str, Any]) -> list[tuple[str, str]]:
@@ -111,6 +162,9 @@ def _source_identity(candidate: dict[str, Any]) -> tuple[str, str | None]:
     evidence = candidate.get("evidence", {})
     if event_type == "earnings_call_transcript":
         source_id = str(evidence.get("transcript_id") or "").strip() or None
+        signal_id = str(evidence.get("signal_id") or "").strip()
+        if source_id and signal_id:
+            source_id = f"{source_id}:{signal_id}"
         return "earnings_call_transcript", source_id
     if event_type == "edgar_8k":
         source_id = str(evidence.get("edgar_accession") or "").strip() or None
@@ -127,6 +181,25 @@ def _source_identity(candidate: dict[str, Any]) -> tuple[str, str | None]:
 
 def _fallback_source_id(source_type: str, text: str) -> str:
     return f"{source_type}:{hashlib.sha256(text.encode()).hexdigest()[:24]}"
+
+
+def _chunk_metadata(candidate: dict[str, Any], source_type: str) -> dict[str, Any]:
+    evidence = candidate.get("evidence", {})
+    metadata: dict[str, Any] = {
+        "event_type": source_type,
+        "source": evidence.get("source"),
+        "relevance": evidence.get("relevance"),
+        "is_grounded": bool(evidence.get("is_grounded")),
+        "ticker_relevance": evidence.get("ticker_relevance"),
+        "topic_context": evidence.get("topic_context"),
+        "matched_topics": evidence.get("matched_topics"),
+        "relevant_signals": evidence.get("relevant_signals"),
+        "matched_signal_ids": evidence.get("matched_signal_ids"),
+        "matched_signal_labels": evidence.get("matched_signal_labels"),
+        "signal_id": evidence.get("signal_id"),
+        "claim_id": evidence.get("claim_id"),
+    }
+    return {key: value for key, value in metadata.items() if value not in (None, "", [], {})}
 
 
 async def persist_candidate_evidence_chunks(
@@ -147,17 +220,30 @@ async def persist_candidate_evidence_chunks(
     if not prepared:
         return 0
 
-    keys = [(source_type, source_id, idx) for source_type, source_id, idx, _chunk_type, _text in prepared]
+    keys = [
+        (source_type, source_id, idx, chunk_type)
+        for source_type, source_id, idx, chunk_type, _text in prepared
+    ]
     existing = await db.execute(
-        select(EvidenceChunk.source_type, EvidenceChunk.source_id, EvidenceChunk.chunk_index).where(
+        select(
+            EvidenceChunk.source_type,
+            EvidenceChunk.source_id,
+            EvidenceChunk.chunk_index,
+            EvidenceChunk.chunk_type,
+        ).where(
             EvidenceChunk.thesis_id == thesis.id,
             EvidenceChunk.holding_id == holding.id,
-            tuple_(EvidenceChunk.source_type, EvidenceChunk.source_id, EvidenceChunk.chunk_index).in_(keys),
+            tuple_(
+                EvidenceChunk.source_type,
+                EvidenceChunk.source_id,
+                EvidenceChunk.chunk_index,
+                EvidenceChunk.chunk_type,
+            ).in_(keys),
         )
     )
-    existing_keys = {(row[0], row[1], row[2]) for row in existing.all()}
+    existing_keys = {(row[0], row[1], row[2], row[3]) for row in existing.all()}
 
-    new_rows = [row for row in prepared if (row[0], row[1], row[2]) not in existing_keys]
+    new_rows = [row for row in prepared if (row[0], row[1], row[2], row[3]) not in existing_keys]
     if not new_rows:
         return 0
 
@@ -174,7 +260,7 @@ async def persist_candidate_evidence_chunks(
                 chunk_type=chunk_type,
                 chunk_index=idx,
                 chunk_text=chunk_text,
-                metadata_json={"event_type": source_type},
+                metadata_json=_chunk_metadata(candidate, source_type),
                 embedding=text_map.get(chunk_text),
                 embedded_at=now if text_map.get(chunk_text) else None,
             )

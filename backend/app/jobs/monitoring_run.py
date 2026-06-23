@@ -357,9 +357,6 @@ async def run_monitoring():
                     logger.warning("Gemini gap for thesis %s: %s", thesis.id, exc)
                     await write_monitoring_gap(db, thesis.id, "gemini_news", str(exc), run_id)
                     coverage.record_source("gemini_news", candidates_returned=0, error=str(exc))
-                await best_effort_persist_candidate_evidence_chunks(
-                    db, thesis=thesis, holding=holding, candidates=candidates
-                )
                 coverage.record_stage(STAGE_CANDIDATES_GENERATED, len(candidates))
                 candidates = match_candidates_to_signals(candidates, claims)
                 coverage.record_stage(STAGE_AFTER_MATCH, len(candidates))
@@ -423,6 +420,9 @@ async def run_monitoring():
                 # matched news item is tagged (and survives minimum-relevance).
                 nw_matched = await match_thesis_news_watches(candidates, extract_news_watches(claims))
                 candidates = await expand_transcript_candidates_for_signals(candidates, claims)
+                await best_effort_persist_candidate_evidence_chunks(
+                    db, thesis=thesis, holding=holding, candidates=candidates
+                )
 
                 # Noise suppression: filter before classification (rules 1, 2, 4)
                 candidates = await filter_candidates(candidates, holding.id, signals_by_id, db, now=now)

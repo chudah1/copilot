@@ -295,7 +295,6 @@ async def run_check_now(
         logger.warning("Gemini news failed for %s during check-now — skipping: %s", holding.ticker, exc)
         await write_monitoring_gap(db, thesis.id, "gemini_news", str(exc), check_run_id)
         coverage.record_source("gemini_news", candidates_returned=0, error=str(exc))
-    await best_effort_persist_candidate_evidence_chunks(db, thesis=thesis, holding=holding, candidates=candidates)
     coverage.record_stage(STAGE_CANDIDATES_GENERATED, len(candidates))
     candidates = match_candidates_to_signals(candidates, claims)
     coverage.record_stage(STAGE_AFTER_MATCH, len(candidates))
@@ -375,6 +374,7 @@ async def run_check_now(
     # earnings_growth / news_topic signals with effectively zero transcript
     # coverage even when relevant Q&A existed in the call.
     candidates = await expand_transcript_candidates_for_signals(candidates, claims)
+    await best_effort_persist_candidate_evidence_chunks(db, thesis=thesis, holding=holding, candidates=candidates)
 
     # Noise suppression: filter before classification (rules 1, 2, 4)
     candidates = await filter_candidates(candidates, holding.id, signals_by_id, db, now=now)
@@ -825,8 +825,6 @@ async def _run_historical_audit_with_session(
             await write_monitoring_gap(db, thesis.id, "gemini_news", str(exc), audit_run_id)
             coverage.record_source("gemini_news", candidates_returned=0, error=str(exc))
 
-        await best_effort_persist_candidate_evidence_chunks(db, thesis=thesis, holding=holding, candidates=candidates)
-
         # Form 4 insider transactions and earnings enrichment are intentionally omitted —
         # they add LLM cost per filing over a 90-day window. The live pipeline handles them.
         coverage.record_stage(STAGE_CANDIDATES_GENERATED, len(candidates))
@@ -859,6 +857,10 @@ async def _run_historical_audit_with_session(
         if not news_watches:
             news_watches = extract_provisional_news_watches(thesis.interpretation)
         nw_matched = await match_thesis_news_watches(candidates, news_watches)
+        candidates = await expand_transcript_candidates_for_signals(candidates, claims)
+        await best_effort_persist_candidate_evidence_chunks(
+            db, thesis=thesis, holding=holding, candidates=candidates
+        )
 
         candidates = await filter_candidates(
             candidates, holding.id, signals_by_id, db, now=now, skip_cooldown=True

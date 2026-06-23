@@ -116,9 +116,6 @@ async def run_edgar_watch():
             decomposition = await load_active_decomposition(db, thesis.id)
             claims = decomposition.claims if decomposition else None
             signal_descriptors = signal_search_descriptors_from_claims(claims)
-            await best_effort_persist_candidate_evidence_chunks(
-                db, thesis=thesis, holding=holding, candidates=candidates
-            )
             coverage.record_stage(STAGE_CANDIDATES_GENERATED, len(candidates))
             candidates = match_candidates_to_signals(candidates, claims)
             coverage.record_stage(STAGE_AFTER_MATCH, len(candidates))
@@ -142,6 +139,9 @@ async def run_edgar_watch():
             news_watches = extract_news_watches(claims)
             nw_matched = await match_thesis_news_watches(candidates, news_watches)
             candidates = await expand_transcript_candidates_for_signals(candidates, claims)
+            await best_effort_persist_candidate_evidence_chunks(
+                db, thesis=thesis, holding=holding, candidates=candidates
+            )
 
             candidates = apply_thesis_floor(candidates, thesis.created_at)
             coverage.record_stage(STAGE_AFTER_THESIS_FLOOR, len(candidates))

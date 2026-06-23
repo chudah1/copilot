@@ -13,6 +13,7 @@ from app.models.evidence_chunk import EvidenceChunk
 from app.models.thesis_claim import ThesisClaim
 from app.models.thesis_decomposition import ThesisDecomposition
 from app.models.thesis_entity import ThesisEntity
+from app.services.evidence_chunking import _GENERIC_NEWS_MIN_RELEVANCE
 
 
 @dataclass
@@ -43,6 +44,36 @@ class ThesisRetrievalReport:
     claim_results: list[ClaimRetrievalResult] = field(default_factory=list)
     chunk_pool_size: int = 0
     no_decomposition: bool = False
+
+
+def _chunk_is_retrieval_eligible(chunk: EvidenceChunk) -> bool:
+    metadata = chunk.metadata_json or {}
+    if chunk.source_type != "news_or_earnings_candidate":
+        return True
+    if not isinstance(metadata, dict):
+        return False
+
+    source = str(metadata.get("source") or "").strip().lower()
+    relevance = str(metadata.get("relevance") or "").strip().lower()
+    grounded = bool(metadata.get("is_grounded"))
+    relevant_signals = metadata.get("relevant_signals")
+    matched_signal_ids = metadata.get("matched_signal_ids")
+    matched_topics = metadata.get("matched_topics")
+    topic_context = str(metadata.get("topic_context") or "").strip()
+    ticker_relevance = metadata.get("ticker_relevance")
+    try:
+        ticker_relevance_value = float(ticker_relevance) if ticker_relevance is not None else None
+    except (TypeError, ValueError):
+        ticker_relevance_value = None
+
+    explicitly_bound = bool(isinstance(relevant_signals, list) and relevant_signals)
+    semantically_bound = bool(isinstance(matched_signal_ids, list) and matched_signal_ids)
+    topic_shaped = bool(isinstance(matched_topics, list) and matched_topics) or bool(topic_context)
+    trusted_source = source == "gemini_search" or grounded
+    strong_relevance = relevance == "high" or (
+        ticker_relevance_value is not None and ticker_relevance_value >= _GENERIC_NEWS_MIN_RELEVANCE
+    )
+    return explicitly_bound or semantically_bound or topic_shaped or trusted_source or strong_relevance
 
 
 def _cosine_similarity(a: list[float], b: list[float]) -> float:
@@ -106,7 +137,11 @@ async def retrieve_similar_chunks_for_thesis(
         .order_by(EvidenceChunk.created_at.desc())
     )
     chunk_result = await db.execute(base_chunk_query)
-    chunks = [chunk for chunk in chunk_result.scalars().all() if chunk.embedding]
+    chunks = [
+        chunk
+        for chunk in chunk_result.scalars().all()
+        if chunk.embedding and _chunk_is_retrieval_eligible(chunk)
+    ]
     report.chunk_pool_size = len(chunks)
     if not claims:
         return report
@@ -143,6 +178,7 @@ async def retrieve_similar_chunks_for_thesis(
                         created_at=chunk.created_at,
                     )
                     for chunk, distance in pg_result.all()
+                    if _chunk_is_retrieval_eligible(chunk)
                 ]
             else:
                 scored: list[RetrievedChunk] = []
