@@ -37,6 +37,7 @@ from app.services.edgar import (
     get_recent_form4_transactions,
 )
 from app.services.edgar_extractor import enrich_earnings_candidates
+from app.services.evidence_chunking import best_effort_persist_candidate_evidence_chunks
 from app.services.news_collector import collect_news_evidence
 from app.services.coverage import (
     STAGE_AFTER_CLASSIFICATION,
@@ -356,6 +357,9 @@ async def run_monitoring():
                     logger.warning("Gemini gap for thesis %s: %s", thesis.id, exc)
                     await write_monitoring_gap(db, thesis.id, "gemini_news", str(exc), run_id)
                     coverage.record_source("gemini_news", candidates_returned=0, error=str(exc))
+                await best_effort_persist_candidate_evidence_chunks(
+                    db, thesis=thesis, holding=holding, candidates=candidates
+                )
                 coverage.record_stage(STAGE_CANDIDATES_GENERATED, len(candidates))
                 candidates = match_candidates_to_signals(candidates, claims)
                 coverage.record_stage(STAGE_AFTER_MATCH, len(candidates))

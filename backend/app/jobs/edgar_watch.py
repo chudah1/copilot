@@ -9,6 +9,7 @@ from app.database import async_session
 from app.models.holding import Holding
 from app.models.thesis import Thesis
 from app.services.edgar import build_edgar_candidates, get_recent_8k_filings
+from app.services.evidence_chunking import best_effort_persist_candidate_evidence_chunks
 from app.services.coverage import (
     STAGE_AFTER_CLASSIFICATION,
     STAGE_AFTER_EMBEDDING_ENRICH,
@@ -115,6 +116,9 @@ async def run_edgar_watch():
             decomposition = await load_active_decomposition(db, thesis.id)
             claims = decomposition.claims if decomposition else None
             signal_descriptors = signal_search_descriptors_from_claims(claims)
+            await best_effort_persist_candidate_evidence_chunks(
+                db, thesis=thesis, holding=holding, candidates=candidates
+            )
             coverage.record_stage(STAGE_CANDIDATES_GENERATED, len(candidates))
             candidates = match_candidates_to_signals(candidates, claims)
             coverage.record_stage(STAGE_AFTER_MATCH, len(candidates))

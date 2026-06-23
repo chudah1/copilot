@@ -41,6 +41,7 @@ from app.services.edgar import (
     get_recent_form4_transactions,
 )
 from app.services.edgar_extractor import enrich_earnings_candidates
+from app.services.evidence_chunking import best_effort_persist_candidate_evidence_chunks
 from app.services.news_collector import collect_news_evidence
 from app.services.coverage import (
     STAGE_AFTER_CLASSIFICATION,
@@ -294,6 +295,7 @@ async def run_check_now(
         logger.warning("Gemini news failed for %s during check-now — skipping: %s", holding.ticker, exc)
         await write_monitoring_gap(db, thesis.id, "gemini_news", str(exc), check_run_id)
         coverage.record_source("gemini_news", candidates_returned=0, error=str(exc))
+    await best_effort_persist_candidate_evidence_chunks(db, thesis=thesis, holding=holding, candidates=candidates)
     coverage.record_stage(STAGE_CANDIDATES_GENERATED, len(candidates))
     candidates = match_candidates_to_signals(candidates, claims)
     coverage.record_stage(STAGE_AFTER_MATCH, len(candidates))
@@ -822,6 +824,8 @@ async def _run_historical_audit_with_session(
             logger.warning("Gemini news failed for %s in historical audit: %s", holding.ticker, exc)
             await write_monitoring_gap(db, thesis.id, "gemini_news", str(exc), audit_run_id)
             coverage.record_source("gemini_news", candidates_returned=0, error=str(exc))
+
+        await best_effort_persist_candidate_evidence_chunks(db, thesis=thesis, holding=holding, candidates=candidates)
 
         # Form 4 insider transactions and earnings enrichment are intentionally omitted —
         # they add LLM cost per filing over a 90-day window. The live pipeline handles them.
