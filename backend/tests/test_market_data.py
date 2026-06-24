@@ -1,9 +1,14 @@
 from datetime import datetime, timedelta, timezone
 
+import pytest
+
 from app.services.market_data import _TTLCache, QUALITATIVE_KEYWORDS
 from app.services.market_data import (
     _build_news_candidate,
     _build_company_data_from_alpha_vantage,
+    _merge_company_data,
+    CompanyData,
+    fetch_company_data,
     _parse_alpha_vantage_earnings,
     _parse_alpha_vantage_earnings_calendar,
     _parse_alpha_vantage_insider_transactions,
@@ -241,6 +246,211 @@ def test_build_company_data_keeps_multiple_current_transcripts():
     assert data.earnings_call is not None
     assert data.earnings_call.quarter == "2026Q1"
     assert [transcript.quarter for transcript in data.earnings_calls] == ["2026Q1", "2025Q4"]
+
+
+def test_merge_company_data_preserves_transcript_enrichment():
+    base = CompanyData(
+        ticker="AAPL",
+        name="Apple Inc",
+        sector="Technology",
+        industry="Consumer Electronics",
+        current_price=210.15,
+        market_cap=4500000000000.0,
+        pe_ratio=37.2,
+        revenue_growth_yoy=None,
+        earnings_growth_yoy=None,
+        dividend_yield=None,
+        description="Makes devices",
+        recent_news=[],
+        upcoming_earnings_date=None,
+        recent_earnings_surprise_pct=None,
+        news_items=[],
+        provider_payload={"provider": "yfinance"},
+        recent_fiscal_quarter="2026Q1",
+        recent_fiscal_quarters=["2026Q1"],
+        earnings_call=None,
+        earnings_calls=[],
+        insider_transactions=[],
+        country="United States",
+        currency="USD",
+    )
+    transcript = _parse_alpha_vantage_transcript(
+        {
+            "quarter": "2026Q1",
+            "date": "2026-05-01",
+            "transcript": "Services demand was solid and margins improved.",
+        }
+    )
+    enrichment = CompanyData(
+        ticker="AAPL",
+        name="Apple Inc",
+        sector="Unknown",
+        industry="Unknown",
+        current_price=None,
+        market_cap=None,
+        pe_ratio=None,
+        revenue_growth_yoy=None,
+        earnings_growth_yoy=None,
+        dividend_yield=None,
+        description="",
+        recent_news=[],
+        upcoming_earnings_date=None,
+        recent_earnings_surprise_pct=4.5,
+        news_items=[],
+        provider_payload={"provider": "alpha_vantage"},
+        recent_fiscal_quarter="2026Q1",
+        recent_fiscal_quarters=["2026Q1"],
+        earnings_call=transcript,
+        earnings_calls=[transcript] if transcript else [],
+        insider_transactions=[],
+        country="Unknown",
+        currency=None,
+    )
+
+    merged = _merge_company_data(base, enrichment)
+
+    assert merged.current_price == 210.15
+    assert merged.earnings_call is not None
+    assert merged.earnings_call.quarter == "2026Q1"
+    assert merged.provider_payload["baseline_provider"] == "yfinance"
+    assert merged.provider_payload["enrichment_provider"] == "alpha_vantage"
+
+
+@pytest.mark.asyncio
+async def test_fetch_company_data_merges_partial_alpha_vantage_with_yfinance(monkeypatch):
+    monkeypatch.setattr("app.services.market_data.settings.market_data_provider", "alpha_vantage", raising=False)
+    monkeypatch.setattr("app.services.market_data.settings.alpha_vantage_api_key", "test-key", raising=False)
+
+    transcript = {
+        "quarter": "2026Q1",
+        "date": "2026-05-01",
+        "transcript": "Services demand was solid and margins improved.",
+    }
+    partial_payload = {
+        "quote": {},
+        "overview": {},
+        "earnings": {
+            "quarterlyEarnings": [
+                {
+                    "reportedDate": "2026-05-01",
+                    "fiscalDateEnding": "2026-03-31",
+                    "surprisePercentage": "4.5",
+                }
+            ]
+        },
+        "earnings_calendar": "",
+        "news": {"feed": []},
+        "earnings_call_transcripts": [transcript],
+        "insider_transactions": {"data": []},
+    }
+    yfinance_data = CompanyData(
+        ticker="AAPL",
+        name="Apple Inc",
+        sector="Technology",
+        industry="Consumer Electronics",
+        current_price=210.15,
+        market_cap=4500000000000.0,
+        pe_ratio=37.2,
+        revenue_growth_yoy=None,
+        earnings_growth_yoy=None,
+        dividend_yield=None,
+        description="Makes devices",
+        recent_news=[],
+        upcoming_earnings_date=None,
+        recent_earnings_surprise_pct=None,
+        news_items=[],
+        provider_payload={"provider": "yfinance"},
+        recent_fiscal_quarter="2026Q1",
+        recent_fiscal_quarters=["2026Q1"],
+        earnings_call=None,
+        earnings_calls=[],
+        insider_transactions=[],
+        country="United States",
+        currency="USD",
+    )
+
+    async def fake_payloads(_ticker: str):
+        return partial_payload
+
+    async def fake_yfinance(_ticker: str):
+        return yfinance_data
+
+    monkeypatch.setattr("app.services.market_data._fetch_alpha_vantage_payloads", fake_payloads)
+    monkeypatch.setattr("app.services.market_data._fetch_yfinance_company_data", fake_yfinance)
+
+    data = await fetch_company_data("AAPL")
+
+    assert data is not None
+    assert data.current_price == 210.15
+    assert data.earnings_call is not None
+    assert data.earnings_call.quarter == "2026Q1"
+
+
+@pytest.mark.asyncio
+async def test_fetch_company_data_uses_yfinance_quarter_for_transcript_retry(monkeypatch):
+    monkeypatch.setattr("app.services.market_data.settings.market_data_provider", "alpha_vantage", raising=False)
+    monkeypatch.setattr("app.services.market_data.settings.alpha_vantage_api_key", "test-key", raising=False)
+
+    partial_payload = {
+        "quote": {},
+        "overview": {},
+        "earnings": {},
+        "earnings_calendar": "",
+        "news": {"feed": []},
+        "earnings_call_transcripts": [],
+        "insider_transactions": {"data": []},
+    }
+    yfinance_data = CompanyData(
+        ticker="AAPL",
+        name="Apple Inc",
+        sector="Technology",
+        industry="Consumer Electronics",
+        current_price=210.15,
+        market_cap=4500000000000.0,
+        pe_ratio=37.2,
+        revenue_growth_yoy=None,
+        earnings_growth_yoy=None,
+        dividend_yield=None,
+        description="Makes devices",
+        recent_news=[],
+        upcoming_earnings_date=None,
+        recent_earnings_surprise_pct=None,
+        news_items=[],
+        provider_payload={"provider": "yfinance"},
+        recent_fiscal_quarter="2026Q1",
+        recent_fiscal_quarters=["2026Q1"],
+        earnings_call=None,
+        earnings_calls=[],
+        insider_transactions=[],
+        country="United States",
+        currency="USD",
+    )
+
+    async def fake_payloads(_ticker: str):
+        return partial_payload
+
+    async def fake_yfinance(_ticker: str):
+        return yfinance_data
+
+    async def fake_transcripts(_ticker: str, quarters: list[str], **_kwargs):
+        assert quarters == ["2026Q1"]
+        return [
+            {
+                "quarter": "2026Q1",
+                "date": "2026-05-01",
+                "transcript": "Services demand was solid and margins improved.",
+            }
+        ]
+
+    monkeypatch.setattr("app.services.market_data._fetch_alpha_vantage_payloads", fake_payloads)
+    monkeypatch.setattr("app.services.market_data._fetch_yfinance_company_data", fake_yfinance)
+    monkeypatch.setattr("app.services.market_data._fetch_alpha_vantage_transcript_payloads", fake_transcripts)
+
+    data = await fetch_company_data("AAPL")
+
+    assert data is not None
+    assert data.earnings_call is not None
+    assert data.earnings_call.quarter == "2026Q1"
 
 
 def test_parse_alpha_vantage_insider_transactions():

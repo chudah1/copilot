@@ -1542,12 +1542,30 @@ async def fetch_company_data(ticker: str) -> CompanyData | None:
 
     try:
         provider_payload = await _fetch_alpha_vantage_payloads(ticker)
-        data = _build_company_data_from_alpha_vantage(ticker, provider_payload)
-        # If AV returned mostly empty data (rate-limited payloads), fall back to yfinance
-        if data.sector == "Unknown" and not data.news_items and data.current_price is None:
-            logger.info("Alpha Vantage returned empty data for %s, falling back to yfinance", ticker)
-            return await _fetch_yfinance_company_data(ticker)
-        return data
+        av_data = _build_company_data_from_alpha_vantage(ticker, provider_payload)
+        av_has_basics = av_data.current_price is not None and av_data.sector != "Unknown"
+        av_has_enrichment = bool(
+            av_data.news_items or av_data.earnings_call or av_data.earnings_calls or av_data.insider_transactions
+        )
+        if av_has_basics:
+            return av_data
+        logger.info(
+            "Alpha Vantage returned partial data for %s, merging with yfinance baseline",
+            ticker,
+        )
+        yfinance_data = await _fetch_yfinance_company_data(ticker)
+        if yfinance_data is None:
+            return av_data if av_has_enrichment else None
+        if not av_data.earnings_calls and yfinance_data.recent_fiscal_quarters:
+            transcript_payloads = await _fetch_alpha_vantage_transcript_payloads(
+                ticker,
+                yfinance_data.recent_fiscal_quarters,
+            )
+            if transcript_payloads:
+                provider_payload["earnings_call_transcripts"] = transcript_payloads
+                provider_payload["earnings_call_transcript"] = transcript_payloads[0]
+                av_data = _build_company_data_from_alpha_vantage(ticker, provider_payload)
+        return _merge_company_data(yfinance_data, av_data)
     except Exception:
         logger.warning("Alpha Vantage fetch failed for %s, falling back to yfinance", ticker, exc_info=True)
         return await _fetch_yfinance_company_data(ticker)
@@ -1556,14 +1574,43 @@ async def fetch_company_data(ticker: str) -> CompanyData | None:
 async def _fetch_alpha_vantage_payloads(ticker: str) -> dict[str, Any]:
     provider_payload: dict[str, Any] = {}
     async with httpx.AsyncClient() as client:
-        quote_payload = await _cached_request(client, "GLOBAL_QUOTE", _CACHE_TTL_SHORT, symbol=ticker)
+        quote_payload = await _safe_cached_request(
+            client,
+            "GLOBAL_QUOTE",
+            _CACHE_TTL_SHORT,
+            {},
+            symbol=ticker,
+        )
         provider_payload["quote"] = quote_payload
 
-        overview_payload = await _cached_request(client, "OVERVIEW", _CACHE_TTL_LONG, symbol=ticker)
+        overview_payload = await _safe_cached_request(
+            client,
+            "OVERVIEW",
+            _CACHE_TTL_LONG,
+            {},
+            symbol=ticker,
+        )
         provider_payload["overview"] = overview_payload
 
-        earnings_payload = await _cached_request(client, "EARNINGS", _CACHE_TTL_LONG, symbol=ticker)
+        earnings_payload = await _safe_cached_request(
+            client,
+            "EARNINGS",
+            _CACHE_TTL_LONG,
+            {},
+            symbol=ticker,
+        )
         provider_payload["earnings"] = earnings_payload
+
+        recent_quarters = _parse_alpha_vantage_earnings(
+            earnings_payload if isinstance(earnings_payload, dict) else {}
+        ).get("recent_fiscal_quarters") or []
+        transcript_payloads = await _fetch_alpha_vantage_transcript_payloads(
+            ticker,
+            recent_quarters,
+            client=client,
+        )
+        provider_payload["earnings_call_transcripts"] = transcript_payloads
+        provider_payload["earnings_call_transcript"] = transcript_payloads[0] if transcript_payloads else {}
 
         earnings_calendar_payload = await _safe_cached_request(
             client,
@@ -1586,26 +1633,6 @@ async def _fetch_alpha_vantage_payloads(ticker: str) -> dict[str, Any]:
         )
         provider_payload["news"] = news_payload
 
-        recent_quarters = _parse_alpha_vantage_earnings(
-            earnings_payload if isinstance(earnings_payload, dict) else {}
-        ).get("recent_fiscal_quarters") or []
-        transcript_payloads: list[dict[str, Any]] = []
-        for recent_quarter in recent_quarters:
-            if not recent_quarter:
-                continue
-            transcript_payload = await _safe_cached_request(
-                client,
-                "EARNINGS_CALL_TRANSCRIPT",
-                _CACHE_TTL_LONG,
-                {},
-                symbol=ticker,
-                quarter=recent_quarter,
-            )
-            if isinstance(transcript_payload, dict) and transcript_payload:
-                transcript_payloads.append(transcript_payload)
-        provider_payload["earnings_call_transcripts"] = transcript_payloads
-        provider_payload["earnings_call_transcript"] = transcript_payloads[0] if transcript_payloads else {}
-
         insiders_payload = await _safe_cached_request(
             client,
             "INSIDER_TRANSACTIONS",
@@ -1617,6 +1644,80 @@ async def _fetch_alpha_vantage_payloads(ticker: str) -> dict[str, Any]:
         provider_payload["insider_transactions"] = insiders_payload
 
     return provider_payload
+
+
+async def _fetch_alpha_vantage_transcript_payloads(
+    ticker: str,
+    quarters: list[str] | None,
+    *,
+    client: httpx.AsyncClient | None = None,
+) -> list[dict[str, Any]]:
+    recent_quarters = [quarter for quarter in (quarters or []) if quarter]
+    if not recent_quarters or not settings.alpha_vantage_api_key:
+        return []
+
+    async def _run(active_client: httpx.AsyncClient) -> list[dict[str, Any]]:
+        transcript_payloads: list[dict[str, Any]] = []
+        for recent_quarter in recent_quarters[:MAX_RECENT_TRANSCRIPT_QUARTERS]:
+            transcript_payload = await _safe_cached_request(
+                active_client,
+                "EARNINGS_CALL_TRANSCRIPT",
+                _CACHE_TTL_LONG,
+                {},
+                symbol=ticker,
+                quarter=recent_quarter,
+            )
+            if isinstance(transcript_payload, dict) and transcript_payload:
+                transcript_payloads.append(transcript_payload)
+        return transcript_payloads
+
+    if client is not None:
+        return await _run(client)
+    async with httpx.AsyncClient() as active_client:
+        return await _run(active_client)
+
+
+def _merge_company_data(base: CompanyData, enrichment: CompanyData) -> CompanyData:
+    """Preserve richer AV qualitative/transcript evidence on top of a yfinance baseline."""
+    news_items = enrichment.news_items or base.news_items
+    recent_news = enrichment.recent_news or base.recent_news
+    provider_payload = dict(base.provider_payload or {})
+    enrichment_payload = dict(enrichment.provider_payload or {})
+    provider_payload.update({
+        "baseline_provider": provider_payload.get("provider", "yfinance"),
+        "enrichment_provider": enrichment_payload.get("provider", "alpha_vantage"),
+        "alpha_vantage": enrichment_payload,
+    })
+
+    return CompanyData(
+        ticker=base.ticker,
+        name=base.name or enrichment.name,
+        sector=base.sector if base.sector != "Unknown" else enrichment.sector,
+        industry=base.industry if base.industry != "Unknown" else enrichment.industry,
+        current_price=base.current_price if base.current_price is not None else enrichment.current_price,
+        market_cap=base.market_cap if base.market_cap is not None else enrichment.market_cap,
+        pe_ratio=base.pe_ratio if base.pe_ratio is not None else enrichment.pe_ratio,
+        revenue_growth_yoy=base.revenue_growth_yoy if base.revenue_growth_yoy is not None else enrichment.revenue_growth_yoy,
+        earnings_growth_yoy=base.earnings_growth_yoy if base.earnings_growth_yoy is not None else enrichment.earnings_growth_yoy,
+        dividend_yield=base.dividend_yield if base.dividend_yield is not None else enrichment.dividend_yield,
+        description=base.description or enrichment.description,
+        recent_news=recent_news,
+        upcoming_earnings_date=base.upcoming_earnings_date or enrichment.upcoming_earnings_date,
+        recent_earnings_surprise_pct=(
+            base.recent_earnings_surprise_pct
+            if base.recent_earnings_surprise_pct is not None
+            else enrichment.recent_earnings_surprise_pct
+        ),
+        news_items=news_items,
+        provider_payload=provider_payload,
+        recent_fiscal_quarter=enrichment.recent_fiscal_quarter or base.recent_fiscal_quarter,
+        recent_fiscal_quarters=enrichment.recent_fiscal_quarters or base.recent_fiscal_quarters,
+        earnings_call=enrichment.earnings_call or base.earnings_call,
+        earnings_calls=enrichment.earnings_calls or base.earnings_calls,
+        insider_transactions=enrichment.insider_transactions or base.insider_transactions,
+        country=base.country if base.country != "Unknown" else enrichment.country,
+        currency=base.currency or enrichment.currency,
+    )
 
 
 def _build_company_data_from_alpha_vantage(ticker: str, provider_payload: dict[str, Any]) -> CompanyData:
