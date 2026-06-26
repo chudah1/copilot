@@ -6,6 +6,8 @@ from app.services.market_data import _TTLCache, QUALITATIVE_KEYWORDS
 from app.services.market_data import (
     _build_news_candidate,
     _build_company_data_from_alpha_vantage,
+    _fetch_alpha_vantage_transcript_payloads,
+    _fallback_transcript_quarters,
     _merge_company_data,
     CompanyData,
     fetch_company_data,
@@ -16,6 +18,7 @@ from app.services.market_data import (
     _parse_alpha_vantage_overview,
     _parse_alpha_vantage_quote,
     _parse_alpha_vantage_transcript,
+    transcript_fetch_diagnostics,
     is_current_earnings_call,
     shortlist_qualitative_candidates,
 )
@@ -386,6 +389,59 @@ async def test_fetch_company_data_merges_partial_alpha_vantage_with_yfinance(mon
     assert data.earnings_call.quarter == "2026Q1"
 
 
+def test_transcript_fetch_diagnostics_reads_alpha_vantage_payload():
+    data = CompanyData(
+        ticker="AAPL",
+        name="Apple Inc",
+        sector="Technology",
+        industry="Consumer Electronics",
+        current_price=210.15,
+        market_cap=4500000000000.0,
+        pe_ratio=37.2,
+        revenue_growth_yoy=None,
+        earnings_growth_yoy=None,
+        dividend_yield=None,
+        description="Makes devices",
+        recent_news=[],
+        upcoming_earnings_date=None,
+        recent_earnings_surprise_pct=None,
+        news_items=[],
+        provider_payload={
+            "provider": "yfinance",
+            "alpha_vantage": {
+                "transcript_diagnostics": {
+                    "requested_quarters": ["2026Q1"],
+                    "returned_quarters": [],
+                    "empty_quarters": ["2026Q1"],
+                    "error_quarters": {},
+                }
+            },
+        },
+        recent_fiscal_quarter="2026Q1",
+        recent_fiscal_quarters=["2026Q1"],
+        earnings_call=None,
+        earnings_calls=[],
+        insider_transactions=[],
+        country="United States",
+        currency="USD",
+    )
+
+    diagnostics = transcript_fetch_diagnostics(data)
+
+    assert diagnostics["requested_quarters"] == ["2026Q1"]
+    assert diagnostics["empty_quarters"] == ["2026Q1"]
+    assert diagnostics["available_transcripts"] == 0
+
+
+def test_fallback_transcript_quarters_uses_recent_calendar_quarters():
+    quarters = _fallback_transcript_quarters(
+        reference_now=datetime(2026, 6, 26, tzinfo=timezone.utc),
+        count=3,
+    )
+
+    assert quarters == ["2026Q2", "2026Q1", "2025Q4"]
+
+
 @pytest.mark.asyncio
 async def test_fetch_company_data_uses_yfinance_quarter_for_transcript_retry(monkeypatch):
     monkeypatch.setattr("app.services.market_data.settings.market_data_provider", "alpha_vantage", raising=False)
@@ -451,6 +507,102 @@ async def test_fetch_company_data_uses_yfinance_quarter_for_transcript_retry(mon
     assert data is not None
     assert data.earnings_call is not None
     assert data.earnings_call.quarter == "2026Q1"
+
+
+@pytest.mark.asyncio
+async def test_fetch_alpha_vantage_transcript_payloads_marks_rate_limit_as_error(monkeypatch):
+    monkeypatch.setattr("app.services.market_data.settings.alpha_vantage_api_key", "test-key", raising=False)
+
+    async def fake_cached_request(_client, _function, _ttl, **kwargs):
+        if kwargs["quarter"] == "2026Q2":
+            return {"Note": "Please consider spreading out your free API requests more sparingly."}
+        return {
+            "quarter": "2026Q1",
+            "date": "2026-05-01",
+            "transcript": "Demand stayed strong and margins improved.",
+        }
+
+    monkeypatch.setattr("app.services.market_data._cached_request", fake_cached_request)
+
+    payloads, diagnostics = await _fetch_alpha_vantage_transcript_payloads("MSFT", ["2026Q2", "2026Q1"])
+
+    assert len(payloads) == 1
+    assert diagnostics["returned_quarters"] == ["2026Q1"]
+    assert diagnostics["error_quarters"]["2026Q2"].startswith("Please consider spreading out")
+
+
+@pytest.mark.asyncio
+async def test_fetch_company_data_uses_calendar_fallback_for_transcript_retry(monkeypatch):
+    monkeypatch.setattr("app.services.market_data.settings.market_data_provider", "alpha_vantage", raising=False)
+    monkeypatch.setattr("app.services.market_data.settings.alpha_vantage_api_key", "test-key", raising=False)
+    monkeypatch.setattr(
+        "app.services.market_data._fallback_transcript_quarters",
+        lambda **_kwargs: ["2026Q2", "2026Q1"],
+    )
+
+    partial_payload = {
+        "quote": {},
+        "overview": {},
+        "earnings": {},
+        "earnings_calendar": "",
+        "news": {"feed": []},
+        "earnings_call_transcripts": [],
+        "insider_transactions": {"data": []},
+    }
+    yfinance_data = CompanyData(
+        ticker="AAPL",
+        name="Apple Inc",
+        sector="Technology",
+        industry="Consumer Electronics",
+        current_price=210.15,
+        market_cap=4500000000000.0,
+        pe_ratio=37.2,
+        revenue_growth_yoy=None,
+        earnings_growth_yoy=None,
+        dividend_yield=None,
+        description="Makes devices",
+        recent_news=[],
+        upcoming_earnings_date=None,
+        recent_earnings_surprise_pct=None,
+        news_items=[],
+        provider_payload={"provider": "yfinance"},
+        recent_fiscal_quarter=None,
+        recent_fiscal_quarters=[],
+        earnings_call=None,
+        earnings_calls=[],
+        insider_transactions=[],
+        country="United States",
+        currency="USD",
+    )
+
+    async def fake_payloads(_ticker: str):
+        return partial_payload
+
+    async def fake_yfinance(_ticker: str):
+        return yfinance_data
+
+    async def fake_transcripts(_ticker: str, quarters: list[str], **_kwargs):
+        assert quarters == ["2026Q2", "2026Q1"]
+        return [
+            {
+                "quarter": "2026Q1",
+                "date": "2026-05-01",
+                "transcript": "Services demand was solid and margins improved.",
+            }
+        ]
+
+    monkeypatch.setattr("app.services.market_data._fetch_alpha_vantage_payloads", fake_payloads)
+    monkeypatch.setattr("app.services.market_data._fetch_yfinance_company_data", fake_yfinance)
+    monkeypatch.setattr("app.services.market_data._fetch_alpha_vantage_transcript_payloads", fake_transcripts)
+
+    data = await fetch_company_data("AAPL")
+
+    assert data is not None
+    assert data.earnings_call is not None
+    assert data.earnings_call.quarter == "2026Q1"
+    diagnostics = transcript_fetch_diagnostics(data)
+    assert diagnostics["requested_quarters"] == ["2026Q2", "2026Q1"]
+    assert diagnostics["quarter_strategy"] == "calendar_fallback"
 
 
 def test_parse_alpha_vantage_insider_transactions():

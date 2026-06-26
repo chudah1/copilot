@@ -14,7 +14,11 @@ from app.config import settings
 from app.models.holding import Holding
 from app.models.monitoring_event import MonitoringEvent
 from app.models.thesis import Thesis
-from app.services.market_data import MAX_CURRENT_TRANSCRIPT_AGE_DAYS, fetch_company_data
+from app.services.market_data import (
+    MAX_CURRENT_TRANSCRIPT_AGE_DAYS,
+    fetch_company_data,
+    transcript_fetch_diagnostics,
+)
 from app.services.valuation import apply_market_price, compute_pnl, to_account_value
 from app.services.monitoring import check_metric_watch_hints, generate_monitoring_candidates
 from app.services.noise_filter import (
@@ -257,6 +261,12 @@ async def run_check_now(
         triggered_by="check_now",
     )
     coverage.record_source("qualitative_market_data", candidates_returned=len(candidates))
+    coverage.record_source(
+        "earnings_call_transcripts",
+        queried=bool(transcript_fetch_diagnostics(company_data).get("requested_quarters")),
+        candidates_returned=len(company_data.earnings_calls or []),
+        details=transcript_fetch_diagnostics(company_data) or None,
+    )
 
     # EDGAR 8-K candidates (US tickers only; silently skipped for non-US)
     before_edgar = len(candidates)
@@ -797,6 +807,12 @@ async def _run_historical_audit_with_session(
             triggered_by="historical_audit",
         )
         coverage.record_source("qualitative_market_data", candidates_returned=len(candidates))
+        coverage.record_source(
+            "earnings_call_transcripts",
+            queried=bool(transcript_fetch_diagnostics(company_data).get("requested_quarters")),
+            candidates_returned=len(company_data.earnings_calls or []),
+            details=transcript_fetch_diagnostics(company_data) or None,
+        )
 
         try:
             audit_since = (now - timedelta(days=HISTORICAL_AUDIT_LOOKBACK_DAYS)).date()

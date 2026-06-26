@@ -18,6 +18,7 @@ from app.services.market_data import (
     CompanyData,
     fetch_company_data,
     shortlist_qualitative_candidates,
+    transcript_fetch_diagnostics,
 )
 from app.services.valuation import apply_market_price
 from app.services.noise_filter import (
@@ -303,6 +304,12 @@ async def run_monitoring():
                     transcript_max_age_days=MAX_CURRENT_TRANSCRIPT_AGE_DAYS,
                 )
                 coverage.record_source("qualitative_market_data", candidates_returned=len(candidates))
+                coverage.record_source(
+                    "earnings_call_transcripts",
+                    queried=bool(transcript_fetch_diagnostics(company_data).get("requested_quarters")),
+                    candidates_returned=len(company_data.earnings_calls or []),
+                    details=transcript_fetch_diagnostics(company_data) or None,
+                )
 
                 # Proxy ticker candidates
                 proxy_before = len(candidates)

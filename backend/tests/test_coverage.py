@@ -260,6 +260,15 @@ async def test_coverage_pass_builder_records_sources_and_stages(db, test_user):
         triggered_by="check_now",
     )
     builder.record_source("qualitative_market_data", candidates_returned=8)
+    builder.record_source(
+        "earnings_call_transcripts",
+        candidates_returned=1,
+        details={
+            "requested_quarters": ["2026Q1"],
+            "returned_quarters": ["2026Q1"],
+            "available_transcripts": 1,
+        },
+    )
     builder.record_source("edgar_8k", candidates_returned=2)
     builder.record_source("gemini_news", candidates_returned=0, error="429 RESOURCE_EXHAUSTED")
     builder.record_stage("candidates_generated", 10)
@@ -283,6 +292,7 @@ async def test_coverage_pass_builder_records_sources_and_stages(db, test_user):
     # Sources record both success counts and failure errors.
     assert payload["sources"]["gemini_news"]["error"].startswith("429")
     assert payload["sources"]["qualitative_market_data"]["candidates_returned"] == 8
+    assert payload["sources"]["earnings_call_transcripts"]["details"]["requested_quarters"] == ["2026Q1"]
     # Stages preserve order — the funnel reads top-to-bottom.
     stage_names = [row[0] for row in payload["stages"]]
     assert stage_names == [

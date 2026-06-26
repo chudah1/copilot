@@ -265,12 +265,15 @@ class CoveragePassBuilder:
         queried: bool = True,
         candidates_returned: int | None = None,
         error: str | None = None,
+        details: dict[str, Any] | None = None,
     ) -> None:
         entry: dict[str, Any] = {"queried": queried}
         if candidates_returned is not None:
             entry["candidates_returned"] = candidates_returned
         if error:
             entry["error"] = str(error)[:500]
+        if details:
+            entry["details"] = details
         # Multiple calls for the same source name (e.g. EDGAR queried twice
         # over the pass) are merged by keeping the worst error and summing
         # candidates so the funnel matches reality.
@@ -284,6 +287,10 @@ class CoveragePassBuilder:
             merged["candidates_returned"] = int(existing.get("candidates_returned", 0)) + int(entry.get("candidates_returned", 0))
         if "error" in entry:
             merged["error"] = entry["error"]
+        if "details" in entry:
+            merged_details = dict(existing.get("details") or {})
+            merged_details.update(entry["details"])
+            merged["details"] = merged_details
         self.sources[name] = merged
 
     def record_stage(self, stage: str, count: int) -> None:

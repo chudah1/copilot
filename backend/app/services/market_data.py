@@ -676,6 +676,29 @@ def _quarter_string(dt: datetime | None) -> str | None:
     return f"{dt.year}Q{quarter}"
 
 
+def _fallback_transcript_quarters(
+    *,
+    reference_now: datetime | None = None,
+    count: int = 2,
+) -> list[str]:
+    """Best-effort calendar-quarter fallback when providers expose no recent
+    earnings metadata. We prefer trying a small recent window over skipping
+    transcript retrieval entirely."""
+    if count <= 0:
+        return []
+    current = reference_now or datetime.now(timezone.utc)
+    year = current.year
+    quarter = ((current.month - 1) // 3) + 1
+    quarters: list[str] = []
+    for _ in range(count):
+        quarters.append(f"{year}Q{quarter}")
+        quarter -= 1
+        if quarter == 0:
+            year -= 1
+            quarter = 4
+    return quarters
+
+
 def _extract_text_segments(value: Any) -> list[str]:
     if isinstance(value, str):
         return [value]
@@ -819,6 +842,14 @@ def _parse_alpha_vantage_transcript(payload: dict[str, Any]) -> TranscriptSignal
         excerpt=excerpt,
         full_text=transcript_text[:30_000] if transcript_text else None,
     )
+
+
+def _transcript_payload_error(payload: dict[str, Any]) -> str | None:
+    for key in ("Error Message", "error", "message", "Note", "Information", "information"):
+        value = payload.get(key)
+        if isinstance(value, str) and value.strip():
+            return value.strip()[:200]
+    return None
 
 
 def _current_earnings_calls(
@@ -1556,15 +1587,25 @@ async def fetch_company_data(ticker: str) -> CompanyData | None:
         yfinance_data = await _fetch_yfinance_company_data(ticker)
         if yfinance_data is None:
             return av_data if av_has_enrichment else None
-        if not av_data.earnings_calls and yfinance_data.recent_fiscal_quarters:
-            transcript_payloads = await _fetch_alpha_vantage_transcript_payloads(
+        retry_quarters = list(yfinance_data.recent_fiscal_quarters or [])
+        if not retry_quarters:
+            retry_quarters = _fallback_transcript_quarters()
+        if not av_data.earnings_calls and retry_quarters:
+            transcript_result = await _fetch_alpha_vantage_transcript_payloads(
                 ticker,
-                yfinance_data.recent_fiscal_quarters,
+                retry_quarters,
             )
+            transcript_payloads, transcript_diagnostics = _normalize_transcript_fetch_result(
+                transcript_result,
+                retry_quarters,
+            )
+            if not yfinance_data.recent_fiscal_quarters:
+                transcript_diagnostics.setdefault("quarter_strategy", "calendar_fallback")
             if transcript_payloads:
                 provider_payload["earnings_call_transcripts"] = transcript_payloads
                 provider_payload["earnings_call_transcript"] = transcript_payloads[0]
-                av_data = _build_company_data_from_alpha_vantage(ticker, provider_payload)
+            provider_payload["transcript_diagnostics"] = transcript_diagnostics
+            av_data = _build_company_data_from_alpha_vantage(ticker, provider_payload)
         return _merge_company_data(yfinance_data, av_data)
     except Exception:
         logger.warning("Alpha Vantage fetch failed for %s, falling back to yfinance", ticker, exc_info=True)
@@ -1604,13 +1645,17 @@ async def _fetch_alpha_vantage_payloads(ticker: str) -> dict[str, Any]:
         recent_quarters = _parse_alpha_vantage_earnings(
             earnings_payload if isinstance(earnings_payload, dict) else {}
         ).get("recent_fiscal_quarters") or []
-        transcript_payloads = await _fetch_alpha_vantage_transcript_payloads(
+        transcript_quarters = list(recent_quarters or _fallback_transcript_quarters())
+        transcript_payloads, transcript_diagnostics = await _fetch_alpha_vantage_transcript_payloads(
             ticker,
-            recent_quarters,
+            transcript_quarters,
             client=client,
         )
+        if not recent_quarters:
+            transcript_diagnostics.setdefault("quarter_strategy", "calendar_fallback")
         provider_payload["earnings_call_transcripts"] = transcript_payloads
         provider_payload["earnings_call_transcript"] = transcript_payloads[0] if transcript_payloads else {}
+        provider_payload["transcript_diagnostics"] = transcript_diagnostics
 
         earnings_calendar_payload = await _safe_cached_request(
             client,
@@ -1651,30 +1696,92 @@ async def _fetch_alpha_vantage_transcript_payloads(
     quarters: list[str] | None,
     *,
     client: httpx.AsyncClient | None = None,
-) -> list[dict[str, Any]]:
+) -> tuple[list[dict[str, Any]], dict[str, Any]]:
     recent_quarters = [quarter for quarter in (quarters or []) if quarter]
+    diagnostics: dict[str, Any] = {
+        "requested_quarters": recent_quarters[:MAX_RECENT_TRANSCRIPT_QUARTERS],
+        "returned_quarters": [],
+        "empty_quarters": [],
+        "unusable_quarters": [],
+        "error_quarters": {},
+    }
     if not recent_quarters or not settings.alpha_vantage_api_key:
-        return []
+        return [], diagnostics
 
-    async def _run(active_client: httpx.AsyncClient) -> list[dict[str, Any]]:
+    async def _run(active_client: httpx.AsyncClient) -> tuple[list[dict[str, Any]], dict[str, Any]]:
         transcript_payloads: list[dict[str, Any]] = []
-        for recent_quarter in recent_quarters[:MAX_RECENT_TRANSCRIPT_QUARTERS]:
-            transcript_payload = await _safe_cached_request(
-                active_client,
-                "EARNINGS_CALL_TRANSCRIPT",
-                _CACHE_TTL_LONG,
-                {},
-                symbol=ticker,
-                quarter=recent_quarter,
-            )
+        for recent_quarter in diagnostics["requested_quarters"]:
+            try:
+                transcript_payload = await _cached_request(
+                    active_client,
+                    "EARNINGS_CALL_TRANSCRIPT",
+                    _CACHE_TTL_LONG,
+                    symbol=ticker,
+                    quarter=recent_quarter,
+                )
+            except Exception as exc:
+                diagnostics["error_quarters"][recent_quarter] = str(exc)[:200]
+                continue
+            if not isinstance(transcript_payload, dict) or not transcript_payload:
+                diagnostics["empty_quarters"].append(recent_quarter)
+                continue
+            payload_error = _transcript_payload_error(transcript_payload)
+            if payload_error:
+                diagnostics["error_quarters"][recent_quarter] = payload_error
+                continue
+            if _parse_alpha_vantage_transcript(transcript_payload) is None:
+                diagnostics["unusable_quarters"].append(recent_quarter)
+                continue
             if isinstance(transcript_payload, dict) and transcript_payload:
                 transcript_payloads.append(transcript_payload)
-        return transcript_payloads
+                diagnostics["returned_quarters"].append(recent_quarter)
+        return transcript_payloads, diagnostics
 
     if client is not None:
         return await _run(client)
     async with httpx.AsyncClient() as active_client:
         return await _run(active_client)
+
+
+def _normalize_transcript_fetch_result(
+    result: Any,
+    requested_quarters: list[str] | None,
+) -> tuple[list[dict[str, Any]], dict[str, Any]]:
+    """Accept both the newer `(payloads, diagnostics)` shape and the older
+    payload-only shape still used by some test doubles / callers."""
+    normalized_requested = [quarter for quarter in (requested_quarters or []) if quarter][
+        :MAX_RECENT_TRANSCRIPT_QUARTERS
+    ]
+    default_diagnostics: dict[str, Any] = {
+        "requested_quarters": normalized_requested,
+        "returned_quarters": [],
+        "empty_quarters": [],
+        "unusable_quarters": [],
+        "error_quarters": {},
+    }
+
+    if (
+        isinstance(result, tuple)
+        and len(result) == 2
+        and isinstance(result[0], list)
+        and isinstance(result[1], dict)
+    ):
+        payloads = result[0]
+        diagnostics = dict(default_diagnostics)
+        diagnostics.update(result[1])
+        return payloads, diagnostics
+
+    payloads = result if isinstance(result, list) else []
+    diagnostics = dict(default_diagnostics)
+    diagnostics["returned_quarters"] = [
+        str(payload.get("quarter"))
+        for payload in payloads
+        if isinstance(payload, dict) and payload.get("quarter")
+    ]
+    diagnostics["empty_quarters"] = [
+        quarter for quarter in normalized_requested if quarter not in set(diagnostics["returned_quarters"])
+    ]
+    return payloads, diagnostics
 
 
 def _merge_company_data(base: CompanyData, enrichment: CompanyData) -> CompanyData:
@@ -1718,6 +1825,25 @@ def _merge_company_data(base: CompanyData, enrichment: CompanyData) -> CompanyDa
         country=base.country if base.country != "Unknown" else enrichment.country,
         currency=base.currency or enrichment.currency,
     )
+
+
+def transcript_fetch_diagnostics(company_data: CompanyData | None) -> dict[str, Any]:
+    if company_data is None:
+        return {}
+    provider_payload = company_data.provider_payload or {}
+    if not isinstance(provider_payload, dict):
+        return {}
+
+    diagnostics = provider_payload.get("transcript_diagnostics")
+    if not diagnostics and isinstance(provider_payload.get("alpha_vantage"), dict):
+        diagnostics = provider_payload["alpha_vantage"].get("transcript_diagnostics")
+    if not isinstance(diagnostics, dict):
+        diagnostics = {}
+
+    result = dict(diagnostics)
+    result["available_transcripts"] = len(company_data.earnings_calls or [])
+    result["recent_fiscal_quarters"] = list(company_data.recent_fiscal_quarters or [])
+    return result
 
 
 def _build_company_data_from_alpha_vantage(ticker: str, provider_payload: dict[str, Any]) -> CompanyData:
