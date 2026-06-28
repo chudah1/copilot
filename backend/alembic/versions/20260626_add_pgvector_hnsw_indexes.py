@@ -1,6 +1,6 @@
 """add pgvector hnsw indexes for embeddings
 
-Revision ID: 20260626_add_pgvector_hnsw_indexes
+Revision ID: 20260626_pgvector_hnsw
 Revises: 20260623_add_embedding_storage
 Create Date: 2026-06-26
 """
@@ -8,7 +8,7 @@ Create Date: 2026-06-26
 from alembic import op
 
 
-revision = "20260626_add_pgvector_hnsw_indexes"
+revision = "20260626_pgvector_hnsw"
 down_revision = "20260623_add_embedding_storage"
 branch_labels = None
 depends_on = None
