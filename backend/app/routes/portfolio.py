@@ -39,6 +39,39 @@ from app.services.valuation import apply_broker_position, refresh_holding_price,
 router = APIRouter(prefix="/api/portfolio", tags=["portfolio"])
 
 
+async def _enrich_holding_metadata(
+    ticker: str,
+    *,
+    name: str,
+    sector: str | None = None,
+    geography: str | None = None,
+    currency: str | None = None,
+) -> tuple[str, str | None, str | None, str | None]:
+    """Resolve name/sector/geography/native currency from the market data
+    provider so a manual or CSV import matches what broker sync produces. The
+    provider is authoritative on currency (otherwise US stocks imported without
+    a currency column get valued as GBP — a large silent error). Existing
+    descriptive values win over provider defaults."""
+    enriched_name = name
+    enriched_sector = sector
+    enriched_geography = geography
+    native_currency = currency
+    try:
+        overview = await fetch_company_overview(ticker)
+        if overview:
+            if not enriched_sector and overview["sector"] != "Unknown":
+                enriched_sector = overview["sector"]
+            if not enriched_geography and overview["country"] != "Unknown":
+                enriched_geography = overview["country"]
+            if enriched_name == ticker and overview["name"] != ticker:
+                enriched_name = overview["name"]
+            if overview.get("currency"):
+                native_currency = overview["currency"]
+    except Exception:
+        pass
+    return enriched_name, enriched_sector, enriched_geography, native_currency
+
+
 @router.get("/search")
 @limiter.limit("30/minute")
 async def search_tickers(request: Request, q: str):
@@ -349,27 +382,13 @@ async def add_manual_holding(
             detail=f"{body.ticker.upper()} is already in your portfolio.",
         )
 
-    # Enrich name/sector/geography and resolve the instrument's NATIVE currency from
-    # the provider. The manual form has no currency field (it always defaults to GBP),
-    # so a US stock added by ticker would otherwise be mislabelled GBP and its value
-    # left unconverted. The provider is the authority on currency.
-    enriched_sector = body.sector
-    enriched_geography = body.geography
-    enriched_name = body.name
-    native_currency = body.currency
-    try:
-        overview = await fetch_company_overview(body.ticker)
-        if overview:
-            if not enriched_sector and overview["sector"] != "Unknown":
-                enriched_sector = overview["sector"]
-            if not enriched_geography and overview["country"] != "Unknown":
-                enriched_geography = overview["country"]
-            if enriched_name == body.ticker and overview["name"] != body.ticker:
-                enriched_name = overview["name"]
-            if overview.get("currency"):
-                native_currency = overview["currency"]
-    except Exception:
-        pass
+    enriched_name, enriched_sector, enriched_geography, native_currency = await _enrich_holding_metadata(
+        body.ticker,
+        name=body.name,
+        sector=body.sector,
+        geography=body.geography,
+        currency=body.currency,
+    )
 
     holding = Holding(
         user_id=current_user.id,
@@ -514,27 +533,43 @@ async def upload_csv(
         )
         holding = existing_result.scalar_one_or_none()
 
+        # Ask the provider for the authoritative currency (and enrich sector /
+        # geography while we're at it). Generic CSVs rarely include a currency
+        # column, so parse_generic_csv defaults them to GBP — writing a US stock
+        # into current_value at £USD is the same silent FX bug portfolio_sync
+        # used to have. Trading 212 exports already carry the correct currency,
+        # so the provider only overrides when we're confident.
+        enriched_name, enriched_sector, enriched_geography, native_currency = await _enrich_holding_metadata(
+            p.ticker,
+            name=p.name,
+            currency=p.currency,
+        )
+
         if holding:
-            holding.name = p.name
+            holding.name = enriched_name
+            if enriched_sector:
+                holding.sector = enriched_sector
+            if enriched_geography:
+                holding.geography = enriched_geography
         else:
             holding = Holding(
                 user_id=current_user.id,
                 ticker=p.ticker.upper(),
-                name=p.name,
+                name=enriched_name,
+                sector=enriched_sector,
+                geography=enriched_geography,
             )
             db.add(holding)
 
         # Normalise valuation to the account currency (GBP), like broker sync.
-        # The CSV's price/cost are in the instrument's NATIVE currency; writing
-        # them straight into the GBP value/cost fields was the same FX bug
-        # portfolio_sync used to have. apply_broker_position converts the cost
-        # basis; refresh_holding_price fetches a live price for current_value.
+        # apply_broker_position converts the cost basis; refresh_holding_price
+        # fetches a live price for current_value.
         await apply_broker_position(
             holding,
             quantity=p.quantity,
             native_price=None,
             native_avg_cost=p.average_cost_basis,
-            native_currency=p.currency,
+            native_currency=native_currency,
             now=now,
         )
         try:
