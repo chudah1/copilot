@@ -51,6 +51,9 @@ def _candidate_event_date(candidate: dict[str, Any]) -> datetime | None:
 def apply_thesis_floor(
     candidates: list[dict[str, Any]],
     thesis_created_at: datetime,
+    *,
+    min_lookback_days: int = 0,
+    now: datetime | None = None,
 ) -> list[dict[str, Any]]:
     """Drop event-dated candidates that predate this thesis.
 
@@ -61,10 +64,21 @@ def apply_thesis_floor(
 
     Prevents new users from receiving alerts about stale evidence — most
     obviously earnings-call transcripts, which have a 120-day fetch window.
+
+    min_lookback_days extends the floor for on-demand runs so a brand-new user
+    hitting check-now (or first pulse right after onboarding) sees the last N
+    days of relevant filings/news, rather than nothing because every event
+    predates a thesis they wrote minutes ago. Only pulls the floor earlier;
+    for older theses the thesis-created-at date wins so we don't resurface a
+    year of already-processed history.
     """
     if thesis_created_at.tzinfo is None:
         thesis_created_at = thesis_created_at.replace(tzinfo=timezone.utc)
     floor = thesis_created_at - timedelta(days=1)
+    if min_lookback_days > 0:
+        current_time = now or datetime.now(timezone.utc)
+        lookback_floor = current_time - timedelta(days=min_lookback_days)
+        floor = min(floor, lookback_floor)
 
     surviving = []
     for candidate in candidates:

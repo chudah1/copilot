@@ -345,9 +345,13 @@ async def run_check_now(
         candidates = await enrich_candidates_with_embedding_matches(candidates, claims)
         candidates = await adjudicate_signal_matches(candidates, claims)
 
-    # Drop candidates predating this thesis — same guard as the daily batch run,
-    # critical here because run_first_pulse fires immediately after onboarding.
-    candidates = apply_thesis_floor(candidates, thesis.created_at)
+    # Drop candidates predating this thesis — same guard as the daily batch
+    # run. On check-now we also allow the last 14 days: run_first_pulse fires
+    # immediately after onboarding, and a strict floor at thesis.created_at
+    # drops every recent filing/news as "before your time", leaving the first
+    # experience empty. The daily batch stays strict so we don't resurface
+    # already-processed history to established users.
+    candidates = apply_thesis_floor(candidates, thesis.created_at, min_lookback_days=14, now=now)
     coverage.record_stage(STAGE_AFTER_THESIS_FLOOR, len(candidates))
 
     # Build lookup tables for narrative generation
