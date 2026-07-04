@@ -32,8 +32,9 @@ _DZ = {
     "faint": "#9A8A78",   # labels / footer
     "line": "#C8BBA8",    # hairline
     "quote": "#EDE5DB",   # quote rule + soft fill
-    "accent": "#C1492A",  # rust
-    "accent_deep": "#7A3520",  # mahogany
+    "accent": "#1E5C3A",  # forest green (brand)
+    "accent_deep": "#174D31",  # deep forest green
+    "warning": "#C1492A",  # rust — reserved for danger/warning semantics
 }
 _SERIF = "Georgia, 'Times New Roman', serif"
 _SANS = "-apple-system, BlinkMacSystemFont, 'Segoe UI', Helvetica, Arial, sans-serif"
@@ -69,7 +70,7 @@ def _wrap_email_shell(body_html: str, *, headline: str, preheader: str = "") -> 
         '<table role="presentation" width="100%" cellpadding="0" cellspacing="0" border="0" '
         f'style="background:{_DZ["paper"]};"><tr><td align="center" style="padding:48px 16px 64px;">'
         '<table role="presentation" width="100%" cellpadding="0" cellspacing="0" border="0" style="max-width:600px;">'
-        # Top mahogany rule
+        # Top brand rule
         f'<tr><td style="background-color:{_DZ["accent_deep"]};height:3px;font-size:0;line-height:0;">&nbsp;</td></tr>'
         # Card open
         f'<tr><td style="background:{_DZ["card"]};border-left:1px solid {_DZ["line"]};border-right:1px solid {_DZ["line"]};">'
@@ -682,7 +683,7 @@ def _render_digest_html(
             parts.append(
                 '<table role="presentation" width="100%" cellpadding="0" cellspacing="0" border="0" '
                 f'style="margin:14px 0;background:{_DZ["card"]};border:1px solid {_DZ["line"]};'
-                f'border-left:3px solid {_DZ["accent"] if is_negative else _DZ["line"]};">'
+                f'border-left:3px solid {_DZ["warning"] if is_negative else _DZ["line"]};">'
                 '<tr><td style="padding:16px 18px;">'
             )
             parts.append(

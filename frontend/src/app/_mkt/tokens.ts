@@ -13,10 +13,10 @@ export const mk = {
   pencilLight: "#D2CBBB",
   rule: "#D2CBBB",
 
-  // Accent — rust is the only one
-  accent: "#C1492A",
-  accentDeep: "#A23A1F",
-  accentSoft: "#F0D8CB",
+  // Accent — forest green
+  accent: "#1E5C3A",
+  accentDeep: "#174D31",
+  accentSoft: "#D4E8DC",
 
   // Status
   sage: "#5A7A5D",

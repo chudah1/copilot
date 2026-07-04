@@ -59,14 +59,14 @@
   --status-watch:  oklch(0.540 0.130 72);    /* amber         */
   --status-review: oklch(0.510 0.195 22);    /* deep red      */
 
-  /* ── The Investment Ledger — aged paper, sharp edges, serious money ── */
+  /* ── The Investment Ledger — aged paper, sharp edges, forest green ── */
   --background: oklch(0.948 0.018 78);         /* genuine parchment — cream with warmth */
   --foreground: oklch(0.112 0.010 45);         /* rich warm ink, slightly darker */
   --card: oklch(0.988 0.005 72);               /* elevated surface — clearly lighter than bg */
   --card-foreground: oklch(0.112 0.010 45);
   --popover: oklch(0.988 0.005 72);
   --popover-foreground: oklch(0.112 0.010 45);
-  --primary: oklch(0.355 0.110 28);            /* deep mahogany — slightly richer */
+  --primary: oklch(0.32 0.105 155);            /* deep forest green */
   --primary-foreground: oklch(0.991 0.003 75);
   --secondary: oklch(0.922 0.022 76);          /* visible secondary — tan, not ghost */
   --secondary-foreground: oklch(0.112 0.010 45);
@@ -77,8 +77,8 @@
   --destructive: oklch(0.510 0.195 22);
   --border: oklch(0.820 0.028 70);             /* strong warm tan — visible hierarchy */
   --input: oklch(0.820 0.028 70);
-  --ring: oklch(0.355 0.110 28);
-  --chart-1: oklch(0.355 0.110 28);            /* mahogany */
+  --ring: oklch(0.32 0.105 155);
+  --chart-1: oklch(0.32 0.105 155);            /* forest green */
   --chart-2: oklch(0.440 0.110 155);           /* forest green */
   --chart-3: oklch(0.510 0.195 22);            /* deep red */
   --chart-4: oklch(0.415 0.095 252);           /* navy */
@@ -86,12 +86,12 @@
   --radius: 0.2rem;                            /* crisp — not zero, not round */
   --sidebar: oklch(0.938 0.020 77);
   --sidebar-foreground: oklch(0.112 0.010 45);
-  --sidebar-primary: oklch(0.355 0.110 28);
+  --sidebar-primary: oklch(0.32 0.105 155);
   --sidebar-primary-foreground: oklch(0.991 0.003 75);
   --sidebar-accent: oklch(0.918 0.020 75);
   --sidebar-accent-foreground: oklch(0.112 0.010 45);
   --sidebar-border: oklch(0.820 0.028 70);
-  --sidebar-ring: oklch(0.355 0.110 28);
+  --sidebar-ring: oklch(0.32 0.105 155);
 }
 
 /* ── Override dark-mode media queries from imported shadcn stylesheet ── */
@@ -103,7 +103,7 @@
     --card-foreground: oklch(0.112 0.010 45);
     --popover: oklch(0.988 0.005 72);
     --popover-foreground: oklch(0.112 0.010 45);
-    --primary: oklch(0.355 0.110 28);
+    --primary: oklch(0.32 0.105 155);
     --primary-foreground: oklch(0.991 0.003 75);
     --secondary: oklch(0.922 0.022 76);
     --secondary-foreground: oklch(0.112 0.010 45);
@@ -114,15 +114,15 @@
     --destructive: oklch(0.510 0.195 22);
     --border: oklch(0.820 0.028 70);
     --input: oklch(0.820 0.028 70);
-    --ring: oklch(0.355 0.110 28);
+    --ring: oklch(0.32 0.105 155);
     --sidebar: oklch(0.938 0.020 77);
     --sidebar-foreground: oklch(0.112 0.010 45);
-    --sidebar-primary: oklch(0.355 0.110 28);
+    --sidebar-primary: oklch(0.32 0.105 155);
     --sidebar-primary-foreground: oklch(0.991 0.003 75);
     --sidebar-accent: oklch(0.918 0.020 75);
     --sidebar-accent-foreground: oklch(0.112 0.010 45);
     --sidebar-border: oklch(0.820 0.028 70);
-    --sidebar-ring: oklch(0.355 0.110 28);
+    --sidebar-ring: oklch(0.32 0.105 155);
   }
 }
 
@@ -163,13 +163,13 @@
 
   /* Text selection */
   ::selection {
-    background: oklch(0.365 0.105 30 / 0.15);
+    background: oklch(0.32 0.105 155 / 0.15);
     color: oklch(0.118 0.008 50);
   }
 
   /* Improved focus ring */
   :focus-visible {
-    outline: 2px solid oklch(0.365 0.105 30 / 0.6);
+    outline: 2px solid oklch(0.32 0.105 155 / 0.6);
     outline-offset: 2px;
   }
 

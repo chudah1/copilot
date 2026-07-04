@@ -18,8 +18,8 @@ _P = "#ECE7DB"   # parchment
 _C = "#F5F0E8"   # card
 _I = "#161510"   # ink
 _B = "#C8BBA8"   # border
-_M = "#7A3520"   # mahogany
-_R = "#C1492A"   # rust
+_M = "#1E5C3A"   # forest green (brand)
+_R = "#C1492A"   # rust — warning/danger semantics
 _T = "#4A3F35"   # body text
 _F = "#9A8A78"   # faint
 
