@@ -601,3 +601,13 @@ export interface EarningsReviewResult {
   log_entry_id: string;
   reviewed_at: string;
 }
+
+export interface ReviewedItem {
+  ticker: string;
+  headline: string;
+  reason: string;
+  source_label: string;
+  url: string | null;
+  published_at: string | null;
+  matched_signal_labels: string[];
+}

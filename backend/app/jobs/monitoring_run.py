@@ -64,7 +64,10 @@ from app.services.signal_matching import (
     match_candidates_to_signals,
 )
 from app.services.monitoring_gap_writer import write_monitoring_gap
-from app.services.thesis_relevance_filter import filter_candidates_by_thesis_relevance_with_drops
+from app.services.thesis_relevance_filter import (
+    apply_drop_thesis_floor,
+    filter_candidates_by_thesis_relevance_with_drops,
+)
 
 logger = logging.getLogger(__name__)
 
@@ -385,7 +388,9 @@ async def run_monitoring():
                         why_own_it=thesis.why_own_it or "",
                     )
                     coverage.record_stage(STAGE_AFTER_RELEVANCE_FILTER, len(candidates))
-                    coverage.record_reviewed_but_dropped(reviewed_but_dropped)
+                    coverage.record_reviewed_but_dropped(
+                        apply_drop_thesis_floor(reviewed_but_dropped, thesis.created_at, now=now)
+                    )
                     candidates = match_candidates_to_signals(candidates, claims)
                     candidates = await enrich_candidates_with_embedding_matches(candidates, claims)
                     candidates = await adjudicate_signal_matches(candidates, claims)

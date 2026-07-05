@@ -312,7 +312,10 @@ class CoveragePassBuilder:
         blow up on a noisy news day."""
         if not drops:
             return
-        for drop in drops[:20]:
+        remaining = max(0, 20 - len(self.reviewed_but_dropped))
+        if remaining == 0:
+            return
+        for drop in drops[:remaining]:
             if hasattr(drop, "__dict__"):
                 entry = dict(drop.__dict__)
             elif isinstance(drop, dict):

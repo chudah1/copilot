@@ -5,6 +5,7 @@ responses to verify the keep/drop logic and the tagging of matched
 signals into evidence.relevant_signals (so the existing label-binding
 path can pick them up downstream).
 """
+from datetime import datetime, timezone
 import json
 from unittest.mock import AsyncMock, MagicMock, patch
 
@@ -12,6 +13,7 @@ import pytest
 
 from app.services.thesis_relevance_filter import (
     _RELEVANCE_FILTER_EVENT_TYPES,
+    apply_drop_thesis_floor,
     filter_candidates_by_thesis_relevance,
     filter_candidates_by_thesis_relevance_with_drops,
 )
@@ -250,6 +252,34 @@ async def test_with_drops_variant_omits_drops_with_empty_reason(monkeypatch):
 
     assert kept == []
     assert dropped == []
+
+
+def test_apply_drop_thesis_floor_filters_pre_thesis_drops():
+    from app.services.thesis_relevance_filter import DroppedCandidate
+
+    thesis_created_at = datetime(2026, 7, 5, tzinfo=timezone.utc)
+    stale = DroppedCandidate(
+        headline="Old news",
+        source="gemini_news",
+        published_at="2026-06-01T10:00:00Z",
+        url="https://example.com/old",
+        reason="This article is old and should not count for the current thesis.",
+        ticker="AAPL",
+        matched_signal_labels=[],
+    )
+    fresh = DroppedCandidate(
+        headline="Fresh news",
+        source="gemini_news",
+        published_at="2026-07-06T10:00:00Z",
+        url="https://example.com/fresh",
+        reason="This article was reviewed during the current thesis window.",
+        ticker="AAPL",
+        matched_signal_labels=[],
+    )
+
+    kept = apply_drop_thesis_floor([stale, fresh], thesis_created_at)
+
+    assert [drop.headline for drop in kept] == ["Fresh news"]
 
 
 def test_relevance_filter_targets_all_news_style_event_types():

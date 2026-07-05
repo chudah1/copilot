@@ -1,5 +1,5 @@
 import uuid
-from datetime import datetime, timezone
+from datetime import datetime, timedelta, timezone
 
 from fastapi import APIRouter, Depends, Header, HTTPException, Query, status
 from sqlalchemy import select
@@ -22,6 +22,7 @@ from app.schemas.monitoring_event import (
     MonitoringEventResponse,
     MonitoringEventReviewResponse,
     ReviewMonitoringEventRequest,
+    ReviewedItemResponse,
 )
 from app.schemas.coverage import (
     ClaimRetrievalComparisonResponse,
@@ -34,6 +35,11 @@ from app.schemas.coverage import (
     ThesisCoverageRetrievalResponse,
 )
 from app.schemas.monitoring_gap import MonitoringGapResponse
+from app.services.adjacency import (
+    DEFAULT_MAX_REVIEWED_ITEMS,
+    curate_reviewed_but_dropped,
+    load_reviewed_but_dropped,
+)
 from app.services.check_now import run_check_now
 from app.services.conviction_log import REASON_CREATED
 from app.services.coverage import (
@@ -181,6 +187,75 @@ async def _reason_age_days_for_thesis(
 
     created = _normalize_datetime(first_entry.created_at)
     return (datetime.now(timezone.utc) - created).days
+
+
+@router.get("/holdings/{holding_id}/reviewed", response_model=list[ReviewedItemResponse])
+async def get_reviewed_items_for_holding(
+    holding_id: uuid.UUID,
+    window_days: int = Query(default=7, ge=1, le=30),
+    limit: int = Query(default=5, ge=1, le=10),
+    user: User = Depends(get_current_user),
+    db: AsyncSession = Depends(get_db),
+):
+    """Return adjacency evidence for a single holding — news items the LLM
+    relevance filter reviewed and decided not to alert on, plus the sentence
+    it wrote to explain each drop. Powers the "Reviewed this week" block on
+    the position monitoring tab, so silence looks informed instead of lazy."""
+    holding = (
+        await db.execute(
+            select(Holding).where(Holding.id == holding_id, Holding.user_id == user.id)
+        )
+    ).scalar_one_or_none()
+    if holding is None:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Holding not found")
+
+    # Active theses on this holding — coverage_pass rows are keyed by thesis,
+    # and an invalidated thesis's drops shouldn't leak onto the current
+    # thesis's tab. Same scoping rule as the passive receipt.
+    thesis_ids_result = await db.execute(
+        select(Thesis.id).where(
+            Thesis.holding_id == holding_id,
+            Thesis.user_id == user.id,
+            Thesis.status.in_(["active", "draft", "needs_review"]),
+        )
+    )
+    thesis_ids = [row[0] for row in thesis_ids_result.all()]
+    if not thesis_ids:
+        return []
+
+    now = datetime.now(timezone.utc)
+    period_start = now - timedelta(days=window_days)
+    ticker_by_thesis = {str(tid): holding.ticker for tid in thesis_ids}
+    holding_id_by_thesis = {str(tid): holding.id for tid in thesis_ids}
+
+    raw = await load_reviewed_but_dropped(
+        db,
+        thesis_ids=thesis_ids,
+        ticker_by_thesis=ticker_by_thesis,
+        holding_id_by_thesis=holding_id_by_thesis,
+        period_start=period_start,
+        period_end=now,
+    )
+    # Per-holding surface: user is already looking at this ticker, so
+    # require_distinct_tickers=False lets us surface multiple items for the
+    # same position. Larger cap than the digest — the tab has more room.
+    picked = curate_reviewed_but_dropped(
+        raw,
+        max_items=max(limit, DEFAULT_MAX_REVIEWED_ITEMS),
+        require_distinct_tickers=False,
+    )
+    return [
+        ReviewedItemResponse(
+            ticker=item["ticker"],
+            headline=item["headline"],
+            reason=item["reason"],
+            source_label=item.get("source_label") or "news",
+            url=item.get("url"),
+            published_at=item.get("published_at"),
+            matched_signal_labels=item.get("matched_signal_labels") or [],
+        )
+        for item in picked
+    ]
 
 
 @router.get("/holdings/{holding_id}/events", response_model=list[MonitoringEventResponse])

@@ -28,6 +28,7 @@ import asyncio
 import json
 import logging
 from dataclasses import dataclass
+from datetime import date, datetime, timedelta, timezone
 from typing import Any
 
 from app.config import settings
@@ -47,6 +48,51 @@ class DroppedCandidate:
     reason: str
     ticker: str
     matched_signal_labels: list[str]
+
+
+def _drop_published_at(drop: DroppedCandidate) -> datetime | None:
+    raw = drop.published_at
+    if not raw:
+        return None
+    if isinstance(raw, datetime):
+        return raw if raw.tzinfo else raw.replace(tzinfo=timezone.utc)
+    if isinstance(raw, date):
+        return datetime.combine(raw, datetime.min.time()).replace(tzinfo=timezone.utc)
+    if isinstance(raw, str):
+        try:
+            dt = datetime.fromisoformat(raw.replace("Z", "+00:00"))
+            return dt if dt.tzinfo else dt.replace(tzinfo=timezone.utc)
+        except ValueError:
+            try:
+                d = date.fromisoformat(raw)
+                return datetime.combine(d, datetime.min.time()).replace(tzinfo=timezone.utc)
+            except ValueError:
+                return None
+    return None
+
+
+def apply_drop_thesis_floor(
+    drops: list[DroppedCandidate],
+    thesis_created_at: datetime,
+    *,
+    min_lookback_days: int = 0,
+    now: datetime | None = None,
+) -> list[DroppedCandidate]:
+    """Apply the same time floor to reviewed-but-dropped items that we use for
+    live candidates, so pre-thesis evidence doesn't leak into weekly digests."""
+    if thesis_created_at.tzinfo is None:
+        thesis_created_at = thesis_created_at.replace(tzinfo=timezone.utc)
+    floor = thesis_created_at - timedelta(days=1)
+    if min_lookback_days > 0:
+        current_time = now or datetime.now(timezone.utc)
+        floor = min(floor, current_time - timedelta(days=min_lookback_days))
+
+    surviving: list[DroppedCandidate] = []
+    for drop in drops:
+        published_at = _drop_published_at(drop)
+        if published_at is None or published_at >= floor:
+            surviving.append(drop)
+    return surviving
 
 # Only news-style candidates need this filter — quantitative events
 # (price_move, metric_breach, watch_hint_breach, earnings_surprise, etc.)

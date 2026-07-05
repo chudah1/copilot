@@ -330,7 +330,10 @@ async def run_check_now(
     # surfacing as info-tier noise. Cheap (gpt-4o-mini) per-candidate check
     # before the expensive severity classification downstream.
     if claims:
-        from app.services.thesis_relevance_filter import filter_candidates_by_thesis_relevance_with_drops
+        from app.services.thesis_relevance_filter import (
+            apply_drop_thesis_floor,
+            filter_candidates_by_thesis_relevance_with_drops,
+        )
         candidates, reviewed_but_dropped = await filter_candidates_by_thesis_relevance_with_drops(
             candidates,
             signal_descriptors=signal_descriptors,
@@ -338,7 +341,14 @@ async def run_check_now(
             why_own_it=thesis.why_own_it or "",
         )
         coverage.record_stage(STAGE_AFTER_RELEVANCE_FILTER, len(candidates))
-        coverage.record_reviewed_but_dropped(reviewed_but_dropped)
+        coverage.record_reviewed_but_dropped(
+            apply_drop_thesis_floor(
+                reviewed_but_dropped,
+                thesis.created_at,
+                min_lookback_days=14,
+                now=now,
+            )
+        )
         # The relevance filter can attach matched signal labels after the first
         # binding pass. Re-run light signal enrichment so those new labels and
         # any semantic matches flow into multi-binding instead of getting lost.

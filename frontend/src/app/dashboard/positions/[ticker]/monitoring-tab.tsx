@@ -2,7 +2,8 @@
 
 import { EventReviewStack } from "@/components/monitoring/event-review-stack";
 import { EventTimeline } from "@/components/monitoring/event-timeline";
-import type { MonitoringEvent } from "@/types";
+import { ReviewedThisWeek } from "@/components/monitoring/reviewed-this-week";
+import type { MonitoringEvent, ReviewedItem } from "@/types";
 import type { getMonitoringCalmState } from "./position-helpers";
 
 type ReviewAction = "reaffirmed" | "ignored" | "lowered_confidence" | "invalidated" | "not_relevant";
@@ -21,6 +22,7 @@ interface MonitoringTabProps {
   reviewingEventId: string | null;
   decompositionLoading: boolean;
   emptyCopy: { title: string; body: string; cta: string };
+  reviewedItems: ReviewedItem[];
   onReview: (event: MonitoringEvent, action: ReviewAction, notes?: string) => Promise<void>;
   onWriteThesis: () => void;
 }
@@ -28,7 +30,7 @@ interface MonitoringTabProps {
 export function MonitoringTab({
   hasThesis, investorProfile, events, unreviewedEvents, activeSignalCount, hasSignals, firstPendingEvent,
   firstPendingAssumptionLabel, isFirstLiveEvidenceMoment, calmState, reviewingEventId,
-  decompositionLoading, emptyCopy, onReview, onWriteThesis,
+  decompositionLoading, emptyCopy, reviewedItems, onReview, onWriteThesis,
 }: MonitoringTabProps) {
   const reviewedEventsCount = events.filter((event) => Boolean(event.review_action)).length;
   const monitoringCopy = investorProfile === "hearsay_driven"
@@ -375,6 +377,12 @@ export function MonitoringTab({
               </p>
             </div>
           )}
+
+          {/* Adjacency evidence — the "we looked at these edge cases for you"
+              receipt. Quiet state is where users most want proof of
+              watchfulness, but the block reads as reassurance under alerts
+              too, so we show it whenever items exist. */}
+          {reviewedItems.length > 0 && <ReviewedThisWeek items={reviewedItems} />}
         </>
       )}
     </div>

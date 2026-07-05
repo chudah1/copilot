@@ -6,9 +6,10 @@ is exercised indirectly through the existing integration tests.
 """
 from datetime import datetime, timezone
 
-from app.jobs.digest_builder import (
-    _curate_reviewed_but_dropped,
-    _render_reviewed_but_dropped_section,
+from app.jobs.digest_builder import _render_reviewed_but_dropped_section
+from app.services.adjacency import (
+    curate_reviewed_but_dropped as _curate_reviewed_but_dropped,
+    source_label_for_reader,
 )
 
 
@@ -67,6 +68,26 @@ def test_curate_prefers_trusted_sources_over_yfinance_noise():
     assert result[0]["headline"] == "Gemini take"
 
 
+def test_curate_prefers_trusted_source_even_when_generic_has_close_call_label():
+    # The product promise says trusted Gemini/EDGAR evidence beats generic
+    # yfinance-style news. A matched-signal label on the generic item
+    # shouldn't reverse that preference by itself.
+    drops = [
+        _drop(
+            source="news_or_earnings_candidate",
+            headline="Generic close call",
+            matched_signal_labels=["CUDA moat"],
+        ),
+        _drop(
+            source="gemini_news",
+            headline="Trusted non-close call",
+            matched_signal_labels=[],
+        ),
+    ]
+    result = _curate_reviewed_but_dropped(drops)
+    assert result[0]["headline"] == "Trusted non-close call"
+
+
 def test_curate_drops_items_with_terse_reasons():
     # A 5-character reason ('N/A.') is useless to show — no thesis specificity.
     # These would look like the app just deleted stuff without thinking.
@@ -104,6 +125,54 @@ def test_render_section_includes_ticker_headline_and_reason():
     assert "CUDA moat pillar" in html
     # 4-day gap should read as "4d ago".
     assert "4d ago" in html
+
+
+def test_source_label_prefers_publisher_from_url_over_source_enum():
+    # Users don't know or care what "gemini_news" is. If we have a URL to a
+    # recognized publisher, that's what they should see.
+    assert source_label_for_reader("gemini_news", "https://www.reuters.com/x") == "Reuters"
+    assert source_label_for_reader("gemini_news", "https://bloomberg.com/y") == "Bloomberg"
+    assert source_label_for_reader("edgar_8k", "https://www.sec.gov/z") == "SEC"
+
+
+def test_source_label_falls_back_to_friendly_bucket_when_url_is_absent():
+    # No URL → pick a category label, never leak the raw enum.
+    assert source_label_for_reader("gemini_news", None) == "web news"
+    assert source_label_for_reader("edgar_8k", None) == "SEC filing"
+    assert source_label_for_reader("edgar_form4", "") == "insider filing"
+    assert source_label_for_reader("news_or_earnings_candidate", None) == "news"
+
+
+def test_source_label_never_returns_raw_event_type_string():
+    # Even for a made-up source we don't recognize, output must be user-safe.
+    label = source_label_for_reader("some_unknown_source_v2", None)
+    assert "_" not in label
+    assert label.islower() or label[0].isupper()
+
+
+def test_source_label_handles_uppercase_and_subdomain_publishers():
+    assert source_label_for_reader("gemini_news", "https://UK.REUTERS.COM/a/b") == "Reuters"
+    # Unrecognized publisher — falls back to capitalized first token, not enum.
+    assert source_label_for_reader(
+        "gemini_news", "https://www.techcrunch.com/x"
+    ) == "TechCrunch"
+
+
+def test_render_uses_publisher_label_not_raw_event_type():
+    now = datetime(2026, 7, 5, tzinfo=timezone.utc)
+    items = [
+        _drop(
+            source="gemini_news",
+            url="https://www.reuters.com/article/x",
+            published_at="2026-07-04T10:00:00+00:00",
+        ),
+    ]
+    # The stored source_label should carry through, but even without one
+    # the render must not print the raw enum.
+    items[0].pop("source_label", None)
+    html = _render_reviewed_but_dropped_section(items, now=now)
+    assert "gemini" not in html.lower()
+    assert "Reuters" in html
 
 
 def test_render_section_html_escapes_hostile_input():

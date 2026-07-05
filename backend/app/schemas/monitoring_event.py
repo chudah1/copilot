@@ -20,6 +20,21 @@ class MonitoringEventReviewResponse(BaseModel):
     reason_age_days: int | None = None
 
 
+class ReviewedItemResponse(BaseModel):
+    """One 'reviewed but not alerted on' item, ready for the position tab.
+
+    Wire shape mirrors what the digest already stashes — same publisher-first
+    label so the position page and the email agree on how to refer to the
+    source."""
+    ticker: str
+    headline: str
+    reason: str
+    source_label: str
+    url: str | None = None
+    published_at: str | None = None
+    matched_signal_labels: list[str] = []
+
+
 class MonitoringEventResponse(BaseModel):
     id: uuid.UUID
     holding_id: uuid.UUID
