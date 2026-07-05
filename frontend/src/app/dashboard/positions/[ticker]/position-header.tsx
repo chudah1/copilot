@@ -4,13 +4,15 @@ import Link from "next/link";
 import { motion } from "framer-motion";
 import { formatCurrency } from "@/lib/utils";
 import { CheckNowButton } from "@/components/monitoring/check-now-button";
-import type { CheckNowResponse, Holding, Thesis } from "@/types";
+import type { CheckNowResponse, Holding, HoldingPulse, Thesis } from "@/types";
+import { WatchReceipt } from "@/components/portfolio/watch-receipt";
 import { cleanTicker, ageInDays, STATUS_DOT, HEALTH_CHIP } from "./position-helpers";
 import type { TabId, getThesisInsights, getStalePressure } from "./position-helpers";
 
 interface PositionHeaderProps {
   holding: Holding;
   activeThesis: Thesis | undefined;
+  pulse: HoldingPulse | null;
   investorProfile: "thesis_driven" | "hearsay_driven" | null;
   headerCollapsed: boolean;
   hasPrice: boolean;
@@ -32,7 +34,7 @@ interface PositionHeaderProps {
 }
 
 export function PositionHeader({
-  holding, activeThesis, investorProfile, headerCollapsed, hasPrice, value, pnl, pnlPct,
+  holding, activeThesis, pulse, investorProfile, headerCollapsed, hasPrice, value, pnl, pnlPct,
   thesisInsights, stalePressure, steps, tabs, activeTab, unreviewedEvents, deleteConfirming,
   deleteLoading, onDelete, onSetDeleteConfirming, onCheckNowComplete, onSelectTab,
 }: PositionHeaderProps) {
@@ -115,6 +117,11 @@ export function PositionHeader({
                   </p>
                 </>
               )}
+              <WatchReceipt
+                pulse={pulse ?? undefined}
+                hasThesis={Boolean(activeThesis)}
+                className="mt-1"
+              />
             </div>
           </div>
 

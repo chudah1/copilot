@@ -27,10 +27,12 @@ import type {
   HealthCheckResult,
   HistoricalAuditResponse,
   Holding,
+  HoldingPulse,
   MonitoringEvent,
   MonitoringEventReviewResponse,
   MonitoringGap,
   OnboardingState,
+  PortfolioPulse,
   Thesis,
   ThesisAssistResponse,
   ThesisDecompositionEnvelope,
@@ -86,6 +88,7 @@ function PositionDetailInner() {
   const [convictionLogLoading, setConvictionLogLoading] = useState(false);
   const [noteSaving, setNoteSaving] = useState(false);
   const [upcomingEarnings, setUpcomingEarnings] = useState<UpcomingEarnings | null>(null);
+  const [pulse, setPulse] = useState<HoldingPulse | null>(null);
   const [loading, setLoading] = useState(true);
   const [healthCheck, setHealthCheck] = useState<HealthCheckResult | null>(null);
   const [healthCheckLoading, setHealthCheckLoading] = useState(false);
@@ -119,13 +122,14 @@ function PositionDetailInner() {
         setHoldings(h);
         const match = h.find((x) => x.ticker === ticker);
         if (match) {
-          const [t, e, log, earnings, onboarding, gaps] = await Promise.all([
+          const [t, e, log, earnings, onboarding, gaps, portfolioPulse] = await Promise.all([
             api.get<Thesis[]>(`/api/theses/holding/${match.id}`),
             api.get<MonitoringEvent[]>(`/api/monitoring/holdings/${match.id}/events`),
             api.get<ConvictionLogResponse>(`/api/portfolio/holdings/${match.id}/conviction-log`).catch(() => null),
             api.get<UpcomingEarnings[]>("/api/portfolio/upcoming-earnings").catch(() => []),
             api.get<OnboardingState>("/api/onboarding/state").catch(() => null),
             api.get<MonitoringGap[]>(`/api/monitoring/gaps`).catch(() => []),
+            api.get<PortfolioPulse>("/api/portfolio/pulse").catch(() => null),
           ]);
           setTheses(t);
           setEvents(e);
@@ -133,6 +137,7 @@ function PositionDetailInner() {
           setUpcomingEarnings(earnings.find((item) => item.holding_id === match.id) ?? null);
           setOnboardingState(onboarding);
           setAllGaps(gaps);
+          setPulse(portfolioPulse?.pulses.find((p) => p.holding_id === match.id) ?? null);
           const latestThesis = t.find((item) => item.status === "active" || item.status === "draft" || item.status === "needs_review");
           if (latestThesis) {
             setDecompositionLoading(true);
@@ -814,6 +819,7 @@ function PositionDetailInner() {
       <PositionHeader
         holding={holding}
         activeThesis={activeThesis}
+        pulse={pulse}
         investorProfile={onboardingState?.investor_profile ?? null}
         headerCollapsed={headerCollapsed}
         hasPrice={hasPrice}

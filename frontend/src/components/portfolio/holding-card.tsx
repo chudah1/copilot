@@ -3,6 +3,7 @@
 import Link from "next/link";
 import { formatCurrency, formatPercent } from "@/lib/utils";
 import type { Holding, Thesis, HoldingPulse, UpcomingEarnings } from "@/types";
+import { WatchReceipt } from "./watch-receipt";
 
 interface Props {
   holding: Holding;
@@ -69,10 +70,12 @@ export function HoldingCard({ holding, thesis, pulse, earnings, onGenerateDraft,
                 <p className="font-sans text-xs text-foreground/85 leading-relaxed line-clamp-1 max-w-lg italic">
                   {thesisText}
                 </p>
-                {alertReason && (
+                {alertReason ? (
                   <p className="font-mono text-[10px] text-amber-700 leading-relaxed line-clamp-1 max-w-lg">
                     {alertReason}
                   </p>
+                ) : (
+                  <WatchReceipt pulse={pulse} hasThesis={hasThesis} />
                 )}
               </div>
             ) : !hasThesis ? (

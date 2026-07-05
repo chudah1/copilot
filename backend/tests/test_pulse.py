@@ -4,6 +4,7 @@ from datetime import datetime, timedelta, timezone
 import pytest
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from app.models.coverage_pass import CoveragePass
 from app.models.holding import Holding
 from app.models.monitoring_event import MonitoringEvent
 from app.models.thesis import Thesis
@@ -314,3 +315,58 @@ async def test_pulse_stale_high_confidence_thesis_can_escalate_to_review(client,
     assert pulse["pulse_status"] == "review"
     assert pulse["reason"] == "This thesis is 108 days old and far past its 30-day review cadence."
     assert pulse["urgency_score"] >= 90
+
+
+@pytest.mark.asyncio
+async def test_pulse_counts_sources_from_latest_coverage_pass(
+    client, auth_headers, test_user, db: AsyncSession
+):
+    # Passive receipt: the pulse response reports how many pipeline sources
+    # were queried on the latest pass. A source that was queried counts, even
+    # if it returned zero candidates — "we looked" is the honest signal.
+    holding = Holding(
+        id=uuid.uuid4(), ticker="NVDA", name="NVIDIA",
+        quantity=10, average_cost_basis=180, currency="USD",
+        user_id=test_user.id,
+    )
+    db.add(holding)
+    await db.commit()
+
+    thesis = Thesis(
+        id=uuid.uuid4(), holding_id=holding.id, user_id=test_user.id,
+        status="active", why_own_it="AI infra leader", confidence="high",
+    )
+    db.add(thesis)
+    await db.commit()
+
+    now = datetime.now(timezone.utc)
+    older = CoveragePass(
+        id=uuid.uuid4(), thesis_id=thesis.id, holding_id=holding.id,
+        run_id="check_now:old", triggered_by="check_now",
+        started_at=now - timedelta(hours=6),
+        finished_at=now - timedelta(hours=6),
+        payload={"sources": {
+            "qualitative_market_data": {"queried": True, "candidates_returned": 1},
+        }},
+    )
+    latest = CoveragePass(
+        id=uuid.uuid4(), thesis_id=thesis.id, holding_id=holding.id,
+        run_id="check_now:latest", triggered_by="check_now",
+        started_at=now,
+        finished_at=now,
+        payload={"sources": {
+            "qualitative_market_data": {"queried": True, "candidates_returned": 0},
+            "edgar_8k": {"queried": True, "candidates_returned": 2},
+            "edgar_form4": {"queried": True, "candidates_returned": 0},
+            "gemini_news": {"queried": True, "candidates_returned": 0, "error": "credit exhausted"},
+            "earnings_call_transcripts": {"queried": False, "candidates_returned": 0},
+        }},
+    )
+    db.add_all([older, latest])
+    await db.commit()
+
+    resp = await client.get("/api/portfolio/pulse", headers=auth_headers)
+    pulse = resp.json()["pulses"][0]
+    # 4 sources actually queried (qual/edgar_8k/edgar_form4/gemini_news);
+    # earnings_call_transcripts was skipped so it doesn't count.
+    assert pulse["sources_count"] == 4
