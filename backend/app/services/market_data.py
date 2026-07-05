@@ -833,6 +833,17 @@ def _parse_alpha_vantage_transcript(payload: dict[str, Any]) -> TranscriptSignal
     )
     quarter = payload.get("quarter") or payload.get("fiscalQuarter") or ""
 
+    # Alpha Vantage's EARNINGS_CALL_TRANSCRIPT response ships without a date
+    # field on many companies — we get {quarter, symbol, transcript} and
+    # nothing else. Without an explicit date, is_current_earnings_call
+    # fall-throughs to False and every AV transcript gets silently dropped
+    # downstream even when the transcript is fresh. Back-fill call_date from
+    # the calendar-quarter end so recency logic has something to work with —
+    # imprecise (calls happen weeks after quarter end) but well inside the
+    # 120-day currency window for genuinely-recent quarters.
+    if call_date is None and quarter:
+        call_date = _quarter_end_datetime(quarter)
+
     if not transcript_text and sentiment is None and call_date is None and not quarter:
         return None
 
@@ -1716,6 +1727,22 @@ def _split_quarter_string(quarter: str) -> tuple[int, int] | None:
         return None
 
 
+def _quarter_end_datetime(quarter: str) -> datetime | None:
+    """UTC datetime for the last day of the calendar quarter, used as a rough
+    call-date proxy when the provider omits the actual date."""
+    split = _split_quarter_string(quarter)
+    if split is None:
+        return None
+    year, q_num = split
+    if q_num not in (1, 2, 3, 4):
+        return None
+    month, day = {1: (3, 31), 2: (6, 30), 3: (9, 30), 4: (12, 31)}[q_num]
+    try:
+        return datetime(year, month, day, tzinfo=timezone.utc)
+    except ValueError:
+        return None
+
+
 def _api_ninjas_to_transcript_payload(raw: dict[str, Any]) -> dict[str, Any]:
     """Reshape an API Ninjas response so the existing Alpha Vantage transcript
     parser can read it. The Developer tier returns the raw transcript text plus
@@ -1766,11 +1793,6 @@ async def _fetch_api_ninjas_transcript_payloads(
             cached = _cache.get(cache_key)
             if cached is not None:
                 raw = cached
-                logger.warning(
-                    "[transcript-debug] api_ninjas %s %sQ%s CACHED (transcript_len=%s)",
-                    ticker, year, q_num,
-                    len((cached.get("transcript") or "")) if isinstance(cached, dict) else "n/a",
-                )
             else:
                 try:
                     response = await active_client.get(
@@ -1780,17 +1802,8 @@ async def _fetch_api_ninjas_transcript_payloads(
                         timeout=15.0,
                     )
                 except Exception as exc:
-                    logger.warning(
-                        "[transcript-debug] api_ninjas %s %sQ%s EXCEPTION: %s",
-                        ticker, year, q_num, str(exc)[:200],
-                    )
                     diagnostics["error_quarters"][quarter] = str(exc)[:200]
                     continue
-                body_preview = (response.text or "")[:500]
-                logger.warning(
-                    "[transcript-debug] api_ninjas %s %sQ%s HTTP %s body=%s",
-                    ticker, year, q_num, response.status_code, body_preview,
-                )
                 if response.status_code == 429:
                     diagnostics["error_quarters"][quarter] = "api_ninjas rate limit"
                     continue
@@ -1942,25 +1955,8 @@ async def _fetch_alpha_vantage_transcript_payloads(
                     quarter=recent_quarter,
                 )
             except Exception as exc:
-                logger.warning(
-                    "[transcript-debug] alpha_vantage %s %s EXCEPTION: %s",
-                    ticker, recent_quarter, str(exc)[:200],
-                )
                 diagnostics["error_quarters"][recent_quarter] = str(exc)[:200]
                 continue
-            payload_type = type(transcript_payload).__name__
-            payload_keys = (
-                sorted(list(transcript_payload.keys()))
-                if isinstance(transcript_payload, dict) else "n/a"
-            )
-            transcript_len = (
-                len(str(transcript_payload.get("transcript") or ""))
-                if isinstance(transcript_payload, dict) else 0
-            )
-            logger.warning(
-                "[transcript-debug] alpha_vantage %s %s type=%s keys=%s transcript_len=%s",
-                ticker, recent_quarter, payload_type, payload_keys, transcript_len,
-            )
             if not isinstance(transcript_payload, dict) or not transcript_payload:
                 diagnostics["empty_quarters"].append(recent_quarter)
                 continue

@@ -433,6 +433,22 @@ def test_transcript_fetch_diagnostics_reads_alpha_vantage_payload():
     assert diagnostics["available_transcripts"] == 0
 
 
+def test_parse_transcript_backfills_call_date_from_quarter_when_missing():
+    # Alpha Vantage's EARNINGS_CALL_TRANSCRIPT response frequently omits the
+    # date field. Without a back-filled call_date, is_current_earnings_call
+    # returns False for genuinely fresh transcripts and the pipeline drops
+    # them silently. The quarter-end proxy keeps recent quarters current.
+    payload = {"quarter": "2026Q2", "symbol": "AAPL", "transcript": "…real content…"}
+    transcript = _parse_alpha_vantage_transcript(payload)
+    assert transcript is not None
+    assert transcript.call_date == datetime(2026, 6, 30, tzinfo=timezone.utc)
+    # And the fresh-enough check accepts it.
+    assert is_current_earnings_call(
+        transcript,
+        now=datetime(2026, 7, 5, tzinfo=timezone.utc),
+    )
+
+
 def test_fallback_transcript_quarters_uses_recent_calendar_quarters():
     # June 26 is still inside calendar Q2 2026 (Q2 ends June 30). The most
     # recently completed quarter is Q1 2026, so the fallback should lead
