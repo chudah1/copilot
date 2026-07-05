@@ -199,6 +199,27 @@ def test_build_company_data_drops_stale_transcript_from_live_payload():
 
 
 def test_build_company_data_keeps_multiple_current_transcripts():
+    # Reference dates relative to today so the assertion doesn't age out — the
+    # 120-day currency window pushes fixed-date fixtures out of "current" as
+    # calendar time moves on. Choose spans that fall into two distinct calendar
+    # quarters so multi-quarter behavior is exercised regardless of when the
+    # test runs.
+    now = datetime.now(timezone.utc)
+    recent_dt = now - timedelta(days=30)
+    prior_dt = now - timedelta(days=100)
+    recent_call = recent_dt.date().isoformat()
+    prior_call = prior_dt.date().isoformat()
+
+    def _q(dt: datetime) -> str:
+        return f"{dt.year}Q{((dt.month - 1) // 3) + 1}"
+
+    recent_quarter = _q(recent_dt)
+    prior_quarter = _q(prior_dt)
+    if recent_quarter == prior_quarter:
+        # Nudge prior_dt further back until it crosses a quarter boundary.
+        prior_dt = now - timedelta(days=115)
+        prior_call = prior_dt.date().isoformat()
+        prior_quarter = _q(prior_dt)
     data = _build_company_data_from_alpha_vantage(
         "AAPL",
         {
@@ -216,13 +237,13 @@ def test_build_company_data_keeps_multiple_current_transcripts():
             "earnings": {
                 "quarterlyEarnings": [
                     {
-                        "reportedDate": "2026-05-01",
-                        "fiscalDateEnding": "2026-03-31",
+                        "reportedDate": recent_call,
+                        "fiscalDateEnding": recent_call,
                         "surprisePercentage": "4.5",
                     },
                     {
-                        "reportedDate": "2026-02-01",
-                        "fiscalDateEnding": "2025-12-31",
+                        "reportedDate": prior_call,
+                        "fiscalDateEnding": prior_call,
                         "surprisePercentage": "5.1",
                     },
                 ]
@@ -231,13 +252,13 @@ def test_build_company_data_keeps_multiple_current_transcripts():
             "news": {"feed": []},
             "earnings_call_transcripts": [
                 {
-                    "quarter": "2026Q1",
-                    "date": "2026-05-01",
+                    "quarter": recent_quarter,
+                    "date": recent_call,
                     "transcript": "Services demand was solid and margins improved.",
                 },
                 {
-                    "quarter": "2025Q4",
-                    "date": "2026-03-01",
+                    "quarter": prior_quarter,
+                    "date": prior_call,
                     "transcript": "Product demand improved and channel inventory normalized.",
                 },
             ],
@@ -245,10 +266,10 @@ def test_build_company_data_keeps_multiple_current_transcripts():
         },
     )
 
-    assert data.recent_fiscal_quarters == ["2026Q1", "2025Q4"]
+    assert data.recent_fiscal_quarters == [recent_quarter, prior_quarter]
     assert data.earnings_call is not None
-    assert data.earnings_call.quarter == "2026Q1"
-    assert [transcript.quarter for transcript in data.earnings_calls] == ["2026Q1", "2025Q4"]
+    assert data.earnings_call.quarter == recent_quarter
+    assert [transcript.quarter for transcript in data.earnings_calls] == [recent_quarter, prior_quarter]
 
 
 def test_merge_company_data_preserves_transcript_enrichment():

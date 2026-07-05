@@ -54,9 +54,6 @@ class Settings(BaseSettings):
     sentry_dsn: str = ""
     trading212_base_url: str = "https://live.trading212.com/api/v0"
     alpha_vantage_api_key: str = ""
-    # API Ninjas is the primary earnings-call-transcript provider; when the key
-    # is set, it runs ahead of Alpha Vantage, which stays as a fallback.
-    api_ninjas_api_key: str = ""
     market_data_provider: str = "yfinance"
     edgar_user_agent: str = "penKeep contact@penkeep.io"
     frontend_url: str = "http://localhost:3000"

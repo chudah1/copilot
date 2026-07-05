@@ -16,7 +16,6 @@ from app.config import settings
 logger = logging.getLogger(__name__)
 
 ALPHA_VANTAGE_BASE_URL = "https://www.alphavantage.co/query"
-API_NINJAS_TRANSCRIPT_URL = "https://api.api-ninjas.com/v1/earningstranscript"
 
 # Cache TTLs in seconds
 _CACHE_TTL_LONG = 24 * 3600   # overview, earnings, earnings_calendar — change quarterly
@@ -1586,7 +1585,7 @@ async def fetch_company_data(ticker: str) -> CompanyData | None:
         # a real transcript-capable option instead of always empty.
         if yfinance_data is None:
             return None
-        if settings.api_ninjas_api_key or settings.alpha_vantage_api_key:
+        if settings.alpha_vantage_api_key:
             yfinance_data = await _enrich_yfinance_with_transcripts(yfinance_data)
         return yfinance_data
 
@@ -1616,7 +1615,7 @@ async def fetch_company_data(ticker: str) -> CompanyData | None:
         if not retry_quarters:
             retry_quarters = _fallback_transcript_quarters()
         if not av_data.earnings_calls and retry_quarters:
-            transcript_result = await _fetch_transcript_payloads(
+            transcript_result = await _fetch_alpha_vantage_transcript_payloads(
                 ticker,
                 retry_quarters,
             )
@@ -1671,7 +1670,7 @@ async def _fetch_alpha_vantage_payloads(ticker: str) -> dict[str, Any]:
             earnings_payload if isinstance(earnings_payload, dict) else {}
         ).get("recent_fiscal_quarters") or []
         transcript_quarters = list(recent_quarters or _fallback_transcript_quarters())
-        transcript_payloads, transcript_diagnostics = await _fetch_transcript_payloads(
+        transcript_payloads, transcript_diagnostics = await _fetch_alpha_vantage_transcript_payloads(
             ticker,
             transcript_quarters,
             client=client,
@@ -1743,112 +1742,18 @@ def _quarter_end_datetime(quarter: str) -> datetime | None:
         return None
 
 
-def _api_ninjas_to_transcript_payload(raw: dict[str, Any]) -> dict[str, Any]:
-    """Reshape an API Ninjas response so the existing Alpha Vantage transcript
-    parser can read it. The Developer tier returns the raw transcript text plus
-    date/year/quarter; sentiment fields are absent, which the AV parser already
-    treats as optional."""
-    year = raw.get("year")
-    q_num = raw.get("quarter")
-    quarter = f"{year}Q{q_num}" if year and q_num else ""
-    return {
-        "transcript": raw.get("transcript") or "",
-        "date": raw.get("date") or "",
-        "quarter": quarter,
-    }
-
-
-async def _fetch_api_ninjas_transcript_payloads(
-    ticker: str,
-    quarters: list[str] | None,
-    *,
-    client: httpx.AsyncClient | None = None,
-) -> tuple[list[dict[str, Any]], dict[str, Any]]:
-    """Fetch earnings-call transcripts from API Ninjas. Same return shape as the
-    Alpha Vantage fetcher so the downstream pipeline is provider-agnostic."""
-    recent_quarters = [quarter for quarter in (quarters or []) if quarter]
-    diagnostics: dict[str, Any] = {
-        "requested_quarters": recent_quarters[:MAX_RECENT_TRANSCRIPT_QUARTERS],
-        "returned_quarters": [],
-        "empty_quarters": [],
-        "unusable_quarters": [],
-        "error_quarters": {},
-        "provider": "api_ninjas",
-    }
-    if not recent_quarters or not settings.api_ninjas_api_key:
-        return [], diagnostics
-
-    headers = {"X-Api-Key": settings.api_ninjas_api_key}
-
-    async def _run(active_client: httpx.AsyncClient) -> tuple[list[dict[str, Any]], dict[str, Any]]:
-        transcript_payloads: list[dict[str, Any]] = []
-        for quarter in diagnostics["requested_quarters"]:
-            split = _split_quarter_string(quarter)
-            if split is None:
-                diagnostics["unusable_quarters"].append(quarter)
-                continue
-            year, q_num = split
-            params = {"ticker": ticker, "year": year, "quarter": q_num}
-            cache_key = f"api_ninjas:transcript:{ticker}:{year}:{q_num}"
-            cached = _cache.get(cache_key)
-            if cached is not None:
-                raw = cached
-            else:
-                try:
-                    response = await active_client.get(
-                        API_NINJAS_TRANSCRIPT_URL,
-                        headers=headers,
-                        params=params,
-                        timeout=15.0,
-                    )
-                except Exception as exc:
-                    diagnostics["error_quarters"][quarter] = str(exc)[:200]
-                    continue
-                if response.status_code == 429:
-                    diagnostics["error_quarters"][quarter] = "api_ninjas rate limit"
-                    continue
-                if response.status_code == 401 or response.status_code == 403:
-                    diagnostics["error_quarters"][quarter] = f"api_ninjas auth ({response.status_code})"
-                    # No point retrying other quarters if the key is bad.
-                    return transcript_payloads, diagnostics
-                if response.status_code >= 400:
-                    diagnostics["error_quarters"][quarter] = f"api_ninjas http {response.status_code}"
-                    continue
-                try:
-                    raw = response.json()
-                except ValueError:
-                    diagnostics["error_quarters"][quarter] = "api_ninjas invalid json"
-                    continue
-                # API Ninjas returns {} when the quarter isn't available.
-                if not isinstance(raw, dict) or not raw.get("transcript"):
-                    diagnostics["empty_quarters"].append(quarter)
-                    continue
-                _cache.set(cache_key, raw, _CACHE_TTL_LONG)
-            payload = _api_ninjas_to_transcript_payload(raw)
-            if _parse_alpha_vantage_transcript(payload) is None:
-                diagnostics["unusable_quarters"].append(quarter)
-                continue
-            transcript_payloads.append(payload)
-            diagnostics["returned_quarters"].append(quarter)
-        return transcript_payloads, diagnostics
-
-    if client is not None:
-        return await _run(client)
-    async with httpx.AsyncClient() as active_client:
-        return await _run(active_client)
-
-
 async def _enrich_yfinance_with_transcripts(company_data: "CompanyData") -> "CompanyData":
-    """Attach transcript signals to a yfinance CompanyData in place. Uses the
-    provider router so API Ninjas is preferred when configured, AV is fallback.
-    Silent no-op if no transcript is found or both providers are unconfigured."""
+    """Attach Alpha Vantage transcript signals to a yfinance CompanyData in
+    place. Silent no-op when the AV key is unconfigured or nothing is found."""
     quarters = list(company_data.recent_fiscal_quarters or [])
     if not quarters:
         quarters = _fallback_transcript_quarters()
     if not quarters:
         return company_data
 
-    payloads, diagnostics = await _fetch_transcript_payloads(company_data.ticker, quarters)
+    payloads, diagnostics = await _fetch_alpha_vantage_transcript_payloads(
+        company_data.ticker, quarters
+    )
     if not company_data.recent_fiscal_quarters:
         diagnostics.setdefault("quarter_strategy", "calendar_fallback")
     provider_payload = dict(company_data.provider_payload or {})
@@ -1873,56 +1778,6 @@ async def _enrich_yfinance_with_transcripts(company_data: "CompanyData") -> "Com
     provider_payload["earnings_call_transcript"] = payloads[0]
     company_data.provider_payload = provider_payload
     return company_data
-
-
-async def _fetch_transcript_payloads(
-    ticker: str,
-    quarters: list[str] | None,
-    *,
-    client: httpx.AsyncClient | None = None,
-) -> tuple[list[dict[str, Any]], dict[str, Any]]:
-    """Fetch transcripts, preferring API Ninjas when configured, falling back
-    to Alpha Vantage. AV stays available so an outage in either provider
-    degrades gracefully instead of taking the pipeline down."""
-    if settings.api_ninjas_api_key:
-        payloads, diagnostics = await _fetch_api_ninjas_transcript_payloads(
-            ticker, quarters, client=client
-        )
-        missing = [
-            quarter for quarter in diagnostics.get("requested_quarters", [])
-            if quarter not in set(diagnostics.get("returned_quarters", []))
-        ]
-        # If API Ninjas covered every requested quarter, we're done.
-        if not missing:
-            return payloads, diagnostics
-        # Otherwise let AV fill the gaps when its key is set.
-        if not settings.alpha_vantage_api_key:
-            return payloads, diagnostics
-        av_payloads, av_diagnostics = await _fetch_alpha_vantage_transcript_payloads(
-            ticker, missing, client=client
-        )
-        combined = list(payloads) + list(av_payloads)
-        returned = list(diagnostics.get("returned_quarters", [])) + list(av_diagnostics.get("returned_quarters", []))
-        returned_set = set(returned)
-        diagnostics["returned_quarters"] = returned
-        # If AV covered a quarter API Ninjas failed on, drop the stale API
-        # Ninjas error — it lies about the final outcome. Same for empty /
-        # unusable buckets.
-        diagnostics["error_quarters"] = {
-            q: err for q, err in diagnostics.get("error_quarters", {}).items()
-            if q not in returned_set
-        }
-        for key in ("empty_quarters", "unusable_quarters"):
-            diagnostics[key] = [q for q in diagnostics.get(key, []) if q not in returned_set]
-            for q in av_diagnostics.get(key, []):
-                if q not in returned_set and q not in diagnostics[key]:
-                    diagnostics[key].append(q)
-        for q, err in av_diagnostics.get("error_quarters", {}).items():
-            if q not in returned_set:
-                diagnostics["error_quarters"][q] = err
-        diagnostics["provider"] = "api_ninjas+alpha_vantage" if av_payloads else "api_ninjas"
-        return combined, diagnostics
-    return await _fetch_alpha_vantage_transcript_payloads(ticker, quarters, client=client)
 
 
 async def _fetch_alpha_vantage_transcript_payloads(
