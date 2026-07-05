@@ -683,13 +683,18 @@ def _fallback_transcript_quarters(
     count: int = 2,
 ) -> list[str]:
     """Best-effort calendar-quarter fallback when providers expose no recent
-    earnings metadata. We prefer trying a small recent window over skipping
-    transcript retrieval entirely."""
+    earnings metadata. Starts from the most recently completed calendar
+    quarter — asking a transcript provider for the quarter we're currently
+    inside guarantees a 400 or empty response, since no company can report
+    on a quarter that hasn't ended."""
     if count <= 0:
         return []
     current = reference_now or datetime.now(timezone.utc)
     year = current.year
-    quarter = ((current.month - 1) // 3) + 1
+    quarter = ((current.month - 1) // 3)
+    if quarter == 0:
+        year -= 1
+        quarter = 4
     quarters: list[str] = []
     for _ in range(count):
         quarters.append(f"{year}Q{quarter}")

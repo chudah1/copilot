@@ -434,12 +434,27 @@ def test_transcript_fetch_diagnostics_reads_alpha_vantage_payload():
 
 
 def test_fallback_transcript_quarters_uses_recent_calendar_quarters():
+    # June 26 is still inside calendar Q2 2026 (Q2 ends June 30). The most
+    # recently completed quarter is Q1 2026, so the fallback should lead
+    # with Q1 rather than the current-quarter Q2, which no company can have
+    # reported on yet.
     quarters = _fallback_transcript_quarters(
         reference_now=datetime(2026, 6, 26, tzinfo=timezone.utc),
         count=3,
     )
 
-    assert quarters == ["2026Q2", "2026Q1", "2025Q4"]
+    assert quarters == ["2026Q1", "2025Q4", "2025Q3"]
+
+
+def test_fallback_transcript_quarters_wraps_year_boundary():
+    # Early January is inside calendar Q1; the last completed quarter is the
+    # prior year's Q4. Verifies the year-decrement path.
+    quarters = _fallback_transcript_quarters(
+        reference_now=datetime(2026, 1, 10, tzinfo=timezone.utc),
+        count=2,
+    )
+
+    assert quarters == ["2025Q4", "2025Q3"]
 
 
 @pytest.mark.asyncio
