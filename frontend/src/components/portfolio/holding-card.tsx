@@ -71,9 +71,12 @@ export function HoldingCard({ holding, thesis, pulse, earnings, onGenerateDraft,
                   {thesisText}
                 </p>
                 {alertReason ? (
-                  <p className="font-mono text-[10px] text-amber-700 leading-relaxed line-clamp-1 max-w-lg">
-                    {alertReason}
-                  </p>
+                  <>
+                    <p className="font-mono text-[10px] text-amber-700 leading-relaxed line-clamp-1 max-w-lg">
+                      {alertReason}
+                    </p>
+                    <WatchReceipt pulse={pulse} hasThesis={hasThesis} />
+                  </>
                 ) : (
                   <WatchReceipt pulse={pulse} hasThesis={hasThesis} />
                 )}

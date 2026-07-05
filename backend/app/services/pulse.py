@@ -208,38 +208,43 @@ def _event_decision_summary(event: MonitoringEvent) -> str:
     return event.title.strip()
 
 
-async def _latest_sources_by_holding(
-    db: AsyncSession, holding_ids: list[uuid.UUID]
+async def _latest_sources_by_thesis(
+    db: AsyncSession, thesis_ids: list[uuid.UUID]
 ) -> dict[uuid.UUID, int]:
-    """For each holding, count how many pipeline sources produced at least one
-    candidate on the latest coverage pass. This is the "N sources" number in
-    the passive-receipt line — it's the honest floor of "how much did we
-    actually look at?" and stays truthful on quiet weeks."""
-    if not holding_ids:
+    """For each thesis, count how many pipeline sources were queried on the
+    latest coverage pass for that thesis.
+
+    Scope the lookup by thesis, not holding, so a rewritten active thesis
+    doesn't inherit a passive receipt from an older invalidated thesis on the
+    same holding.
+    """
+    if not thesis_ids:
         return {}
 
-    # Pull one row per holding: the most recent coverage pass, whatever its
+    # Pull one row per thesis: the most recent coverage pass, whatever its
     # trigger (check_now / daily monitoring_run / edgar_watch all count).
     subquery = (
         select(
-            CoveragePass.holding_id,
+            CoveragePass.thesis_id,
             func.max(CoveragePass.started_at).label("latest_started_at"),
         )
-        .where(CoveragePass.holding_id.in_(holding_ids))
-        .group_by(CoveragePass.holding_id)
+        .where(CoveragePass.thesis_id.in_(thesis_ids))
+        .group_by(CoveragePass.thesis_id)
         .subquery()
     )
     latest_result = await db.execute(
-        select(CoveragePass.holding_id, CoveragePass.payload)
+        select(CoveragePass.thesis_id, CoveragePass.payload)
         .join(
             subquery,
-            (CoveragePass.holding_id == subquery.c.holding_id)
+            (CoveragePass.thesis_id == subquery.c.thesis_id)
             & (CoveragePass.started_at == subquery.c.latest_started_at),
         )
     )
 
     counts: dict[uuid.UUID, int] = {}
-    for holding_id, payload in latest_result.all():
+    for thesis_id, payload in latest_result.all():
+        if thesis_id is None:
+            continue
         if not isinstance(payload, dict):
             continue
         sources = payload.get("sources")
@@ -260,7 +265,7 @@ async def _latest_sources_by_holding(
             elif source.get("queried"):
                 # Queried, returned nothing, no error — still counts as "looked."
                 count += 1
-        counts[holding_id] = count
+        counts[thesis_id] = count
     return counts
 
 
@@ -369,7 +374,8 @@ async def compute_portfolio_pulse(user_id: uuid.UUID, db: AsyncSession) -> tuple
         row[0]: _normalize_datetime(row[1])
         for row in last_event_result.fetchall()
     }
-    sources_count_by_holding = await _latest_sources_by_holding(db, holding_ids)
+    active_thesis_ids = [thesis.id for thesis in thesis_by_holding.values()]
+    sources_count_by_thesis = await _latest_sources_by_thesis(db, active_thesis_ids)
 
     for holding in holdings:
         thesis = thesis_by_holding.get(holding.id)
@@ -398,7 +404,7 @@ async def compute_portfolio_pulse(user_id: uuid.UUID, db: AsyncSession) -> tuple
                 pnl_pct=pnl_pct,
                 last_checked_at=last_checked,
                 recent_event_count=len(events),
-                sources_count=sources_count_by_holding.get(holding.id),
+                sources_count=None,
             ))
             continue
 
@@ -448,7 +454,7 @@ async def compute_portfolio_pulse(user_id: uuid.UUID, db: AsyncSession) -> tuple
                 pnl_pct=pnl_pct,
                 last_checked_at=last_checked,
                 recent_event_count=len(events),
-                sources_count=sources_count_by_holding.get(holding.id),
+                sources_count=sources_count_by_thesis.get(thesis.id),
             ))
         elif "warning" in severities or stale_status in {"watch", "review"}:
             pulse_status = stale_status or "watch"
@@ -473,7 +479,7 @@ async def compute_portfolio_pulse(user_id: uuid.UUID, db: AsyncSession) -> tuple
                 pnl_pct=pnl_pct,
                 last_checked_at=last_checked,
                 recent_event_count=len(events),
-                sources_count=sources_count_by_holding.get(holding.id),
+                sources_count=sources_count_by_thesis.get(thesis.id),
             ))
         else:
             pulse_status = "intact"
@@ -497,7 +503,7 @@ async def compute_portfolio_pulse(user_id: uuid.UUID, db: AsyncSession) -> tuple
                 pnl_pct=pnl_pct,
                 last_checked_at=last_checked,
                 recent_event_count=len(events),
-                sources_count=sources_count_by_holding.get(holding.id),
+                sources_count=sources_count_by_thesis.get(thesis.id),
             ))
 
     return pulses, _next_sunday_8am()

@@ -370,3 +370,47 @@ async def test_pulse_counts_sources_from_latest_coverage_pass(
     # 4 sources actually queried (qual/edgar_8k/edgar_form4/gemini_news);
     # earnings_call_transcripts was skipped so it doesn't count.
     assert pulse["sources_count"] == 4
+
+
+@pytest.mark.asyncio
+async def test_pulse_sources_count_stays_scoped_to_active_thesis(
+    client, auth_headers, test_user, db: AsyncSession
+):
+    holding = Holding(
+        id=uuid.uuid4(), ticker="MSFT", name="Microsoft",
+        quantity=8, average_cost_basis=300, currency="USD",
+        user_id=test_user.id,
+    )
+    db.add(holding)
+    await db.commit()
+
+    active_thesis = Thesis(
+        id=uuid.uuid4(), holding_id=holding.id, user_id=test_user.id,
+        status="active", why_own_it="Cloud and AI demand", confidence="high",
+    )
+    old_thesis = Thesis(
+        id=uuid.uuid4(), holding_id=holding.id, user_id=test_user.id,
+        status="invalidated", why_own_it="Legacy thesis", confidence="medium",
+    )
+    db.add_all([active_thesis, old_thesis])
+    await db.commit()
+
+    db.add(
+        CoveragePass(
+            id=uuid.uuid4(), thesis_id=old_thesis.id, holding_id=holding.id,
+            run_id="check_now:old-thesis", triggered_by="check_now",
+            started_at=datetime.now(timezone.utc),
+            finished_at=datetime.now(timezone.utc),
+            payload={"sources": {
+                "qualitative_market_data": {"queried": True, "candidates_returned": 1},
+                "gemini_news": {"queried": True, "candidates_returned": 1},
+            }},
+        )
+    )
+    await db.commit()
+
+    resp = await client.get("/api/portfolio/pulse", headers=auth_headers)
+    pulse = resp.json()["pulses"][0]
+    # The active thesis has never been monitored, so it should not inherit the
+    # old thesis's passive receipt.
+    assert pulse["sources_count"] is None

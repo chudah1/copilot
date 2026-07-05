@@ -115,6 +115,11 @@ function PositionDetailInner() {
     .filter((t) => t.status === "invalidated")
     .sort((a, b) => new Date(b.updated_at).getTime() - new Date(a.updated_at).getTime())[0];
 
+  const refreshPulse = async (holdingId: string) => {
+    const portfolioPulse = await api.get<PortfolioPulse>("/api/portfolio/pulse").catch(() => null);
+    setPulse(portfolioPulse?.pulses.find((p) => p.holding_id === holdingId) ?? null);
+  };
+
   useEffect(() => {
     async function load() {
       try {
@@ -552,6 +557,9 @@ function PositionDetailInner() {
   const handleCheckNowComplete = async (result: CheckNowResponse) => {
     await refreshEvents();
     await refreshCurrentThesis();
+    if (holding) {
+      await refreshPulse(holding.id);
+    }
     setActiveTab("monitoring");
     setNextStepNotice(buildCheckNowNotice({
       result,
