@@ -45,7 +45,22 @@ def make_async_engine(url: str):
     url = _resolve_database_url(url)
     if url.startswith("postgresql"):
         url, connect_args = _asyncpg_engine_kwargs(url)
-        return create_async_engine(url, echo=False, connect_args=connect_args)
+        # Neon (and other serverless Postgres providers) close idle connections
+        # aggressively — usually within minutes. Without pool_pre_ping the pool
+        # hands stale connections to the next caller and the scheduled jobs
+        # blow up with `asyncpg InterfaceError: connection is closed` after
+        # any quiet period. pool_pre_ping runs a cheap `SELECT 1` before each
+        # checkout and transparently reconnects on failure. pool_recycle
+        # additionally forces recycling before Neon's default 5-minute
+        # autosuspend so we don't hold a connection long enough to be
+        # closed on the server side in the first place.
+        return create_async_engine(
+            url,
+            echo=False,
+            connect_args=connect_args,
+            pool_pre_ping=True,
+            pool_recycle=280,
+        )
     # SQLite
     eng = create_async_engine(url, echo=False, connect_args={"timeout": 5})
 
