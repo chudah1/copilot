@@ -1871,16 +1871,24 @@ async def _fetch_transcript_payloads(
         )
         combined = list(payloads) + list(av_payloads)
         returned = list(diagnostics.get("returned_quarters", [])) + list(av_diagnostics.get("returned_quarters", []))
+        returned_set = set(returned)
         diagnostics["returned_quarters"] = returned
+        # If AV covered a quarter API Ninjas failed on, drop the stale API
+        # Ninjas error — it lies about the final outcome. Same for empty /
+        # unusable buckets.
+        diagnostics["error_quarters"] = {
+            q: err for q, err in diagnostics.get("error_quarters", {}).items()
+            if q not in returned_set
+        }
         for key in ("empty_quarters", "unusable_quarters"):
-            diagnostics[key] = [q for q in diagnostics.get(key, []) if q not in set(returned)]
+            diagnostics[key] = [q for q in diagnostics.get(key, []) if q not in returned_set]
             for q in av_diagnostics.get(key, []):
-                if q not in returned and q not in diagnostics[key]:
+                if q not in returned_set and q not in diagnostics[key]:
                     diagnostics[key].append(q)
         for q, err in av_diagnostics.get("error_quarters", {}).items():
-            if q not in returned:
+            if q not in returned_set:
                 diagnostics["error_quarters"][q] = err
-        diagnostics["provider"] = "api_ninjas+alpha_vantage"
+        diagnostics["provider"] = "api_ninjas+alpha_vantage" if av_payloads else "api_ninjas"
         return combined, diagnostics
     return await _fetch_alpha_vantage_transcript_payloads(ticker, quarters, client=client)
 
