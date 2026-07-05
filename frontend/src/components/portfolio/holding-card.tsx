@@ -70,16 +70,12 @@ export function HoldingCard({ holding, thesis, pulse, earnings, onGenerateDraft,
                 <p className="font-sans text-xs text-foreground/85 leading-relaxed line-clamp-1 max-w-lg italic">
                   {thesisText}
                 </p>
-                {alertReason ? (
-                  <>
-                    <p className="font-mono text-[10px] text-amber-700 leading-relaxed line-clamp-1 max-w-lg">
-                      {alertReason}
-                    </p>
-                    <WatchReceipt pulse={pulse} hasThesis={hasThesis} />
-                  </>
-                ) : (
-                  <WatchReceipt pulse={pulse} hasThesis={hasThesis} />
+                {alertReason && (
+                  <p className="font-mono text-[10px] text-amber-700 leading-relaxed line-clamp-1 max-w-lg">
+                    {alertReason}
+                  </p>
                 )}
+                <WatchReceipt pulse={pulse} hasThesis={hasThesis} />
               </div>
             ) : !hasThesis ? (
               <button
