@@ -13,6 +13,7 @@ import pytest
 from app.services.thesis_relevance_filter import (
     _RELEVANCE_FILTER_EVENT_TYPES,
     filter_candidates_by_thesis_relevance,
+    filter_candidates_by_thesis_relevance_with_drops,
 )
 
 
@@ -169,6 +170,86 @@ async def test_filter_keeps_candidate_when_llm_returns_invalid_json(monkeypatch)
         )
 
     assert result == [news]
+
+
+@pytest.mark.asyncio
+async def test_with_drops_variant_captures_reason_and_metadata(monkeypatch):
+    """The digest's 'reviewed this week' section needs both the LLM's
+    plain-english reason and enough evidence context (headline, source,
+    matched signal labels) to render a curated snippet."""
+    monkeypatch.setattr(
+        "app.services.thesis_relevance_filter.settings.openai_api_key", "test-key", raising=False
+    )
+
+    fund_flow = {
+        "event_type": "gemini_news",
+        "description": "Vanguard trimmed AAPL by 0.2% in Q1",
+        "evidence": {
+            "headline": "Vanguard trimmed AAPL by 0.2% in Q1",
+            "summary": "Institutional 13F filing.",
+            "url": "https://example.com/vanguard",
+            "published_at": "2026-07-01T10:00:00Z",
+        },
+    }
+
+    response = _mock_openai_response({
+        "relevant": False,
+        "matched_signals": [],
+        "reason": "This is a 13F institutional-holding update, which doesn't touch your services-growth pillar.",
+    })
+
+    fake_create = AsyncMock(return_value=response)
+    fake_client = MagicMock()
+    fake_client.chat.completions.create = fake_create
+
+    with patch("openai.AsyncOpenAI", return_value=fake_client):
+        kept, dropped = await filter_candidates_by_thesis_relevance_with_drops(
+            [fund_flow],
+            signal_descriptors=[{"label": "AAPL services growth", "claim_text": "services grows above 15% YoY"}],
+            ticker="AAPL",
+            why_own_it="Services is a durable high-margin engine.",
+        )
+
+    assert kept == []
+    assert len(dropped) == 1
+    drop = dropped[0]
+    assert drop.headline == "Vanguard trimmed AAPL by 0.2% in Q1"
+    assert drop.source == "gemini_news"
+    assert drop.ticker == "AAPL"
+    assert drop.url == "https://example.com/vanguard"
+    assert drop.published_at == "2026-07-01T10:00:00Z"
+    assert "13F" in drop.reason
+    assert "services-growth pillar" in drop.reason
+
+
+@pytest.mark.asyncio
+async def test_with_drops_variant_omits_drops_with_empty_reason(monkeypatch):
+    """The LLM might mark relevant=false without producing a reason (parse
+    error, model quirk). We can't honestly show these to the user, so skip
+    them from the reviewed-this-week payload — the drop still happens for
+    the kept-candidates return value."""
+    monkeypatch.setattr(
+        "app.services.thesis_relevance_filter.settings.openai_api_key", "test-key", raising=False
+    )
+
+    news = _make_news_candidate("Some ambiguous news")
+
+    response = _mock_openai_response({"relevant": False, "matched_signals": []})  # no reason
+
+    fake_create = AsyncMock(return_value=response)
+    fake_client = MagicMock()
+    fake_client.chat.completions.create = fake_create
+
+    with patch("openai.AsyncOpenAI", return_value=fake_client):
+        kept, dropped = await filter_candidates_by_thesis_relevance_with_drops(
+            [news],
+            signal_descriptors=[{"label": "AAPL services", "claim_text": "growth"}],
+            ticker="AAPL",
+            why_own_it="brand.",
+        )
+
+    assert kept == []
+    assert dropped == []
 
 
 def test_relevance_filter_targets_all_news_style_event_types():

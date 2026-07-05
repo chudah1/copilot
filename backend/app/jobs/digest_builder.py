@@ -648,6 +648,8 @@ def _render_digest_html(
     upcoming_earnings: list[dict] | None = None,
     investor_profile: InvestorProfile = None,
     mirror: dict | None = None,
+    reviewed_but_dropped: list[dict] | None = None,
+    now: datetime | None = None,
 ) -> str:
     ranked_events = sorted(events_data, key=_event_rank)[:5]
     stable_holdings = observations.get("stable_holdings", [])[:3]
@@ -754,6 +756,16 @@ def _render_digest_html(
     parts.append(_section_label("Monitoring receipt"))
     parts.append(f'<p style="color:{_DZ["muted"]};margin:6px 0;">{escape(monitoring_receipt)}</p>')
 
+    # Reviewed-this-week block — the "we looked at these edge cases for you"
+    # receipt. Sits right after the monitoring receipt so both quiet-work
+    # proofs land together instead of getting scattered across the email.
+    reviewed_section = _render_reviewed_but_dropped_section(
+        reviewed_but_dropped or [],
+        now=now or datetime.now(timezone.utc),
+    )
+    if reviewed_section:
+        parts.append(reviewed_section)
+
     if observations.get("missing_theses"):
         parts.append(
             f'<p style="margin:6px 0;"><strong style="color:{_DZ["ink"]};">{_missing_section_label(investor_profile=investor_profile)}:</strong> '
@@ -794,6 +806,187 @@ def _render_digest_html(
         f'<p style="margin:24px 0 4px;"><a href="{settings.frontend_url}/dashboard" '
         f'style="color:{_DZ["accent"]};text-decoration:none;font-weight:600;">Open dashboard &rarr;</a></p>'
     )
+    return "".join(parts)
+
+
+async def _load_reviewed_but_dropped(
+    db,
+    *,
+    thesis_ids: list[uuid.UUID],
+    ticker_by_thesis: dict[str, str],
+    holding_id_by_thesis: dict[str, uuid.UUID],
+    period_start: datetime,
+    period_end: datetime,
+) -> list[dict]:
+    """Pull the reviewed-but-dropped items the thesis-relevance filter captured
+    during pipeline runs in this digest window. Each coverage_pass.payload has
+    a `reviewed_but_dropped` list; this flattens the payloads, tags each item
+    with its ticker/holding for downstream curation, and dedupes on URL so
+    the same article dropped in multiple passes only shows once."""
+    if not thesis_ids:
+        return []
+    from app.models.coverage_pass import CoveragePass
+
+    result = await db.execute(
+        select(CoveragePass)
+        .where(
+            CoveragePass.thesis_id.in_(thesis_ids),
+            CoveragePass.started_at >= period_start,
+            CoveragePass.started_at <= period_end,
+        )
+        .order_by(CoveragePass.started_at.desc())
+    )
+    passes = list(result.scalars().all())
+
+    seen_urls: set[str] = set()
+    seen_headline_keys: set[tuple[str, str]] = set()
+    flat: list[dict] = []
+    for pass_row in passes:
+        payload = pass_row.payload or {}
+        if not isinstance(payload, dict):
+            continue
+        drops = payload.get("reviewed_but_dropped")
+        if not isinstance(drops, list):
+            continue
+        thesis_key = str(pass_row.thesis_id)
+        ticker = ticker_by_thesis.get(thesis_key)
+        holding_id = holding_id_by_thesis.get(thesis_key)
+        if not ticker or holding_id is None:
+            continue
+        for drop in drops:
+            if not isinstance(drop, dict):
+                continue
+            headline = (drop.get("headline") or "").strip()
+            reason = (drop.get("reason") or "").strip()
+            if not headline or not reason:
+                continue
+            url = (drop.get("url") or "").strip()
+            headline_key = (ticker, headline.lower())
+            if url and url in seen_urls:
+                continue
+            if headline_key in seen_headline_keys:
+                continue
+            if url:
+                seen_urls.add(url)
+            seen_headline_keys.add(headline_key)
+            flat.append({
+                "ticker": ticker,
+                "holding_id": str(holding_id),
+                "headline": headline,
+                "reason": reason,
+                "source": drop.get("source") or "unknown",
+                "url": url or None,
+                "published_at": drop.get("published_at"),
+                "matched_signal_labels": drop.get("matched_signal_labels") or [],
+                "pass_started_at": pass_row.started_at,
+            })
+    return flat
+
+
+# Sources that are considered trusted / editorially curated. We prefer these
+# over generic yfinance news when we can only surface a couple of drops.
+_TRUSTED_DROP_SOURCES = {"gemini_news", "edgar_8k"}
+
+# Absolute cap on how many reviewed-but-dropped items the digest surfaces.
+# Two per digest keeps the section short and skimmable — the point is a
+# taste of "we looked," not a receipt of every filter decision.
+_MAX_REVIEWED_ITEMS = 2
+
+
+def _curate_reviewed_but_dropped(
+    drops: list[dict],
+    *,
+    holdings_covered: set[str] | None = None,
+) -> list[dict]:
+    """Pick the strongest 1-2 reviewed-but-dropped items for the digest.
+
+    Preferences:
+      - one per holding, so users see breadth rather than a wall of same-ticker
+      - substantive reasons only (short generic strings are noise)
+      - trusted sources (Gemini / EDGAR) beat generic yfinance headlines
+      - items with matched_signal_labels are close calls — favour them
+      - skip items whose holding is already covered by a live alert; the
+        alert is louder and we don't want the receipt to compete
+    """
+    if not drops:
+        return []
+
+    def _score(item: dict) -> tuple[int, int, int, int]:
+        reason_len = len(item.get("reason") or "")
+        substantive = 1 if reason_len >= 40 else 0
+        trusted = 1 if item.get("source") in _TRUSTED_DROP_SOURCES else 0
+        close_call = 1 if item.get("matched_signal_labels") else 0
+        recency = -int(reason_len == 0)  # tiebreaker only
+        return (substantive, close_call, trusted, recency)
+
+    covered = set(holdings_covered or set())
+    sorted_drops = sorted(drops, key=_score, reverse=True)
+    picked: list[dict] = []
+    picked_tickers: set[str] = set()
+    for item in sorted_drops:
+        if len(picked) >= _MAX_REVIEWED_ITEMS:
+            break
+        ticker = item.get("ticker")
+        if not ticker:
+            continue
+        if ticker in picked_tickers or ticker in covered:
+            continue
+        # Filter out reasons that came back too terse to be useful.
+        if len(item.get("reason") or "") < 20:
+            continue
+        picked_tickers.add(ticker)
+        picked.append(item)
+    return picked
+
+
+def _render_reviewed_but_dropped_section(
+    items: list[dict],
+    *,
+    now: datetime,
+) -> str:
+    """Render the 'reviewed this week' block. Kept intentionally short and
+    quiet so it reads as a receipt, not a to-do list."""
+    if not items:
+        return ""
+    parts: list[str] = []
+    parts.append(_section_label("Reviewed this week"))
+    parts.append(
+        f'<p style="color:{_DZ["muted"]};margin:6px 0 12px;">'
+        "We looked at these against your thesis and decided they didn&apos;t rise to an alert:"
+        "</p>"
+    )
+    for item in items:
+        ticker = item["ticker"].replace("_US_EQ", "").replace("_EQ", "")
+        published = item.get("published_at")
+        when_txt = ""
+        if isinstance(published, str) and published:
+            try:
+                published_dt = datetime.fromisoformat(published.replace("Z", "+00:00"))
+                if published_dt.tzinfo is None:
+                    published_dt = published_dt.replace(tzinfo=timezone.utc)
+                delta = now - published_dt
+                days = delta.days
+                if days <= 0:
+                    when_txt = "today"
+                elif days == 1:
+                    when_txt = "yesterday"
+                else:
+                    when_txt = f"{days}d ago"
+            except ValueError:
+                when_txt = ""
+        source_txt = str(item.get("source") or "").replace("_", " ")
+        meta_line = source_txt + (f" &middot; {when_txt}" if when_txt else "")
+        headline_html = f'<span style="color:{_DZ["ink"]};">{escape(item["headline"])}</span>'
+        parts.append(
+            f'<div style="margin:12px 0 14px;">'
+            f'<p style="margin:0 0 3px;font-family:{_SERIF};font-size:14px;">'
+            f'<strong>{escape(ticker)}</strong> &mdash; {headline_html}'
+            f'</p>'
+            f'<p style="margin:0 0 6px;font-family:{_MONO};font-size:10px;letter-spacing:0.1em;'
+            f'text-transform:uppercase;color:{_DZ["faint"]};">{meta_line}</p>'
+            f'<p style="margin:0;color:{_DZ["muted"]};font-style:italic;">&ldquo;{escape(item["reason"])}&rdquo;</p>'
+            f'</div>'
+        )
     return "".join(parts)
 
 
@@ -932,6 +1125,34 @@ async def build_and_persist_user_digest(
     quiet_nudge = _oldest_reason_nudge(holdings_with_theses, investor_profile=investor_profile) if not events_data else None
     next_earnings = upcoming_earnings[0] if upcoming_earnings else None
 
+    # Reviewed-this-week block: items the LLM relevance filter looked at and
+    # ruled out. Only meaningful with claims/decompositions, so silently absent
+    # when the pipeline hasn't produced any drops. Curation dedupes and picks
+    # the strongest 1-2 items, one per holding, skipping tickers already
+    # covered by a live alert.
+    ticker_by_thesis = {
+        str(item["thesis_id"]): item["ticker"]
+        for item in holdings_with_theses
+        if item.get("thesis_id") and item.get("ticker")
+    }
+    holding_id_by_thesis = {
+        str(item["thesis_id"]): uuid.UUID(item["holding_id"])
+        for item in holdings_with_theses
+        if item.get("thesis_id") and item.get("holding_id")
+    }
+    raw_reviewed_drops = await _load_reviewed_but_dropped(
+        db,
+        thesis_ids=thesis_ids,
+        ticker_by_thesis=ticker_by_thesis,
+        holding_id_by_thesis=holding_id_by_thesis,
+        period_start=period_start,
+        period_end=period_end,
+    )
+    reviewed_drops = _curate_reviewed_but_dropped(
+        raw_reviewed_drops,
+        holdings_covered={e["ticker"] for e in events_data},
+    )
+
     if update_streak:
         quiet_streak = _update_quiet_streak(user, has_events=bool(events_data))
     else:
@@ -955,6 +1176,8 @@ async def build_and_persist_user_digest(
         upcoming_earnings=upcoming_earnings if not events_data else None,
         investor_profile=investor_profile,
         mirror=mirror,
+        reviewed_but_dropped=reviewed_drops,
+        now=now,
     )
 
     digest = Digest(
@@ -984,6 +1207,7 @@ async def build_and_persist_user_digest(
             "next_earnings": next_earnings,
             "investor_profile": investor_profile,
             "decision_mirror": mirror,
+            "reviewed_but_dropped": reviewed_drops,
         },
         status="pending",
     )

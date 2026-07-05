@@ -257,6 +257,12 @@ class CoveragePassBuilder:
     sources: dict[str, dict[str, Any]] = field(default_factory=dict)
     stage_counts: list[tuple[str, int]] = field(default_factory=list)
     events_persisted: int = 0
+    # News-style candidates the LLM relevance filter reviewed and ruled out,
+    # with the sentence it wrote to explain the drop. The digest and the
+    # position page render a curated sample as "we looked at these and
+    # decided they didn't touch your thesis" — quiet products only feel
+    # informed if the reviewed-but-dropped items are visible.
+    reviewed_but_dropped: list[dict[str, Any]] = field(default_factory=list)
 
     def record_source(
         self,
@@ -299,6 +305,22 @@ class CoveragePassBuilder:
     def record_events_persisted(self, count: int) -> None:
         self.events_persisted = int(count)
 
+    def record_reviewed_but_dropped(self, drops: list[Any]) -> None:
+        """Store the DroppedCandidate dataclasses (or dicts) from the
+        thesis-relevance filter into the pass payload. Cap at 20 per pass —
+        the digest only ever samples 2-3 and we don't need the payload to
+        blow up on a noisy news day."""
+        if not drops:
+            return
+        for drop in drops[:20]:
+            if hasattr(drop, "__dict__"):
+                entry = dict(drop.__dict__)
+            elif isinstance(drop, dict):
+                entry = dict(drop)
+            else:
+                continue
+            self.reviewed_but_dropped.append(entry)
+
     async def persist(self, db: AsyncSession) -> None:
         finished_at = datetime.now(timezone.utc)
         row = CoveragePass(
@@ -312,6 +334,7 @@ class CoveragePassBuilder:
                 "sources": self.sources,
                 "stages": [[name, count] for name, count in self.stage_counts],
                 "events_persisted": self.events_persisted,
+                "reviewed_but_dropped": self.reviewed_but_dropped,
             },
         )
         db.add(row)
