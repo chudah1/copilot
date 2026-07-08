@@ -151,6 +151,8 @@ async def test_digest_happy_path_after_monitoring_event(client, auth_headers, db
         upcoming_earnings_date = None
         recent_earnings_surprise_pct = None
         news_items = []
+        earnings_calls = []
+        recent_fiscal_quarters = []
         currency = "USD"
         provider_payload = {"quote": {"Global Quote": {"05. price": "170.0"}}}
 

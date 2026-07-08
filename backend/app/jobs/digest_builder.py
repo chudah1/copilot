@@ -312,6 +312,7 @@ def _monitoring_receipt(
     holdings_count: int,
     events_count: int,
     stable_count: int,
+    supporting_count: int = 0,
     upcoming_earnings_count: int = 0,
     *,
     investor_profile: InvestorProfile = None,
@@ -326,12 +327,17 @@ def _monitoring_receipt(
         else:
             base = f"Checked {holdings_count} {noun} — {flagged}."
     else:
+        support_note = ""
+        if supporting_count > 0:
+            support_note = (
+                f" {supporting_count} supportive signal{'s' if supporting_count != 1 else ''} surfaced."
+            )
         if investor_profile == "thesis_driven":
-            base = f"Checked {holdings_count} {noun} against your written assumptions — all quiet."
+            base = f"Checked {holdings_count} {noun} against your written assumptions — all quiet.{support_note}"
         elif investor_profile == "hearsay_driven":
-            base = f"Checked {holdings_count} {noun} against your reasons — all quiet."
+            base = f"Checked {holdings_count} {noun} against your reasons — all quiet.{support_note}"
         else:
-            base = f"Checked {holdings_count} {noun} — all quiet."
+            base = f"Checked {holdings_count} {noun} — all quiet.{support_note}"
     if upcoming_earnings_count > 0:
         enoun = "holding" if upcoming_earnings_count == 1 else "holdings"
         verb = "reports" if upcoming_earnings_count == 1 else "report"
@@ -514,23 +520,39 @@ async def _load_events_data(
     db,
     *,
     user_id: uuid.UUID,
+    thesis_ids: list[uuid.UUID],
     holdings_by_id: dict[uuid.UUID, Holding],
     snapshot_by_holding_id: dict[str, dict],
     signal_counts: dict[str, tuple[int, int]],
     period_start: datetime,
     period_end: datetime,
 ) -> tuple[list[MonitoringEvent], list[dict], set[str]]:
+    if not thesis_ids:
+        return [], [], set()
+
     events_result = await db.execute(
         select(MonitoringEvent)
         .join(Holding)
         .where(
             Holding.user_id == user_id,
+            MonitoringEvent.thesis_id.in_(thesis_ids),
             MonitoringEvent.created_at >= period_start,
             MonitoringEvent.created_at <= period_end,
         )
         .order_by(MonitoringEvent.created_at.desc())
     )
     events = list(events_result.scalars().all())
+    signal_ids = {event.signal_id for event in events if event.signal_id is not None}
+    signal_label_by_id: dict[uuid.UUID, str] = {}
+    if signal_ids:
+        signal_result = await db.execute(
+            select(ThesisSignal.id, ThesisSignal.signal_label).where(ThesisSignal.id.in_(signal_ids))
+        )
+        signal_label_by_id = {
+            signal_id: signal_label
+            for signal_id, signal_label in signal_result.all()
+            if signal_label
+        }
     event_holding_ids: set[str] = set()
     events_data: list[dict] = []
 
@@ -554,6 +576,10 @@ async def _load_events_data(
                 "why_own_it": snapshot.get("why_own_it"),
                 "verdict": event.verdict,
                 "evidence_summary": event.evidence_summary,
+                "created_at": event.created_at,
+                "claim_id": event.claim_id,
+                "signal_id": event.signal_id,
+                "signal_label": signal_label_by_id.get(event.signal_id) if event.signal_id else None,
                 "signal_status_text": _signal_status_text(intact, weakening),
             }
         )
@@ -665,13 +691,18 @@ def _render_digest_html(
     held_up_ids = {id(event) for event in held_up_events}
     alert_events = [event for event in events_data if id(event) not in held_up_ids]
     ranked_events = sorted(alert_events, key=_event_rank)[:5]
+    has_supporting_only = bool(held_up_events) and not ranked_events
     stable_holdings = observations.get("stable_holdings", [])[:3]
 
     parts = [
         f'<h2 style="font-family:{_SERIF};font-style:italic;font-weight:400;font-size:24px;'
         f'line-height:1.25;color:{_DZ["ink"]};margin:18px 0 2px;">{escape(headline)}</h2>',
     ]
-    intro_line = _digest_intro_line(bool(ranked_events), investor_profile=investor_profile)
+    intro_line = (
+        "Nothing threatened what you're watching this week, but some evidence reinforced it."
+        if has_supporting_only
+        else _digest_intro_line(bool(ranked_events), investor_profile=investor_profile)
+    )
     if intro_line:
         parts.append(f'<p style="color:{_DZ["muted"]};margin:8px 0 4px;">{intro_line}</p>')
 
@@ -739,8 +770,15 @@ def _render_digest_html(
                     f'<span style="color:{_DZ["muted"]};">: {escape(stable["why_own_it"])}</span></p>'
                 )
     else:
-        parts.append(f'<p style="color:{_DZ["muted"]};margin:14px 0;">Your holdings were quiet this week. '
-                     'Nothing landed that touched what you&apos;re watching.</p>')
+        if has_supporting_only:
+            parts.append(
+                f'<p style="color:{_DZ["muted"]};margin:14px 0;">'
+                "Nothing challenged what you&apos;re watching this week. Some evidence reinforced it."
+                "</p>"
+            )
+        else:
+            parts.append(f'<p style="color:{_DZ["muted"]};margin:14px 0;">Your holdings were quiet this week. '
+                         'Nothing landed that touched what you&apos;re watching.</p>')
         if stable_holdings:
             parts.append(_section_label(_stable_section_title(investor_profile=investor_profile)))
             for stable in stable_holdings:
@@ -843,13 +881,15 @@ def _pick_held_up_events(events_data: list[dict], *, max_per_position: int = 1, 
     if not supports:
         return []
 
-    def _score(event: dict) -> tuple[int, int, int]:
+    def _score(event: dict) -> tuple[int, int, float]:
         severity_rank = {"thesis_breaking": 3, "warning": 2, "info": 1}.get(event.get("severity") or "info", 0)
-        bound = 1 if (event.get("evidence_summary") or event.get("signal_status_text")) else 0
-        # Prefer more-recent items when other signals tie, using ticker as a
-        # stable secondary — the digest doesn't have per-event created_at
-        # sorted here beyond the source order.
-        return (severity_rank, bound, 0)
+        bound = 1 if (event.get("claim_id") or event.get("signal_id")) else 0
+        created = event.get("created_at")
+        if isinstance(created, datetime):
+            created_score = _normalize_datetime(created).timestamp()
+        else:
+            created_score = 0.0
+        return (severity_rank, bound, created_score)
 
     ordered = sorted(supports, key=_score, reverse=True)
     per_position: dict[str, int] = {}
@@ -882,7 +922,7 @@ def _render_held_up_section(items: list[dict], *, investor_profile: InvestorProf
     positive_soft = "#E3EDE4"
     for event in items:
         ticker = event["ticker"].replace("_US_EQ", "").replace("_EQ", "")
-        assumption = event.get("signal_status_text") or event.get("why_own_it") or ""
+        assumption = event.get("signal_label") or ""
         what_happened = event.get("evidence_summary") or event.get("ai_analysis") or event.get("summary") or event.get("title") or ""
         parts.append(
             '<table role="presentation" width="100%" cellpadding="0" cellspacing="0" border="0" '
@@ -1040,6 +1080,7 @@ async def build_and_persist_user_digest(
     events, events_data, event_holding_ids = await _load_events_data(
         db,
         user_id=user_id,
+        thesis_ids=thesis_ids,
         holdings_by_id=holdings_by_id,
         snapshot_by_holding_id=snapshot_by_holding_id,
         signal_counts=signal_counts,
@@ -1069,6 +1110,8 @@ async def build_and_persist_user_digest(
         "missing_theses": missing_theses,
         "stable_holdings": stable_holdings,
     }
+    alert_events_data = [event for event in events_data if event.get("verdict") != "supports"]
+    supporting_events_data = [event for event in events_data if event.get("verdict") == "supports"]
     # Count distinct holdings with alert-shaped events, not raw events — so a
     # position that fired two signals reads as one reason to review, not two.
     # Supporting-verdict events are excluded here: they're rendered separately
@@ -1076,8 +1119,7 @@ async def build_and_persist_user_digest(
     # flatly contradict the emotional framing.
     reasons_flagged = len({
         e.get("holding_id") or e.get("ticker")
-        for e in events_data
-        if e.get("verdict") != "supports"
+        for e in alert_events_data
     })
     headline = _digest_headline(
         reasons_flagged,
@@ -1100,8 +1142,9 @@ async def build_and_persist_user_digest(
     )
     receipt = _monitoring_receipt(
         len(holdings),
-        len(events_data),
+        len(alert_events_data),
         len(stable_holdings),
+        supporting_count=len(supporting_events_data),
         upcoming_earnings_count=len(upcoming_earnings),
         investor_profile=investor_profile,
     )
@@ -1137,7 +1180,7 @@ async def build_and_persist_user_digest(
     )
 
     if update_streak:
-        quiet_streak = _update_quiet_streak(user, has_events=bool(events_data))
+        quiet_streak = _update_quiet_streak(user, has_events=bool(alert_events_data))
     else:
         prefs = user.preferences or {}
         quiet_streak = prefs.get("consecutive_quiet_weeks", 0)
@@ -1169,7 +1212,7 @@ async def build_and_persist_user_digest(
         period_end=period_end,
         content={
             "html": html_content,
-            "digest_mode": "events" if events_data else "quiet_week",
+            "digest_mode": "events" if alert_events_data else "quiet_week",
             "subject_line": subject,
             "events_count": len(events_data),
             "holdings_count": len(holdings),

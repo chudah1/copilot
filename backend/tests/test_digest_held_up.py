@@ -3,7 +3,9 @@
 Focuses on the pure split + render helpers so we don't need the DB path.
 """
 from app.jobs.digest_builder import (
+    _monitoring_receipt,
     _pick_held_up_events,
+    _render_digest_html,
     _render_held_up_section,
 )
 
@@ -73,3 +75,31 @@ def test_render_uses_positive_framing_not_alert_language():
     assert "Q1 beat driven by services growth" in html
     for hostile in ("Threat", "needs review", "Review this reason", "at risk"):
         assert hostile not in html
+
+
+def test_monitoring_receipt_treats_support_only_week_as_quiet_plus_reinforcement():
+    receipt = _monitoring_receipt(
+        holdings_count=3,
+        events_count=0,
+        supporting_count=1,
+        stable_count=2,
+    )
+    assert "all quiet" in receipt
+    assert "1 supportive signal surfaced" in receipt
+    assert "flagged" not in receipt
+
+
+def test_render_digest_does_not_claim_nothing_touched_the_thesis_when_only_supports_exist():
+    html = _render_digest_html(
+        holdings_with_theses=[],
+        events_data=[_event("NVDA", "supports", title="Management reaffirmed demand")],
+        observations={"stable_holdings": [], "missing_theses": [], "stale_theses": [], "concentration_warnings": ""},
+        headline="1 of your reasons held up this week.",
+        monitoring_receipt="Checked 1 holding — all quiet. 1 supportive signal surfaced.",
+        quiet_nudge=None,
+        investor_profile="thesis_driven",
+        mirror=None,
+        reviewed_but_dropped=[],
+    )
+    assert "Nothing challenged what you&apos;re watching this week. Some evidence reinforced it." in html
+    assert "Nothing landed that touched what you&apos;re watching." not in html

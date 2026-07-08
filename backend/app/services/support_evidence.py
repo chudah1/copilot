@@ -25,6 +25,8 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.models.holding import Holding
 from app.models.monitoring_event import MonitoringEvent
+from app.models.thesis import Thesis
+from app.models.thesis_signal import ThesisSignal
 
 
 # Hard cap per surface: the point is occasional reassurance, not a wall of
@@ -96,11 +98,12 @@ async def load_supporting_events_for_holdings(
     db: AsyncSession,
     *,
     holding_ids: list[uuid.UUID],
+    thesis_ids: list[uuid.UUID] | None = None,
     period_start: datetime,
     period_end: datetime | None = None,
 ) -> list[MonitoringEvent]:
     """Fetch supporting-verdict events for the given holdings in the window."""
-    if not holding_ids:
+    if not holding_ids or thesis_ids == []:
         return []
     stmt = (
         select(MonitoringEvent)
@@ -111,6 +114,8 @@ async def load_supporting_events_for_holdings(
         )
         .order_by(MonitoringEvent.created_at.desc())
     )
+    if thesis_ids is not None:
+        stmt = stmt.where(MonitoringEvent.thesis_id.in_(thesis_ids))
     if period_end is not None:
         stmt = stmt.where(MonitoringEvent.created_at <= period_end)
     result = await db.execute(stmt)
@@ -174,17 +179,46 @@ async def load_curated_supporting_items_for_holding(
 ) -> list[SupportingItem]:
     """Convenience wrapper for the single-holding API endpoint. Applies the
     same curation rules the digest uses so the two surfaces agree."""
+    thesis_ids_result = await db.execute(
+        select(Thesis.id).where(
+            Thesis.holding_id == holding.id,
+            Thesis.user_id == holding.user_id,
+            Thesis.status.in_(["active", "draft", "needs_review"]),
+        )
+    )
+    thesis_ids = [row[0] for row in thesis_ids_result.all()]
+    if not thesis_ids:
+        return []
+
     now = datetime.now(timezone.utc)
     period_start = now - timedelta(days=window_days)
     events = await load_supporting_events_for_holdings(
         db,
         holding_ids=[holding.id],
+        thesis_ids=thesis_ids,
         period_start=period_start,
         period_end=now,
     )
+    signal_ids = {event.signal_id for event in events if event.signal_id is not None}
+    label_by_event: dict[uuid.UUID, str | None] = {}
+    if signal_ids:
+        signals_result = await db.execute(
+            select(ThesisSignal).where(ThesisSignal.id.in_(signal_ids))
+        )
+        label_by_signal = {
+            signal.id: signal.signal_label
+            for signal in signals_result.scalars().all()
+            if signal.signal_label
+        }
+        label_by_event = {
+            event.id: label_by_signal.get(event.signal_id)
+            for event in events
+            if event.signal_id in label_by_signal
+        }
     return curate_supporting_items(
         events,
         ticker_by_holding={holding.id: holding.ticker},
+        label_by_event=label_by_event,
         max_items=max_items,
-        max_per_holding=max_items,
+        max_per_holding=1,
     )
