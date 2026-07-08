@@ -20,6 +20,26 @@ class MonitoringEventReviewResponse(BaseModel):
     reason_age_days: int | None = None
 
 
+class SupportingItemResponse(BaseModel):
+    """One 'thesis held up this week' item — a monitoring event whose verdict
+    was `supports`, rendered as a distinct positive surface rather than
+    mixed into the alerts feed.
+
+    Cap on frontends should stay at ~1 recent per position (the goal is
+    emotional balance, not a green highlight reel)."""
+    event_id: uuid.UUID
+    ticker: str
+    title: str
+    summary: str
+    ai_analysis: str | None = None
+    evidence_summary: str | None = None
+    severity: str
+    event_type: str
+    source_url: str | None = None
+    created_at: datetime
+    assumption_label: str | None = None
+
+
 class ReviewedItemResponse(BaseModel):
     """One 'reviewed but not alerted on' item, ready for the position tab.
 

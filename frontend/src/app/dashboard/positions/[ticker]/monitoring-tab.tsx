@@ -2,8 +2,9 @@
 
 import { EventReviewStack } from "@/components/monitoring/event-review-stack";
 import { EventTimeline } from "@/components/monitoring/event-timeline";
+import { HeldUpThisWeek } from "@/components/monitoring/held-up-this-week";
 import { ReviewedThisWeek } from "@/components/monitoring/reviewed-this-week";
-import type { MonitoringEvent, ReviewedItem } from "@/types";
+import type { MonitoringEvent, ReviewedItem, SupportingItem } from "@/types";
 import type { getMonitoringCalmState } from "./position-helpers";
 
 type ReviewAction = "reaffirmed" | "ignored" | "lowered_confidence" | "invalidated" | "not_relevant";
@@ -23,6 +24,7 @@ interface MonitoringTabProps {
   decompositionLoading: boolean;
   emptyCopy: { title: string; body: string; cta: string };
   reviewedItems: ReviewedItem[];
+  supportingItems: SupportingItem[];
   onReview: (event: MonitoringEvent, action: ReviewAction, notes?: string) => Promise<void>;
   onWriteThesis: () => void;
 }
@@ -30,7 +32,7 @@ interface MonitoringTabProps {
 export function MonitoringTab({
   hasThesis, investorProfile, events, unreviewedEvents, activeSignalCount, hasSignals, firstPendingEvent,
   firstPendingAssumptionLabel, isFirstLiveEvidenceMoment, calmState, reviewingEventId,
-  decompositionLoading, emptyCopy, reviewedItems, onReview, onWriteThesis,
+  decompositionLoading, emptyCopy, reviewedItems, supportingItems, onReview, onWriteThesis,
 }: MonitoringTabProps) {
   const reviewedEventsCount = events.filter((event) => Boolean(event.review_action)).length;
   const monitoringCopy = investorProfile === "hearsay_driven"
@@ -377,6 +379,13 @@ export function MonitoringTab({
               </p>
             </div>
           )}
+
+          {/* Supporting evidence — signals the pipeline judged as validating
+              the thesis rather than threatening it. Rendered above the
+              adjacency block so a positive read lands first when both are
+              present; users should sometimes feel "my thesis was
+              validated" rather than only "my thesis is under attack." */}
+          {supportingItems.length > 0 && <HeldUpThisWeek items={supportingItems} />}
 
           {/* Adjacency evidence — the "we looked at these edge cases for you"
               receipt. Quiet state is where users most want proof of

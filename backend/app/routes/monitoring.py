@@ -23,6 +23,7 @@ from app.schemas.monitoring_event import (
     MonitoringEventReviewResponse,
     ReviewMonitoringEventRequest,
     ReviewedItemResponse,
+    SupportingItemResponse,
 )
 from app.schemas.coverage import (
     ClaimRetrievalComparisonResponse,
@@ -42,6 +43,7 @@ from app.services.adjacency import (
 )
 from app.services.check_now import run_check_now
 from app.services.conviction_log import REASON_CREATED
+from app.services.support_evidence import load_curated_supporting_items_for_holding
 from app.services.coverage import (
     DEFAULT_COVERAGE_WINDOW_DAYS,
     compute_thesis_coverage,
@@ -255,6 +257,49 @@ async def get_reviewed_items_for_holding(
             matched_signal_labels=item.get("matched_signal_labels") or [],
         )
         for item in picked
+    ]
+
+
+@router.get("/holdings/{holding_id}/supporting", response_model=list[SupportingItemResponse])
+async def get_supporting_items_for_holding(
+    holding_id: uuid.UUID,
+    window_days: int = Query(default=7, ge=1, le=30),
+    limit: int = Query(default=1, ge=1, le=3),
+    user: User = Depends(get_current_user),
+    db: AsyncSession = Depends(get_db),
+):
+    """Return supporting evidence for a single holding — monitoring events
+    the pipeline judged as validating the thesis rather than threatening it.
+
+    Intentionally capped small (1 by default) so the surface reads as
+    reassurance ("your thesis held up") rather than a highlight reel that
+    starts to flatter the user."""
+    holding = (
+        await db.execute(
+            select(Holding).where(Holding.id == holding_id, Holding.user_id == user.id)
+        )
+    ).scalar_one_or_none()
+    if holding is None:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Holding not found")
+
+    items = await load_curated_supporting_items_for_holding(
+        db, holding=holding, window_days=window_days, max_items=limit,
+    )
+    return [
+        SupportingItemResponse(
+            event_id=item.event_id,
+            ticker=item.ticker,
+            title=item.title,
+            summary=item.summary,
+            ai_analysis=item.ai_analysis,
+            evidence_summary=item.evidence_summary,
+            severity=item.severity,
+            event_type=item.event_type,
+            source_url=item.source_url,
+            created_at=item.created_at,
+            assumption_label=item.assumption_label,
+        )
+        for item in items
     ]
 
 

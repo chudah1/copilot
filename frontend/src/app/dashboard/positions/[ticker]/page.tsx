@@ -34,6 +34,7 @@ import type {
   OnboardingState,
   PortfolioPulse,
   ReviewedItem,
+  SupportingItem,
   Thesis,
   ThesisAssistResponse,
   ThesisDecompositionEnvelope,
@@ -91,6 +92,7 @@ function PositionDetailInner() {
   const [upcomingEarnings, setUpcomingEarnings] = useState<UpcomingEarnings | null>(null);
   const [pulse, setPulse] = useState<HoldingPulse | null>(null);
   const [reviewedItems, setReviewedItems] = useState<ReviewedItem[]>([]);
+  const [supportingItems, setSupportingItems] = useState<SupportingItem[]>([]);
   const [loading, setLoading] = useState(true);
   const [healthCheck, setHealthCheck] = useState<HealthCheckResult | null>(null);
   const [healthCheckLoading, setHealthCheckLoading] = useState(false);
@@ -129,7 +131,7 @@ function PositionDetailInner() {
         setHoldings(h);
         const match = h.find((x) => x.ticker === ticker);
         if (match) {
-          const [t, e, log, earnings, onboarding, gaps, portfolioPulse, reviewed] = await Promise.all([
+          const [t, e, log, earnings, onboarding, gaps, portfolioPulse, reviewed, supporting] = await Promise.all([
             api.get<Thesis[]>(`/api/theses/holding/${match.id}`),
             api.get<MonitoringEvent[]>(`/api/monitoring/holdings/${match.id}/events`),
             api.get<ConvictionLogResponse>(`/api/portfolio/holdings/${match.id}/conviction-log`).catch(() => null),
@@ -138,6 +140,7 @@ function PositionDetailInner() {
             api.get<MonitoringGap[]>(`/api/monitoring/gaps`).catch(() => []),
             api.get<PortfolioPulse>("/api/portfolio/pulse").catch(() => null),
             api.get<ReviewedItem[]>(`/api/monitoring/holdings/${match.id}/reviewed`).catch(() => []),
+            api.get<SupportingItem[]>(`/api/monitoring/holdings/${match.id}/supporting`).catch(() => []),
           ]);
           setTheses(t);
           setEvents(e);
@@ -147,6 +150,7 @@ function PositionDetailInner() {
           setAllGaps(gaps);
           setPulse(portfolioPulse?.pulses.find((p) => p.holding_id === match.id) ?? null);
           setReviewedItems(reviewed);
+          setSupportingItems(supporting);
           const latestThesis = t.find((item) => item.status === "active" || item.status === "draft" || item.status === "needs_review");
           if (latestThesis) {
             setDecompositionLoading(true);
@@ -566,10 +570,14 @@ function PositionDetailInner() {
       // The relevance filter can produce fresh reviewed-but-dropped items on
       // this same pass, so pull them alongside events/pulse — otherwise the
       // 'Reviewed this week' block stays stale until a full reload.
-      const nextReviewed = await api
-        .get<ReviewedItem[]>(`/api/monitoring/holdings/${holding.id}/reviewed`)
-        .catch(() => [] as ReviewedItem[]);
+      const [nextReviewed, nextSupporting] = await Promise.all([
+        api.get<ReviewedItem[]>(`/api/monitoring/holdings/${holding.id}/reviewed`)
+          .catch(() => [] as ReviewedItem[]),
+        api.get<SupportingItem[]>(`/api/monitoring/holdings/${holding.id}/supporting`)
+          .catch(() => [] as SupportingItem[]),
+      ]);
       setReviewedItems(nextReviewed);
+      setSupportingItems(nextSupporting);
     }
     setActiveTab("monitoring");
     setNextStepNotice(buildCheckNowNotice({
@@ -1438,6 +1446,7 @@ function PositionDetailInner() {
                   decompositionLoading={decompositionLoading}
                   emptyCopy={{ title: copy.monitoringEmptyTitle, body: copy.monitoringEmptyBody, cta: copy.monitoringEmptyCta }}
                   reviewedItems={reviewedItems}
+                  supportingItems={supportingItems}
                   onReview={handleReviewEvent}
                   onWriteThesis={() => { setEditing(true); setActiveTab("thesis"); }}
                 />

@@ -547,6 +547,7 @@ async def _load_events_data(
                 "ticker": holding.ticker if holding else "Unknown",
                 "name": holding.name if holding else "Unknown",
                 "severity": event.severity,
+                "event_type": event.event_type,
                 "title": event.title,
                 "summary": event.summary,
                 "ai_analysis": event.ai_analysis,
@@ -656,7 +657,14 @@ def _render_digest_html(
     reviewed_but_dropped: list[dict] | None = None,
     now: datetime | None = None,
 ) -> str:
-    ranked_events = sorted(events_data, key=_event_rank)[:5]
+    # Supporting events are pulled out and rendered in a distinct 'Held up
+    # this week' section instead of mixed into the ranked alerts — a
+    # positive event styled like a threat card reads as "another thing to
+    # deal with" instead of "your thesis was validated."
+    held_up_events = _pick_held_up_events(events_data)
+    held_up_ids = {id(event) for event in held_up_events}
+    alert_events = [event for event in events_data if id(event) not in held_up_ids]
+    ranked_events = sorted(alert_events, key=_event_rank)[:5]
     stable_holdings = observations.get("stable_holdings", [])[:3]
 
     parts = [
@@ -758,6 +766,17 @@ def _render_digest_html(
             parts.append(_section_label("Quick thought"))
             parts.append(f'<p style="margin:6px 0;">{escape(quiet_nudge)}</p>')
 
+    # Held up this week — supporting evidence pulled out of the ranked-events
+    # feed and rendered with distinct positive framing so users emotionally
+    # register "my thesis was validated" instead of "another card to read."
+    # Capped hard at one per position so it stays occasional; the goal is
+    # balance, not a highlight reel.
+    held_up_section = _render_held_up_section(
+        held_up_events, investor_profile=investor_profile,
+    )
+    if held_up_section:
+        parts.append(held_up_section)
+
     parts.append(_section_label("Monitoring receipt"))
     parts.append(f'<p style="color:{_DZ["muted"]};margin:6px 0;">{escape(monitoring_receipt)}</p>')
 
@@ -811,6 +830,84 @@ def _render_digest_html(
         f'<p style="margin:24px 0 4px;"><a href="{settings.frontend_url}/dashboard" '
         f'style="color:{_DZ["accent"]};text-decoration:none;font-weight:600;">Open dashboard &rarr;</a></p>'
     )
+    return "".join(parts)
+
+
+def _pick_held_up_events(events_data: list[dict], *, max_per_position: int = 1, max_total: int = 3) -> list[dict]:
+    """Extract supporting-verdict events for the 'Held up this week' section.
+
+    Same intent as the API's curate_supporting_items — caps per-position and
+    total so the digest never turns into a green highlight reel. Prefers
+    stronger severity + claim/signal-bound events."""
+    supports = [event for event in events_data if event.get("verdict") == "supports"]
+    if not supports:
+        return []
+
+    def _score(event: dict) -> tuple[int, int, int]:
+        severity_rank = {"thesis_breaking": 3, "warning": 2, "info": 1}.get(event.get("severity") or "info", 0)
+        bound = 1 if (event.get("evidence_summary") or event.get("signal_status_text")) else 0
+        # Prefer more-recent items when other signals tie, using ticker as a
+        # stable secondary — the digest doesn't have per-event created_at
+        # sorted here beyond the source order.
+        return (severity_rank, bound, 0)
+
+    ordered = sorted(supports, key=_score, reverse=True)
+    per_position: dict[str, int] = {}
+    picked: list[dict] = []
+    for event in ordered:
+        if len(picked) >= max_total:
+            break
+        ticker = event.get("ticker") or ""
+        if per_position.get(ticker, 0) >= max_per_position:
+            continue
+        picked.append(event)
+        per_position[ticker] = per_position.get(ticker, 0) + 1
+    return picked
+
+
+def _render_held_up_section(items: list[dict], *, investor_profile: InvestorProfile = None) -> str:
+    """Render the 'Held up this week' block. Distinctly positive framing —
+    small green accent, no threatening border, no 'Review this reason' CTA."""
+    if not items:
+        return ""
+    header_copy = (
+        "This week your thesis was reinforced by:"
+        if investor_profile != "hearsay_driven"
+        else "This week your reason was reinforced by:"
+    )
+    parts: list[str] = []
+    parts.append(_section_label("Held up this week"))
+    parts.append(f'<p style="color:{_DZ["muted"]};margin:6px 0 12px;">{header_copy}</p>')
+    positive_border = "#3D6B41"  # same green used in _VERDICT_STYLE["supports"]
+    positive_soft = "#E3EDE4"
+    for event in items:
+        ticker = event["ticker"].replace("_US_EQ", "").replace("_EQ", "")
+        assumption = event.get("signal_status_text") or event.get("why_own_it") or ""
+        what_happened = event.get("evidence_summary") or event.get("ai_analysis") or event.get("summary") or event.get("title") or ""
+        parts.append(
+            '<table role="presentation" width="100%" cellpadding="0" cellspacing="0" border="0" '
+            f'style="margin:10px 0;background:{positive_soft};'
+            f'border-left:3px solid {positive_border};">'
+            '<tr><td style="padding:12px 14px;">'
+        )
+        parts.append(
+            f'<div style="font-family:{_SERIF};font-size:15px;color:{_DZ["ink"]};margin:0 0 4px;">'
+            f'<strong>{escape(ticker)}</strong>'
+            f' &mdash; {escape(event.get("title") or "").strip() or "your thesis was reinforced"}'
+            f'</div>'
+        )
+        if what_happened:
+            parts.append(
+                f'<p style="margin:2px 0 0;color:{_DZ["muted"]};font-size:13px;line-height:1.5;">'
+                f'{escape(str(what_happened)[:280])}'
+                f'</p>'
+            )
+        if assumption:
+            parts.append(
+                f'<p style="margin:6px 0 0;font-family:{_MONO};font-size:10px;letter-spacing:0.1em;'
+                f'text-transform:uppercase;color:{_DZ["faint"]};">{escape(str(assumption))}</p>'
+            )
+        parts.append('</td></tr></table>')
     return "".join(parts)
 
 
@@ -972,9 +1069,16 @@ async def build_and_persist_user_digest(
         "missing_theses": missing_theses,
         "stable_holdings": stable_holdings,
     }
-    # Count distinct holdings with events, not raw events — so a position that
-    # fired two signals reads as one reason to review, not two.
-    reasons_flagged = len({e.get("holding_id") or e.get("ticker") for e in events_data})
+    # Count distinct holdings with alert-shaped events, not raw events — so a
+    # position that fired two signals reads as one reason to review, not two.
+    # Supporting-verdict events are excluded here: they're rendered separately
+    # as reassurance, so counting them as "reasons that need review" would
+    # flatly contradict the emotional framing.
+    reasons_flagged = len({
+        e.get("holding_id") or e.get("ticker")
+        for e in events_data
+        if e.get("verdict") != "supports"
+    })
     headline = _digest_headline(
         reasons_flagged,
         len(stale_theses),
@@ -1087,6 +1191,18 @@ async def build_and_persist_user_digest(
             "investor_profile": investor_profile,
             "decision_mirror": mirror,
             "reviewed_but_dropped": reviewed_drops,
+            "held_up_events": [
+                {
+                    "ticker": event.get("ticker"),
+                    "title": event.get("title"),
+                    "evidence_summary": event.get("evidence_summary"),
+                    "ai_analysis": event.get("ai_analysis"),
+                    "severity": event.get("severity"),
+                    "event_type": event.get("event_type"),
+                    "signal_status_text": event.get("signal_status_text"),
+                }
+                for event in _pick_held_up_events(events_data)
+            ],
         },
         status="pending",
     )

@@ -611,3 +611,17 @@ export interface ReviewedItem {
   published_at: string | null;
   matched_signal_labels: string[];
 }
+
+export interface SupportingItem {
+  event_id: string;
+  ticker: string;
+  title: string;
+  summary: string;
+  ai_analysis: string | null;
+  evidence_summary: string | null;
+  severity: string;
+  event_type: string;
+  source_url: string | null;
+  created_at: string;
+  assumption_label: string | null;
+}
