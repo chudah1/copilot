@@ -357,11 +357,14 @@ async def collect_news_evidence(
     two rounds trying to figure out whether Gemini was 'unconfigured',
     'searched but found nothing', or 'errored silently'. Now it says.
     """
+    # Diagnostic branches log at WARNING so they surface in Railway's default
+    # log level filter — the whole reason we added these was to stop silent
+    # empties from being invisible.
     if not settings.gemini_api_key:
-        logger.info("Gemini news skipped for %s: GEMINI_API_KEY not configured", ticker)
+        logger.warning("Gemini news skipped for %s: GEMINI_API_KEY not configured", ticker)
         return []
     if not signal_inputs:
-        logger.info("Gemini news skipped for %s: no signal inputs to search on", ticker)
+        logger.warning("Gemini news skipped for %s: no signal inputs to search on", ticker)
         return []
 
     try:
@@ -373,7 +376,7 @@ async def collect_news_evidence(
 
     signal_descriptors = _normalise_signal_search_inputs(signal_inputs)
     if not signal_descriptors:
-        logger.info(
+        logger.warning(
             "Gemini news skipped for %s: %d signal inputs normalised to zero descriptors",
             ticker, len(signal_inputs),
         )
@@ -469,7 +472,7 @@ or clearly a roundup / market-recap / "why the stock moved" explainer where the 
         if not raw_sections:
             if last_error is not None:
                 raise last_error
-            logger.info(
+            logger.warning(
                 "Gemini news for %s: all %d searches returned 'no news found' (labels: %s)",
                 ticker, len(search_jobs), ", ".join(empty_search_labels) or "none",
             )
