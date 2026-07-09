@@ -1,9 +1,9 @@
 "use client";
 
-import { useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { api } from "@/lib/api";
 import { formatCurrency } from "@/lib/utils";
-import type { CheckNowResponse, MarketSnapshot } from "@/types";
+import type { CheckNowResponse, MarketSnapshot, PortfolioPulse } from "@/types";
 
 interface CheckNowButtonProps {
   holdingId: string;
@@ -115,23 +115,99 @@ function SnapshotCard({ snapshot, ticker, currency, eventsCreated }: { snapshot:
   );
 }
 
+// How long we're willing to poll before giving up on a background check-now
+// run. The backend pipeline can take ~2 minutes end-to-end when transcripts
+// + Gemini + Sonnet all fire fresh; polling stops if we don't see
+// last_checked_at bump within this window so the button doesn't spin forever.
+const POLL_INTERVAL_MS = 3000;
+const POLL_MAX_MS = 3 * 60 * 1000;
+
 export function CheckNowButton({ holdingId, ticker, currency = "GBP", investorProfile, onComplete }: CheckNowButtonProps) {
   const [loading, setLoading] = useState(false);
+  const [polling, setPolling] = useState(false);
   const [result, setResult] = useState<CheckNowResponse | null>(null);
+  const pollTimer = useRef<ReturnType<typeof setInterval> | null>(null);
+
+  useEffect(() => {
+    return () => {
+      if (pollTimer.current) clearInterval(pollTimer.current);
+    };
+  }, []);
+
+  const stopPolling = () => {
+    if (pollTimer.current) {
+      clearInterval(pollTimer.current);
+      pollTimer.current = null;
+    }
+    setPolling(false);
+    setLoading(false);
+  };
 
   const handleCheckNow = async () => {
     try {
       setLoading(true);
       setResult(null);
+
+      // Baseline for comparing when the background pass finishes writing.
+      // We take Date.now() rather than reading the current pulse first — a
+      // saved test where two rapid clicks race would otherwise consider the
+      // second click "already done" against the first's stale timestamp.
+      const baselineMs = Date.now();
+
       const res = await api.post<CheckNowResponse>(`/api/monitoring/holdings/${holdingId}/check-now`);
       setResult(res);
+
+      // Rate-limited: the server told us to back off, nothing to poll for.
+      if (res.status === "rate_limited") {
+        setLoading(false);
+        return;
+      }
+
+      // completed (legacy sync path, kept for compatibility) — fire the
+      // completion callback and stop the spinner.
       if (res.status === "completed") {
         onComplete(res);
+        setLoading(false);
+        return;
       }
+
+      // status === "running": pipeline is executing as a BackgroundTask.
+      // Poll /pulse until this holding's last_checked_at bumps past the
+      // baseline, then run the same refresh path the sync completion took.
+      setPolling(true);
+      const startedAt = Date.now();
+      pollTimer.current = setInterval(async () => {
+        if (Date.now() - startedAt > POLL_MAX_MS) {
+          stopPolling();
+          console.warn("Check-now polling timed out after", POLL_MAX_MS, "ms");
+          return;
+        }
+        try {
+          const pulse = await api.get<PortfolioPulse>("/api/portfolio/pulse");
+          const holdingPulse = pulse.pulses.find((p) => p.holding_id === holdingId);
+          const lastCheckedMs = holdingPulse?.last_checked_at
+            ? new Date(holdingPulse.last_checked_at).getTime()
+            : 0;
+          if (lastCheckedMs > baselineMs) {
+            stopPolling();
+            // Synthesize a completion result for the parent handler — the
+            // real events/reviewed/supporting counts come from its own
+            // refresh calls, so we don't need the numbers here.
+            onComplete({
+              status: "completed",
+              events_created: 0,
+              next_available_at: null,
+              snapshot: null,
+            });
+          }
+        } catch (err) {
+          // A single poll failure is fine — keep trying until the timeout.
+          console.warn("Poll for check-now completion failed:", err);
+        }
+      }, POLL_INTERVAL_MS);
     } catch (err) {
       console.error("Check now failed:", err);
-    } finally {
-      setLoading(false);
+      stopPolling();
     }
   };
 
@@ -153,7 +229,7 @@ export function CheckNowButton({ holdingId, ticker, currency = "GBP", investorPr
           disabled={loading || isRateLimited}
           className="font-mono text-[10px] uppercase tracking-[0.15em] border border-border text-foreground/70 hover:text-foreground px-4 py-2 transition-colors hover:border-border/80 disabled:opacity-40 disabled:cursor-not-allowed"
         >
-          {loading ? "Checking…" : "Check now"}
+          {polling ? "Monitoring…" : loading ? "Checking…" : "Check now"}
         </button>
 
         {hasEvents && (

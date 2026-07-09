@@ -31,7 +31,7 @@ def _make_company_data(ticker="AAPL", current_price=120.0):
     )
 
 
-async def test_check_now_creates_monitoring_events(client, auth_headers, db, test_user):
+async def test_check_now_creates_monitoring_events(client, auth_headers, db, test_user, job_session_factory):
     holding = Holding(
         user_id=test_user.id,
         ticker="AAPL",
@@ -73,21 +73,31 @@ async def test_check_now_creates_monitoring_events(client, auth_headers, db, tes
         "app.services.check_now.fetch_company_data",
         new_callable=AsyncMock,
         return_value=company_data,
+    ), patch(
+        "app.services.monitoring_pipeline.classify_event",
+        new_callable=AsyncMock,
+        return_value=classification,
+    ), patch(
+        # The background task opens its own session — in production that
+        # session points at the real DB; in tests we redirect it to the
+        # same TestSession factory the request handler uses so the BG task
+        # can see the fixture-created holding + thesis rows.
+        "app.services.check_now.async_session",
+        job_session_factory,
     ):
-        with patch(
-            "app.services.monitoring_pipeline.classify_event",
-            new_callable=AsyncMock,
-            return_value=classification,
-        ):
-            response = await client.post(
-                f"/api/monitoring/holdings/{holding.id}/check-now",
-                headers=auth_headers,
-            )
+        response = await client.post(
+            f"/api/monitoring/holdings/{holding.id}/check-now",
+            headers=auth_headers,
+        )
 
+    # Fresh check-now no longer runs synchronously — the pipeline is fired
+    # as a BackgroundTask so a slow fresh run doesn't trip Cloudflare's edge
+    # timeout. FastAPI TestClient still executes background tasks after the
+    # response is emitted, so the DB state has landed by the time we assert.
     assert response.status_code == 200
     data = response.json()
-    assert data["status"] == "completed"
-    assert data["events_created"] >= 1
+    assert data["status"] == "running"
+    assert data["events_created"] == 0
 
     events = (await db.execute(MonitoringEvent.__table__.select())).all()
     assert len(events) >= 1

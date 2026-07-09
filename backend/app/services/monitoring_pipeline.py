@@ -614,10 +614,13 @@ async def classify_candidates_for_thesis(
             # Propagate the classifier's direction so determine_verdict can
             # surface "supports" events on the positive Held Up channel even
             # when they land at info severity — the whole reason we split
-            # direction from severity in ClassificationResult.
-            if classification.direction:
+            # direction from severity in ClassificationResult. getattr guards
+            # against mocked Classification objects in tests that predate
+            # the direction field.
+            direction = getattr(classification, "direction", None)
+            if direction:
                 evidence_ref = candidate.setdefault("evidence", {})
-                evidence_ref["signal_direction"] = classification.direction
+                evidence_ref["signal_direction"] = direction
             classified.append((candidate, classification.severity, classification.analysis))
             continue
 

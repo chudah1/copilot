@@ -11,6 +11,11 @@ from sqlalchemy.exc import OperationalError
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.config import settings
+# Module-level import so tests can patch it to point at the test session
+# factory. Used by the BackgroundTask wrappers (run_first_pulse,
+# run_check_now_background) which open their own sessions independent of
+# the request handler.
+from app.database import async_session
 from app.models.holding import Holding
 from app.models.monitoring_event import MonitoringEvent
 from app.models.thesis import Thesis
@@ -556,8 +561,6 @@ async def run_first_pulse(
     if not settings.enable_first_pulse:
         return
 
-    from app.database import async_session
-
     try:
         async with async_session() as db:
             await _run_first_pulse_with_session(
@@ -565,6 +568,45 @@ async def run_first_pulse(
             )
     except Exception:
         logger.exception("First pulse failed for user %s", user_id)
+
+
+async def run_check_now_background(
+    user_id: uuid.UUID,
+    holding_id: uuid.UUID,
+    thesis_id: uuid.UUID,
+) -> None:
+    """FastAPI BackgroundTask wrapper around run_check_now.
+
+    The synchronous handler was blowing past Cloudflare's ~100s edge timeout
+    on fresh theses (transcripts + LLM classification + Gemini search chain
+    up to ~2 minutes). Moving the heavy work to a background task lets the
+    handler return immediately with status='running'; the frontend polls
+    last_monitored_at to know when the pipeline actually completes.
+
+    Opens its own DB session (same shape as run_first_pulse) and never
+    raises — a check-now failure must not tank the request handler that
+    already returned to the user.
+    """
+    try:
+        async with async_session() as db:
+            holding = (
+                await db.execute(
+                    select(Holding).where(Holding.id == holding_id, Holding.user_id == user_id)
+                )
+            ).scalar_one_or_none()
+            thesis = (
+                await db.execute(
+                    select(Thesis).where(Thesis.id == thesis_id, Thesis.user_id == user_id)
+                )
+            ).scalar_one_or_none()
+            if holding is None or thesis is None:
+                logger.warning(
+                    "Background check-now: holding %s or thesis %s missing", holding_id, thesis_id
+                )
+                return
+            await run_check_now(holding, thesis, db)
+    except Exception:
+        logger.exception("Background check-now failed for holding %s", holding_id)
 
 
 HISTORICAL_AUDIT_LOOKBACK_DAYS = 90
@@ -963,8 +1005,6 @@ async def run_historical_audit(thesis_id: uuid.UUID) -> None:
     # (live market data + Gemini call per thesis). Disabling one disables both.
     if not settings.enable_first_pulse:
         return
-
-    from app.database import async_session
 
     try:
         async with async_session() as db:

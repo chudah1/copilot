@@ -111,7 +111,7 @@ class MarketSnapshotResponse(BaseModel):
 
 
 class CheckNowResponse(BaseModel):
-    status: str  # completed | rate_limited
+    status: str  # running | completed | rate_limited
     events_created: int
     next_available_at: datetime | None = None
     snapshot: MarketSnapshotResponse | None = None

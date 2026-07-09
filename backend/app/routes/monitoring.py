@@ -1,7 +1,7 @@
 import uuid
 from datetime import datetime, timedelta, timezone
 
-from fastapi import APIRouter, Depends, Header, HTTPException, Query, status
+from fastapi import APIRouter, BackgroundTasks, Depends, Header, HTTPException, Query, status
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.orm import selectinload
@@ -41,7 +41,7 @@ from app.services.adjacency import (
     curate_reviewed_but_dropped,
     load_reviewed_but_dropped,
 )
-from app.services.check_now import run_check_now
+from app.services.check_now import RATE_LIMIT_HOURS, run_check_now, run_check_now_background
 from app.services.conviction_log import REASON_CREATED
 from app.services.support_evidence import load_curated_supporting_items_for_holding
 from app.services.coverage import (
@@ -364,9 +364,22 @@ async def review_event(
 @router.post("/holdings/{holding_id}/check-now", response_model=CheckNowResponse)
 async def check_now(
     holding_id: uuid.UUID,
+    background_tasks: BackgroundTasks,
     user: User = Depends(get_current_user),
     db: AsyncSession = Depends(get_db),
 ):
+    """Kick off an on-demand monitoring pass for a single holding.
+
+    Historically this ran the pipeline synchronously and returned the full
+    result — but on fresh theses that mean fetching transcripts, calling
+    Gemini, and classifying with Sonnet, which routinely took 60-125s.
+    Cloudflare's edge times out around 100s, so the client saw a 524 even
+    when the backend was still working. Now: the rate-limit check runs
+    inline (fast), and the actual pipeline fires as a BackgroundTask. The
+    handler returns status='running' immediately; the frontend polls
+    /pulse.last_checked_at to know when the pass has landed and to refresh
+    events / reviewed / supporting.
+    """
     # Load holding and verify ownership
     holding_result = await db.execute(
         select(Holding).where(Holding.id == holding_id, Holding.user_id == user.id)
@@ -387,39 +400,47 @@ async def check_now(
     if thesis is None:
         raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="No active thesis")
 
-    try:
-        result = await run_check_now(holding, thesis, db)
-    except RuntimeError as exc:
-        if "market_data_unavailable" in str(exc):
-            raise HTTPException(
-                status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
-                detail="Market data is temporarily unavailable (rate limit). Wait a moment and try again.",
-            ) from exc
-        raise
-
-    snapshot_response = None
-    if result.snapshot is not None:
-        snapshot_response = MarketSnapshotResponse(
-            current_price=result.snapshot.current_price,
-            price_change_pct=result.snapshot.price_change_pct,
-            cost_basis=result.snapshot.cost_basis,
-            pnl=result.snapshot.pnl,
-            pnl_pct=result.snapshot.pnl_pct,
-            sector=result.snapshot.sector,
-            pe_ratio=result.snapshot.pe_ratio,
-            market_cap=result.snapshot.market_cap,
-            upcoming_earnings_date=result.snapshot.upcoming_earnings_date,
-            recent_news_count=result.snapshot.recent_news_count,
-            watch_hints_ok=result.snapshot.watch_hints_ok,
-            watch_hints_total=result.snapshot.watch_hints_total,
-            checked_at=result.snapshot.checked_at,
+    # Inline rate-limit check — mirrors the guard inside run_check_now so
+    # the frontend still gets a proper "rate_limited" verdict without ever
+    # spinning up the background task.
+    now = _normalize_datetime(datetime.now(timezone.utc))
+    cutoff = now - timedelta(hours=RATE_LIMIT_HOURS)
+    rate_limit_result = await db.execute(
+        select(MonitoringEvent.created_at)
+        .where(
+            MonitoringEvent.holding_id == holding.id,
+            MonitoringEvent.created_at >= cutoff,
+            MonitoringEvent.event_type != "monitoring_inactive",
+        )
+        .order_by(MonitoringEvent.created_at.asc())
+        .limit(1)
+    )
+    earliest = rate_limit_result.scalar_one_or_none()
+    if earliest is not None:
+        earliest_norm = _normalize_datetime(earliest)
+        next_available = earliest_norm + timedelta(hours=RATE_LIMIT_HOURS)
+        return CheckNowResponse(
+            status="rate_limited",
+            events_created=0,
+            next_available_at=next_available,
+            snapshot=None,
         )
 
+    # Fire the pipeline in the background so the response returns before
+    # Cloudflare's ~100s edge timeout. The frontend takes the current
+    # last_monitored_at as a baseline and polls /pulse until the pass lands.
+    background_tasks.add_task(
+        run_check_now_background,
+        user.id,
+        holding.id,
+        thesis.id,
+    )
+
     return CheckNowResponse(
-        status=result.status,
-        events_created=result.events_created,
-        next_available_at=result.next_available_at,
-        snapshot=snapshot_response,
+        status="running",
+        events_created=0,
+        next_available_at=None,
+        snapshot=None,
     )
 
 
