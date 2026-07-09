@@ -294,10 +294,7 @@ export function getDecisionPrompt(
         investorProfile === "hearsay_driven"
           ? "Still buy this on the same reason?"
           : "Still buy this on the same thesis?",
-      body:
-        investorProfile === "hearsay_driven"
-          ? `${stalePressure.daysOld}d old. Your cadence is ${stalePressure.cadenceDays}d. Refresh it before you add or keep sizing on it.`
-          : `${stalePressure.daysOld}d old. Your cadence is ${stalePressure.cadenceDays}d. Refresh it before you add or keep sizing on it.`,
+      body: `${stalePressure.daysOld}d old. Your cadence is ${stalePressure.cadenceDays}d. Refresh it before you add or keep sizing on it.`,
       ctaLabel: "Refresh it →",
       action: "edit" as const,
       tone: "border-amber-500/25 bg-amber-500/8",

@@ -424,7 +424,7 @@ function WizardInner() {
           {
             eyebrow: "In progress",
             title: "Turning your answers into a working thesis.",
-            body: "This is where the product converts free text into something reviewable and monitorable.",
+            body: "Turning your answers into something you can review and monitor.",
           },
         ];
       case "CLIMB":
@@ -460,7 +460,7 @@ function WizardInner() {
           {
             eyebrow: "Setup",
             title: "Building the first decision record.",
-            body: "The onboarding flow should get you to one real position quickly, not trap you in setup theatre.",
+            body: "One real position, quickly. No setup theatre.",
           },
         ];
     }

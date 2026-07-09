@@ -69,7 +69,7 @@ export function ThesisEditor({ thesis, investorProfile, mode = "write", onSave, 
     ? {
         title: thesis ? "Edit thesis" : "Write your thesis",
         helperTitle: "What makes a strong thesis here",
-        helperBody: "Be specific enough that you would know which assumption changed. A strong thesis explains why you own this, what must remain true, and what would clearly break the case.",
+        helperBody: "Be specific enough that you would know which assumption changed.",
         why: "Why do you own this?",
         whyPlaceholder: "Example: I own this because AI infrastructure demand should keep revenue growth and margins strong for the next 3 years.",
         must: "What must remain true?",
@@ -81,7 +81,7 @@ export function ThesisEditor({ thesis, investorProfile, mode = "write", onSave, 
       ? {
           title: thesis ? "Edit reason" : "Write your reason",
           helperTitle: "What makes a strong reason here",
-          helperBody: "Turn the original story into something testable. A strong reason explains why you own this, what has to stay true, and what would clearly prove the story wrong.",
+          helperBody: "Turn the original story into something testable.",
           why: "Why do you own this?",
           whyPlaceholder: "Example: I own this because AI demand should keep revenue growth and margins strong for the next 3 years.",
           must: "What must remain true?",
@@ -92,7 +92,7 @@ export function ThesisEditor({ thesis, investorProfile, mode = "write", onSave, 
       : {
           title: thesis ? "Edit reason" : "Write your reason",
           helperTitle: "What makes a strong reason here",
-          helperBody: "Be specific enough that you would know what changed. A good reason explains why you own this, what has to stay true, and what would clearly break the case.",
+          helperBody: "Be specific enough that you would know what changed.",
           why: "Why do you own this?",
           whyPlaceholder: "Example: I own this because demand for AI infrastructure should keep revenue growth and margins strong for the next 3 years.",
           must: "What must remain true?",
@@ -106,13 +106,13 @@ export function ThesisEditor({ thesis, investorProfile, mode = "write", onSave, 
       ? {
           title: "Rewrite the reason",
           helperTitle: "What to rewrite this time",
-          helperBody: "Keep what still holds. Cut what already broke. The next version should say plainly why you still own this and what would break it again.",
+          helperBody: "Keep what still holds. Cut what already broke.",
           saveLabel: "Save rewritten reason",
         }
       : {
           title: "Rewrite the thesis",
           helperTitle: "What to rewrite this time",
-          helperBody: "Keep what still holds. Cut the assumption that broke. The next version should say plainly why you still own this and what would invalidate it.",
+          helperBody: "Keep what still holds. Cut the assumption that broke.",
           saveLabel: "Save rewritten thesis",
         }
     : mode === "tighten"
@@ -140,7 +140,7 @@ export function ThesisEditor({ thesis, investorProfile, mode = "write", onSave, 
           : {
               title: "Write the thesis",
               helperTitle: "Make the position monitorable",
-              helperBody: "Write why you own it, what must stay true, and what would make you sell. Keep it short enough to re-read when evidence lands.",
+              helperBody: "Keep it short enough to re-read when evidence lands.",
               saveLabel: "Save thesis and start watching",
             }
         : {
