@@ -514,10 +514,21 @@ or clearly a roundup / market-recap / "why the stock moved" explainer where the 
             )
 
         candidates = _to_candidates(items, ticker=ticker, name=name, grounded_urls=grounded_urls)
-        logger.info(
-            "Gemini news for %s: %d candidate(s) from %d search section(s) [%d empty]",
-            ticker, len(candidates), len(raw_sections), len(empty_search_labels),
-        )
+        # When items were extracted but the candidate filter dropped them all
+        # (roundup noise, target-company mismatch, low-relevance, no matched
+        # signal), log at WARNING so the silent-zero case is diagnosable.
+        # Successful non-empty passes stay at INFO to avoid log spam.
+        if items and not candidates:
+            sample_headlines = [str(item.get("headline") or "")[:80] for item in items[:3] if isinstance(item, dict)]
+            logger.warning(
+                "Gemini news for %s: %d item(s) extracted but all filtered out by _to_candidates. Sample headlines: %s",
+                ticker, len(items), " | ".join(sample_headlines),
+            )
+        else:
+            logger.info(
+                "Gemini news for %s: %d candidate(s) from %d search section(s) [%d empty]",
+                ticker, len(candidates), len(raw_sections), len(empty_search_labels),
+            )
         return candidates
 
     except Exception as exc:
