@@ -18,7 +18,16 @@ interface AuthContextType {
 const AuthContext = createContext<AuthContextType | null>(null);
 
 export function AuthProvider({ children }: { children: ReactNode }) {
-  const [isAuthenticated, setIsAuthenticated] = useState(false);
+  // Lazy-init from durable storage so a re-mount (or the destination page
+  // rendering before setIsAuthenticated commits) doesn't briefly report
+  // `false` and get the user bounced to /login. The initial render sees
+  // "we have a token, presume authenticated" — the `checkAuth` effect
+  // below still runs the real validation and downgrades to false if the
+  // token turns out to be stale.
+  const [isAuthenticated, setIsAuthenticated] = useState(() => {
+    if (typeof window === "undefined") return false;
+    return Boolean(getStoredAccessToken());
+  });
   const [isLoading, setIsLoading] = useState(true);
   const router = useRouter();
 
@@ -63,14 +72,16 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   const login = async (email: string, password: string) => {
     const tokens = await api.post<TokenResponse>("/api/auth/login", { email, password });
     storeTokens(tokens);
-    startTransition(() => { setIsAuthenticated(true); });
+    // Urgent (non-transition) so React commits the state before router.push
+    // navigates. Belt-and-braces with the AuthGuard's stored-token fallback.
+    setIsAuthenticated(true);
     router.push("/dashboard");
   };
 
   const register = async (email: string, password: string) => {
     const tokens = await api.post<TokenResponse>("/api/auth/register", { email, password });
     storeTokens(tokens);
-    startTransition(() => { setIsAuthenticated(true); });
+    setIsAuthenticated(true);
     router.push("/connect");
   };
 
