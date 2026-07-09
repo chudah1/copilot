@@ -788,6 +788,45 @@ def test_determine_verdict_info_supports_when_signal_direction_is_supportive():
     assert determine_verdict("info", candidate) == "supports"
 
 
+def test_determine_verdict_supports_direction_wins_at_higher_severities_too():
+    # A thesis_breaking-severity event with direction=supports is an
+    # unusually strong positive read ("management explicitly confirmed the
+    # moat is widening") — it should surface as supports, not fall through
+    # to the severity-based "threatens" fallback that misinterprets it.
+    for severity in ("info", "warning", "thesis_breaking"):
+        candidate = {
+            "event_type": "earnings_call_transcript",
+            "evidence": {"signal_direction": "supports"},
+        }
+        assert determine_verdict(severity, candidate) == "supports"
+
+
+def test_determine_verdict_threatens_direction_is_more_precise_than_review():
+    # Warning + threatens is a stronger read than the generic "review" fallback.
+    candidate = {
+        "event_type": "news_or_earnings_candidate",
+        "evidence": {"signal_direction": "threatens"},
+    }
+    assert determine_verdict("warning", candidate) == "threatens"
+    assert determine_verdict("thesis_breaking", candidate) == "threatens"
+    # info + threatens elevates to review — worth a look even when the LLM
+    # couldn't muster more severity than info.
+    assert determine_verdict("info", candidate) == "review"
+
+
+def test_determine_verdict_neutral_direction_falls_through_to_severity():
+    # An explicit direction=neutral is treated identically to no direction:
+    # the severity-based fallback wins. Guards against a change where
+    # 'neutral' accidentally becomes a first-class verdict.
+    candidate = {
+        "event_type": "news_or_earnings_candidate",
+        "evidence": {"signal_direction": "neutral"},
+    }
+    assert determine_verdict("info", candidate) == "neutral"
+    assert determine_verdict("warning", candidate) == "review"
+    assert determine_verdict("thesis_breaking", candidate) == "threatens"
+
+
 def test_determine_verdict_unknown_defaults_to_review():
     assert determine_verdict("something_else") == "review"
 

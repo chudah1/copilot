@@ -611,6 +611,13 @@ async def classify_candidates_for_thesis(
             company_name=company_name,
         )
         if classification is not None and classification.severity != "skip":
+            # Propagate the classifier's direction so determine_verdict can
+            # surface "supports" events on the positive Held Up channel even
+            # when they land at info severity — the whole reason we split
+            # direction from severity in ClassificationResult.
+            if classification.direction:
+                evidence_ref = candidate.setdefault("evidence", {})
+                evidence_ref["signal_direction"] = classification.direction
             classified.append((candidate, classification.severity, classification.analysis))
             continue
 

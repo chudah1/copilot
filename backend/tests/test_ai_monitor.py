@@ -24,6 +24,24 @@ def test_parse_classification_response_accepts_valid_payload():
     result = _parse_classification_response('{"severity":"info","analysis":"All clear."}')
     assert result.severity == "info"
     assert result.analysis == "All clear."
+    # direction is optional — defaults to empty string when the LLM omits it.
+    assert result.direction == ""
+
+
+def test_parse_classification_response_extracts_valid_direction():
+    result = _parse_classification_response(
+        '{"severity":"info","direction":"supports","analysis":"Services beat pillar."}'
+    )
+    assert result.direction == "supports"
+
+
+def test_parse_classification_response_ignores_bogus_direction():
+    # Model garbage — treat as if it wasn't emitted at all. Downstream
+    # determine_verdict falls back to severity-only logic.
+    result = _parse_classification_response(
+        '{"severity":"info","direction":"kinda-supportive","analysis":"Mixed read."}'
+    )
+    assert result.direction == ""
 
 
 def test_parse_classification_response_rejects_invalid_severity():

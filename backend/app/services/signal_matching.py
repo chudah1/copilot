@@ -835,15 +835,22 @@ def determine_verdict(severity: str, candidate: dict | None = None) -> str:
     if news_watch_direction == "threatens":
         return "threatens"
 
-    # Signal-focused qualitative transcript/news candidates can carry an
-    # inferred signal direction even when they were not matched through the
-    # explicit news_watch judge. When such a candidate survives classification
-    # as plain "info", interpret it as supporting evidence rather than a
-    # neutral FYI, so positive management commentary can land in the calm
-    # support surface instead of disappearing into generic transcript noise.
+    # The classifier can emit a direction alongside severity ("supports" /
+    # "threatens" / "neutral") — see ClassificationResult in ai_monitor. The
+    # direction path lets a low-severity event that clearly validates a
+    # stated pillar surface as "supports" on the Held Up channel instead of
+    # vanishing as info/neutral (the transcript FYI problem). Direction
+    # wins over the severity fallback whenever the LLM was confident about
+    # which way this cuts against the thesis.
     signal_direction = evidence.get("signal_direction")
-    if signal_direction == "supports" and severity == "info":
+    if signal_direction == "supports":
         return "supports"
+    if signal_direction == "threatens":
+        # Warning + threatens is more precise than the generic "review";
+        # info + threatens still deserves a "review" nudge over neutral.
+        if severity in {"thesis_breaking", "warning"}:
+            return "threatens"
+        return "review"
 
     # Earnings surprise: use direction
     if event_type == "earnings_surprise":

@@ -13,6 +13,11 @@ logger = logging.getLogger(__name__)
 class ClassificationResult:
     severity: str  # info | warning | thesis_breaking
     analysis: str
+    # supports | threatens | neutral | "" — separate from severity so a
+    # low-severity event that clearly *validates* the thesis (e.g. an earnings
+    # call quote confirming a stated pillar) surfaces on the "Held up this
+    # week" positive channel instead of vanishing as an info/neutral FYI.
+    direction: str = ""
 
 
 _CLASSIFY_SYSTEM = """You classify new data against an investor's written reason for holding a stock.
@@ -38,8 +43,15 @@ Severity rules for non-skip events (apply strictly):
 - "info": when the event does not directly touch any specific stated condition. Macro moves, index-level rallies, unrelated product launches, general market surveys, a competitor's fundraising or hiring, and same-company news outside the thesis pillars are almost always "info". Classify as "warning" only when the event reports direct evidence that a stated condition is currently changing, not because it might eventually lead to one.
 - Sector-aware macro rule: some macro events are "info" for most stocks but "warning" for specific sectors. When the holding sector is provided and the event directly affects that sector's economics, use "warning" even if the thesis doesn't explicitly name the macro risk. Examples: geopolitical conflict or oil supply disruption → Energy; central bank rate decision → Financials or REITs; trade tariffs on specific goods → the sector that makes or imports those goods; currency moves → companies with heavy international revenue; defence spending news → Industrials/Aerospace & Defence.
 
+Also decide direction — whether this event validates or threatens the thesis, independent of severity:
+- "supports": the event provides evidence FOR a stated pillar. Management commentary confirming a growth driver, a metric printing above a stated floor, a competitor failing where the thesis assumed they would. Use even at info severity if the direction is unambiguous — "Held up this week" needs positive signal.
+- "threatens": the event provides evidence AGAINST a stated pillar. Guidance cut, a signal weakening, a competitor gaining where the thesis assumed they wouldn't.
+- "neutral": genuinely no directional signal for the thesis (skip candidates fall here by default).
+
+A single event can be severity="info" AND direction="supports" — that combination is the whole point of separating them.
+
 Output valid JSON:
-{"severity": "skip|info|warning|thesis_breaking", "analysis": "2-3 sentences, or empty string if skip."}
+{"severity": "skip|info|warning|thesis_breaking", "direction": "supports|threatens|neutral", "analysis": "2-3 sentences, or empty string if skip."}
 
 Requirements for analysis (exactly 3 short sentences, plain English, no labels like "What changed:"):
 - Sentence 1: what happened
@@ -188,7 +200,9 @@ def _parse_classification_response(text: str) -> ClassificationResult:
     analysis = data.get("analysis")
     if severity not in {"skip", "info", "warning", "thesis_breaking"} or not isinstance(analysis, str):
         raise ValueError("Invalid classification payload")
-    return ClassificationResult(severity=severity, analysis=analysis)
+    direction_raw = data.get("direction")
+    direction = direction_raw if direction_raw in {"supports", "threatens", "neutral"} else ""
+    return ClassificationResult(severity=severity, analysis=analysis, direction=direction)
 
 
 async def classify_event(
@@ -235,6 +249,7 @@ async def classify_event(
                     severity=parsed.severity,
                     investor_profile=investor_profile,
                 ),
+                direction=parsed.direction,
             )
         except Exception as e:
             logger.warning("Anthropic classification failed (%s), trying OpenAI: %s", type(e).__name__, e)
@@ -270,6 +285,7 @@ async def classify_event(
                     severity=parsed.severity,
                     investor_profile=investor_profile,
                 ),
+                direction=parsed.direction,
             )
         except Exception as e:
             logger.error("OpenAI classification also failed (%s): %s", type(e).__name__, e)
