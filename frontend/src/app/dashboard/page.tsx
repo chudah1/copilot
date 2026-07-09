@@ -76,7 +76,7 @@ function dashboardCopy(investorProfile: "thesis_driven" | "hearsay_driven" | nul
 
   return {
     emptyBody:
-      "The market will test you. Add your positions below and write down exactly why you own them so you don&rsquo;t panic sell when things get tough.",
+      "The market will test you. Add your positions below and write down exactly why you own them so you don't panic sell when things get tough.",
     draftBanner:
       "Drafts are ready for {count}. Review them before monitoring takes over.",
     quarterly:
@@ -660,25 +660,16 @@ function DashboardInner() {
           transition={{ duration: 0.4, delay: 0.2 }}
           className="flex gap-3"
         >
+          {/* Single CTA — /connect already presents Manual, CSV, and
+              Trading 212 as tabs (Manual is the default), so a "Connect
+              broker" label plus a broken "Add manually" split button was
+              both incorrect and confusing. */}
           <Link href="/connect">
             <button className="px-5 py-2.5 font-mono text-[11px] uppercase tracking-[0.15em] bg-primary text-primary-foreground hover:bg-primary/90 transition-colors">
-              Connect broker
+              Add position
             </button>
           </Link>
-          <button
-            onClick={() => setShowAddForm(true)}
-            className="px-5 py-2.5 font-mono text-[11px] uppercase tracking-[0.15em] border border-border text-foreground/60 hover:text-foreground hover:border-foreground/40 transition-colors"
-          >
-            Add manually
-          </button>
         </motion.div>
-        {showAddForm && (
-          <div className="w-full max-w-md text-left">
-            <p className="font-sans text-sm text-muted-foreground mb-3">
-              Add your first position using the form in the positions list once you connect your broker, or connect a broker above to import automatically.
-            </p>
-          </div>
-        )}
       </div>
     );
   }
