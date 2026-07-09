@@ -24,7 +24,21 @@ def _cookie_kwargs(request: Request) -> dict[str, object]:
     secure = request.url.scheme == "https"
     # Browsers drop `SameSite=None` cookies unless `Secure` is also set.
     # For local HTTP development, use `Lax` so auth works on localhost/127.0.0.1.
-    return dict(httponly=True, secure=secure, samesite="none" if secure else "lax")
+    kwargs: dict[str, object] = dict(
+        httponly=True, secure=secure, samesite="none" if secure else "lax"
+    )
+
+    # The backend runs on api.penkeep.io but the frontend + Edge middleware
+    # live on penkeep.io / app.penkeep.io. Without an explicit Domain, the
+    # cookie is scoped to api.penkeep.io only — invisible to the middleware
+    # handling penkeep.io/dashboard, which then redirects a freshly-registered
+    # user straight back to /login?from=/dashboard. Setting Domain to the
+    # apex .penkeep.io makes the cookie shared across every subdomain we
+    # deploy. Skipped for localhost since browsers reject Domain= there.
+    host = request.url.hostname or ""
+    if host.endswith(".penkeep.io") or host == "penkeep.io":
+        kwargs["domain"] = ".penkeep.io"
+    return kwargs
 
 
 def _is_local_dev_request(request: Request) -> bool:
