@@ -300,6 +300,12 @@ def _candidate_family(event_type: str) -> str | None:
         "earnings_call_transcript",
         "news_or_earnings_candidate",
         "news_keyword_match",
+        # gemini_news was missing from the fundamental family, so sibling
+        # specificity suppression skipped it — 10 outlets covering the same
+        # Q2-deliveries story all landed as 10 separate events on the same
+        # signal. Grouping gemini_news with the other news-shaped events
+        # collapses same-signal duplicates to the strongest single item.
+        "gemini_news",
     }:
         return "fundamental"
     if event_type == "insider_transaction":

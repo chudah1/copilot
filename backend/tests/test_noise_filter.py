@@ -279,6 +279,53 @@ def test_sibling_specificity_keeps_different_families():
     assert len(result) == 2
 
 
+def test_sibling_specificity_collapses_gemini_news_bound_to_same_signal():
+    """The TSLA smoke test on 2026-07-09 landed 30 gemini_news events on one
+    holding — 10+ different outlets covering the same Q2 deliveries story
+    were each becoming a separate event because gemini_news wasn't in the
+    fundamental family. Grouping it with the other news-shaped events lets
+    sibling suppression collapse them per (signal_id, claim_id) group."""
+    signal_id = str(uuid.uuid4())
+    claim_id = str(uuid.uuid4())
+    classified = [
+        (
+            {"event_type": "gemini_news", "evidence": {"signal_id": signal_id, "claim_id": claim_id, "headline": "Tesla Q2 deliveries jump 25% - Reuters"}},
+            "info",
+        ),
+        (
+            {"event_type": "gemini_news", "evidence": {"signal_id": signal_id, "claim_id": claim_id, "headline": "Tesla delivered 480,126 vehicles - Bloomberg"}},
+            "info",
+        ),
+        (
+            {"event_type": "gemini_news", "evidence": {"signal_id": signal_id, "claim_id": claim_id, "headline": "Tesla posts blowout quarter - TechCrunch"}},
+            "info",
+        ),
+    ]
+    result = _apply_sibling_specificity_suppression(classified)
+    assert len(result) == 1
+
+
+def test_sibling_specificity_keeps_gemini_news_on_different_signals():
+    """Regression guard: the collapse must be per signal_id, not global — a
+    delivery-beat story bound to the growth pillar and an FSD-progress
+    story bound to the FSD pillar should both survive."""
+    growth_signal = str(uuid.uuid4())
+    fsd_signal = str(uuid.uuid4())
+    claim_id = str(uuid.uuid4())
+    classified = [
+        (
+            {"event_type": "gemini_news", "evidence": {"signal_id": growth_signal, "claim_id": claim_id}},
+            "info",
+        ),
+        (
+            {"event_type": "gemini_news", "evidence": {"signal_id": fsd_signal, "claim_id": claim_id}},
+            "info",
+        ),
+    ]
+    result = _apply_sibling_specificity_suppression(classified)
+    assert len(result) == 2
+
+
 def test_apply_priority_suppression_also_applies_sibling_specificity():
     claim_id = str(uuid.uuid4())
     classified = [
