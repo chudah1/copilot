@@ -47,7 +47,11 @@ class Settings(BaseSettings):
     founding_seats_total: int = 100
 
     anthropic_api_key: str = ""
-    anthropic_model: str = "claude-sonnet-4-20250514"
+    # claude-sonnet-4-20250514 was retired — every call routing through
+    # settings.anthropic_model was 404'ing, silently falling through to the
+    # OpenAI fallback (news_watch judge, ai_thesis, ai_digest, earnings_review).
+    # The current Sonnet ID is claude-sonnet-4-6.
+    anthropic_model: str = "claude-sonnet-4-6"
     openai_api_key: str = ""
     gemini_api_key: str = ""
     resend_api_key: str = ""
