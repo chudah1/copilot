@@ -324,8 +324,17 @@ class CoveragePassBuilder:
                 continue
             self.reviewed_but_dropped.append(entry)
 
-    async def persist(self, db: AsyncSession) -> None:
+    async def persist(self, db: AsyncSession, *, error: str | None = None) -> None:
         finished_at = datetime.now(timezone.utc)
+        payload: dict[str, Any] = {
+            "sources": self.sources,
+            "stages": [[name, count] for name, count in self.stage_counts],
+            "events_persisted": self.events_persisted,
+            "reviewed_but_dropped": self.reviewed_but_dropped,
+        }
+        if error:
+            # Truncated so a runaway traceback can't bloat the coverage row.
+            payload["error"] = error[:500]
         row = CoveragePass(
             thesis_id=self.thesis_id,
             holding_id=self.holding_id,
@@ -333,12 +342,7 @@ class CoveragePassBuilder:
             triggered_by=self.triggered_by,
             started_at=self.started_at,
             finished_at=finished_at,
-            payload={
-                "sources": self.sources,
-                "stages": [[name, count] for name, count in self.stage_counts],
-                "events_persisted": self.events_persisted,
-                "reviewed_but_dropped": self.reviewed_but_dropped,
-            },
+            payload=payload,
         )
         db.add(row)
 

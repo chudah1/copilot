@@ -190,6 +190,27 @@ async def _persist_historical_audit_state(
             await asyncio.sleep(_SQLITE_LOCK_RETRY_DELAY_SECONDS * (attempt + 1))
 
 
+async def _persist_partial_coverage(
+    coverage: CoveragePassBuilder, error: str
+) -> None:
+    """Write whatever the coverage funnel captured before the pipeline crashed.
+
+    Opens a fresh session because the caller's session is in a failed state
+    (post-rollback) and any further work on it would be at best a no-op. Failure
+    to write this row is never allowed to propagate — the whole point of this
+    helper is to be a safety net, not a new failure mode."""
+    try:
+        async with async_session() as fresh:
+            await coverage.persist(fresh, error=error)
+            await fresh.commit()
+    except Exception:
+        logger.exception(
+            "Failed to persist partial coverage row (holding=%s thesis=%s)",
+            coverage.holding_id,
+            coverage.thesis_id,
+        )
+
+
 async def run_check_now(
     holding: Holding,
     thesis: Thesis,
@@ -265,190 +286,217 @@ async def run_check_now(
         run_id=check_run_id,
         triggered_by="check_now",
     )
-    coverage.record_source("qualitative_market_data", candidates_returned=len(candidates))
-    coverage.record_source(
-        "earnings_call_transcripts",
-        queried=bool(transcript_fetch_diagnostics(company_data).get("requested_quarters")),
-        candidates_returned=len(company_data.earnings_calls or []),
-        details=transcript_fetch_diagnostics(company_data) or None,
-    )
-
-    # EDGAR 8-K candidates (US tickers only; silently skipped for non-US)
-    before_edgar = len(candidates)
+    # From here on, anything that raises would normally leave zero trace of
+    # what the funnel looked like at the moment of failure — the same
+    # transaction was going to write both events and the coverage row, so a
+    # rollback erased both. That's what left the ASML pass looking like a
+    # silent no-op. Wrap the body so we can persist a partial coverage row
+    # in a fresh session even when the pipeline blows up mid-flight.
+    coverage_committed = False
     try:
-        edgar_filings = await get_recent_8k_filings(holding.ticker)
-        candidates.extend(build_edgar_candidates(holding.ticker, edgar_filings))
-        coverage.record_source("edgar_8k", candidates_returned=len(candidates) - before_edgar)
-    except Exception as exc:
-        logger.warning("EDGAR fetch failed for %s during check-now — skipping: %s", holding.ticker, exc)
-        await write_monitoring_gap(db, thesis.id, "edgar", str(exc), check_run_id)
-        coverage.record_source("edgar_8k", candidates_returned=0, error=str(exc))
-
-    # EDGAR Form 4 insider transactions
-    before_form4 = len(candidates)
-    form4_txns = await get_recent_form4_transactions(holding.ticker)
-    candidates.extend(build_form4_candidates(holding.ticker, form4_txns, now=now))
-    coverage.record_source("edgar_form4", candidates_returned=len(candidates) - before_form4)
-
-    # Enrich earnings 8-Ks (item 2.02) with LLM-extracted content
-    candidates = await enrich_earnings_candidates(candidates, thesis)
-
-    # Signal linking: load decomposition and enrich candidates
-    decomposition = await load_active_decomposition(db, thesis.id)
-    claims = decomposition.claims if decomposition else None
-
-    # Gemini news uses signal descriptors from the decomposition so focused
-    # searches can include claim/rationale context, not just bare labels.
-    signal_descriptors = signal_search_descriptors_from_claims(claims)
-    before_gemini = len(candidates)
-    try:
-        gemini_candidates = await collect_news_evidence(
-            holding.ticker, holding.name or holding.ticker, signal_descriptors
+        coverage.record_source("qualitative_market_data", candidates_returned=len(candidates))
+        coverage.record_source(
+            "earnings_call_transcripts",
+            queried=bool(transcript_fetch_diagnostics(company_data).get("requested_quarters")),
+            candidates_returned=len(company_data.earnings_calls or []),
+            details=transcript_fetch_diagnostics(company_data) or None,
         )
-        candidates.extend(gemini_candidates)
-        coverage.record_source("gemini_news", candidates_returned=len(candidates) - before_gemini)
-    except Exception as exc:
-        logger.warning("Gemini news failed for %s during check-now — skipping: %s", holding.ticker, exc)
-        await write_monitoring_gap(db, thesis.id, "gemini_news", str(exc), check_run_id)
-        coverage.record_source("gemini_news", candidates_returned=0, error=str(exc))
-    coverage.record_stage(STAGE_CANDIDATES_GENERATED, len(candidates))
-    candidates = match_candidates_to_signals(candidates, claims)
-    coverage.record_stage(STAGE_AFTER_MATCH, len(candidates))
 
-    # Semantic ranking layer: union embedding-based matches into the multi-
-    # binding list so a candidate that didn't share words with the signal
-    # label can still bind ("Pricing Dilemma" → "Services gross margin").
-    # Falls back to word-overlap inside build_embedding_similarity if the
-    # OpenAI embedding call fails, so this never makes the pipeline less
-    # resilient than before.
-    candidates = await enrich_candidates_with_embedding_matches(candidates, claims)
-    coverage.record_stage(STAGE_AFTER_EMBEDDING_ENRICH, len(candidates))
-    # Adjudicate borderline embedding matches with a cheap LLM call so a
-    # cosine-0.65 "maybe" becomes a concrete keep-or-drop with a real
-    # confidence score the UI can show.
-    candidates = await adjudicate_signal_matches(candidates, claims)
-    coverage.record_stage(STAGE_AFTER_LLM_ADJUDICATION, len(candidates))
+        # EDGAR 8-K candidates (US tickers only; silently skipped for non-US)
+        before_edgar = len(candidates)
+        try:
+            edgar_filings = await get_recent_8k_filings(holding.ticker)
+            candidates.extend(build_edgar_candidates(holding.ticker, edgar_filings))
+            coverage.record_source("edgar_8k", candidates_returned=len(candidates) - before_edgar)
+        except Exception as exc:
+            logger.warning("EDGAR fetch failed for %s during check-now — skipping: %s", holding.ticker, exc)
+            await write_monitoring_gap(db, thesis.id, "edgar", str(exc), check_run_id)
+            coverage.record_source("edgar_8k", candidates_returned=0, error=str(exc))
 
-    # Thesis-aware relevance filter for news-style candidates. When Gemini
-    # is up this trims polished noise (13F filings, fund-flow updates); when
-    # Gemini is down it's the floor that keeps yfinance/AV news from
-    # surfacing as info-tier noise. Cheap (gpt-4o-mini) per-candidate check
-    # before the expensive severity classification downstream.
-    if claims:
-        from app.services.thesis_relevance_filter import (
-            apply_drop_thesis_floor,
-            filter_candidates_by_thesis_relevance_with_drops,
-        )
-        candidates, reviewed_but_dropped = await filter_candidates_by_thesis_relevance_with_drops(
-            candidates,
-            signal_descriptors=signal_descriptors,
-            ticker=holding.ticker,
-            why_own_it=thesis.why_own_it or "",
-        )
-        coverage.record_stage(STAGE_AFTER_RELEVANCE_FILTER, len(candidates))
-        coverage.record_reviewed_but_dropped(
-            apply_drop_thesis_floor(
-                reviewed_but_dropped,
-                thesis.created_at,
-                min_lookback_days=14,
+        # EDGAR Form 4 insider transactions
+        before_form4 = len(candidates)
+        form4_txns = await get_recent_form4_transactions(holding.ticker)
+        candidates.extend(build_form4_candidates(holding.ticker, form4_txns, now=now))
+        coverage.record_source("edgar_form4", candidates_returned=len(candidates) - before_form4)
+
+        # Enrich earnings 8-Ks (item 2.02) with LLM-extracted content
+        candidates = await enrich_earnings_candidates(candidates, thesis)
+
+        # Signal linking: load decomposition and enrich candidates
+        decomposition = await load_active_decomposition(db, thesis.id)
+        claims = decomposition.claims if decomposition else None
+
+        # Gemini news uses signal descriptors from the decomposition so focused
+        # searches can include claim/rationale context, not just bare labels.
+        signal_descriptors = signal_search_descriptors_from_claims(claims)
+        before_gemini = len(candidates)
+        try:
+            gemini_candidates = await collect_news_evidence(
+                holding.ticker, holding.name or holding.ticker, signal_descriptors
+            )
+            candidates.extend(gemini_candidates)
+            coverage.record_source("gemini_news", candidates_returned=len(candidates) - before_gemini)
+        except Exception as exc:
+            logger.warning("Gemini news failed for %s during check-now — skipping: %s", holding.ticker, exc)
+            await write_monitoring_gap(db, thesis.id, "gemini_news", str(exc), check_run_id)
+            coverage.record_source("gemini_news", candidates_returned=0, error=str(exc))
+        coverage.record_stage(STAGE_CANDIDATES_GENERATED, len(candidates))
+        candidates = match_candidates_to_signals(candidates, claims)
+        coverage.record_stage(STAGE_AFTER_MATCH, len(candidates))
+
+        # Semantic ranking layer: union embedding-based matches into the multi-
+        # binding list so a candidate that didn't share words with the signal
+        # label can still bind ("Pricing Dilemma" → "Services gross margin").
+        # Falls back to word-overlap inside build_embedding_similarity if the
+        # OpenAI embedding call fails, so this never makes the pipeline less
+        # resilient than before.
+        candidates = await enrich_candidates_with_embedding_matches(candidates, claims)
+        coverage.record_stage(STAGE_AFTER_EMBEDDING_ENRICH, len(candidates))
+        # Adjudicate borderline embedding matches with a cheap LLM call so a
+        # cosine-0.65 "maybe" becomes a concrete keep-or-drop with a real
+        # confidence score the UI can show.
+        candidates = await adjudicate_signal_matches(candidates, claims)
+        coverage.record_stage(STAGE_AFTER_LLM_ADJUDICATION, len(candidates))
+
+        # Thesis-aware relevance filter for news-style candidates. When Gemini
+        # is up this trims polished noise (13F filings, fund-flow updates); when
+        # Gemini is down it's the floor that keeps yfinance/AV news from
+        # surfacing as info-tier noise. Cheap (gpt-4o-mini) per-candidate check
+        # before the expensive severity classification downstream.
+        if claims:
+            from app.services.thesis_relevance_filter import (
+                apply_drop_thesis_floor,
+                filter_candidates_by_thesis_relevance_with_drops,
+            )
+            candidates, reviewed_but_dropped = await filter_candidates_by_thesis_relevance_with_drops(
+                candidates,
+                signal_descriptors=signal_descriptors,
+                ticker=holding.ticker,
+                why_own_it=thesis.why_own_it or "",
+            )
+            coverage.record_stage(STAGE_AFTER_RELEVANCE_FILTER, len(candidates))
+            coverage.record_reviewed_but_dropped(
+                apply_drop_thesis_floor(
+                    reviewed_but_dropped,
+                    thesis.created_at,
+                    min_lookback_days=14,
+                    now=now,
+                )
+            )
+            # The relevance filter can attach matched signal labels after the first
+            # binding pass. Re-run light signal enrichment so those new labels and
+            # any semantic matches flow into multi-binding instead of getting lost.
+            candidates = match_candidates_to_signals(candidates, claims)
+            candidates = await enrich_candidates_with_embedding_matches(candidates, claims)
+            candidates = await adjudicate_signal_matches(candidates, claims)
+
+        # Drop candidates predating this thesis — same guard as the daily batch
+        # run. On check-now we also allow the last 14 days: run_first_pulse fires
+        # immediately after onboarding, and a strict floor at thesis.created_at
+        # drops every recent filing/news as "before your time", leaving the first
+        # experience empty. The daily batch stays strict so we don't resurface
+        # already-processed history to established users.
+        candidates = apply_thesis_floor(candidates, thesis.created_at, min_lookback_days=14, now=now)
+        coverage.record_stage(STAGE_AFTER_THESIS_FLOOR, len(candidates))
+
+        # Build lookup tables for narrative generation
+        claims_by_id, signals_by_id = build_claim_signal_lookup(claims)
+        investor_profile = await load_investor_profile(db, thesis.user_id)
+
+        # Build snapshot — always returned, even when 0 events
+        snapshot = await _build_snapshot(company_data, holding, previous_price, thesis)
+
+        # Update holding price via the single valuation path (GBP value, not native).
+        if company_data and company_data.current_price is not None:
+            await apply_market_price(
+                holding,
+                native_price=company_data.current_price,
+                native_currency=getattr(company_data, "currency", None),
                 now=now,
             )
+
+        # Record that we actually checked, even if the pass is quiet — this is what
+        # lets the dashboard say "checked just now, all calm" truthfully.
+        holding.last_monitored_at = now
+
+        # Qualitative news_watch matching — BEFORE noise filtering, so a matched
+        # news item is tagged (and survives minimum-relevance) and gets cooldown.
+        news_watches = extract_news_watches(claims)
+        if not news_watches:
+            news_watches = extract_provisional_news_watches(thesis.interpretation)
+        nw_matched = await match_thesis_news_watches(candidates, news_watches)
+
+        # Per-active-signal transcript expansion: every active signal gets its
+        # own transcript candidate seeded with claim + label + rationale,
+        # pre-bound to the signal. This is the AMD-style segment-commentary
+        # path Codex called out — previously only news_watch signals got
+        # transcript candidates of their own, leaving revenue_growth /
+        # earnings_growth / news_topic signals with effectively zero transcript
+        # coverage even when relevant Q&A existed in the call.
+        candidates = await expand_transcript_candidates_for_signals(candidates, claims)
+        await best_effort_persist_candidate_evidence_chunks(db, thesis=thesis, holding=holding, candidates=candidates)
+
+        # Noise suppression: filter before classification (rules 1, 2, 4)
+        candidates = await filter_candidates(candidates, holding.id, signals_by_id, db, now=now)
+        coverage.record_stage(STAGE_AFTER_NOISE_FILTER, len(candidates))
+
+        classified = await classify_candidates_for_thesis(
+            thesis,
+            candidates,
+            investor_profile=investor_profile,
+            sector=holding.sector,
+            ticker=holding.ticker,
+            company_name=holding.name,
+            nw_matched=nw_matched,
         )
-        # The relevance filter can attach matched signal labels after the first
-        # binding pass. Re-run light signal enrichment so those new labels and
-        # any semantic matches flow into multi-binding instead of getting lost.
-        candidates = match_candidates_to_signals(candidates, claims)
-        candidates = await enrich_candidates_with_embedding_matches(candidates, claims)
-        candidates = await adjudicate_signal_matches(candidates, claims)
 
-    # Drop candidates predating this thesis — same guard as the daily batch
-    # run. On check-now we also allow the last 14 days: run_first_pulse fires
-    # immediately after onboarding, and a strict floor at thesis.created_at
-    # drops every recent filing/news as "before your time", leaving the first
-    # experience empty. The daily batch stays strict so we don't resurface
-    # already-processed history to established users.
-    candidates = apply_thesis_floor(candidates, thesis.created_at, min_lookback_days=14, now=now)
-    coverage.record_stage(STAGE_AFTER_THESIS_FLOOR, len(candidates))
+        # Rule 3: Priority suppression (post-classification)
+        suppressed = apply_priority_suppression([(c, s) for c, s, _ in classified])
+        surviving_set = {id(c) for c, _ in suppressed}
+        classified = [(c, s, a) for c, s, a in classified if id(c) in surviving_set]
+        coverage.record_stage(STAGE_AFTER_CLASSIFICATION, len(classified))
 
-    # Build lookup tables for narrative generation
-    claims_by_id, signals_by_id = build_claim_signal_lookup(claims)
-    investor_profile = await load_investor_profile(db, thesis.user_id)
-
-    # Build snapshot — always returned, even when 0 events
-    snapshot = await _build_snapshot(company_data, holding, previous_price, thesis)
-
-    # Update holding price via the single valuation path (GBP value, not native).
-    if company_data and company_data.current_price is not None:
-        await apply_market_price(
-            holding,
-            native_price=company_data.current_price,
-            native_currency=getattr(company_data, "currency", None),
+        created_event_ids = await persist_classified_candidates(
+            db,
+            thesis=thesis,
+            holding=holding,
+            classified=classified,
+            claims_by_id=claims_by_id,
+            signals_by_id=signals_by_id,
             now=now,
+            investor_profile=investor_profile,
         )
+        coverage.record_stage(STAGE_EVENTS_PERSISTED, len(created_event_ids))
+        coverage.record_events_persisted(len(created_event_ids))
+        # Persist coverage in its own try so an exception here can't strand the
+        # events commit — if we can't write the funnel row inline, the outer
+        # except still writes a partial one in a fresh session.
+        try:
+            await coverage.persist(db)
+        except Exception:
+            logger.exception(
+                "coverage.persist failed inline for holding %s (events still committing)",
+                holding.ticker,
+            )
 
-    # Record that we actually checked, even if the pass is quiet — this is what
-    # lets the dashboard say "checked just now, all calm" truthfully.
-    holding.last_monitored_at = now
+        await db.commit()
+        coverage_committed = True
 
-    # Qualitative news_watch matching — BEFORE noise filtering, so a matched
-    # news item is tagged (and survives minimum-relevance) and gets cooldown.
-    news_watches = extract_news_watches(claims)
-    if not news_watches:
-        news_watches = extract_provisional_news_watches(thesis.interpretation)
-    nw_matched = await match_thesis_news_watches(candidates, news_watches)
-
-    # Per-active-signal transcript expansion: every active signal gets its
-    # own transcript candidate seeded with claim + label + rationale,
-    # pre-bound to the signal. This is the AMD-style segment-commentary
-    # path Codex called out — previously only news_watch signals got
-    # transcript candidates of their own, leaving revenue_growth /
-    # earnings_growth / news_topic signals with effectively zero transcript
-    # coverage even when relevant Q&A existed in the call.
-    candidates = await expand_transcript_candidates_for_signals(candidates, claims)
-    await best_effort_persist_candidate_evidence_chunks(db, thesis=thesis, holding=holding, candidates=candidates)
-
-    # Noise suppression: filter before classification (rules 1, 2, 4)
-    candidates = await filter_candidates(candidates, holding.id, signals_by_id, db, now=now)
-    coverage.record_stage(STAGE_AFTER_NOISE_FILTER, len(candidates))
-
-    classified = await classify_candidates_for_thesis(
-        thesis,
-        candidates,
-        investor_profile=investor_profile,
-        sector=holding.sector,
-        ticker=holding.ticker,
-        company_name=holding.name,
-        nw_matched=nw_matched,
-    )
-
-    # Rule 3: Priority suppression (post-classification)
-    suppressed = apply_priority_suppression([(c, s) for c, s, _ in classified])
-    surviving_set = {id(c) for c, _ in suppressed}
-    classified = [(c, s, a) for c, s, a in classified if id(c) in surviving_set]
-    coverage.record_stage(STAGE_AFTER_CLASSIFICATION, len(classified))
-
-    created_event_ids = await persist_classified_candidates(
-        db,
-        thesis=thesis,
-        holding=holding,
-        classified=classified,
-        claims_by_id=claims_by_id,
-        signals_by_id=signals_by_id,
-        now=now,
-        investor_profile=investor_profile,
-    )
-    coverage.record_stage(STAGE_EVENTS_PERSISTED, len(created_event_ids))
-    coverage.record_events_persisted(len(created_event_ids))
-    await coverage.persist(db)
-
-    await db.commit()
-
-    return CheckNowResult(
-        status="completed",
-        events_created=len(created_event_ids),
-        created_event_ids=created_event_ids,
-        snapshot=snapshot,
-    )
+        return CheckNowResult(
+            status="completed",
+            events_created=len(created_event_ids),
+            created_event_ids=created_event_ids,
+            snapshot=snapshot,
+        )
+    except Exception as exc:
+        logger.exception("check-now pipeline failed for %s", holding.ticker)
+        if not coverage_committed:
+            try:
+                await db.rollback()
+            except Exception:
+                logger.exception("db.rollback after check-now failure raised for %s", holding.ticker)
+            await _persist_partial_coverage(coverage, f"{type(exc).__name__}: {exc}")
+        raise
 
 
 MONITORABLE_THESIS_STATUSES = ("active", "draft", "needs_review")
