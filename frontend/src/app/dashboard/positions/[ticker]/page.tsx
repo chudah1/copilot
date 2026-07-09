@@ -796,7 +796,7 @@ function PositionDetailInner() {
   const firstWriteChecklist =
     onboardingState?.investor_profile === "hearsay_driven"
       ? [
-          { label: "Why this is in the portfolio", detail: "Name the business driver, not just the ticker story." },
+          { label: "Why this is in the portfolio", detail: "Name the business reason, in one or two sentences." },
           { label: "What must stay true", detail: "List the condition that would keep your confidence intact." },
           { label: "What would break it", detail: "Define the evidence that should force a rethink." },
         ]
@@ -809,12 +809,12 @@ function PositionDetailInner() {
     onboardingState?.investor_profile === "hearsay_driven"
       ? [
           "Signals get matched to the written story instead of generic price noise.",
-          "Review prompts land when the business case moves, not just when price does.",
+          "Review prompts land when the business case moves, regardless of the tape.",
           "The next digest explains what matters for this position in plain language.",
         ]
       : [
           "Signals get tied to explicit assumptions instead of generic headlines.",
-          "Review prompts show up when evidence hits the thesis, not just when price moves.",
+          "Review prompts fire on evidence that hits your thesis, regardless of price.",
           "The next digest reads like a portfolio memo, not a watchlist alert.",
         ];
   const suppressSecondaryThesisPrompts = Boolean(decisionPrompt || showEarningsBanner);

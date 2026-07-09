@@ -57,12 +57,12 @@ const PROFILE_CONTENT: Record<
     label: "I invest from a thesis",
     title: "You already have a view. Put it on paper.",
     subtitle:
-      "Two questions, one position — then we watch for news that actually hits what you wrote.",
+      "Two questions, one position — then we watch for news that touches what you wrote.",
     welcomeLines: [
       "One position, two questions — about 2 minutes.",
       "We structure it without sanding off your wording.",
       "Alerts only when something touches what you said you believe.",
-      "A regular check-in rhythm, not just panic when the tape moves.",
+      "A steady check-in rhythm you can hold to, whether the tape is loud or quiet.",
     ],
     q1: "What is the core thesis behind owning this position?",
     q2: "What specific evidence would tell you that thesis is breaking?",
@@ -79,8 +79,8 @@ const PROFILE_CONTENT: Record<
     welcomeLines: [
       "One position, two questions — about 2 minutes.",
       "Start with what caught your eye, even if it was chatter or momentum.",
-      "We turn that into something you can test, not just hope for.",
-      "Check back on a schedule, not only when you're scared.",
+      "We turn a hunch into something you can test.",
+      "Regular check-ins, so fear isn't the trigger.",
     ],
     q1: "What made this stock interesting enough to buy in the first place?",
     q2: "What would make you admit the original idea is no longer working?",
@@ -390,7 +390,7 @@ function WizardInner() {
           {
             eyebrow: "",
             title: "~2 min",
-            body: "One position, two answers, then a working thesis you can actually review later.",
+            body: "One position, two answers, and a working thesis you can review later.",
           },
           {
             eyebrow: "Goal",

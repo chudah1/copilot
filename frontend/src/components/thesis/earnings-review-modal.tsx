@@ -219,7 +219,7 @@ export function EarningsReviewModal({
                         What this does
                       </p>
                       <p className="mt-2 font-sans text-base leading-relaxed text-foreground/90">
-                        Run the latest earnings against what you actually wrote down.
+                        Run the latest earnings against what you wrote down.
                       </p>
                     </div>
                     <div className="grid gap-3 sm:grid-cols-3">
@@ -228,7 +228,7 @@ export function EarningsReviewModal({
                           Overall call
                         </p>
                         <p className="mt-2 font-sans text-sm leading-relaxed text-foreground/85">
-                          Intact, worth watching, or genuinely challenged.
+                          Intact, worth watching, or challenged.
                         </p>
                       </div>
                       <div className="product-panel p-4">

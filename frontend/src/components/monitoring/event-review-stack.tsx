@@ -94,9 +94,9 @@ function eventDecisionCopy(
     null;
 
   const prompt = investorProfile === "hearsay_driven"
-    ? "Does this actually change the original story?"
+    ? "Does this change the original story?"
     : investorProfile === "thesis_driven"
-      ? "Does this actually weaken the thesis?"
+      ? "Does this weaken the thesis?"
       : "Does this change the reason enough to act?";
 
   return {

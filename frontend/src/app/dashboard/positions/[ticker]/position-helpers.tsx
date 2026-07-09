@@ -411,7 +411,7 @@ export function getMonitoringCalmState(args: {
       ? `Next likely checkpoint: earnings ${upcomingEarnings.days_until === 0 ? "today" : upcomingEarnings.days_until === 1 ? "tomorrow" : `in ${upcomingEarnings.days_until} days`}.`
       : activeSignalCount > 0
         ? `We're watching ${activeSignalCount} signal${activeSignalCount === 1 ? "" : "s"} on this position.`
-        : "We're waiting for news that actually hits one of your assumptions.";
+        : "We're waiting for news that hits one of your assumptions.";
 
   return {
     title,
@@ -476,8 +476,8 @@ export function buildPostSaveNotice(args: {
       eyebrow: "Blind spot closed",
       title:
         investorProfile === "hearsay_driven"
-          ? "Now choose what should actually test this reason."
-          : "Now choose what should actually test this thesis.",
+          ? "Now choose what would test this reason."
+          : "Now choose what would test this thesis.",
       body:
         investorProfile === "hearsay_driven"
           ? "The position now has a real written reason. Generate the first watchlist so the next alert is tied to the story you mean."
