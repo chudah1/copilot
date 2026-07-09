@@ -349,8 +349,19 @@ async def collect_news_evidence(
     signal_inputs: list[Any],
     days_back: int = 7,
 ) -> list[dict[str, Any]]:
-    """Return gemini_news monitoring candidates for the given ticker and signals."""
-    if not settings.gemini_api_key or not signal_inputs:
+    """Return gemini_news monitoring candidates for the given ticker and
+    signals.
+
+    Every early-return path logs why it bailed so a silent-empty coverage
+    funnel doesn't stay ambiguous — the smoke test on 2026-07-09 spent
+    two rounds trying to figure out whether Gemini was 'unconfigured',
+    'searched but found nothing', or 'errored silently'. Now it says.
+    """
+    if not settings.gemini_api_key:
+        logger.info("Gemini news skipped for %s: GEMINI_API_KEY not configured", ticker)
+        return []
+    if not signal_inputs:
+        logger.info("Gemini news skipped for %s: no signal inputs to search on", ticker)
         return []
 
     try:
@@ -362,6 +373,10 @@ async def collect_news_evidence(
 
     signal_descriptors = _normalise_signal_search_inputs(signal_inputs)
     if not signal_descriptors:
+        logger.info(
+            "Gemini news skipped for %s: %d signal inputs normalised to zero descriptors",
+            ticker, len(signal_inputs),
+        )
         return []
 
     signals_text = _signal_search_bullets(signal_descriptors)
@@ -430,6 +445,7 @@ or clearly a roundup / market-recap / "why the stock moved" explainer where the 
 
         grounded_urls: set[str] = set()
         raw_sections: list[str] = []
+        empty_search_labels: list[str] = []
         last_error: Exception | None = None
         for prompt, signal_label in search_jobs:
             try:
@@ -444,6 +460,7 @@ or clearly a roundup / market-recap / "why the stock moved" explainer where the 
                 )
                 continue
             if not raw_text or raw_text.lower().startswith("no news found"):
+                empty_search_labels.append(signal_label or "broad")
                 continue
             grounded_urls.update(search_grounded_urls)
             section_header = f"SEARCH FOCUS: {signal_label}" if signal_label else "SEARCH FOCUS: broad company search"
@@ -452,6 +469,10 @@ or clearly a roundup / market-recap / "why the stock moved" explainer where the 
         if not raw_sections:
             if last_error is not None:
                 raise last_error
+            logger.info(
+                "Gemini news for %s: all %d searches returned 'no news found' (labels: %s)",
+                ticker, len(search_jobs), ", ".join(empty_search_labels) or "none",
+            )
             return []
 
         # Step 2 — structured extraction, no search
@@ -477,8 +498,24 @@ or clearly a roundup / market-recap / "why the stock moved" explainer where the 
 
         extraction_text = (getattr(extraction_response, "text", "") or "").strip()
         items = _parse_news_response_tolerant(extraction_text)
+        if not items:
+            # Search returned raw content but the JSON extractor parsed 0
+            # articles out of it. Usually means the extractor prompt is
+            # rejecting the raw results (wrong shape, out of date range,
+            # or unrelated topic). Log the first 200 chars of the raw
+            # sections so we can eyeball what went wrong.
+            preview = "\n---\n".join(raw_sections)[:200]
+            logger.warning(
+                "Gemini news for %s: extractor returned 0 items from %d search section(s). Raw preview: %s",
+                ticker, len(raw_sections), preview,
+            )
 
-        return _to_candidates(items, ticker=ticker, name=name, grounded_urls=grounded_urls)
+        candidates = _to_candidates(items, ticker=ticker, name=name, grounded_urls=grounded_urls)
+        logger.info(
+            "Gemini news for %s: %d candidate(s) from %d search section(s) [%d empty]",
+            ticker, len(candidates), len(raw_sections), len(empty_search_labels),
+        )
+        return candidates
 
     except Exception as exc:
         logger.warning("Gemini news collection failed for %s: %s", ticker, exc)
