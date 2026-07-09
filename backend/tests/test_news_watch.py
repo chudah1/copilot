@@ -1,6 +1,8 @@
 """Tests for qualitative news_watch matching (embed pre-filter + judge)."""
+import json
 import re
 from types import SimpleNamespace
+from unittest.mock import AsyncMock, MagicMock, patch
 
 import pytest
 
@@ -215,6 +217,47 @@ async def test_match_skips_when_judge_rejects():
     matched = await match_news_watches([cand], [_WATCH], similarity=_kw_similarity, judge=_judge_no)
     assert matched == {}
     assert "signal_id" not in cand["evidence"]
+
+
+@pytest.mark.asyncio
+async def test_judge_news_watch_falls_back_to_openai_when_anthropic_fails(monkeypatch):
+    monkeypatch.setattr("app.services.news_watch.settings.anthropic_api_key", "anthropic-key")
+    monkeypatch.setattr("app.services.news_watch.settings.openai_api_key", "openai-key")
+    monkeypatch.setattr("app.services.news_watch.settings.anthropic_model", "claude-test")
+
+    anthropic_client = MagicMock()
+    anthropic_client.messages.create = AsyncMock(side_effect=RuntimeError("anthropic credits empty"))
+    openai_client = MagicMock()
+    openai_client.chat.completions.create = AsyncMock(
+        return_value=SimpleNamespace(
+            choices=[
+                SimpleNamespace(
+                    message=SimpleNamespace(
+                        content=json.dumps(
+                            {
+                                "matches": True,
+                                "severity": "warning",
+                                "reason": "Management explicitly confirmed the watched condition.",
+                            }
+                        )
+                    )
+                )
+            ]
+        )
+    )
+
+    with patch("anthropic.AsyncAnthropic", return_value=anthropic_client), patch(
+        "openai.AsyncOpenAI", return_value=openai_client
+    ):
+        verdict = await judge_news_watch(
+            "Management said pricing remained strong in services.",
+            "Apple services pricing power",
+            "supports",
+        )
+
+    assert verdict.matches is True
+    assert verdict.severity == "warning"
+    assert "confirmed" in verdict.reason.lower()
 
 
 @pytest.mark.asyncio

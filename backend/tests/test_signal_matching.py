@@ -780,6 +780,14 @@ def test_determine_verdict_info():
     assert determine_verdict("info") == "neutral"
 
 
+def test_determine_verdict_info_supports_when_signal_direction_is_supportive():
+    candidate = {
+        "event_type": "earnings_call_transcript",
+        "evidence": {"signal_direction": "supports"},
+    }
+    assert determine_verdict("info", candidate) == "supports"
+
+
 def test_determine_verdict_unknown_defaults_to_review():
     assert determine_verdict("something_else") == "review"
 

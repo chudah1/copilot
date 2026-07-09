@@ -59,3 +59,20 @@ async def test_confident_qualitative_verdict_does_fire():
         classified = await classify_candidates_for_thesis(_thesis(), [_news_candidate()])
     assert len(classified) == 1
     assert classified[0][1] == "warning"
+
+
+async def test_signal_bound_transcript_survives_skip_as_info():
+    skip = SimpleNamespace(severity="skip", analysis=None)
+    transcript_candidate = {
+        "event_type": "earnings_call_transcript",
+        "description": "Q2 earnings call on services revenue growth: Services revenue grew 16% year over year.",
+        "evidence": {
+            "signal_id": "sig-1",
+            "signal_direction": "supports",
+            "excerpt": "Services revenue grew 16% year over year.",
+        },
+    }
+    with patch(f"{_PIPE}.classify_event", new_callable=AsyncMock, return_value=skip):
+        classified = await classify_candidates_for_thesis(_thesis(), [transcript_candidate])
+    assert len(classified) == 1
+    assert classified[0][1] == "info"

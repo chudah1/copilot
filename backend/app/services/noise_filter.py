@@ -196,17 +196,23 @@ def _apply_evidence_dedup(
     existing_keys: set[tuple[str, str]],
 ) -> list[dict[str, Any]]:
     """Rule 1: Skip candidates whose (evidence_type, source_id) already exists in recent events."""
-    filtered = []
-    seen: set[tuple[str, str]] = set()
+    filtered: list[dict[str, Any]] = []
+    seen: dict[tuple[str, str], int] = {}
     for candidate in candidates:
         evidence = candidate.get("evidence", {})
         source_id = _get_evidence_source_id(evidence)
         if source_id:
             ev_type = _get_evidence_type(candidate.get("event_type", ""))
             key = (ev_type, source_id)
-            if key in existing_keys or key in seen:
+            if key in existing_keys:
                 continue
-            seen.add(key)
+            existing_idx = seen.get(key)
+            if existing_idx is not None:
+                existing = filtered[existing_idx]
+                if _cross_source_rank(candidate) > _cross_source_rank(existing):
+                    filtered[existing_idx] = candidate
+                continue
+            seen[key] = len(filtered)
         filtered.append(candidate)
     return filtered
 

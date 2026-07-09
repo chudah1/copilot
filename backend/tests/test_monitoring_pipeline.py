@@ -245,6 +245,49 @@ async def test_expand_transcript_candidates_for_signals_skips_inactive_signals(m
 
 
 @pytest.mark.asyncio
+async def test_expand_transcript_candidates_for_transcript_topic_falls_back_to_generic_highlights(monkeypatch):
+    """If a transcript_topic signal can't find a tighter signal-specific
+    window, keep the signal-bound candidate by reusing the generic transcript
+    highlights instead of dropping to the unbound transcript event."""
+    monkeypatch.setattr(
+        "app.services.monitoring_pipeline.settings.openai_api_key",
+        None,
+        raising=False,
+    )
+    transcript_candidate = {
+        "event_type": "earnings_call_transcript",
+        "description": "Earnings call",
+        "evidence": {
+            "quarter": "2026Q2",
+            "full_transcript": "Now let us turn to Services, which set an all-time revenue record with $31 billion.",
+            "highlights": ["Now let us turn to Services, which set an all-time revenue record with $31 billion."],
+            "excerpt": "Now let us turn to Services, which set an all-time revenue record with $31 billion.",
+        },
+    }
+    support_signal = SimpleNamespace(
+        id="support-sig",
+        signal_type="transcript_topic",
+        signal_label="AAPL ecosystem retention commentary",
+        rationale="Management commentary should reinforce ecosystem durability.",
+        active=True,
+    )
+    entity = SimpleNamespace(signals=[support_signal])
+    claim = SimpleNamespace(
+        id="claim-1",
+        claim_text="AAPL ecosystem retention and engagement remain durable",
+        entities=[entity],
+    )
+
+    expanded = await expand_transcript_candidates_for_signals([transcript_candidate], [claim])
+
+    assert len(expanded) == 2
+    signal_bound = expanded[1]
+    assert signal_bound["evidence"]["signal_id"] == "support-sig"
+    assert signal_bound["evidence"]["matched_signal_ids"] == ["support-sig"]
+    assert signal_bound["evidence"]["excerpt"] == transcript_candidate["evidence"]["excerpt"]
+
+
+@pytest.mark.asyncio
 async def test_expand_transcript_candidates_for_signals_noop_without_transcripts():
     """If the candidate set has no transcripts, the expansion is a no-op
     (we can't extract from text that isn't there). Important so the

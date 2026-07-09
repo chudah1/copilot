@@ -342,7 +342,7 @@ async def test_decompose_thesis_persists_nested_records(client, auth_headers, ho
 
     assert response.status_code == 201
     envelope = response.json()
-    assert envelope["status"] == "draft"
+    assert envelope["status"] == "confirmed"
     data = envelope["decomposition"]
     assert data["version"] == 1
     assert data["reason_type"] == "business_performance"
@@ -680,6 +680,7 @@ async def test_decompose_auto_activates_direct_high_confidence_signal_and_syncs_
         response = await client.post(f"/api/theses/{thesis_id}/decompose", headers=auth_headers)
 
     assert response.status_code == 201
+    assert response.json()["status"] == "confirmed"
     signal = response.json()["decomposition"]["claims"][0]["entities"][0]["signals"][0]
     assert signal["active"] is True
     assert signal["user_confirmed"] is True
@@ -755,6 +756,7 @@ async def test_proxy_signal_remains_inactive_and_not_projected(client, auth_head
         response = await client.post(f"/api/theses/{thesis_id}/decompose", headers=auth_headers)
 
     assert response.status_code == 201
+    assert response.json()["status"] == "draft"
     signal = response.json()["decomposition"]["claims"][0]["entities"][0]["signals"][0]
     assert signal["active"] is False
     assert signal["user_confirmed"] is None
@@ -1058,6 +1060,7 @@ async def test_decompose_auto_activates_strong_held_company_transcript_signal(cl
         response = await client.post(f"/api/theses/{thesis_id}/decompose", headers=auth_headers)
 
     assert response.status_code == 201
+    assert response.json()["status"] == "confirmed"
     signal = response.json()["decomposition"]["claims"][0]["entities"][0]["signals"][0]
     assert signal["active"] is True
     assert signal["user_confirmed"] is True

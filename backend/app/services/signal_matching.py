@@ -835,6 +835,16 @@ def determine_verdict(severity: str, candidate: dict | None = None) -> str:
     if news_watch_direction == "threatens":
         return "threatens"
 
+    # Signal-focused qualitative transcript/news candidates can carry an
+    # inferred signal direction even when they were not matched through the
+    # explicit news_watch judge. When such a candidate survives classification
+    # as plain "info", interpret it as supporting evidence rather than a
+    # neutral FYI, so positive management commentary can land in the calm
+    # support surface instead of disappearing into generic transcript noise.
+    signal_direction = evidence.get("signal_direction")
+    if signal_direction == "supports" and severity == "info":
+        return "supports"
+
     # Earnings surprise: use direction
     if event_type == "earnings_surprise":
         surprise = evidence.get("recent_earnings_surprise_pct")

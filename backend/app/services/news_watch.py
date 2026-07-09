@@ -238,33 +238,61 @@ async def judge_news_watch(evidence_text: str, watch_for: str, direction: str) -
     """LLM judge: does this news satisfy the watch condition? Conservative — with
     no API key it returns no-match (qualitative signals simply don't fire rather
     than guess)."""
-    if not settings.anthropic_api_key:
-        return NewsWatchVerdict(matches=False, severity="info", reason="judge unavailable")
-    try:
-        import anthropic
+    prompt = _JUDGE_USER.format(direction=direction, watch_for=watch_for, evidence_text=evidence_text)
 
-        client = anthropic.AsyncAnthropic(api_key=settings.anthropic_api_key)
-        resp = await client.messages.create(
-            model=settings.anthropic_model,
-            max_tokens=256,
-            system=_JUDGE_SYSTEM,
-            messages=[{
-                "role": "user",
-                "content": _JUDGE_USER.format(direction=direction, watch_for=watch_for, evidence_text=evidence_text),
-            }],
-            timeout=30.0,
-        )
-        data = json.loads(strip_code_fences(resp.content[0].text.strip()))
-        matches = bool(data.get("matches"))
-        severity = data.get("severity")
-        if severity not in {"info", "warning", "thesis_breaking"}:
-            severity = "warning" if matches else "info"
-        if matches and severity == "info":
-            severity = "warning"
-        return NewsWatchVerdict(matches=matches, severity=severity, reason=str(data.get("reason") or ""))
-    except Exception as exc:
-        logger.error("news_watch judge failed (%s): %s", type(exc).__name__, exc)
-        return NewsWatchVerdict(matches=False, severity="info", reason="judge error")
+    if settings.anthropic_api_key:
+        try:
+            import anthropic
+
+            client = anthropic.AsyncAnthropic(api_key=settings.anthropic_api_key)
+            resp = await client.messages.create(
+                model=settings.anthropic_model,
+                max_tokens=256,
+                system=_JUDGE_SYSTEM,
+                messages=[{
+                    "role": "user",
+                    "content": prompt,
+                }],
+                timeout=30.0,
+            )
+            data = json.loads(strip_code_fences(resp.content[0].text.strip()))
+            matches = bool(data.get("matches"))
+            severity = data.get("severity")
+            if severity not in {"info", "warning", "thesis_breaking"}:
+                severity = "warning" if matches else "info"
+            if matches and severity == "info":
+                severity = "warning"
+            return NewsWatchVerdict(matches=matches, severity=severity, reason=str(data.get("reason") or ""))
+        except Exception as exc:
+            logger.warning("Anthropic news_watch judge failed (%s), trying OpenAI: %s", type(exc).__name__, exc)
+
+    if settings.openai_api_key:
+        try:
+            from openai import AsyncOpenAI
+
+            client = AsyncOpenAI(api_key=settings.openai_api_key)
+            resp = await client.chat.completions.create(
+                model="gpt-4o-mini",
+                max_tokens=256,
+                messages=[
+                    {"role": "system", "content": _JUDGE_SYSTEM},
+                    {"role": "user", "content": prompt},
+                ],
+                timeout=30.0,
+            )
+            text = (resp.choices[0].message.content or "").strip()
+            data = json.loads(strip_code_fences(text))
+            matches = bool(data.get("matches"))
+            severity = data.get("severity")
+            if severity not in {"info", "warning", "thesis_breaking"}:
+                severity = "warning" if matches else "info"
+            if matches and severity == "info":
+                severity = "warning"
+            return NewsWatchVerdict(matches=matches, severity=severity, reason=str(data.get("reason") or ""))
+        except Exception as exc:
+            logger.error("OpenAI news_watch judge also failed (%s): %s", type(exc).__name__, exc)
+
+    return NewsWatchVerdict(matches=False, severity="info", reason="judge unavailable")
 
 
 SimilarityFn = Callable[[str, str], float]

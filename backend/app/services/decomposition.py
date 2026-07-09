@@ -1203,6 +1203,20 @@ async def _persist_successful_decomposition(
     # generate_decomposition_for_thesis) and confirmation that leaves zero
     # active signals (see confirm_decomposition_for_thesis).
 
+    decomposition.status = "confirmed" if active_signals else "draft"
+    if decomposition.status in {"confirmed", "partially_confirmed"}:
+        decomposition_result = await db.execute(
+            select(ThesisDecomposition)
+            .where(ThesisDecomposition.id == decomposition.id)
+            .options(
+                selectinload(ThesisDecomposition.claims)
+                .selectinload(ThesisClaim.entities)
+                .selectinload(ThesisEntity.signals)
+            )
+        )
+        loaded_decomposition = decomposition_result.scalar_one()
+        await _sync_claim_embeddings(loaded_decomposition)
+
     await db.commit()
     return decomposition
 
@@ -1229,7 +1243,7 @@ async def generate_decomposition_for_thesis(
 
     if result.success and result.normalized_output is not None:
         decomposition = await _persist_successful_decomposition(db, thesis, holding, result)
-        return PersistedDecompositionResult(status="draft", message=None, decomposition=decomposition)
+        return PersistedDecompositionResult(status=decomposition.status, message=None, decomposition=decomposition)
 
     # One automatic retry for transient failures (network hiccup, rate limit, etc.)
     if result.retryable:
@@ -1237,7 +1251,7 @@ async def generate_decomposition_for_thesis(
         result = await gateway.run(request)
         if result.success and result.normalized_output is not None:
             decomposition = await _persist_successful_decomposition(db, thesis, holding, result)
-            return PersistedDecompositionResult(status="draft", message=None, decomposition=decomposition)
+            return PersistedDecompositionResult(status=decomposition.status, message=None, decomposition=decomposition)
 
     # The AI decomposition is unusable — but never leave the thesis unmonitored.
     # Persist a baseline floor so monitoring still fires, and surface guidance to

@@ -79,6 +79,25 @@ def test_evidence_dedup_deduplicates_within_batch():
     assert len(result) == 1
 
 
+def test_evidence_dedup_prefers_signal_bound_candidate_with_same_source():
+    existing: set[tuple[str, str]] = set()
+    candidates = [
+        {
+            "event_type": "earnings_call_transcript",
+            "description": "generic transcript candidate",
+            "evidence": {"transcript_id": "transcript:2026Q2"},
+        },
+        {
+            "event_type": "earnings_call_transcript",
+            "description": "signal-bound transcript candidate",
+            "evidence": {"transcript_id": "transcript:2026Q2", "signal_id": "sig-1"},
+        },
+    ]
+    result = _apply_evidence_dedup(candidates, existing)
+    assert len(result) == 1
+    assert result[0]["description"] == "signal-bound transcript candidate"
+
+
 def test_evidence_dedup_allows_same_source_different_evidence_type():
     """Same article_id but different evidence_type should NOT be deduped."""
     existing = {("news", "shared-id")}

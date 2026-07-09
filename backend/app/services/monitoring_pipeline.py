@@ -499,10 +499,25 @@ async def expand_transcript_candidates_for_signals(
             label = str(getattr(signal, "signal_label", "") or "").strip()
             claim_text = str(getattr(claim, "claim_text", "") or "").strip()
             rationale = str(getattr(signal, "rationale", "") or "").strip()
+            signal_type = str(getattr(signal, "signal_type", "") or "").strip()
+            raw_direction = str((getattr(signal, "signal_config_json", {}) or {}).get("direction") or "").strip().lower()
+            if raw_direction in {"supports", "threatens"}:
+                signal_direction = raw_direction
+            else:
+                signal_direction = (
+                    "threatens" if getattr(getattr(signal, "entity", None), "relation_type", None) == "threatened_by" else "supports"
+                )
             focus_texts = [t for t in (label, claim_text, rationale) if t]
             if not focus_texts:
                 continue
             smart = await _relevant_transcript_highlights(full_text, focus_texts)
+            if not smart and signal_type == "transcript_topic":
+                existing_highlights = evidence.get("highlights")
+                existing_excerpt = str(evidence.get("excerpt") or "").strip()
+                if isinstance(existing_highlights, list) and existing_highlights:
+                    smart = [str(item).strip() for item in existing_highlights if str(item).strip()]
+                elif existing_excerpt:
+                    smart = [existing_excerpt]
             if not smart:
                 continue
 
@@ -522,6 +537,7 @@ async def expand_transcript_candidates_for_signals(
                         "claim_id": str(claim.id),
                         "matched_signal_ids": [sig_id],
                         "matched_signal_labels": [label] if label else [],
+                        "signal_direction": signal_direction,
                         "highlights": smart,
                         "excerpt": " ".join(smart[:2]),
                         "topic_context": " ".join(part for part in topic_context_parts if part),
@@ -596,6 +612,22 @@ async def classify_candidates_for_thesis(
         )
         if classification is not None and classification.severity != "skip":
             classified.append((candidate, classification.severity, classification.analysis))
+            continue
+
+        # Signal-bound transcript windows are already thesis-linked by the time
+        # they reach classification: we only create them after finding a
+        # signal-specific excerpt in the call. If the generic classifier still
+        # returns skip/None, keep them as low-severity evidence instead of
+        # dropping the support path entirely.
+        evidence = candidate.get("evidence", {})
+        if candidate.get("event_type") == "earnings_call_transcript" and evidence.get("signal_id"):
+            classified.append(
+                (
+                    candidate,
+                    "info",
+                    "This management commentary directly touched a signal you're actively watching.",
+                )
+            )
             continue
 
         # Objective threshold breaches (a price move or metric breach past the

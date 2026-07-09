@@ -386,6 +386,35 @@ def test_serialise_audit_results_drops_unlinked_earnings_surprise():
     assert results == []
 
 
+def test_serialise_audit_results_drops_unlinked_exec_change_8k_warning():
+    from app.services.check_now import _serialise_audit_results
+
+    mock_thesis = MagicMock()
+    mock_thesis.why_own_it = "Services growth stays strong."
+
+    classified = [
+        (
+            {
+                "description": "SEC 8-K filed by AAPL: Executive Change (2026-04-20)",
+                "event_type": "edgar_8k",
+                "evidence": {"filing_date": "2026-04-20", "items": ["5.02"]},
+            },
+            "warning",
+            "",
+        )
+    ]
+
+    results = _serialise_audit_results(
+        classified,
+        thesis=mock_thesis,
+        investor_profile="thesis_driven",
+        claims_by_id={},
+        signals_by_id={},
+    )
+
+    assert results == []
+
+
 def test_build_coverage_gap_items_reports_uncovered_qualitative_signals():
     from app.services.check_now import _build_coverage_gap_items
 

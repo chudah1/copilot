@@ -606,6 +606,12 @@ def _serialise_audit_results(
             if candidate.get("event_type") == "earnings_surprise":
                 continue
             if (
+                candidate.get("event_type") == "edgar_8k"
+                and severity == "warning"
+                and {str(item) for item in (evidence.get("items") or [])} <= {"5.02"}
+            ):
+                continue
+            if (
                 severity == "info"
                 and candidate.get("event_type") in {"news_or_earnings_candidate", "product_ramp_update", "contract_renewal_update", "funding_condition_update", "margin_pressure_update", "customer_capex_signal", "gemini_news", "news_keyword_match"}
             ):
