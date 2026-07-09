@@ -54,7 +54,7 @@ export default function ResearchLandingPage() {
                   You get
                 </p>
                 <p className="mt-2 font-display text-[1.4rem] italic leading-tight text-foreground">
-                  A decision memo, not a blurb.
+                  A decision memo.
                 </p>
               </div>
               <div className="border border-border/60 bg-background/70 p-4">
