@@ -24,6 +24,7 @@ class MonitoringEvent(Base):
     claim_id: Mapped[uuid.UUID | None] = mapped_column(UUIDType, nullable=True, index=True)
     signal_id: Mapped[uuid.UUID | None] = mapped_column(UUIDType, nullable=True, index=True)
     evidence_type: Mapped[str | None] = mapped_column(String(30), nullable=True)
+    story_anchor: Mapped[str | None] = mapped_column(String(255), nullable=True)
     evidence_summary: Mapped[str | None] = mapped_column(Text, nullable=True)
     verdict: Mapped[str | None] = mapped_column(String(20), nullable=True)
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now())

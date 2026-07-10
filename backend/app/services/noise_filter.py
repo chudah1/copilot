@@ -100,6 +100,13 @@ COOLDOWN_HOURS: dict[str, int] = {
     "analyst_revision": 72,
 }
 DEFAULT_COOLDOWN_HOURS = 24
+COARSE_COOLDOWN_EVENT_TYPES = frozenset({
+    "price_move",
+    "metric_threshold",
+    "upcoming_earnings",
+    "earnings_surprise",
+    "monitoring_inactive",
+})
 
 SEVERITY_RANK: dict[str, int] = {
     "info": 0,
@@ -191,6 +198,155 @@ async def _load_recent_evidence_keys(
     return keys
 
 
+def _normalize_story_date(raw: Any) -> str | None:
+    if not raw:
+        return None
+    if isinstance(raw, datetime):
+        return raw.date().isoformat()
+    if isinstance(raw, date):
+        return raw.isoformat()
+    if isinstance(raw, str):
+        try:
+            return datetime.fromisoformat(raw.replace("Z", "+00:00")).date().isoformat()
+        except ValueError:
+            try:
+                return date.fromisoformat(raw[:10]).isoformat()
+            except ValueError:
+                return None
+    return None
+
+
+def _story_anchor_uses_cooldown(event_type: str) -> bool:
+    return event_type not in COARSE_COOLDOWN_EVENT_TYPES
+
+
+def story_anchor_for_candidate(candidate: dict[str, Any]) -> str | None:
+    evidence = candidate.get("evidence", {})
+    event_type = str(candidate.get("event_type", "") or "").strip()
+    if not event_type:
+        return None
+
+    source_id = _get_evidence_source_id(evidence)
+    if source_id:
+        return f"{event_type}:source:{source_id}"
+
+    if event_type in {"earnings_call_transcript", "upcoming_earnings"}:
+        quarter = str(evidence.get("quarter") or "").strip()
+        if quarter:
+            return f"{event_type}:earnings_cycle:{quarter}"
+        call_date = _normalize_story_date(evidence.get("call_date") or evidence.get("date"))
+        if call_date:
+            return f"{event_type}:earnings_cycle:{call_date}"
+
+    if event_type == "insider_transaction":
+        transaction_date = _normalize_story_date(evidence.get("transaction_date") or evidence.get("date"))
+        if transaction_date:
+            actor = str(
+                evidence.get("insider_name")
+                or evidence.get("owner_name")
+                or evidence.get("reporting_name")
+                or ""
+            ).strip().lower()
+            if actor:
+                return f"{event_type}:insider:{transaction_date}:{actor}"
+            return f"{event_type}:insider:{transaction_date}"
+
+    if event_type == "edgar_8k":
+        filing_date = _normalize_story_date(evidence.get("filing_date") or evidence.get("date"))
+        items = evidence.get("items")
+        item_key = ""
+        if isinstance(items, list) and items:
+            item_key = ",".join(sorted(str(item).strip() for item in items if str(item).strip()))
+        headline = str(evidence.get("headline") or evidence.get("description") or "").strip()
+        prefix = _headline_prefix(headline, words=5)
+        parts = [part for part in (filing_date, item_key, prefix) if part]
+        if parts:
+            return f"{event_type}:filing:{':'.join(parts)}"
+
+    headline = str(evidence.get("headline") or candidate.get("description") or "").strip()
+    prefix = _headline_prefix(headline, words=5)
+    if not prefix:
+        return None
+    story_date = _normalize_story_date(
+        evidence.get("published_at")
+        or evidence.get("date")
+        or evidence.get("filing_date")
+        or evidence.get("event_date")
+    )
+    if story_date:
+        return f"{event_type}:headline:{story_date}:{prefix}"
+    return f"{event_type}:headline:{prefix}"
+
+
+def _story_anchor_from_event(
+    event_type: str | None,
+    story_anchor: str | None,
+    raw_data: dict[str, Any] | None,
+) -> str | None:
+    if story_anchor:
+        return story_anchor
+    if not event_type or not raw_data or not isinstance(raw_data, dict):
+        return None
+    evidence = raw_data.get("evidence")
+    if not isinstance(evidence, dict):
+        return None
+    return story_anchor_for_candidate({
+        "event_type": event_type,
+        "evidence": evidence,
+    })
+
+
+async def _load_recent_signal_story_anchors(
+    db: AsyncSession,
+    holding_id: uuid.UUID,
+    signal_ids: set[str],
+    *,
+    cutoff: datetime,
+) -> dict[str, list[tuple[datetime, str]]]:
+    """Load recent story anchors for the active signals in this pass.
+
+    Recent monitoring_events are the source of truth. We fall back to deriving
+    an anchor from legacy raw_data when the persisted story_anchor column is
+    still null during rollout.
+    """
+    if not signal_ids:
+        return {}
+
+    signal_uuids: list[uuid.UUID] = []
+    for signal_id in signal_ids:
+        try:
+            signal_uuids.append(uuid.UUID(str(signal_id)))
+        except (TypeError, ValueError):
+            continue
+    if not signal_uuids:
+        return {}
+
+    result = await db.execute(
+        select(
+            MonitoringEvent.signal_id,
+            MonitoringEvent.story_anchor,
+            MonitoringEvent.raw_data,
+            MonitoringEvent.event_type,
+            MonitoringEvent.created_at,
+        ).where(
+            MonitoringEvent.holding_id == holding_id,
+            MonitoringEvent.signal_id.in_(signal_uuids),
+            MonitoringEvent.created_at >= cutoff,
+        )
+    )
+
+    anchors_by_signal: dict[str, list[tuple[datetime, str]]] = {}
+    for signal_id, stored_anchor, raw_data, event_type, created_at in result:
+        if signal_id is None or created_at is None:
+            continue
+        anchor = _story_anchor_from_event(event_type, stored_anchor, raw_data)
+        if not anchor:
+            continue
+        signal_id_str = str(signal_id)
+        anchors_by_signal.setdefault(signal_id_str, []).append((_normalize_datetime(created_at), anchor))
+    return anchors_by_signal
+
+
 def _apply_evidence_dedup(
     candidates: list[dict[str, Any]],
     existing_keys: set[tuple[str, str]],
@@ -220,10 +376,12 @@ def _apply_evidence_dedup(
 def _apply_signal_cooldown(
     candidates: list[dict[str, Any]],
     signal_map: dict[str, ThesisSignal],
+    recent_story_anchors: dict[str, list[tuple[datetime, str]]] | None = None,
     now: datetime | None = None,
 ) -> list[dict[str, Any]]:
     """Rule 2: Skip candidates whose signal fired within the cooldown window."""
     now = now or datetime.now(timezone.utc)
+    recent_story_anchors = recent_story_anchors or {}
     filtered = []
     for candidate in candidates:
         evidence = candidate.get("evidence", {})
@@ -232,20 +390,42 @@ def _apply_signal_cooldown(
             filtered.append(candidate)
             continue
 
-        signal = signal_map.get(signal_id)
+        event_type = candidate.get("event_type", "")
+        evidence_type = _get_evidence_type(candidate.get("event_type", ""))
+        cooldown_hours = COOLDOWN_HOURS.get(evidence_type, DEFAULT_COOLDOWN_HOURS)
+        signal_id_str = str(signal_id)
+
+        if _story_anchor_uses_cooldown(event_type):
+            candidate_anchor = story_anchor_for_candidate(candidate)
+            if candidate_anchor:
+                cooldown_start = now - timedelta(hours=cooldown_hours)
+                recent_anchors = recent_story_anchors.get(signal_id_str, [])
+                if any(
+                    anchor == candidate_anchor and created_at >= cooldown_start
+                    for created_at, anchor in recent_anchors
+                ):
+                    logger.debug(
+                        "Signal cooldown: skipping %s for signal %s due to matching story anchor %s",
+                        event_type,
+                        signal_id_str,
+                        candidate_anchor,
+                    )
+                    continue
+                filtered.append(candidate)
+                continue
+
+        signal = signal_map.get(signal_id_str)
         if not signal or not signal.last_fired_at:
             filtered.append(candidate)
             continue
 
-        evidence_type = _get_evidence_type(candidate.get("event_type", ""))
-        cooldown_hours = COOLDOWN_HOURS.get(evidence_type, DEFAULT_COOLDOWN_HOURS)
         cooldown_end = _normalize_datetime(signal.last_fired_at) + timedelta(hours=cooldown_hours)
 
         if now < cooldown_end:
             logger.debug(
                 "Signal cooldown: skipping %s for signal %s (cooldown until %s)",
-                candidate.get("event_type"),
-                signal_id,
+                event_type,
+                signal_id_str,
                 cooldown_end.isoformat(),
             )
             continue
@@ -313,6 +493,41 @@ def _candidate_family(event_type: str) -> str | None:
     return None
 
 
+def _sibling_story_key(candidate: dict[str, Any]) -> str | None:
+    evidence = candidate.get("evidence", {})
+    source_id = _get_evidence_source_id(evidence)
+    if source_id:
+        return f"source:{source_id}"
+
+    event_type = candidate.get("event_type", "")
+    if event_type in {"earnings_call_transcript", "upcoming_earnings", "earnings_surprise"}:
+        quarter = str(evidence.get("quarter") or "").strip()
+        if quarter:
+            return f"earnings_cycle:{quarter}"
+        call_date = _normalize_story_date(evidence.get("call_date") or evidence.get("date"))
+        if call_date:
+            return f"earnings_cycle:{call_date}"
+
+    if event_type == "insider_transaction":
+        transaction_date = _normalize_story_date(evidence.get("transaction_date") or evidence.get("date"))
+        if transaction_date:
+            return f"insider:{transaction_date}"
+
+    headline = str(evidence.get("headline") or candidate.get("description") or "").strip()
+    prefix = _headline_prefix(headline, words=5)
+    if not prefix:
+        return None
+    story_date = _normalize_story_date(
+        evidence.get("published_at")
+        or evidence.get("date")
+        or evidence.get("filing_date")
+        or evidence.get("event_date")
+    )
+    if story_date:
+        return f"headline:{story_date}:{prefix}"
+    return f"headline:{prefix}"
+
+
 def _sibling_group_key(candidate: dict[str, Any]) -> tuple[str, str, str] | None:
     event_type = candidate.get("event_type", "")
     family = _candidate_family(event_type)
@@ -323,7 +538,10 @@ def _sibling_group_key(candidate: dict[str, Any]) -> tuple[str, str, str] | None
     claim_id = evidence.get("claim_id")
     if not signal_id and not claim_id:
         return None
-    return (str(signal_id or ""), str(claim_id or ""), family)
+    story_key = _sibling_story_key(candidate)
+    if story_key is None:
+        return (str(signal_id or ""), str(claim_id or ""), family)
+    return (str(signal_id or ""), str(claim_id or ""), f"{family}:{story_key}")
 
 
 def _candidate_specificity_tuple(candidate: dict[str, Any], severity: str) -> tuple[int, int]:
@@ -474,7 +692,33 @@ async def filter_candidates(
 
     # Rule 2: Signal cooldown (skipped for non-persisting runs, e.g. historical audit)
     if not skip_cooldown:
-        candidates = _apply_signal_cooldown(candidates, signal_map, now)
+        story_signal_ids = {
+            str((candidate.get("evidence") or {}).get("signal_id"))
+            for candidate in candidates
+            if _story_anchor_uses_cooldown(candidate.get("event_type", ""))
+            and (candidate.get("evidence") or {}).get("signal_id")
+        }
+        recent_story_anchors: dict[str, list[tuple[datetime, str]]] = {}
+        if story_signal_ids:
+            current_time = now or datetime.now(timezone.utc)
+            max_story_cooldown = max(
+                COOLDOWN_HOURS.get(_get_evidence_type(candidate.get("event_type", "")), DEFAULT_COOLDOWN_HOURS)
+                for candidate in candidates
+                if _story_anchor_uses_cooldown(candidate.get("event_type", ""))
+                and (candidate.get("evidence") or {}).get("signal_id")
+            )
+            recent_story_anchors = await _load_recent_signal_story_anchors(
+                db,
+                holding_id,
+                story_signal_ids,
+                cutoff=current_time - timedelta(hours=max_story_cooldown),
+            )
+        candidates = _apply_signal_cooldown(
+            candidates,
+            signal_map,
+            recent_story_anchors=recent_story_anchors,
+            now=now,
+        )
 
     # Rule 3: Priority suppression is applied separately after classification
     # — call apply_priority_suppression() after classify_event() in the caller

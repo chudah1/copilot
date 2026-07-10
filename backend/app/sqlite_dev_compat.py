@@ -67,6 +67,12 @@ def ensure_sqlite_dev_compatibility(conn) -> None:
             conn.execute(text("ALTER TABLE theses ADD COLUMN health_label VARCHAR(10)"))
             logger.info("Added missing theses.health_label column for local SQLite compatibility")
 
+    if "monitoring_events" in tables:
+        monitoring_event_columns = {column["name"] for column in inspector.get_columns("monitoring_events")}
+        if "story_anchor" not in monitoring_event_columns:
+            conn.execute(text("ALTER TABLE monitoring_events ADD COLUMN story_anchor VARCHAR(255)"))
+            logger.info("Added missing monitoring_events.story_anchor column for local SQLite compatibility")
+
     if "thesis_health_snapshots" not in tables:
         conn.execute(text(
             "CREATE TABLE IF NOT EXISTS thesis_health_snapshots ("

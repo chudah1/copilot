@@ -35,7 +35,7 @@ from app.services.news_watch import (
     judge_news_watch,
     match_news_watches,
 )
-from app.services.noise_filter import EVIDENCE_TYPE_MAP, record_signal_fired
+from app.services.noise_filter import EVIDENCE_TYPE_MAP, record_signal_fired, story_anchor_for_candidate
 from app.services.signal_matching import build_evidence_summary, determine_verdict
 
 
@@ -721,6 +721,7 @@ async def persist_classified_candidates(
             claim_id=uuid.UUID(evidence_claim_id) if evidence_claim_id else None,
             signal_id=uuid.UUID(evidence_signal_id) if evidence_signal_id else None,
             evidence_type=evidence_type,
+            story_anchor=story_anchor_for_candidate(candidate),
             evidence_summary=evidence_summary,
             verdict=verdict,
         )
