@@ -5,7 +5,7 @@ import uuid
 from dataclasses import dataclass, field
 from datetime import datetime, timedelta, timezone
 
-from sqlalchemy import select
+from sqlalchemy import Float, select
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.orm import selectinload
 
@@ -155,7 +155,13 @@ async def retrieve_similar_chunks_for_thesis(
         )
         if claim.embedding:
             if use_postgres_vector:
-                distance_expr = EvidenceChunk.embedding.op("<=>")(claim.embedding)
+                # return_type=Float is load-bearing: without it, SQLAlchemy
+                # infers the operator's return type from the LHS column, which
+                # is EmbeddingType. That routes the returned distance (a float)
+                # through EmbeddingType.process_result_value, which iterates it
+                # as if it were a vector row and raises
+                # "'float' object is not iterable".
+                distance_expr = EvidenceChunk.embedding.op("<=>", return_type=Float())(claim.embedding)
                 pg_result = await db.execute(
                     select(EvidenceChunk, distance_expr.label("distance"))
                     .where(
