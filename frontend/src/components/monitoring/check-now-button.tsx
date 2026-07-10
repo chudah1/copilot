@@ -116,11 +116,13 @@ function SnapshotCard({ snapshot, ticker, currency, eventsCreated }: { snapshot:
 }
 
 // How long we're willing to poll before giving up on a background check-now
-// run. The backend pipeline can take ~2 minutes end-to-end when transcripts
-// + Gemini + Sonnet all fire fresh; polling stops if we don't see
-// last_checked_at bump within this window so the button doesn't spin forever.
+// run. Measured worst case on ASML was ~3m40s (transcripts + Gemini + Sonnet
+// classification across 37 candidates); the pipeline only makes
+// last_checked_at visible after the final commit, so a cap under that leaves
+// the button spinning past a run that actually finished. 5 min gives us
+// comfortable headroom.
 const POLL_INTERVAL_MS = 3000;
-const POLL_MAX_MS = 3 * 60 * 1000;
+const POLL_MAX_MS = 5 * 60 * 1000;
 
 export function CheckNowButton({ holdingId, ticker, currency = "GBP", investorProfile, onComplete }: CheckNowButtonProps) {
   const [loading, setLoading] = useState(false);
