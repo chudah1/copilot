@@ -5,6 +5,7 @@ import re
 import uuid
 from datetime import date, datetime, timedelta, timezone
 from typing import Any
+from urllib.parse import urlparse
 
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
@@ -492,6 +493,8 @@ def _apply_signal_cooldown(
 
 def apply_priority_suppression(
     classified: list[tuple[dict[str, Any], str]],
+    *,
+    limit_info_news_per_signal: bool = True,
 ) -> list[tuple[dict[str, Any], str]]:
     """Rule 3: If a thesis_breaking candidate exists, drop lower-severity candidates
     that share the same evidence source.
@@ -509,7 +512,10 @@ def apply_priority_suppression(
                 breaking_sources.add(source_id)
 
     if not breaking_sources:
-        return _apply_sibling_specificity_suppression(classified)
+        filtered = _apply_sibling_specificity_suppression(classified)
+        if limit_info_news_per_signal:
+            filtered = _apply_same_signal_info_news_cap(filtered)
+        return filtered
 
     filtered = []
     for candidate, severity in classified:
@@ -527,7 +533,10 @@ def apply_priority_suppression(
             continue
         filtered.append((candidate, severity))
 
-    return _apply_sibling_specificity_suppression(filtered)
+    filtered = _apply_sibling_specificity_suppression(filtered)
+    if limit_info_news_per_signal:
+        filtered = _apply_same_signal_info_news_cap(filtered)
+    return filtered
 
 
 def _candidate_family(event_type: str) -> str | None:
@@ -671,11 +680,111 @@ def _apply_minimum_relevance(
 
 
 _NEWS_EVENT_TYPES = {"gemini_news", "news_or_earnings_candidate", "product_ramp_update", "news_keyword_match"}
+MAX_INFO_NEWS_EVENTS_PER_SIGNAL_PER_RUN = 2
+_EDITORIAL_NOISE_PATTERNS = (
+    "swot analysis",
+    "morning call",
+    "pick-and-shovel",
+    "supercycle",
+    "community",
+    "price prediction",
+    "stock forecast",
+    "stock analysis",
+    "market outlook",
+    "newsletter",
+    "news digest",
+)
 
 
 def _headline_prefix(text: str, words: int = 6) -> str:
     clean = re.sub(r"[^a-z0-9\s]", "", text.lower())
     return " ".join(clean.split()[:words])
+
+
+def _is_editorial_noise_candidate(candidate: dict[str, Any]) -> bool:
+    evidence = candidate.get("evidence", {})
+    headline = str(evidence.get("headline") or candidate.get("description") or "").lower()
+    summary = str(evidence.get("summary") or "").lower()
+    url = str(evidence.get("url") or "").lower()
+    source = str(evidence.get("source") or "").lower()
+    domain = urlparse(url).netloc.lower() if url else ""
+    haystack = " ".join(part for part in (headline, summary, source, domain) if part)
+    return any(pattern in haystack for pattern in _EDITORIAL_NOISE_PATTERNS)
+
+
+def _info_news_guardrail_group_key(candidate: dict[str, Any], severity: str) -> tuple[str, str] | None:
+    if severity != "info":
+        return None
+    event_type = candidate.get("event_type", "")
+    if event_type not in _NEWS_EVENT_TYPES:
+        return None
+    evidence = candidate.get("evidence", {})
+    signal_id = evidence.get("signal_id")
+    claim_id = evidence.get("claim_id")
+    if not signal_id and not claim_id:
+        return None
+    return (str(signal_id or ""), str(claim_id or ""))
+
+
+def _info_news_guardrail_rank(candidate: dict[str, Any], severity: str) -> tuple[int, int, int, int]:
+    evidence = candidate.get("evidence", {})
+    return (
+        0 if _is_editorial_noise_candidate(candidate) else 1,
+        1 if evidence.get("url") else 0,
+        EVENT_SPECIFICITY_RANK.get(candidate.get("event_type", ""), 0),
+        1 if (evidence.get("matched_topics") or evidence.get("topic_context")) else 0,
+    )
+
+
+def _apply_same_signal_info_news_cap(
+    classified: list[tuple[dict[str, Any], str]],
+    *,
+    max_items_per_signal: int = MAX_INFO_NEWS_EVENTS_PER_SIGNAL_PER_RUN,
+) -> list[tuple[dict[str, Any], str]]:
+    """Cap same-signal info/news bursts after classification."""
+    grouped: dict[tuple[str, str], list[tuple[int, dict[str, Any], str]]] = {}
+    for idx, (candidate, severity) in enumerate(classified):
+        group_key = _info_news_guardrail_group_key(candidate, severity)
+        if group_key is None:
+            continue
+        grouped.setdefault(group_key, []).append((idx, candidate, severity))
+
+    if not grouped:
+        return classified
+
+    allowed_ids: set[int] = set()
+    dropped_by_group: list[tuple[tuple[str, str], list[tuple[dict[str, Any], str]]]] = []
+    for group_key, items in grouped.items():
+        if len(items) <= max_items_per_signal:
+            allowed_ids.update(id(candidate) for _, candidate, _ in items)
+            continue
+        ranked = sorted(
+            items,
+            key=lambda item: (_info_news_guardrail_rank(item[1], item[2]), -item[0]),
+            reverse=True,
+        )
+        kept = ranked[:max_items_per_signal]
+        dropped = ranked[max_items_per_signal:]
+        allowed_ids.update(id(candidate) for _, candidate, _ in kept)
+        dropped_by_group.append((group_key, [(candidate, severity) for _, candidate, severity in dropped]))
+
+    if not dropped_by_group:
+        return classified
+
+    for group_key, dropped_items in dropped_by_group:
+        logger.info(
+            "Post-classification info-news cap dropped %d candidates for group %s; samples=%s",
+            len(dropped_items),
+            group_key,
+            " | ".join(_candidate_log_token(candidate) for candidate, _severity in dropped_items[:3]),
+        )
+
+    filtered: list[tuple[dict[str, Any], str]] = []
+    for candidate, severity in classified:
+        group_key = _info_news_guardrail_group_key(candidate, severity)
+        if group_key is None or id(candidate) in allowed_ids:
+            filtered.append((candidate, severity))
+    return filtered
 
 
 def _apply_cross_source_dedup(candidates: list[dict[str, Any]]) -> list[dict[str, Any]]:

@@ -1005,7 +1005,10 @@ async def _run_historical_audit_with_session(
             nw_matched=nw_matched,
         )
 
-        suppressed = apply_priority_suppression([(c, s) for c, s, _ in classified])
+        suppressed = apply_priority_suppression(
+            [(c, s) for c, s, _ in classified],
+            limit_info_news_per_signal=False,
+        )
         surviving_set = {id(c) for c, _ in suppressed}
         classified = [(c, s, a) for c, s, a in classified if id(c) in surviving_set]
         coverage.record_stage(STAGE_AFTER_CLASSIFICATION, len(classified))

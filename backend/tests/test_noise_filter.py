@@ -441,6 +441,108 @@ def test_apply_priority_suppression_also_applies_sibling_specificity():
     assert result[0][0]["event_type"] == "news_or_earnings_candidate"
 
 
+def test_apply_priority_suppression_caps_info_news_per_signal():
+    signal_id = str(uuid.uuid4())
+    classified = [
+        (
+            {
+                "event_type": "gemini_news",
+                "evidence": {
+                    "signal_id": signal_id,
+                    "headline": "ASML SWOT Analysis 2026",
+                    "url": "https://swotpal.example.com/asml",
+                },
+            },
+            "info",
+        ),
+        (
+            {
+                "event_type": "gemini_news",
+                "evidence": {
+                    "signal_id": signal_id,
+                    "headline": "Traders Morning Call 7/10/2026",
+                    "url": "https://newsletter.example.com/morning-call",
+                },
+            },
+            "info",
+        ),
+        (
+            {
+                "event_type": "gemini_news",
+                "evidence": {
+                    "signal_id": signal_id,
+                    "headline": "JPMorgan raises ASML price target on EUV demand",
+                    "url": "https://example.com/jpm-asml",
+                    "matched_topics": ["demand"],
+                },
+            },
+            "info",
+        ),
+        (
+            {
+                "event_type": "gemini_news",
+                "evidence": {
+                    "signal_id": signal_id,
+                    "headline": "Bernstein says ASML bookings stay strong on lithography intensity",
+                    "url": "https://example.com/bernstein-asml",
+                    "matched_topics": ["bookings"],
+                },
+            },
+            "info",
+        ),
+    ]
+
+    result = apply_priority_suppression(classified)
+
+    assert len(result) == 2
+    kept_headlines = {candidate["evidence"]["headline"] for candidate, _severity in result}
+    assert "JPMorgan raises ASML price target on EUV demand" in kept_headlines
+    assert "Bernstein says ASML bookings stay strong on lithography intensity" in kept_headlines
+
+
+def test_apply_priority_suppression_can_skip_info_news_cap():
+    signal_id = str(uuid.uuid4())
+    classified = [
+        (
+            {
+                "event_type": "gemini_news",
+                "evidence": {
+                    "signal_id": signal_id,
+                    "headline": "ASML SWOT Analysis 2026",
+                    "url": "https://swotpal.example.com/asml",
+                },
+            },
+            "info",
+        ),
+        (
+            {
+                "event_type": "gemini_news",
+                "evidence": {
+                    "signal_id": signal_id,
+                    "headline": "Traders Morning Call 7/10/2026",
+                    "url": "https://newsletter.example.com/morning-call",
+                },
+            },
+            "info",
+        ),
+        (
+            {
+                "event_type": "gemini_news",
+                "evidence": {
+                    "signal_id": signal_id,
+                    "headline": "JPMorgan raises ASML price target on EUV demand",
+                    "url": "https://example.com/jpm-asml",
+                },
+            },
+            "info",
+        ),
+    ]
+
+    result = apply_priority_suppression(classified, limit_info_news_per_signal=False)
+
+    assert len(result) == 3
+
+
 # ---------------------------------------------------------------------------
 # Rule 4: Minimum relevance
 # ---------------------------------------------------------------------------
