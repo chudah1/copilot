@@ -373,6 +373,53 @@ def _apply_evidence_dedup(
     return filtered
 
 
+def _candidate_log_token(candidate: dict[str, Any]) -> str:
+    evidence = candidate.get("evidence", {})
+    event_type = str(candidate.get("event_type", "") or "").strip() or "unknown"
+    parts = [f"type={event_type}"]
+
+    signal_id = str(evidence.get("signal_id") or "").strip()
+    if signal_id:
+        parts.append(f"signal={signal_id[:8]}")
+
+    source_id = str(_get_evidence_source_id(evidence) or "").strip()
+    if source_id:
+        parts.append(f"source={source_id[:16]}")
+
+    anchor = story_anchor_for_candidate(candidate)
+    if anchor:
+        parts.append(f"anchor={anchor[:80]}")
+    else:
+        headline = str(evidence.get("headline") or candidate.get("description") or "").strip()
+        prefix = _headline_prefix(headline, words=5)
+        if prefix:
+            parts.append(f"headline={prefix[:40]}")
+
+    return " ".join(parts)
+
+
+def _log_filter_rule_drops(
+    rule_name: str,
+    *,
+    holding_id: uuid.UUID,
+    before: list[dict[str, Any]],
+    after: list[dict[str, Any]],
+) -> None:
+    kept_ids = {id(candidate) for candidate in after}
+    dropped = [candidate for candidate in before if id(candidate) not in kept_ids]
+    if not dropped:
+        return
+    samples = " | ".join(_candidate_log_token(candidate) for candidate in dropped[:3])
+    logger.info(
+        "Noise filter %s dropped %d/%d candidates for holding %s; samples=%s",
+        rule_name,
+        len(dropped),
+        len(before),
+        holding_id,
+        samples,
+    )
+
+
 def _apply_signal_cooldown(
     candidates: list[dict[str, Any]],
     signal_map: dict[str, ThesisSignal],
@@ -400,15 +447,22 @@ def _apply_signal_cooldown(
             if candidate_anchor:
                 cooldown_start = now - timedelta(hours=cooldown_hours)
                 recent_anchors = recent_story_anchors.get(signal_id_str, [])
-                if any(
-                    anchor == candidate_anchor and created_at >= cooldown_start
-                    for created_at, anchor in recent_anchors
-                ):
+                matched_recent = next(
+                    (
+                        (created_at, anchor)
+                        for created_at, anchor in recent_anchors
+                        if anchor == candidate_anchor and created_at >= cooldown_start
+                    ),
+                    None,
+                )
+                if matched_recent is not None:
+                    matched_at, matched_anchor = matched_recent
                     logger.debug(
-                        "Signal cooldown: skipping %s for signal %s due to matching story anchor %s",
+                        "Signal cooldown: skipping %s for signal %s due to matching story anchor %s from %s",
                         event_type,
                         signal_id_str,
-                        candidate_anchor,
+                        matched_anchor,
+                        matched_at.isoformat(),
                     )
                     continue
                 filtered.append(candidate)
@@ -685,13 +739,18 @@ async def filter_candidates(
     existing_keys = await _load_recent_evidence_keys(db, holding_id)
 
     # Rule 0: Cross-source dedup (same story from Gemini + Alpha Vantage in same run)
+    before_rule0 = list(candidates)
     candidates = _apply_cross_source_dedup(candidates)
+    _log_filter_rule_drops("rule0_cross_source", holding_id=holding_id, before=before_rule0, after=candidates)
 
     # Rule 1: Evidence dedup (scoped by evidence_type + source_id)
+    before_rule1 = list(candidates)
     candidates = _apply_evidence_dedup(candidates, existing_keys)
+    _log_filter_rule_drops("rule1_recent_evidence", holding_id=holding_id, before=before_rule1, after=candidates)
 
     # Rule 2: Signal cooldown (skipped for non-persisting runs, e.g. historical audit)
     if not skip_cooldown:
+        before_rule2 = list(candidates)
         story_signal_ids = {
             str((candidate.get("evidence") or {}).get("signal_id"))
             for candidate in candidates
@@ -719,12 +778,15 @@ async def filter_candidates(
             recent_story_anchors=recent_story_anchors,
             now=now,
         )
+        _log_filter_rule_drops("rule2_signal_cooldown", holding_id=holding_id, before=before_rule2, after=candidates)
 
     # Rule 3: Priority suppression is applied separately after classification
     # — call apply_priority_suppression() after classify_event() in the caller
 
     # Rule 4: Minimum relevance
+    before_rule4 = list(candidates)
     candidates = _apply_minimum_relevance(candidates)
+    _log_filter_rule_drops("rule4_minimum_relevance", holding_id=holding_id, before=before_rule4, after=candidates)
 
     return candidates
 
