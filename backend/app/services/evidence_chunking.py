@@ -7,11 +7,9 @@ from datetime import datetime, timezone
 from typing import Any
 
 from sqlalchemy import select, tuple_
-from sqlalchemy.ext.asyncio import AsyncSession
+from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker
 
 from app.models.evidence_chunk import EvidenceChunk
-from app.models.holding import Holding
-from app.models.thesis import Thesis
 from app.services.embeddings import embed_text_map
 
 logger = logging.getLogger(__name__)
@@ -218,6 +216,13 @@ def _fallback_source_id(source_type: str, text: str) -> str:
     return f"{source_type}:{hashlib.sha256(text.encode()).hexdigest()[:24]}"
 
 
+def _chunk_session_factory(db: AsyncSession):
+    bind = getattr(db, "bind", None)
+    if bind is None:
+        raise RuntimeError("Evidence chunk persistence requires a bound session")
+    return async_sessionmaker(bind, class_=AsyncSession, expire_on_commit=False)
+
+
 def _chunk_metadata(candidate: dict[str, Any], source_type: str) -> dict[str, Any]:
     evidence = candidate.get("evidence", {})
     metadata: dict[str, Any] = {
@@ -240,43 +245,46 @@ def _chunk_metadata(candidate: dict[str, Any], source_type: str) -> dict[str, An
 async def persist_candidate_evidence_chunks(
     db: AsyncSession,
     *,
-    thesis: Thesis,
-    holding: Holding,
+    thesis: Any,
+    holding: Any,
     candidates: list[dict[str, Any]],
 ) -> int:
-    prepared: list[tuple[str, str, int, str, str]] = []
+    prepared: list[tuple[str, str, int, str, str, dict[str, Any]]] = []
     for candidate in candidates:
         source_type, source_id = _source_identity(candidate)
         chunks = build_candidate_chunks(candidate)
+        metadata = _chunk_metadata(candidate, source_type)
         for idx, (chunk_type, chunk_text) in enumerate(chunks):
             stable_source_id = source_id or _fallback_source_id(source_type, chunk_text)
-            prepared.append((source_type, stable_source_id, idx, chunk_type, chunk_text))
+            prepared.append((source_type, stable_source_id, idx, chunk_type, chunk_text, metadata))
 
     if not prepared:
         return 0
 
+    session_factory = _chunk_session_factory(db)
     keys = [
         (source_type, source_id, idx, chunk_type)
-        for source_type, source_id, idx, chunk_type, _text in prepared
+        for source_type, source_id, idx, chunk_type, _text, _metadata in prepared
     ]
-    existing = await db.execute(
-        select(
-            EvidenceChunk.source_type,
-            EvidenceChunk.source_id,
-            EvidenceChunk.chunk_index,
-            EvidenceChunk.chunk_type,
-        ).where(
-            EvidenceChunk.thesis_id == thesis.id,
-            EvidenceChunk.holding_id == holding.id,
-            tuple_(
+    async with session_factory() as read_db:
+        existing = await read_db.execute(
+            select(
                 EvidenceChunk.source_type,
                 EvidenceChunk.source_id,
                 EvidenceChunk.chunk_index,
                 EvidenceChunk.chunk_type,
-            ).in_(keys),
+            ).where(
+                EvidenceChunk.thesis_id == thesis.id,
+                EvidenceChunk.holding_id == holding.id,
+                tuple_(
+                    EvidenceChunk.source_type,
+                    EvidenceChunk.source_id,
+                    EvidenceChunk.chunk_index,
+                    EvidenceChunk.chunk_type,
+                ).in_(keys),
+            )
         )
-    )
-    existing_keys = {(row[0], row[1], row[2], row[3]) for row in existing.all()}
+        existing_keys = {(row[0], row[1], row[2], row[3]) for row in existing.all()}
 
     new_rows = [row for row in prepared if (row[0], row[1], row[2], row[3]) not in existing_keys]
     if not new_rows:
@@ -284,23 +292,51 @@ async def persist_candidate_evidence_chunks(
 
     text_map = await embed_text_map([row[4] for row in new_rows])
     now = datetime.now(timezone.utc)
-    for source_type, source_id, idx, chunk_type, chunk_text in new_rows:
-        db.add(
-            EvidenceChunk(
-                thesis_id=thesis.id,
-                holding_id=holding.id,
-                ticker=holding.ticker,
-                source_type=source_type,
-                source_id=source_id,
-                chunk_type=chunk_type,
-                chunk_index=idx,
-                chunk_text=chunk_text,
-                metadata_json=_chunk_metadata(candidate, source_type),
-                embedding=text_map.get(chunk_text),
-                embedded_at=now if text_map.get(chunk_text) else None,
+
+    async with session_factory() as write_db:
+        existing_now = await write_db.execute(
+            select(
+                EvidenceChunk.source_type,
+                EvidenceChunk.source_id,
+                EvidenceChunk.chunk_index,
+                EvidenceChunk.chunk_type,
+            ).where(
+                EvidenceChunk.thesis_id == thesis.id,
+                EvidenceChunk.holding_id == holding.id,
+                tuple_(
+                    EvidenceChunk.source_type,
+                    EvidenceChunk.source_id,
+                    EvidenceChunk.chunk_index,
+                    EvidenceChunk.chunk_type,
+                ).in_(keys),
             )
         )
-    return len(new_rows)
+        existing_now_keys = {(row[0], row[1], row[2], row[3]) for row in existing_now.all()}
+
+        final_rows = [
+            row for row in new_rows if (row[0], row[1], row[2], row[3]) not in existing_now_keys
+        ]
+        if not final_rows:
+            return 0
+
+        for source_type, source_id, idx, chunk_type, chunk_text, metadata in final_rows:
+            write_db.add(
+                EvidenceChunk(
+                    thesis_id=thesis.id,
+                    holding_id=holding.id,
+                    ticker=holding.ticker,
+                    source_type=source_type,
+                    source_id=source_id,
+                    chunk_type=chunk_type,
+                    chunk_index=idx,
+                    chunk_text=chunk_text,
+                    metadata_json=metadata,
+                    embedding=text_map.get(chunk_text),
+                    embedded_at=now if text_map.get(chunk_text) else None,
+                )
+            )
+        await write_db.commit()
+    return len(final_rows)
 
 
 async def best_effort_persist_candidate_evidence_chunks(

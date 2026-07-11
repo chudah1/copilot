@@ -8,7 +8,7 @@ from datetime import datetime, timedelta, timezone
 
 from sqlalchemy import select, func
 from sqlalchemy.exc import OperationalError
-from sqlalchemy.ext.asyncio import AsyncSession
+from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker
 
 from app.config import settings
 # Module-level import so tests can patch it to point at the test session
@@ -106,11 +106,37 @@ class CheckNowResult:
     snapshot: MarketSnapshot | None = None
 
 
+@dataclass(frozen=True)
+class HoldingSnapshot:
+    id: uuid.UUID
+    user_id: uuid.UUID
+    ticker: str
+    name: str | None
+    sector: str | None
+    quantity: float
+    average_cost_basis: float
+    current_price: float | None
+    current_value: float | None
+    currency: str | None
+
+
+@dataclass(frozen=True)
+class ThesisSnapshot:
+    id: uuid.UUID
+    user_id: uuid.UUID
+    created_at: datetime
+    interpretation: dict | None
+    why_own_it: str | None
+    must_remain_true: str | None
+    what_would_change_my_mind: str | None
+    ai_summary: str | None
+
+
 async def _build_snapshot(
     company_data: "CompanyData | None",
-    holding: Holding,
+    holding: HoldingSnapshot,
     previous_price: float | None,
-    thesis: Thesis,
+    interpretation: dict | None,
 ) -> MarketSnapshot:
     from app.services.market_data import CompanyData  # noqa: F811
 
@@ -151,11 +177,18 @@ async def _build_snapshot(
         "dividend_yield": company_data.dividend_yield,
     }
     market_values = {k: v for k, v in market_values.items() if v is not None}
-    hint_results = check_metric_watch_hints(thesis.interpretation, market_values)
+    hint_results = check_metric_watch_hints(interpretation, market_values)
     snapshot.watch_hints_total = len(hint_results)
     snapshot.watch_hints_ok = sum(1 for r in hint_results if not r.breached)
 
     return snapshot
+
+
+def _session_factory_for(db: AsyncSession):
+    bind = getattr(db, "bind", None)
+    if bind is None:
+        return async_session
+    return async_sessionmaker(bind, class_=AsyncSession, expire_on_commit=False)
 
 
 def _is_sqlite_locked_error(exc: Exception) -> bool:
@@ -216,54 +249,86 @@ async def run_check_now(
     thesis: Thesis,
     db: AsyncSession,
 ) -> CheckNowResult:
+    holding_snapshot = HoldingSnapshot(
+        id=holding.id,
+        user_id=holding.user_id,
+        ticker=holding.ticker,
+        name=holding.name,
+        sector=holding.sector,
+        quantity=float(holding.quantity),
+        average_cost_basis=float(holding.average_cost_basis),
+        current_price=float(holding.current_price) if holding.current_price is not None else None,
+        current_value=float(holding.current_value) if holding.current_value is not None else None,
+        currency=holding.currency,
+    )
+    thesis_snapshot = ThesisSnapshot(
+        id=thesis.id,
+        user_id=thesis.user_id,
+        created_at=thesis.created_at,
+        interpretation=thesis.interpretation,
+        why_own_it=thesis.why_own_it,
+        must_remain_true=thesis.must_remain_true,
+        what_would_change_my_mind=thesis.what_would_change_my_mind,
+        ai_summary=thesis.ai_summary,
+    )
+    session_factory = _session_factory_for(db)
+    try:
+        # Release any caller-owned transaction before the slow external work.
+        await db.rollback()
+    except Exception:
+        logger.debug("Initial rollback before check-now had nothing to do", exc_info=True)
+
     now = datetime.now(timezone.utc)
     cutoff = now - timedelta(hours=RATE_LIMIT_HOURS)
-
-    # Rate-limit check: any recent events (excluding monitoring_inactive)?
-    recent_count = (
-        await db.execute(
-            select(func.count())
-            .select_from(MonitoringEvent)
-            .where(
-                MonitoringEvent.holding_id == holding.id,
-                MonitoringEvent.created_at >= cutoff,
-                MonitoringEvent.event_type != "monitoring_inactive",
-            )
-        )
-    ).scalar_one()
-
-    if recent_count > 0:
-        # Find when the earliest recent event was created to compute next_available_at
-        earliest = (
-            await db.execute(
-                select(MonitoringEvent.created_at)
+    async with session_factory() as prep_db:
+        # Rate-limit check: any recent events (excluding monitoring_inactive)?
+        recent_count = (
+            await prep_db.execute(
+                select(func.count())
+                .select_from(MonitoringEvent)
                 .where(
-                    MonitoringEvent.holding_id == holding.id,
+                    MonitoringEvent.holding_id == holding_snapshot.id,
                     MonitoringEvent.created_at >= cutoff,
                     MonitoringEvent.event_type != "monitoring_inactive",
                 )
-                .order_by(MonitoringEvent.created_at.asc())
-                .limit(1)
             )
         ).scalar_one()
-        next_available = earliest + timedelta(hours=RATE_LIMIT_HOURS)
-        return CheckNowResult(status="rate_limited", next_available_at=next_available)
+
+        if recent_count > 0:
+            earliest = (
+                await prep_db.execute(
+                    select(MonitoringEvent.created_at)
+                    .where(
+                        MonitoringEvent.holding_id == holding_snapshot.id,
+                        MonitoringEvent.created_at >= cutoff,
+                        MonitoringEvent.event_type != "monitoring_inactive",
+                    )
+                    .order_by(MonitoringEvent.created_at.asc())
+                    .limit(1)
+                )
+            ).scalar_one()
+            next_available = earliest + timedelta(hours=RATE_LIMIT_HOURS)
+            return CheckNowResult(status="rate_limited", next_available_at=next_available)
+
+        decomposition = await load_active_decomposition(prep_db, thesis_snapshot.id)
+        claims = decomposition.claims if decomposition else None
+        investor_profile = await load_investor_profile(prep_db, thesis_snapshot.user_id)
 
     # Fetch market data
     company_data = None
     try:
-        company_data = await fetch_company_data(holding.ticker)
+        company_data = await fetch_company_data(holding_snapshot.ticker)
     except Exception:
-        logger.exception("Failed to fetch market data for %s", holding.ticker)
+        logger.exception("Failed to fetch market data for %s", holding_snapshot.ticker)
 
     if company_data is None:
-        logger.warning("No market data available for %s — skipping check", holding.ticker)
+        logger.warning("No market data available for %s — skipping check", holding_snapshot.ticker)
         return CheckNowResult(status="no_data")
 
     # Generate monitoring candidates
-    previous_price = float(holding.current_price) if holding.current_price is not None else None
+    previous_price = holding_snapshot.current_price
     candidates = generate_monitoring_candidates(
-        thesis.interpretation,
+        thesis_snapshot.interpretation,
         company_data,
         previous_price,
         now=now,
@@ -281,8 +346,8 @@ async def run_check_now(
     # Persisted at the end of the pass so the diagnostics endpoint can answer
     # "where did our 10 candidates go?" instead of just "we created 4 events."
     coverage = CoveragePassBuilder(
-        thesis_id=thesis.id,
-        holding_id=holding.id,
+        thesis_id=thesis_snapshot.id,
+        holding_id=holding_snapshot.id,
         run_id=check_run_id,
         triggered_by="check_now",
     )
@@ -305,40 +370,39 @@ async def run_check_now(
         # EDGAR 8-K candidates (US tickers only; silently skipped for non-US)
         before_edgar = len(candidates)
         try:
-            edgar_filings = await get_recent_8k_filings(holding.ticker)
-            candidates.extend(build_edgar_candidates(holding.ticker, edgar_filings))
+            edgar_filings = await get_recent_8k_filings(holding_snapshot.ticker)
+            candidates.extend(build_edgar_candidates(holding_snapshot.ticker, edgar_filings))
             coverage.record_source("edgar_8k", candidates_returned=len(candidates) - before_edgar)
         except Exception as exc:
-            logger.warning("EDGAR fetch failed for %s during check-now — skipping: %s", holding.ticker, exc)
-            await write_monitoring_gap(db, thesis.id, "edgar", str(exc), check_run_id)
+            logger.warning("EDGAR fetch failed for %s during check-now — skipping: %s", holding_snapshot.ticker, exc)
+            await write_monitoring_gap(db, thesis_snapshot.id, "edgar", str(exc), check_run_id)
             coverage.record_source("edgar_8k", candidates_returned=0, error=str(exc))
 
         # EDGAR Form 4 insider transactions
         before_form4 = len(candidates)
-        form4_txns = await get_recent_form4_transactions(holding.ticker)
-        candidates.extend(build_form4_candidates(holding.ticker, form4_txns, now=now))
+        form4_txns = await get_recent_form4_transactions(holding_snapshot.ticker)
+        candidates.extend(build_form4_candidates(holding_snapshot.ticker, form4_txns, now=now))
         coverage.record_source("edgar_form4", candidates_returned=len(candidates) - before_form4)
 
         # Enrich earnings 8-Ks (item 2.02) with LLM-extracted content
-        candidates = await enrich_earnings_candidates(candidates, thesis)
+        candidates = await enrich_earnings_candidates(candidates, thesis_snapshot)
 
         # Signal linking: load decomposition and enrich candidates
-        decomposition = await load_active_decomposition(db, thesis.id)
-        claims = decomposition.claims if decomposition else None
-
         # Gemini news uses signal descriptors from the decomposition so focused
         # searches can include claim/rationale context, not just bare labels.
         signal_descriptors = signal_search_descriptors_from_claims(claims)
         before_gemini = len(candidates)
         try:
             gemini_candidates = await collect_news_evidence(
-                holding.ticker, holding.name or holding.ticker, signal_descriptors
+                holding_snapshot.ticker,
+                holding_snapshot.name or holding_snapshot.ticker,
+                signal_descriptors,
             )
             candidates.extend(gemini_candidates)
             coverage.record_source("gemini_news", candidates_returned=len(candidates) - before_gemini)
         except Exception as exc:
-            logger.warning("Gemini news failed for %s during check-now — skipping: %s", holding.ticker, exc)
-            await write_monitoring_gap(db, thesis.id, "gemini_news", str(exc), check_run_id)
+            logger.warning("Gemini news failed for %s during check-now — skipping: %s", holding_snapshot.ticker, exc)
+            await write_monitoring_gap(db, thesis_snapshot.id, "gemini_news", str(exc), check_run_id)
             coverage.record_source("gemini_news", candidates_returned=0, error=str(exc))
         coverage.record_stage(STAGE_CANDIDATES_GENERATED, len(candidates))
         candidates = match_candidates_to_signals(candidates, claims)
@@ -371,14 +435,14 @@ async def run_check_now(
             candidates, reviewed_but_dropped = await filter_candidates_by_thesis_relevance_with_drops(
                 candidates,
                 signal_descriptors=signal_descriptors,
-                ticker=holding.ticker,
-                why_own_it=thesis.why_own_it or "",
+                ticker=holding_snapshot.ticker,
+                why_own_it=thesis_snapshot.why_own_it or "",
             )
             coverage.record_stage(STAGE_AFTER_RELEVANCE_FILTER, len(candidates))
             coverage.record_reviewed_but_dropped(
                 apply_drop_thesis_floor(
                     reviewed_but_dropped,
-                    thesis.created_at,
+                    thesis_snapshot.created_at,
                     min_lookback_days=14,
                     now=now,
                 )
@@ -396,34 +460,30 @@ async def run_check_now(
         # drops every recent filing/news as "before your time", leaving the first
         # experience empty. The daily batch stays strict so we don't resurface
         # already-processed history to established users.
-        candidates = apply_thesis_floor(candidates, thesis.created_at, min_lookback_days=14, now=now)
+        candidates = apply_thesis_floor(
+            candidates,
+            thesis_snapshot.created_at,
+            min_lookback_days=14,
+            now=now,
+        )
         coverage.record_stage(STAGE_AFTER_THESIS_FLOOR, len(candidates))
 
         # Build lookup tables for narrative generation
         claims_by_id, signals_by_id = build_claim_signal_lookup(claims)
-        investor_profile = await load_investor_profile(db, thesis.user_id)
 
         # Build snapshot — always returned, even when 0 events
-        snapshot = await _build_snapshot(company_data, holding, previous_price, thesis)
-
-        # Update holding price via the single valuation path (GBP value, not native).
-        if company_data and company_data.current_price is not None:
-            await apply_market_price(
-                holding,
-                native_price=company_data.current_price,
-                native_currency=getattr(company_data, "currency", None),
-                now=now,
-            )
-
-        # Record that we actually checked, even if the pass is quiet — this is what
-        # lets the dashboard say "checked just now, all calm" truthfully.
-        holding.last_monitored_at = now
+        snapshot = await _build_snapshot(
+            company_data,
+            holding_snapshot,
+            previous_price,
+            thesis_snapshot.interpretation,
+        )
 
         # Qualitative news_watch matching — BEFORE noise filtering, so a matched
         # news item is tagged (and survives minimum-relevance) and gets cooldown.
         news_watches = extract_news_watches(claims)
         if not news_watches:
-            news_watches = extract_provisional_news_watches(thesis.interpretation)
+            news_watches = extract_provisional_news_watches(thesis_snapshot.interpretation)
         nw_matched = await match_thesis_news_watches(candidates, news_watches)
 
         # Per-active-signal transcript expansion: every active signal gets its
@@ -434,19 +494,30 @@ async def run_check_now(
         # earnings_growth / news_topic signals with effectively zero transcript
         # coverage even when relevant Q&A existed in the call.
         candidates = await expand_transcript_candidates_for_signals(candidates, claims)
-        await best_effort_persist_candidate_evidence_chunks(db, thesis=thesis, holding=holding, candidates=candidates)
-
-        # Noise suppression: filter before classification (rules 1, 2, 4)
-        candidates = await filter_candidates(candidates, holding.id, signals_by_id, db, now=now)
+        async with session_factory() as filter_db:
+            await best_effort_persist_candidate_evidence_chunks(
+                filter_db,
+                thesis=thesis_snapshot,
+                holding=holding_snapshot,
+                candidates=candidates,
+            )
+            # Noise suppression: filter before classification (rules 1, 2, 4)
+            candidates = await filter_candidates(
+                candidates,
+                holding_snapshot.id,
+                signals_by_id,
+                filter_db,
+                now=now,
+            )
         coverage.record_stage(STAGE_AFTER_NOISE_FILTER, len(candidates))
 
         classified = await classify_candidates_for_thesis(
-            thesis,
+            thesis_snapshot,
             candidates,
             investor_profile=investor_profile,
-            sector=holding.sector,
-            ticker=holding.ticker,
-            company_name=holding.name,
+            sector=holding_snapshot.sector,
+            ticker=holding_snapshot.ticker,
+            company_name=holding_snapshot.name,
             nw_matched=nw_matched,
         )
 
@@ -456,30 +527,61 @@ async def run_check_now(
         classified = [(c, s, a) for c, s, a in classified if id(c) in surviving_set]
         coverage.record_stage(STAGE_AFTER_CLASSIFICATION, len(classified))
 
-        created_event_ids = await persist_classified_candidates(
-            db,
-            thesis=thesis,
-            holding=holding,
-            classified=classified,
-            claims_by_id=claims_by_id,
-            signals_by_id=signals_by_id,
-            now=now,
-            investor_profile=investor_profile,
-        )
-        coverage.record_stage(STAGE_EVENTS_PERSISTED, len(created_event_ids))
-        coverage.record_events_persisted(len(created_event_ids))
-        # Persist coverage in its own try so an exception here can't strand the
-        # events commit — if we can't write the funnel row inline, the outer
-        # except still writes a partial one in a fresh session.
-        try:
-            await coverage.persist(db)
-        except Exception:
-            logger.exception(
-                "coverage.persist failed inline for holding %s (events still committing)",
-                holding.ticker,
-            )
+        async with session_factory() as write_db:
+            live_holding = (
+                await write_db.execute(
+                    select(Holding).where(
+                        Holding.id == holding_snapshot.id,
+                        Holding.user_id == holding_snapshot.user_id,
+                    )
+                )
+            ).scalar_one_or_none()
+            live_thesis = (
+                await write_db.execute(
+                    select(Thesis).where(
+                        Thesis.id == thesis_snapshot.id,
+                        Thesis.user_id == thesis_snapshot.user_id,
+                    )
+                )
+            ).scalar_one_or_none()
+            if live_holding is None or live_thesis is None:
+                raise RuntimeError(
+                    f"holding/thesis disappeared during check-now ({holding_snapshot.id}, {thesis_snapshot.id})"
+                )
 
-        await db.commit()
+            if company_data and company_data.current_price is not None:
+                await apply_market_price(
+                    live_holding,
+                    native_price=company_data.current_price,
+                    native_currency=getattr(company_data, "currency", None),
+                    now=now,
+                )
+
+            # Record that we actually checked, even if the pass is quiet — this is what
+            # lets the dashboard say "checked just now, all calm" truthfully.
+            live_holding.last_monitored_at = now
+
+            created_event_ids = await persist_classified_candidates(
+                write_db,
+                thesis=live_thesis,
+                holding=live_holding,
+                classified=classified,
+                claims_by_id=claims_by_id,
+                signals_by_id=signals_by_id,
+                now=now,
+                investor_profile=investor_profile,
+            )
+            coverage.record_stage(STAGE_EVENTS_PERSISTED, len(created_event_ids))
+            coverage.record_events_persisted(len(created_event_ids))
+            try:
+                await coverage.persist(write_db)
+            except Exception:
+                logger.exception(
+                    "coverage.persist failed inline for holding %s (events still committing)",
+                    holding_snapshot.ticker,
+                )
+
+            await write_db.commit()
         coverage_committed = True
 
         return CheckNowResult(
@@ -489,12 +591,8 @@ async def run_check_now(
             snapshot=snapshot,
         )
     except Exception as exc:
-        logger.exception("check-now pipeline failed for %s", holding.ticker)
+        logger.exception("check-now pipeline failed for %s", holding_snapshot.ticker)
         if not coverage_committed:
-            try:
-                await db.rollback()
-            except Exception:
-                logger.exception("db.rollback after check-now failure raised for %s", holding.ticker)
             await _persist_partial_coverage(coverage, f"{type(exc).__name__}: {exc}")
         raise
 
