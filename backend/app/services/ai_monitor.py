@@ -35,6 +35,7 @@ Severity rules for non-skip events (apply strictly):
 - "thesis_breaking": ONLY when an explicit stated condition is clearly met. Two distinct cases:
   (1) Quantitative threshold definitively breached: the stated floor or ceiling is missed by more than ~5 percentage points. A miss of 5pp or less from a stated threshold is "warning", not "thesis_breaking".
   (2) Qualitative event explicitly stated: a "must remain true" or "what would change my mind" condition names a specific discrete event and that event has clearly occurred — even if the full financial impact is not yet reported. A qualitative condition being met overrides the quantitative near-miss rule.
+  Positive or thesis-confirming events are never "thesis_breaking" in this generic classifier. If the news supports the thesis, confirms demand, validates management commentary, or shows a metric above a stated floor, use direction="supports" and severity="info" or "warning" instead.
   Discrete events vs competitive dynamics: discrete events are single, datable occurrences (a government ban, a court ruling, a dividend cut, a product withdrawal, a confirmed shift in business practice reported in results) — these require only one clear occurrence. Competitive dynamics are ongoing situations that are matters of degree (a competitor gaining share, a market shifting) — use "warning" unless specific measurable evidence shows the threshold has definitively been crossed.
   Multi-period conditions: when "what would change my mind" specifies an explicit time requirement (e.g. "for two consecutive quarters"), a single period of violation is "warning" — classify "thesis_breaking" only when the full multi-period threshold is completed.
   Multiple conditions: each condition in "what would change my mind" is independent — any single one clearly met is sufficient for "thesis_breaking".
@@ -205,6 +206,19 @@ def _parse_classification_response(text: str) -> ClassificationResult:
     return ClassificationResult(severity=severity, analysis=analysis, direction=direction)
 
 
+def _normalize_classification_result(result: ClassificationResult) -> ClassificationResult:
+    # "thesis_breaking" is reserved for thesis damage. If the model says the
+    # event clearly supports the thesis, keep the positive direction but cap the
+    # urgency to warning so supportive operating news does not look like a red alert.
+    if result.direction == "supports" and result.severity == "thesis_breaking":
+        return ClassificationResult(
+            severity="warning",
+            analysis=result.analysis,
+            direction=result.direction,
+        )
+    return result
+
+
 async def classify_event(
     why_own_it: str,
     must_remain_true: str | None,
@@ -238,7 +252,7 @@ async def classify_event(
                 timeout=30.0,
             )
             text = response.content[0].text.strip()
-            parsed = _parse_classification_response(text)
+            parsed = _normalize_classification_result(_parse_classification_response(text))
             if parsed.severity == "skip":
                 return None
             return ClassificationResult(
@@ -274,7 +288,7 @@ async def classify_event(
                 timeout=30.0,
             )
             text = (oa_response.choices[0].message.content or "").strip()
-            parsed = _parse_classification_response(text)
+            parsed = _normalize_classification_result(_parse_classification_response(text))
             if parsed.severity == "skip":
                 return None
             return ClassificationResult(

@@ -2,10 +2,13 @@ import pytest
 from unittest.mock import patch
 
 from app.services.ai_monitor import (
+    _CLASSIFY_SYSTEM,
     _build_classification_prompt,
+    _normalize_classification_result,
     _normalize_analysis_text,
     classify_event,
     _parse_classification_response,
+    ClassificationResult,
 )
 from app.services.ai_utils import strip_code_fences as _strip_code_fences
 
@@ -76,6 +79,10 @@ def test_build_classification_prompt_includes_profile_guidance():
     assert "started from a tip or theme" in prompt
 
 
+def test_classify_system_forbids_positive_thesis_breaking():
+    assert 'Positive or thesis-confirming events are never "thesis_breaking"' in _CLASSIFY_SYSTEM
+
+
 async def test_classify_event_uses_profile_aware_fallback_when_no_key():
     with patch("app.services.ai_monitor.settings") as mock_settings:
         mock_settings.anthropic_api_key = None
@@ -91,6 +98,33 @@ async def test_classify_event_uses_profile_aware_fallback_when_no_key():
     assert result is not None
     assert result.severity == "warning"
     assert "story" in result.analysis
+
+
+def test_normalize_classification_result_caps_supportive_thesis_breaking():
+    normalized = _normalize_classification_result(
+        ClassificationResult(
+            severity="thesis_breaking",
+            direction="supports",
+            analysis="Record bookings support the demand pillar.",
+        )
+    )
+
+    assert normalized.severity == "warning"
+    assert normalized.direction == "supports"
+    assert normalized.analysis == "Record bookings support the demand pillar."
+
+
+def test_normalize_classification_result_leaves_threatening_breakages_alone():
+    normalized = _normalize_classification_result(
+        ClassificationResult(
+            severity="thesis_breaking",
+            direction="threatens",
+            analysis="Orders collapsed below the stated floor.",
+        )
+    )
+
+    assert normalized.severity == "thesis_breaking"
+    assert normalized.direction == "threatens"
 
 
 def test_normalize_analysis_text_adds_decision_ready_structure():
