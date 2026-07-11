@@ -410,7 +410,10 @@ def _log_filter_rule_drops(
     if not dropped:
         return
     samples = " | ".join(_candidate_log_token(candidate) for candidate in dropped[:3])
-    logger.info(
+    # WARNING so it survives Railway's default log level; INFO app-code lines
+    # get silently dropped under uvicorn's default config — same reason we
+    # bumped Gemini diagnostics in 303b9f3.
+    logger.warning(
         "Noise filter %s dropped %d/%d candidates for holding %s; samples=%s",
         rule_name,
         len(dropped),
