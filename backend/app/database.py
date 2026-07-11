@@ -3,6 +3,7 @@ import logging
 from datetime import datetime, timezone
 from urllib.parse import urlparse, urlencode, parse_qs, urlunparse
 
+from sqlalchemy.exc import InterfaceError
 from sqlalchemy import String, event, types
 from sqlalchemy.ext.asyncio import async_sessionmaker, create_async_engine, AsyncSession
 from sqlalchemy.orm import DeclarativeBase
@@ -181,6 +182,27 @@ class Base(DeclarativeBase):
     pass
 
 
+def _is_closed_connection_rollback_error(exc: InterfaceError) -> bool:
+    text = str(exc).lower()
+    return (
+        "rollback" in text
+        and "underlying connection is closed" in text
+    ) or (
+        "transaction.rollback()" in text and "connection is closed" in text
+    )
+
+
 async def get_db():
-    async with async_session() as session:
+    session = async_session()
+    try:
         yield session
+    finally:
+        try:
+            await session.close()
+        except InterfaceError as exc:
+            if not _is_closed_connection_rollback_error(exc):
+                raise
+            logger.warning(
+                "Suppressing closed-connection rollback error while closing DB session: %s",
+                exc,
+            )
