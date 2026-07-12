@@ -29,6 +29,8 @@ from app.schemas.coverage import (
     ClaimRetrievalComparisonResponse,
     ClaimRetrievalResponse,
     CoveragePassResponse,
+    MonitoringSoakReportRequest,
+    MonitoringSoakReportResponse,
     RetrievalChunkResponse,
     SignalCoverageResponse,
     ThesisCoverageComparisonResponse,
@@ -48,6 +50,13 @@ from app.services.coverage import (
     DEFAULT_COVERAGE_WINDOW_DAYS,
     compute_thesis_coverage,
     latest_coverage_passes,
+)
+from app.services.soak_monitor import (
+    SoakBasketEntry,
+    build_soak_report,
+    load_default_soak_basket,
+    render_soak_report_markdown,
+    soak_window_for_days,
 )
 from app.services.evidence_retrieval import retrieve_similar_chunks_for_thesis
 from app.services.monitoring_review import review_monitoring_event
@@ -709,3 +718,66 @@ async def relevance_metrics(
 
     metrics = await compute_relevance_metrics(db, days=days)
     return metrics.to_dict()
+
+
+@router.post("/soak-report", response_model=MonitoringSoakReportResponse)
+async def monitoring_soak_report(
+    request: MonitoringSoakReportRequest,
+    x_metrics_token: str | None = Header(default=None),
+    db: AsyncSession = Depends(get_db),
+):
+    """Protected ops endpoint for launch-readiness soak reporting.
+
+    Railway or another scheduler can POST a basket of holdings here and receive
+    the full Markdown report plus structured summary data. If no holdings are
+    supplied, the server attempts to load backend/docs/monitoring_soak.json.
+    """
+    if not settings.metrics_token:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Not found")
+    if x_metrics_token != settings.metrics_token:
+        raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Invalid metrics token")
+
+    try:
+        basket = (
+            [
+                SoakBasketEntry(
+                    label=item.label,
+                    ticker=item.ticker.upper() if item.ticker else None,
+                    holding_id=item.holding_id,
+                )
+                for item in request.holdings
+            ]
+            if request.holdings
+            else load_default_soak_basket()
+        )
+    except Exception as exc:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail=f"Invalid soak basket configuration: {exc}",
+        ) from exc
+
+    start_at, end_at = soak_window_for_days(
+        days=request.days,
+        timezone_name=request.timezone_name,
+    )
+    report = await build_soak_report(
+        db,
+        basket=basket,
+        start_at=start_at,
+        end_at=end_at,
+        timezone_name=request.timezone_name,
+    )
+    return MonitoringSoakReportResponse(
+        start_at=report.start_at,
+        end_at=report.end_at,
+        timezone_name=report.timezone_name,
+        markdown=render_soak_report_markdown(report),
+        summaries=[
+            {
+                **summary.__dict__,
+                "recent_events": [event.__dict__ for event in summary.recent_events],
+            }
+            for summary in report.summaries
+        ],
+        unresolved=[item.__dict__ for item in report.unresolved],
+    )

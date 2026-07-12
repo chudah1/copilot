@@ -1,0 +1,20 @@
+{
+  "holdings": [
+    {
+      "label": "NVDA semis control",
+      "ticker": "NVDA"
+    },
+    {
+      "label": "MSFT mega-cap control",
+      "ticker": "MSFT"
+    },
+    {
+      "label": "GOOGL platform control",
+      "ticker": "GOOGL"
+    },
+    {
+      "label": "AAPL baseline control",
+      "ticker": "AAPL"
+    }
+  ]
+}

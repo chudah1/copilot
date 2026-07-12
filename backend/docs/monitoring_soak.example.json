@@ -1,0 +1,16 @@
+{
+  "holdings": [
+    {
+      "label": "ASML noisy control",
+      "ticker": "ASML"
+    },
+    {
+      "label": "MSFT mega-cap control",
+      "ticker": "MSFT"
+    },
+    {
+      "label": "Exact holding example",
+      "holding_id": "00000000-0000-0000-0000-000000000000"
+    }
+  ]
+}

@@ -96,3 +96,58 @@ class ThesisCoverageComparisonResponse(BaseModel):
     covered_count: int
     uncovered_count: int
     claim_results: list[ClaimRetrievalComparisonResponse]
+
+
+class MonitoringSoakBasketEntryRequest(BaseModel):
+    label: str
+    ticker: str | None = None
+    holding_id: uuid.UUID | None = None
+
+
+class MonitoringSoakReportRequest(BaseModel):
+    days: int = 5
+    timezone_name: str = "Europe/London"
+    holdings: list[MonitoringSoakBasketEntryRequest] = []
+
+
+class MonitoringSoakRecentEventResponse(BaseModel):
+    created_at: datetime
+    severity: str
+    event_type: str
+    title: str
+
+
+class MonitoringSoakHoldingSummaryResponse(BaseModel):
+    label: str
+    holding_id: uuid.UUID
+    ticker: str
+    holding_name: str
+    thesis_id: uuid.UUID | None
+    thesis_status: str | None
+    latest_triggered_by: str | None
+    latest_pass_started_at: datetime | None
+    latest_stage_counts: dict[str, int]
+    latest_events_persisted: int
+    pass_count: int
+    total_events_persisted: int
+    total_same_event_merges: int
+    source_error_count: int
+    partial_failure_count: int
+    recent_event_count: int
+    recent_events: list[MonitoringSoakRecentEventResponse]
+    assessment: str
+    assessment_reason: str
+
+
+class MonitoringSoakUnresolvedEntryResponse(BaseModel):
+    label: str
+    reason: str
+
+
+class MonitoringSoakReportResponse(BaseModel):
+    start_at: datetime
+    end_at: datetime
+    timezone_name: str
+    markdown: str
+    summaries: list[MonitoringSoakHoldingSummaryResponse]
+    unresolved: list[MonitoringSoakUnresolvedEntryResponse]
