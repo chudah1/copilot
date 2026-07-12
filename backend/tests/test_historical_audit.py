@@ -5,6 +5,7 @@ from unittest.mock import AsyncMock, MagicMock, patch
 import pytest
 from sqlalchemy.exc import OperationalError
 from app.models.thesis import Thesis
+from app.services.noise_filter import PrioritySuppressionResult
 
 
 def test_thesis_has_historical_audit_columns():
@@ -61,7 +62,10 @@ async def test_run_historical_audit_sets_status_empty_when_no_classified():
         patch("app.services.check_now.match_thesis_news_watches", return_value=set()),
         patch("app.services.check_now.filter_candidates", return_value=[]),
         patch("app.services.check_now.classify_candidates_for_thesis", return_value=[]),
-        patch("app.services.check_now.apply_priority_suppression", return_value=[]),
+        patch(
+            "app.services.check_now.apply_priority_suppression",
+            return_value=PrioritySuppressionResult(classified=[], after_same_event_merge_count=0),
+        ),
         patch("app.services.check_now.CoveragePassBuilder.persist", new_callable=AsyncMock) as mock_persist,
     ):
         from app.services.check_now import _run_historical_audit_with_session
@@ -224,7 +228,10 @@ async def test_run_historical_audit_applies_thesis_relevance_filter_when_claims_
         patch("app.services.check_now.match_thesis_news_watches", return_value=set()),
         patch("app.services.check_now.filter_candidates", return_value=[]),
         patch("app.services.check_now.classify_candidates_for_thesis", return_value=[]),
-        patch("app.services.check_now.apply_priority_suppression", return_value=[]),
+        patch(
+            "app.services.check_now.apply_priority_suppression",
+            return_value=PrioritySuppressionResult(classified=[], after_same_event_merge_count=0),
+        ),
         patch("app.services.check_now.CoveragePassBuilder.persist", new_callable=AsyncMock),
     ):
         from app.services.check_now import _run_historical_audit_with_session

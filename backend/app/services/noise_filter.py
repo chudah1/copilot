@@ -3,6 +3,7 @@ from __future__ import annotations
 import logging
 import re
 import uuid
+from dataclasses import dataclass
 from datetime import date, datetime, timedelta, timezone
 from typing import Any
 from urllib.parse import urlparse
@@ -12,6 +13,12 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.models.monitoring_event import MonitoringEvent
 from app.models.thesis_signal import ThesisSignal
+from app.services.same_event_judge import (
+    MAX_BUCKET_CANDIDATES,
+    SameEventCandidate,
+    SameEventJudgment,
+    judge_same_event_bucket,
+)
 
 logger = logging.getLogger(__name__)
 
@@ -491,11 +498,19 @@ def _apply_signal_cooldown(
     return filtered
 
 
-def apply_priority_suppression(
+@dataclass(frozen=True)
+class PrioritySuppressionResult:
+    classified: list[tuple[dict[str, Any], str]]
+    after_same_event_merge_count: int
+
+
+async def apply_priority_suppression(
     classified: list[tuple[dict[str, Any], str]],
     *,
+    holding_id: uuid.UUID | None = None,
+    enable_same_event_judge: bool = True,
     limit_info_news_per_signal: bool = True,
-) -> list[tuple[dict[str, Any], str]]:
+) -> PrioritySuppressionResult:
     """Rule 3: If a thesis_breaking candidate exists, drop lower-severity candidates
     that share the same evidence source.
 
@@ -513,9 +528,15 @@ def apply_priority_suppression(
 
     if not breaking_sources:
         filtered = _apply_sibling_specificity_suppression(classified)
+        if enable_same_event_judge:
+            filtered = await _apply_same_event_merge(filtered, holding_id=holding_id)
+        after_same_event_merge_count = len(filtered)
         if limit_info_news_per_signal:
             filtered = _apply_same_signal_info_news_cap(filtered)
-        return filtered
+        return PrioritySuppressionResult(
+            classified=filtered,
+            after_same_event_merge_count=after_same_event_merge_count,
+        )
 
     filtered = []
     for candidate, severity in classified:
@@ -534,9 +555,15 @@ def apply_priority_suppression(
         filtered.append((candidate, severity))
 
     filtered = _apply_sibling_specificity_suppression(filtered)
+    if enable_same_event_judge:
+        filtered = await _apply_same_event_merge(filtered, holding_id=holding_id)
+    after_same_event_merge_count = len(filtered)
     if limit_info_news_per_signal:
         filtered = _apply_same_signal_info_news_cap(filtered)
-    return filtered
+    return PrioritySuppressionResult(
+        classified=filtered,
+        after_same_event_merge_count=after_same_event_merge_count,
+    )
 
 
 def _candidate_family(event_type: str) -> str | None:
@@ -681,6 +708,7 @@ def _apply_minimum_relevance(
 
 _NEWS_EVENT_TYPES = {"gemini_news", "news_or_earnings_candidate", "product_ramp_update", "news_keyword_match"}
 MAX_INFO_NEWS_EVENTS_PER_SIGNAL_PER_RUN = 2
+SAME_EVENT_CONFIDENCE_THRESHOLD = 0.85
 _EDITORIAL_NOISE_PATTERNS = (
     "swot analysis",
     "morning call",
@@ -736,6 +764,200 @@ def _info_news_guardrail_rank(candidate: dict[str, Any], severity: str) -> tuple
     )
 
 
+def _same_event_source_domain(candidate: dict[str, Any]) -> str:
+    evidence = candidate.get("evidence", {})
+    url = str(evidence.get("url") or "").strip()
+    if url:
+        return urlparse(url).netloc.lower()[:120]
+    return str(evidence.get("source") or "").strip().lower()[:120]
+
+
+def _same_event_signal_label(candidate: dict[str, Any]) -> str:
+    evidence = candidate.get("evidence", {})
+    explicit = str(evidence.get("signal_label") or "").strip()
+    if explicit:
+        return explicit[:200]
+    matched_labels = evidence.get("matched_signal_labels")
+    if isinstance(matched_labels, list):
+        for label in matched_labels:
+            cleaned = str(label or "").strip()
+            if cleaned:
+                return cleaned[:200]
+    relevant = evidence.get("relevant_signals")
+    if isinstance(relevant, list):
+        for label in relevant:
+            cleaned = str(label or "").strip()
+            if cleaned:
+                return cleaned[:200]
+    return ""
+
+
+def _same_event_matched_topics(candidate: dict[str, Any]) -> str:
+    evidence = candidate.get("evidence", {})
+    topics = evidence.get("matched_topics")
+    if not isinstance(topics, list):
+        return ""
+    values = [str(topic or "").strip() for topic in topics if str(topic or "").strip()]
+    return ", ".join(values)[:200]
+
+
+def _same_event_candidate_payload(candidate_id: str, candidate: dict[str, Any]) -> SameEventCandidate:
+    evidence = candidate.get("evidence", {})
+    headline = str(evidence.get("headline") or candidate.get("description") or "").strip()
+    summary = str(evidence.get("summary") or candidate.get("description") or "").strip()
+    return SameEventCandidate(
+        candidate_id=candidate_id,
+        headline=headline[:200],
+        summary=summary[:400],
+        source_domain=_same_event_source_domain(candidate),
+        signal_label=_same_event_signal_label(candidate),
+        matched_topics=_same_event_matched_topics(candidate),
+        topic_context=str(evidence.get("topic_context") or "").strip()[:200],
+    )
+
+
+def _same_event_components(
+    candidate_ids: list[str],
+    accepted_edges: list[SameEventJudgment],
+) -> list[set[str]]:
+    neighbors: dict[str, set[str]] = {candidate_id: set() for candidate_id in candidate_ids}
+    for judgment in accepted_edges:
+        neighbors.setdefault(judgment.left_id, set()).add(judgment.right_id)
+        neighbors.setdefault(judgment.right_id, set()).add(judgment.left_id)
+
+    visited: set[str] = set()
+    components: list[set[str]] = []
+    for candidate_id in candidate_ids:
+        if candidate_id in visited:
+            continue
+        stack = [candidate_id]
+        component: set[str] = set()
+        while stack:
+            current = stack.pop()
+            if current in visited:
+                continue
+            visited.add(current)
+            component.add(current)
+            stack.extend(neighbors.get(current, ()))
+        components.append(component)
+    return components
+
+
+async def _apply_same_event_merge(
+    classified: list[tuple[dict[str, Any], str]],
+    *,
+    holding_id: uuid.UUID | None,
+) -> list[tuple[dict[str, Any], str]]:
+    grouped: dict[tuple[str, str], list[tuple[int, dict[str, Any], str]]] = {}
+    for idx, (candidate, severity) in enumerate(classified):
+        group_key = _info_news_guardrail_group_key(candidate, severity)
+        if group_key is None:
+            continue
+        if candidate.get("event_type") == "analyst_revision":
+            continue
+        grouped.setdefault(group_key, []).append((idx, candidate, severity))
+
+    if not grouped:
+        return classified
+
+    dropped_candidate_ids: set[int] = set()
+
+    for group_key, items in grouped.items():
+        if len(items) < 2:
+            continue
+        ranked = sorted(
+            items,
+            key=lambda item: (_info_news_guardrail_rank(item[1], item[2]), -item[0]),
+            reverse=True,
+        )
+        compared = ranked[:MAX_BUCKET_CANDIDATES]
+        if len(compared) < 2:
+            continue
+
+        candidate_lookup: dict[str, tuple[int, dict[str, Any], str]] = {}
+        judge_candidates: list[SameEventCandidate] = []
+        ordered_ids: list[str] = []
+        for rank_idx, (original_idx, candidate, severity) in enumerate(compared):
+            candidate_id = f"c{rank_idx}"
+            candidate_lookup[candidate_id] = (original_idx, candidate, severity)
+            ordered_ids.append(candidate_id)
+            judge_candidates.append(_same_event_candidate_payload(candidate_id, candidate))
+
+        judgments = await judge_same_event_bucket(judge_candidates)
+        if not judgments:
+            continue
+
+        accepted_edges = [
+            judgment
+            for judgment in judgments
+            if judgment.same_event and judgment.confidence >= SAME_EVENT_CONFIDENCE_THRESHOLD
+        ]
+        components = _same_event_components(ordered_ids, accepted_edges)
+        collapse_pairs = {
+            (judgment.left_id, judgment.right_id)
+            for judgment in accepted_edges
+        }
+
+        component_by_id: dict[str, set[str]] = {}
+        for component in components:
+            for candidate_id in component:
+                component_by_id[candidate_id] = component
+
+        for judgment in judgments:
+            left_candidate = candidate_lookup[judgment.left_id][1]
+            right_candidate = candidate_lookup[judgment.right_id][1]
+            caused_collapse = (
+                (judgment.left_id, judgment.right_id) in collapse_pairs
+                and len(component_by_id.get(judgment.left_id, {judgment.left_id})) > 1
+            )
+            logger.warning(
+                "Same-event judge holding=%s bucket=%s left=%s right=%s same_event=%s confidence=%.2f caused_collapse=%s reason=%s",
+                holding_id,
+                group_key,
+                _candidate_log_token(left_candidate),
+                _candidate_log_token(right_candidate),
+                judgment.same_event,
+                judgment.confidence,
+                caused_collapse,
+                judgment.reason or "",
+            )
+
+        for component in components:
+            if len(component) <= 1:
+                continue
+            ordered_component_ids = [candidate_id for candidate_id in ordered_ids if candidate_id in component]
+            winner_id = ordered_component_ids[0]
+            winner_candidate = candidate_lookup[winner_id][1]
+            dropped_tokens: list[str] = []
+            for candidate_id in ordered_component_ids[1:]:
+                candidate = candidate_lookup[candidate_id][1]
+                dropped_candidate_ids.add(id(candidate))
+                dropped_tokens.append(_candidate_log_token(candidate))
+            accepted_edge_tokens = [
+                f"{judgment.left_id}-{judgment.right_id}:{judgment.confidence:.2f}:{judgment.reason or ''}"
+                for judgment in accepted_edges
+                if judgment.left_id in component and judgment.right_id in component
+            ]
+            logger.warning(
+                "Same-event merge holding=%s bucket=%s kept=%s dropped=%s accepted_edges=%s cluster=%s",
+                holding_id,
+                group_key,
+                _candidate_log_token(winner_candidate),
+                " | ".join(dropped_tokens),
+                " | ".join(accepted_edge_tokens),
+                ",".join(ordered_component_ids),
+            )
+
+    if not dropped_candidate_ids:
+        return classified
+
+    return [
+        (candidate, severity)
+        for candidate, severity in classified
+        if id(candidate) not in dropped_candidate_ids
+    ]
+
+
 def _apply_same_signal_info_news_cap(
     classified: list[tuple[dict[str, Any], str]],
     *,
@@ -772,7 +994,7 @@ def _apply_same_signal_info_news_cap(
         return classified
 
     for group_key, dropped_items in dropped_by_group:
-        logger.info(
+        logger.warning(
             "Post-classification info-news cap dropped %d candidates for group %s; samples=%s",
             len(dropped_items),
             group_key,

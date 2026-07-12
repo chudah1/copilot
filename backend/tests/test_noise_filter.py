@@ -15,6 +15,7 @@ from app.services.noise_filter import (
     filter_candidates,
     record_signal_fired,
 )
+from app.services.same_event_judge import SameEventJudgment
 from app.models.monitoring_event import MonitoringEvent
 
 
@@ -278,41 +279,45 @@ def test_signal_cooldown_handles_naive_last_fired_at():
 # ---------------------------------------------------------------------------
 
 
-def test_priority_suppression_drops_lower_severity_same_source():
+@pytest.mark.asyncio
+async def test_priority_suppression_drops_lower_severity_same_source():
     classified = [
         ({"event_type": "price_move", "evidence": {"article_id": "src-1"}}, "thesis_breaking"),
         ({"event_type": "metric_threshold", "evidence": {"article_id": "src-1"}}, "warning"),
     ]
-    result = apply_priority_suppression(classified)
-    assert len(result) == 1
-    assert result[0][1] == "thesis_breaking"
+    result = await apply_priority_suppression(classified)
+    assert len(result.classified) == 1
+    assert result.classified[0][1] == "thesis_breaking"
 
 
-def test_priority_suppression_keeps_different_sources():
+@pytest.mark.asyncio
+async def test_priority_suppression_keeps_different_sources():
     classified = [
         ({"event_type": "price_move", "evidence": {"article_id": "src-1"}}, "thesis_breaking"),
         ({"event_type": "news_or_earnings_candidate", "evidence": {"article_id": "src-2"}}, "warning"),
     ]
-    result = apply_priority_suppression(classified)
-    assert len(result) == 2
+    result = await apply_priority_suppression(classified)
+    assert len(result.classified) == 2
 
 
-def test_priority_suppression_no_breaking_keeps_all():
+@pytest.mark.asyncio
+async def test_priority_suppression_no_breaking_keeps_all():
     classified = [
         ({"event_type": "price_move", "evidence": {"article_id": "src-1"}}, "warning"),
         ({"event_type": "news_or_earnings_candidate", "evidence": {"article_id": "src-1"}}, "info"),
     ]
-    result = apply_priority_suppression(classified)
-    assert len(result) == 2
+    result = await apply_priority_suppression(classified)
+    assert len(result.classified) == 2
 
 
-def test_priority_suppression_no_source_id_kept():
+@pytest.mark.asyncio
+async def test_priority_suppression_no_source_id_kept():
     classified = [
         ({"event_type": "price_move", "evidence": {"current_price": 150}}, "thesis_breaking"),
         ({"event_type": "metric_threshold", "evidence": {"metric": "pe"}}, "warning"),
     ]
-    result = apply_priority_suppression(classified)
-    assert len(result) == 2
+    result = await apply_priority_suppression(classified)
+    assert len(result.classified) == 2
 
 
 def test_sibling_specificity_prefers_transcript_over_upcoming_for_same_claim():
@@ -430,18 +435,20 @@ def test_sibling_specificity_keeps_gemini_news_on_different_signals():
     assert len(result) == 2
 
 
-def test_apply_priority_suppression_also_applies_sibling_specificity():
+@pytest.mark.asyncio
+async def test_apply_priority_suppression_also_applies_sibling_specificity():
     claim_id = str(uuid.uuid4())
     classified = [
         ({"event_type": "upcoming_earnings", "evidence": {"claim_id": claim_id}}, "warning"),
         ({"event_type": "news_or_earnings_candidate", "evidence": {"claim_id": claim_id}}, "warning"),
     ]
-    result = apply_priority_suppression(classified)
-    assert len(result) == 1
-    assert result[0][0]["event_type"] == "news_or_earnings_candidate"
+    result = await apply_priority_suppression(classified)
+    assert len(result.classified) == 1
+    assert result.classified[0][0]["event_type"] == "news_or_earnings_candidate"
 
 
-def test_apply_priority_suppression_caps_info_news_per_signal():
+@pytest.mark.asyncio
+async def test_apply_priority_suppression_caps_info_news_per_signal():
     signal_id = str(uuid.uuid4())
     classified = [
         (
@@ -492,15 +499,16 @@ def test_apply_priority_suppression_caps_info_news_per_signal():
         ),
     ]
 
-    result = apply_priority_suppression(classified)
+    result = await apply_priority_suppression(classified)
 
-    assert len(result) == 2
-    kept_headlines = {candidate["evidence"]["headline"] for candidate, _severity in result}
+    assert len(result.classified) == 2
+    kept_headlines = {candidate["evidence"]["headline"] for candidate, _severity in result.classified}
     assert "JPMorgan raises ASML price target on EUV demand" in kept_headlines
     assert "Bernstein says ASML bookings stay strong on lithography intensity" in kept_headlines
 
 
-def test_apply_priority_suppression_can_skip_info_news_cap():
+@pytest.mark.asyncio
+async def test_apply_priority_suppression_can_skip_info_news_cap():
     signal_id = str(uuid.uuid4())
     classified = [
         (
@@ -538,9 +546,279 @@ def test_apply_priority_suppression_can_skip_info_news_cap():
         ),
     ]
 
-    result = apply_priority_suppression(classified, limit_info_news_per_signal=False)
+    result = await apply_priority_suppression(classified, limit_info_news_per_signal=False)
 
-    assert len(result) == 3
+    assert len(result.classified) == 3
+
+
+@pytest.mark.asyncio
+async def test_apply_priority_suppression_collapses_same_event_rewrite_pair(caplog):
+    signal_id = str(uuid.uuid4())
+    classified = [
+        (
+            {
+                "event_type": "gemini_news",
+                "evidence": {
+                    "signal_id": signal_id,
+                    "headline": "ASML stock target raised at Bernstein on capex cycle and litho intensity",
+                    "summary": "Bernstein lifted its target after stronger EUV demand and capex trends.",
+                    "url": "https://aggregator-a.example.com/asml-bernstein",
+                    "matched_topics": ["EUV demand"],
+                },
+            },
+            "info",
+        ),
+        (
+            {
+                "event_type": "gemini_news",
+                "evidence": {
+                    "signal_id": signal_id,
+                    "headline": "ASML Stock Jumps As Bernstein Aggressively Raises Price Target On Booming EUV Demand",
+                    "summary": "Another outlet rewrote the same Bernstein target raise story.",
+                    "url": "https://aggregator-b.example.com/asml-bernstein",
+                    "matched_topics": ["EUV demand"],
+                },
+            },
+            "info",
+        ),
+    ]
+
+    with patch(
+        "app.services.noise_filter.judge_same_event_bucket",
+        new=AsyncMock(
+            return_value=[
+                SameEventJudgment(
+                    left_id="c0",
+                    right_id="c1",
+                    same_event=True,
+                    confidence=0.91,
+                    reason="same analyst note retold by two outlets",
+                )
+            ]
+        ),
+    ):
+        result = await apply_priority_suppression(classified, holding_id=uuid.uuid4())
+
+    assert len(result.classified) == 1
+    assert result.after_same_event_merge_count == 1
+    assert "Same-event judge" in caplog.text
+    assert "Same-event merge" in caplog.text
+
+
+@pytest.mark.asyncio
+async def test_apply_priority_suppression_keeps_distinct_same_signal_stories():
+    signal_id = str(uuid.uuid4())
+    classified = [
+        (
+            {
+                "event_type": "gemini_news",
+                "evidence": {
+                    "signal_id": signal_id,
+                    "headline": "Citi raises TSMC target after 52-week high",
+                    "summary": "Citi updated its view after TSMC momentum.",
+                    "url": "https://example.com/citi-tsmc",
+                },
+            },
+            "info",
+        ),
+        (
+            {
+                "event_type": "gemini_news",
+                "evidence": {
+                    "signal_id": signal_id,
+                    "headline": "Morgan Stanley says semi momentum is weakening",
+                    "summary": "Morgan Stanley published a separate sector report.",
+                    "url": "https://example.com/ms-semi",
+                },
+            },
+            "info",
+        ),
+    ]
+
+    with patch(
+        "app.services.noise_filter.judge_same_event_bucket",
+        new=AsyncMock(
+            return_value=[
+                SameEventJudgment(
+                    left_id="c0",
+                    right_id="c1",
+                    same_event=False,
+                    confidence=0.34,
+                    reason="different analyst firms and different developments",
+                )
+            ]
+        ),
+    ):
+        result = await apply_priority_suppression(classified, holding_id=uuid.uuid4())
+
+    assert len(result.classified) == 2
+    assert result.after_same_event_merge_count == 2
+
+
+@pytest.mark.asyncio
+async def test_apply_priority_suppression_does_not_collapse_below_threshold():
+    signal_id = str(uuid.uuid4())
+    classified = [
+        (
+            {
+                "event_type": "gemini_news",
+                "evidence": {
+                    "signal_id": signal_id,
+                    "headline": "Bernstein raises ASML target on EUV demand",
+                    "url": "https://example.com/a",
+                },
+            },
+            "info",
+        ),
+        (
+            {
+                "event_type": "gemini_news",
+                "evidence": {
+                    "signal_id": signal_id,
+                    "headline": "Another rewrite of the Bernstein ASML target raise",
+                    "url": "https://example.com/b",
+                },
+            },
+            "info",
+        ),
+    ]
+
+    with patch(
+        "app.services.noise_filter.judge_same_event_bucket",
+        new=AsyncMock(
+            return_value=[
+                SameEventJudgment(
+                    left_id="c0",
+                    right_id="c1",
+                    same_event=True,
+                    confidence=0.84,
+                    reason="probably the same story but not quite certain",
+                )
+            ]
+        ),
+    ):
+        result = await apply_priority_suppression(classified, holding_id=uuid.uuid4())
+
+    assert len(result.classified) == 2
+    assert result.after_same_event_merge_count == 2
+
+
+@pytest.mark.asyncio
+async def test_apply_priority_suppression_limits_same_event_judge_to_top_five():
+    signal_id = str(uuid.uuid4())
+    classified = []
+    for idx in range(6):
+        classified.append(
+            (
+                {
+                    "event_type": "gemini_news",
+                    "evidence": {
+                        "signal_id": signal_id,
+                        "headline": f"Candidate {idx}",
+                        "url": f"https://example.com/{idx}",
+                        "matched_topics": ["topic"] if idx < 5 else [],
+                    },
+                },
+                "info",
+            )
+        )
+
+    seen_counts: list[int] = []
+
+    async def _judge(candidates):
+        seen_counts.append(len(candidates))
+        return []
+
+    with patch("app.services.noise_filter.judge_same_event_bucket", new=_judge):
+        result = await apply_priority_suppression(classified, holding_id=uuid.uuid4())
+
+    assert seen_counts == [5]
+    assert len(result.classified) == 2
+
+
+@pytest.mark.asyncio
+async def test_apply_priority_suppression_handles_transitive_same_event_cluster():
+    signal_id = str(uuid.uuid4())
+    classified = [
+        (
+            {
+                "event_type": "gemini_news",
+                "evidence": {"signal_id": signal_id, "headline": "A", "url": "https://example.com/a"},
+            },
+            "info",
+        ),
+        (
+            {
+                "event_type": "gemini_news",
+                "evidence": {"signal_id": signal_id, "headline": "B", "url": "https://example.com/b"},
+            },
+            "info",
+        ),
+        (
+            {
+                "event_type": "gemini_news",
+                "evidence": {"signal_id": signal_id, "headline": "C", "url": "https://example.com/c"},
+            },
+            "info",
+        ),
+    ]
+
+    with patch(
+        "app.services.noise_filter.judge_same_event_bucket",
+        new=AsyncMock(
+            return_value=[
+                SameEventJudgment("c0", "c1", True, 0.90, "same"),
+                SameEventJudgment("c0", "c2", False, 0.70, "uncertain"),
+                SameEventJudgment("c1", "c2", True, 0.90, "same"),
+            ]
+        ),
+    ):
+        result = await apply_priority_suppression(classified, holding_id=uuid.uuid4())
+
+    assert len(result.classified) == 1
+    assert result.after_same_event_merge_count == 1
+
+
+@pytest.mark.asyncio
+async def test_apply_priority_suppression_can_disable_same_event_judge():
+    signal_id = str(uuid.uuid4())
+    classified = [
+        (
+            {
+                "event_type": "gemini_news",
+                "evidence": {
+                    "signal_id": signal_id,
+                    "headline": "First",
+                    "url": "https://example.com/first",
+                },
+            },
+            "info",
+        ),
+        (
+            {
+                "event_type": "gemini_news",
+                "evidence": {
+                    "signal_id": signal_id,
+                    "headline": "Second",
+                    "url": "https://example.com/second",
+                },
+            },
+            "info",
+        ),
+    ]
+
+    judge = AsyncMock(return_value=[])
+    with patch("app.services.noise_filter.judge_same_event_bucket", new=judge):
+        result = await apply_priority_suppression(
+            classified,
+            holding_id=uuid.uuid4(),
+            enable_same_event_judge=False,
+            limit_info_news_per_signal=False,
+        )
+
+    judge.assert_not_awaited()
+    assert len(result.classified) == 2
+    assert result.after_same_event_merge_count == 2
 
 
 # ---------------------------------------------------------------------------
@@ -722,16 +1000,17 @@ async def test_load_recent_signal_story_anchors_derives_from_legacy_raw_data(db)
     ]
 
 
-def test_priority_suppression_end_to_end():
+@pytest.mark.asyncio
+async def test_priority_suppression_end_to_end():
     """Priority suppression drops warning when thesis_breaking exists for same source."""
     classified = [
         ({"event_type": "price_move", "evidence": {"article_id": "src-1"}, "description": "Price moved"}, "thesis_breaking"),
         ({"event_type": "news_or_earnings_candidate", "evidence": {"article_id": "src-1"}, "description": "News"}, "warning"),
         ({"event_type": "earnings_surprise", "evidence": {"article_id": "src-2"}, "description": "Earnings"}, "warning"),
     ]
-    result = apply_priority_suppression(classified)
-    assert len(result) == 2
-    event_types = [c["event_type"] for c, _ in result]
+    result = await apply_priority_suppression(classified)
+    assert len(result.classified) == 2
+    event_types = [c["event_type"] for c, _ in result.classified]
     assert "price_move" in event_types
     assert "earnings_surprise" in event_types
     assert "news_or_earnings_candidate" not in event_types

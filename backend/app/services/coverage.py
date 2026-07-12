@@ -240,6 +240,7 @@ STAGE_AFTER_RELEVANCE_FILTER = "after_relevance_filter"
 STAGE_AFTER_THESIS_FLOOR = "after_thesis_floor"
 STAGE_AFTER_NOISE_FILTER = "after_noise_filter"
 STAGE_AFTER_CLASSIFICATION = "after_classification"
+STAGE_AFTER_SAME_EVENT_MERGE = "after_same_event_merge"
 STAGE_EVENTS_PERSISTED = "events_persisted"
 
 

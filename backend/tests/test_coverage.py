@@ -275,6 +275,7 @@ async def test_coverage_pass_builder_records_sources_and_stages(db, test_user):
     builder.record_stage("after_match", 10)
     builder.record_stage("after_relevance_filter", 4)
     builder.record_stage("after_classification", 4)
+    builder.record_stage("after_same_event_merge", 3)
     builder.record_events_persisted(4)
 
     await builder.persist(db)
@@ -298,6 +299,7 @@ async def test_coverage_pass_builder_records_sources_and_stages(db, test_user):
     assert stage_names == [
         "candidates_generated", "after_match",
         "after_relevance_filter", "after_classification",
+        "after_same_event_merge",
     ]
     assert payload["events_persisted"] == 4
 

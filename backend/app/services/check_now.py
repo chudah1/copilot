@@ -59,6 +59,7 @@ from app.services.coverage import (
     STAGE_AFTER_MATCH,
     STAGE_AFTER_NOISE_FILTER,
     STAGE_AFTER_RELEVANCE_FILTER,
+    STAGE_AFTER_SAME_EVENT_MERGE,
     STAGE_AFTER_THESIS_FLOOR,
     STAGE_CANDIDATES_GENERATED,
     STAGE_EVENTS_PERSISTED,
@@ -522,10 +523,14 @@ async def run_check_now(
         )
 
         # Rule 3: Priority suppression (post-classification)
-        suppressed = apply_priority_suppression([(c, s) for c, s, _ in classified])
-        surviving_set = {id(c) for c, _ in suppressed}
-        classified = [(c, s, a) for c, s, a in classified if id(c) in surviving_set]
         coverage.record_stage(STAGE_AFTER_CLASSIFICATION, len(classified))
+        suppression = await apply_priority_suppression(
+            [(c, s) for c, s, _ in classified],
+            holding_id=holding_snapshot.id,
+        )
+        coverage.record_stage(STAGE_AFTER_SAME_EVENT_MERGE, suppression.after_same_event_merge_count)
+        surviving_set = {id(c) for c, _ in suppression.classified}
+        classified = [(c, s, a) for c, s, a in classified if id(c) in surviving_set]
 
         async with session_factory() as write_db:
             live_holding = (
@@ -1103,13 +1108,16 @@ async def _run_historical_audit_with_session(
             nw_matched=nw_matched,
         )
 
-        suppressed = apply_priority_suppression(
+        coverage.record_stage(STAGE_AFTER_CLASSIFICATION, len(classified))
+        suppression = await apply_priority_suppression(
             [(c, s) for c, s, _ in classified],
+            holding_id=holding.id,
+            enable_same_event_judge=False,
             limit_info_news_per_signal=False,
         )
-        surviving_set = {id(c) for c, _ in suppressed}
+        coverage.record_stage(STAGE_AFTER_SAME_EVENT_MERGE, suppression.after_same_event_merge_count)
+        surviving_set = {id(c) for c, _ in suppression.classified}
         classified = [(c, s, a) for c, s, a in classified if id(c) in surviving_set]
-        coverage.record_stage(STAGE_AFTER_CLASSIFICATION, len(classified))
         coverage.record_stage(STAGE_EVENTS_PERSISTED, 0)
         coverage.record_events_persisted(0)
         await coverage.persist(db)

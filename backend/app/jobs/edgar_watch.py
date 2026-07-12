@@ -17,6 +17,7 @@ from app.services.coverage import (
     STAGE_AFTER_MATCH,
     STAGE_AFTER_NOISE_FILTER,
     STAGE_AFTER_RELEVANCE_FILTER,
+    STAGE_AFTER_SAME_EVENT_MERGE,
     STAGE_AFTER_THESIS_FLOOR,
     STAGE_CANDIDATES_GENERATED,
     STAGE_EVENTS_PERSISTED,
@@ -80,6 +81,7 @@ async def run_edgar_watch():
                 coverage.record_stage(STAGE_CANDIDATES_GENERATED, 0)
                 coverage.record_stage(STAGE_AFTER_NOISE_FILTER, 0)
                 coverage.record_stage(STAGE_AFTER_CLASSIFICATION, 0)
+                coverage.record_stage(STAGE_AFTER_SAME_EVENT_MERGE, 0)
                 coverage.record_stage(STAGE_EVENTS_PERSISTED, 0)
                 coverage.record_events_persisted(0)
                 await coverage.persist(db)
@@ -96,6 +98,7 @@ async def run_edgar_watch():
                 coverage.record_stage(STAGE_CANDIDATES_GENERATED, 0)
                 coverage.record_stage(STAGE_AFTER_NOISE_FILTER, 0)
                 coverage.record_stage(STAGE_AFTER_CLASSIFICATION, 0)
+                coverage.record_stage(STAGE_AFTER_SAME_EVENT_MERGE, 0)
                 coverage.record_stage(STAGE_EVENTS_PERSISTED, 0)
                 coverage.record_events_persisted(0)
                 await coverage.persist(db)
@@ -107,6 +110,7 @@ async def run_edgar_watch():
                 coverage.record_stage(STAGE_CANDIDATES_GENERATED, 0)
                 coverage.record_stage(STAGE_AFTER_NOISE_FILTER, 0)
                 coverage.record_stage(STAGE_AFTER_CLASSIFICATION, 0)
+                coverage.record_stage(STAGE_AFTER_SAME_EVENT_MERGE, 0)
                 coverage.record_stage(STAGE_EVENTS_PERSISTED, 0)
                 coverage.record_events_persisted(0)
                 await coverage.persist(db)
@@ -154,6 +158,7 @@ async def run_edgar_watch():
 
             if not candidates:
                 coverage.record_stage(STAGE_AFTER_CLASSIFICATION, 0)
+                coverage.record_stage(STAGE_AFTER_SAME_EVENT_MERGE, 0)
                 coverage.record_stage(STAGE_EVENTS_PERSISTED, 0)
                 coverage.record_events_persisted(0)
                 await coverage.persist(db)
@@ -172,10 +177,14 @@ async def run_edgar_watch():
             )
 
             # apply_priority_suppression takes list of (candidate, severity) tuples
-            suppressed = apply_priority_suppression([(c, s) for c, s, _ in classified])
-            surviving_set = {id(c) for c, _ in suppressed}
-            classified = [(c, s, a) for c, s, a in classified if id(c) in surviving_set]
             coverage.record_stage(STAGE_AFTER_CLASSIFICATION, len(classified))
+            suppression = await apply_priority_suppression(
+                [(c, s) for c, s, _ in classified],
+                holding_id=holding.id,
+            )
+            coverage.record_stage(STAGE_AFTER_SAME_EVENT_MERGE, suppression.after_same_event_merge_count)
+            surviving_set = {id(c) for c, _ in suppression.classified}
+            classified = [(c, s, a) for c, s, a in classified if id(c) in surviving_set]
 
             created_event_ids: list[uuid.UUID] = []
             if classified:

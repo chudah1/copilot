@@ -535,7 +535,11 @@ async def test_run_monitoring_applies_thesis_relevance_filter(db, job_session_fa
              patch("app.jobs.monitoring_run.match_candidates_to_signals", side_effect=lambda candidates, claims: candidates), \
              patch("app.jobs.monitoring_run.enrich_candidates_with_embedding_matches", new_callable=AsyncMock, side_effect=lambda candidates, claims: candidates), \
              patch("app.jobs.monitoring_run.adjudicate_signal_matches", new_callable=AsyncMock, side_effect=lambda candidates, claims: candidates), \
-             patch("app.jobs.monitoring_run.filter_candidates_by_thesis_relevance", new_callable=AsyncMock, return_value=[] ) as mock_relevance:
+             patch(
+                 "app.jobs.monitoring_run.filter_candidates_by_thesis_relevance_with_drops",
+                 new_callable=AsyncMock,
+                 return_value=([], []),
+             ) as mock_relevance:
             await run_monitoring()
 
     mock_relevance.assert_awaited_once()
@@ -625,6 +629,7 @@ async def test_run_monitoring_persists_coverage_pass_for_eventful_run(db, job_se
     assert len(rows) == 1
     payload = rows[0].payload
     assert payload["events_persisted"] == 1
+    assert ["after_same_event_merge", 1] in payload["stages"]
     assert payload["stages"][-1] == ["events_persisted", 1]
     assert rows[0].triggered_by == "monitoring_run"
 
