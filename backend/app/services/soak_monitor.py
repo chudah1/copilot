@@ -13,6 +13,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from app.models.coverage_pass import CoveragePass
 from app.models.holding import Holding
 from app.models.monitoring_event import MonitoringEvent
+from app.models.monitoring_soak_report import MonitoringSoakReport
 from app.models.thesis import Thesis
 from app.services.coverage import (
     STAGE_AFTER_CLASSIFICATION,
@@ -76,6 +77,19 @@ class SoakReport:
     timezone_name: str
     summaries: list[SoakHoldingSummary]
     unresolved: list[SoakUnresolvedEntry]
+
+
+def soak_basket_payload(entries: list[SoakBasketEntry]) -> dict:
+    return {
+        "holdings": [
+            {
+                "label": entry.label,
+                "ticker": entry.ticker,
+                "holding_id": str(entry.holding_id) if entry.holding_id is not None else None,
+            }
+            for entry in entries
+        ]
+    }
 
 
 def load_soak_basket_config(path: str | Path) -> list[SoakBasketEntry]:
@@ -392,3 +406,76 @@ def render_soak_report_markdown(report: SoakReport) -> str:
         lines.append("")
 
     return "\n".join(lines).strip() + "\n"
+
+
+def soak_report_payload(report: SoakReport) -> dict:
+    return {
+        "start_at": report.start_at.isoformat(),
+        "end_at": report.end_at.isoformat(),
+        "timezone_name": report.timezone_name,
+        "markdown": render_soak_report_markdown(report),
+        "summaries": [
+            {
+                **summary.__dict__,
+                "holding_id": str(summary.holding_id),
+                "thesis_id": str(summary.thesis_id) if summary.thesis_id is not None else None,
+                "latest_pass_started_at": summary.latest_pass_started_at.isoformat() if summary.latest_pass_started_at else None,
+                "recent_events": [
+                    {
+                        "created_at": event.created_at.isoformat(),
+                        "severity": event.severity,
+                        "event_type": event.event_type,
+                        "title": event.title,
+                    }
+                    for event in summary.recent_events
+                ],
+            }
+            for summary in report.summaries
+        ],
+        "unresolved": [item.__dict__ for item in report.unresolved],
+    }
+
+
+async def persist_soak_report(
+    db: AsyncSession,
+    *,
+    run_id: str,
+    started_at: datetime,
+    finished_at: datetime,
+    window_start: datetime,
+    window_end: datetime,
+    timezone_name: str,
+    basket: list[SoakBasketEntry],
+    report: SoakReport | None,
+    status: str,
+    error_message: str | None = None,
+) -> MonitoringSoakReport:
+    row = MonitoringSoakReport(
+        run_id=run_id,
+        started_at=started_at,
+        finished_at=finished_at,
+        window_start=window_start,
+        window_end=window_end,
+        timezone_name=timezone_name,
+        status=status,
+        basket_config=soak_basket_payload(basket),
+        payload=soak_report_payload(report) if report is not None else None,
+        error_message=(error_message[:2000] if error_message else None),
+    )
+    db.add(row)
+    await db.commit()
+    await db.refresh(row)
+    return row
+
+
+async def latest_soak_reports(
+    db: AsyncSession,
+    *,
+    limit: int = 10,
+) -> list[MonitoringSoakReport]:
+    result = await db.execute(
+        select(MonitoringSoakReport)
+        .order_by(MonitoringSoakReport.started_at.desc())
+        .limit(limit)
+    )
+    return list(result.scalars().all())

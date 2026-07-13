@@ -151,3 +151,20 @@ class MonitoringSoakReportResponse(BaseModel):
     markdown: str
     summaries: list[MonitoringSoakHoldingSummaryResponse]
     unresolved: list[MonitoringSoakUnresolvedEntryResponse]
+
+
+class MonitoringSoakSnapshotResponse(BaseModel):
+    id: uuid.UUID
+    run_id: str
+    started_at: datetime
+    finished_at: datetime | None
+    window_start: datetime
+    window_end: datetime
+    timezone_name: str
+    status: str
+    basket_config: dict
+    payload: dict | None
+    error_message: str | None
+    created_at: datetime
+
+    model_config = {"from_attributes": True}

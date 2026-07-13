@@ -13,6 +13,7 @@ from app.jobs.onboarding_drip import run_onboarding_drip
 from app.jobs.reengagement import run_reengagement
 from app.jobs.signal_label_refresh import run_signal_label_refresh
 from app.jobs.edgar_watch import run_edgar_watch
+from app.jobs.monitoring_soak_report import run_monitoring_soak_report
 from app.services.decision_resolution import run_decision_resolution
 
 logger = logging.getLogger(__name__)
@@ -78,15 +79,18 @@ def setup_scheduler():
     scheduler.add_job(run_decision_resolution, "cron", hour=11, minute=0, id="decision_resolution")
     # Near-real-time 8-K detection: runs hourly at :05 to avoid top-of-hour collisions.
     scheduler.add_job(run_edgar_watch, "cron", minute=5, id="edgar_watch")
+    # Launch-readiness soak snapshot: aggregate recent passes/events into a persisted
+    # cross-holding report twice daily without blocking the hot monitoring path.
+    scheduler.add_job(run_monitoring_soak_report, "cron", hour="8,18", minute=0, id="monitoring_soak_report")
 
     scheduler.add_listener(_on_job_executed, EVENT_JOB_EXECUTED)
     scheduler.add_listener(_on_job_error, EVENT_JOB_ERROR)
     scheduler.add_listener(_on_job_missed, EVENT_JOB_MISSED)
     scheduler.start()
     logger.info(
-        "Scheduler started with 11 jobs: portfolio_sync, monitoring_run, digest_builder, "
+        "Scheduler started with 12 jobs: portfolio_sync, monitoring_run, digest_builder, "
         "quarterly_review_prep, earnings_refresh, post_earnings_eval, "
-        "onboarding_drip, reengagement, signal_label_refresh, decision_resolution, edgar_watch"
+        "onboarding_drip, reengagement, signal_label_refresh, decision_resolution, edgar_watch, monitoring_soak_report"
     )
 
 

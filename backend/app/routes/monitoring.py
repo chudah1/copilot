@@ -31,6 +31,7 @@ from app.schemas.coverage import (
     CoveragePassResponse,
     MonitoringSoakReportRequest,
     MonitoringSoakReportResponse,
+    MonitoringSoakSnapshotResponse,
     RetrievalChunkResponse,
     SignalCoverageResponse,
     ThesisCoverageComparisonResponse,
@@ -55,6 +56,7 @@ from app.services.soak_monitor import (
     SoakBasketEntry,
     build_soak_report,
     load_default_soak_basket,
+    latest_soak_reports,
     render_soak_report_markdown,
     soak_window_for_days,
 )
@@ -781,3 +783,18 @@ async def monitoring_soak_report(
         ],
         unresolved=[item.__dict__ for item in report.unresolved],
     )
+
+
+@router.get("/soak-reports", response_model=list[MonitoringSoakSnapshotResponse])
+async def get_monitoring_soak_reports(
+    limit: int = Query(10, ge=1, le=50),
+    x_metrics_token: str | None = Header(default=None),
+    db: AsyncSession = Depends(get_db),
+):
+    if not settings.metrics_token:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Not found")
+    if x_metrics_token != settings.metrics_token:
+        raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Invalid metrics token")
+
+    rows = await latest_soak_reports(db, limit=limit)
+    return [MonitoringSoakSnapshotResponse.model_validate(row) for row in rows]

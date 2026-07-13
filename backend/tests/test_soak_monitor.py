@@ -4,17 +4,23 @@ import json
 import uuid
 from datetime import datetime, timedelta, timezone
 
+from unittest.mock import patch
+from unittest.mock import AsyncMock, MagicMock
+
 import pytest
 
 from app.models.coverage_pass import CoveragePass
 from app.models.holding import Holding
 from app.models.monitoring_event import MonitoringEvent
+from app.models.monitoring_soak_report import MonitoringSoakReport
 from app.models.thesis import Thesis
 from app.config import settings
 from app.services.soak_monitor import (
     SoakBasketEntry,
     build_soak_report,
     load_soak_basket_config,
+    latest_soak_reports,
+    persist_soak_report,
     render_soak_report_markdown,
 )
 
@@ -236,3 +242,91 @@ async def test_monitoring_soak_report_endpoint_returns_report(client, db, test_u
     assert "Monitoring Soak Report" in body["markdown"]
     assert body["summaries"][0]["label"] == "MSFT control"
     assert body["summaries"][0]["latest_stage_counts"]["after_same_event_merge"] == 1
+
+
+@pytest.mark.asyncio
+async def test_persist_and_load_soak_report_snapshot(db):
+    now = datetime.now(timezone.utc)
+    report = await build_soak_report(
+        db,
+        basket=[],
+        start_at=now - timedelta(days=1),
+        end_at=now,
+        timezone_name="Europe/London",
+    )
+
+    row = await persist_soak_report(
+        db,
+        run_id="soak:test",
+        started_at=now - timedelta(minutes=1),
+        finished_at=now,
+        window_start=report.start_at,
+        window_end=report.end_at,
+        timezone_name=report.timezone_name,
+        basket=[],
+        report=report,
+        status="ok",
+    )
+
+    rows = await latest_soak_reports(db, limit=5)
+    assert rows[0].id == row.id
+    assert rows[0].status == "ok"
+    assert rows[0].payload["markdown"].startswith("# Monitoring Soak Report")
+
+
+@pytest.mark.asyncio
+async def test_monitoring_soak_reports_endpoint_returns_persisted_rows(client, db):
+    now = datetime.now(timezone.utc)
+    db.add(
+        MonitoringSoakReport(
+            run_id="soak:test",
+            started_at=now - timedelta(minutes=5),
+            finished_at=now - timedelta(minutes=4),
+            window_start=now - timedelta(days=5),
+            window_end=now,
+            timezone_name="Europe/London",
+            status="ok",
+            basket_config={"holdings": [{"label": "MSFT", "ticker": "MSFT", "holding_id": None}]},
+            payload={"markdown": "# Monitoring Soak Report\n", "summaries": [], "unresolved": []},
+            error_message=None,
+        )
+    )
+    await db.commit()
+
+    original_token = settings.metrics_token
+    settings.metrics_token = "test-metrics-token"
+    try:
+        response = await client.get(
+            "/api/monitoring/soak-reports",
+            headers={"X-Metrics-Token": "test-metrics-token"},
+        )
+    finally:
+        settings.metrics_token = original_token
+
+    assert response.status_code == 200
+    body = response.json()
+    assert len(body) == 1
+    assert body[0]["run_id"] == "soak:test"
+    assert body[0]["status"] == "ok"
+
+
+@pytest.mark.asyncio
+async def test_run_monitoring_soak_report_persists_snapshot(db):
+    from app.jobs.monitoring_soak_report import run_monitoring_soak_report
+
+    mock_session_ctx = MagicMock()
+    mock_session_ctx.__aenter__ = AsyncMock(return_value=db)
+    mock_session_ctx.__aexit__ = AsyncMock(return_value=None)
+
+    with patch(
+        "app.jobs.monitoring_soak_report.async_session",
+        return_value=mock_session_ctx,
+    ), patch(
+        "app.jobs.monitoring_soak_report.load_default_soak_basket",
+        return_value=[],
+    ):
+        await run_monitoring_soak_report()
+
+    rows = (await db.execute(MonitoringSoakReport.__table__.select())).all()
+    assert len(rows) == 1
+    assert rows[0].status == "ok"

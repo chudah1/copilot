@@ -10,6 +10,7 @@ from app.models.evidence_chunk import EvidenceChunk
 from app.models.coverage_pass import CoveragePass
 from app.models.monitoring_event import MonitoringEvent
 from app.models.monitoring_gap import MonitoringGap
+from app.models.monitoring_soak_report import MonitoringSoakReport
 from app.models.thesis_review import ThesisReview
 from app.models.digest import Digest
 from app.models.portfolio_snapshot import PortfolioSnapshot
@@ -36,6 +37,7 @@ __all__ = [
     "CoveragePass",
     "MonitoringEvent",
     "MonitoringGap",
+    "MonitoringSoakReport",
     "ThesisReview",
     "Digest",
     "PortfolioSnapshot",

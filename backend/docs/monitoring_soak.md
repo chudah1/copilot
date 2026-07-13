@@ -50,6 +50,22 @@ curl -s -X POST https://your-backend.example.com/api/monitoring/soak-report \
 
 If `holdings` is omitted, the endpoint falls back to `docs/monitoring_soak.json`.
 
+## Scheduled snapshots
+
+The backend scheduler now runs a separate `monitoring_soak_report` job twice
+daily at `08:00` and `18:00`. It reads `docs/monitoring_soak.json`, computes
+the report, and persists a snapshot to `monitoring_soak_reports`.
+
+Use the protected read endpoint to inspect the stored history:
+
+```bash
+curl -s https://your-backend.example.com/api/monitoring/soak-reports \
+  -H "X-Metrics-Token: $METRICS_TOKEN"
+```
+
+This keeps soak reporting off the hot monitoring pipeline while still making it
+automatic and durable.
+
 ## What the report shows
 
 - A summary table per holding:
