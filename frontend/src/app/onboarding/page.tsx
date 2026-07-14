@@ -191,31 +191,31 @@ function WizardInner() {
     saveState(wizardState);
   }, [wizardState]);
 
-  // On mount: determine starting holding
+  // Pick a starting holding whenever none is set — initial mount, or after we
+  // clear a stale ID below when its context fetch 404s.
   useEffect(() => {
-    if (!initialWizardState.holdingId) {
-      // Lead with the user's own words: pick their largest position that has no
-      // reason written yet (no dependency on any pre-generated AI draft).
-      Promise.all([
-        api.get<Holding[]>("/api/portfolio/holdings"),
-        api.get<Thesis[]>("/api/theses/current"),
-      ])
-        .then(([holdings, theses]) => {
-          const withThesis = new Set(theses.map((t) => t.holding_id));
-          const undrafted = holdings
-            .filter((h) => !withThesis.has(h.id))
-            .sort((a, b) => (b.current_value ?? 0) - (a.current_value ?? 0));
-          if (undrafted[0]) {
-            setLoadingHolding(true);
-            setWizardState((prev) => ({ ...prev, holdingId: undrafted[0].id }));
-          } else {
-            // Every position already has a reason — nothing to onboard.
-            router.replace("/dashboard");
-          }
-        })
-        .catch(() => router.replace("/dashboard"));
-    }
+    if (wizardState.holdingId) return;
+    Promise.all([
+      api.get<Holding[]>("/api/portfolio/holdings"),
+      api.get<Thesis[]>("/api/theses/current"),
+    ])
+      .then(([holdings, theses]) => {
+        const withThesis = new Set(theses.map((t) => t.holding_id));
+        const undrafted = holdings
+          .filter((h) => !withThesis.has(h.id))
+          .sort((a, b) => (b.current_value ?? 0) - (a.current_value ?? 0));
+        if (undrafted[0]) {
+          setLoadingHolding(true);
+          setWizardState((prev) => ({ ...prev, holdingId: undrafted[0].id }));
+        } else {
+          // Every position already has a reason — nothing to onboard.
+          router.replace("/dashboard");
+        }
+      })
+      .catch(() => router.replace("/dashboard"));
+  }, [wizardState.holdingId, router]);
 
+  useEffect(() => {
     api
       .get<{ investor_profile: InvestorProfile | null }>("/api/onboarding/state")
       .then((state) => {
@@ -224,15 +224,30 @@ function WizardInner() {
         }
       })
       .catch(() => {});
-  }, [initialWizardState.holdingId, router]);
+  }, []);
 
-  // Fetch holding context whenever holdingId is set
   useEffect(() => {
     if (!wizardState.holdingId) return;
     api
       .get<HoldingContext>(`/api/onboarding/context/${wizardState.holdingId}`)
       .then((h) => setHolding(h))
-      .catch(() => {})
+      .catch((e) => {
+        // A persisted holdingId can outlive the holding it points at — deleted
+        // position, different account, or state carried over from another env.
+        // Wipe the stale wizard state so the picker above re-fires; otherwise
+        // holding stays null and "Build thesis" silent-returns on click.
+        if (e instanceof Error && e.message === "Holding not found") {
+          setHolding(null);
+          setStep("WELCOME");
+          setWizardState((prev) => ({
+            ...prev,
+            holdingId: null,
+            answer1: "",
+            answer2: "",
+            synthesisResult: null,
+          }));
+        }
+      })
       .finally(() => setLoadingHolding(false));
   }, [wizardState.holdingId]);
 
