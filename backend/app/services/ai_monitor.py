@@ -39,7 +39,7 @@ Severity rules for non-skip events (apply strictly):
   Discrete events vs competitive dynamics: discrete events are single, datable occurrences (a government ban, a court ruling, a dividend cut, a product withdrawal, a confirmed shift in business practice reported in results) — these require only one clear occurrence. Competitive dynamics are ongoing situations that are matters of degree (a competitor gaining share, a market shifting) — use "warning" unless specific measurable evidence shows the threshold has definitively been crossed.
   Multi-period conditions: when "what would change my mind" specifies an explicit time requirement (e.g. "for two consecutive quarters"), a single period of violation is "warning" — classify "thesis_breaking" only when the full multi-period threshold is completed.
   Multiple conditions: each condition in "what would change my mind" is independent — any single one clearly met is sufficient for "thesis_breaking".
-- "warning": when a thesis pillar is weakening, a quantitative threshold is missed by 5pp or less, or a stated qualitative scenario is beginning to materialize. Also use for: management signals that weaken a thesis pillar — significant insider sales (CEO or founders disposing of meaningfully-sized stakes, even under pre-planned 10b5-1 schedules), executive departures, negative guidance — or trends consistently moving against a stated pillar.
+- "warning": when a thesis pillar is weakening, a quantitative threshold is missed by 5pp or less, or a stated qualitative scenario is beginning to materialize. Also use for: management signals that weaken a thesis pillar — significant insider sales (CEO or founders disposing of meaningfully-sized stakes, even under pre-planned 10b5-1 schedules), executive departures, negative guidance — or trends consistently moving against a stated pillar. A large price decline explicitly attributed to market doubts about a stated pillar is also "warning" — the investor should look — but its direction still follows the fundamentals the article reports.
   Competitor activity bar: a competitor's product launch, revenue beat, or capacity expansion is warning ONLY when (a) that competitor is explicitly named in what_would_change_my_mind, AND (b) the event shows a material share or threshold-level shift — not just routine quarterly results, fundraising, or hiring. Without both, classify as info. "AMD reports record revenue" alone is info; "AMD wins a specific hyperscaler from NVIDIA" or "AMD share moves from 5% to 15%" is warning.
 - "info": when the event does not directly touch any specific stated condition. Macro moves, index-level rallies, unrelated product launches, general market surveys, a competitor's fundraising or hiring, and same-company news outside the thesis pillars are almost always "info". Classify as "warning" only when the event reports direct evidence that a stated condition is currently changing, not because it might eventually lead to one.
 - Sector-aware macro rule: some macro events are "info" for most stocks but "warning" for specific sectors. When the holding sector is provided and the event directly affects that sector's economics, use "warning" even if the thesis doesn't explicitly name the macro risk. Examples: geopolitical conflict or oil supply disruption → Energy; central bank rate decision → Financials or REITs; trade tariffs on specific goods → the sector that makes or imports those goods; currency moves → companies with heavy international revenue; defence spending news → Industrials/Aerospace & Defence.
@@ -49,7 +49,13 @@ Also decide direction — whether this event validates or threatens the thesis, 
 - "threatens": the event provides evidence AGAINST a stated pillar. Guidance cut, a signal weakening, a competitor gaining where the thesis assumed they wouldn't.
 - "neutral": genuinely no directional signal for the thesis (skip candidates fall here by default).
 
-A single event can be severity="info" AND direction="supports" — that combination is the whole point of separating them.
+Judge direction from the article's substance about the stated pillars, never from headline tone or the stock's price reaction:
+- A price move alone is not evidence for or against a fundamental pillar. "Shares fell on X concerns" reports what the market fears, not what the business did.
+- Mixed articles are common: a dramatic negative headline or sell-off wrapped around fundamentals that affirm the pillar ("shares drop 30%, but subscription growth remains solid"). That is direction="supports" — the reported fundamentals back the stated reason — even when the sell-off itself justifies severity="warning".
+- The reverse holds too: a celebratory headline or rally wrapped around evidence that a stated condition is deteriorating is direction="threatens".
+- If the article reports only a price move with no fundamental evidence either way, direction="neutral".
+
+A single event can be severity="info" AND direction="supports" — that combination is the whole point of separating them. So is severity="warning" AND direction="supports": a large sell-off attributed to doubts about a stated pillar deserves the investor's attention (warning), while the fundamentals the article actually reports still back the reason (supports).
 
 Output valid JSON:
 {"severity": "skip|info|warning|thesis_breaking", "direction": "supports|threatens|neutral", "analysis": "2-3 sentences, or empty string if skip."}
@@ -250,6 +256,10 @@ async def classify_event(
                 system=_CLASSIFY_SYSTEM,
                 messages=[{"role": "user", "content": prompt}],
                 timeout=30.0,
+                # Classification is a judgment with a right answer; default
+                # temperature made the same event flip severity/direction
+                # between runs (observed 4/5 vs 1/5 splits on a real case).
+                temperature=0.0,
             )
             text = response.content[0].text.strip()
             parsed = _normalize_classification_result(_parse_classification_response(text))
@@ -286,6 +296,7 @@ async def classify_event(
                     {"role": "user", "content": prompt},
                 ],
                 timeout=30.0,
+                temperature=0.0,
             )
             text = (oa_response.choices[0].message.content or "").strip()
             parsed = _normalize_classification_result(_parse_classification_response(text))

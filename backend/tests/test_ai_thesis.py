@@ -234,6 +234,40 @@ def test_normalize_interpretation_repairs_below_threshold_metric_operator():
     assert metric_hint["operator"] == ">="
 
 
+def test_normalize_interpretation_drops_zero_threshold_growth_hint():
+    """The synthesis prompt forbids 0 thresholds for growth metrics ("omit the
+    hint entirely"), but the LLM sometimes emits them anyway — enforce in code."""
+    from app.services.ai_thesis import _normalize_interpretation
+
+    interpretation = {
+        "labels": ["growth"],
+        "monitorability": "high",
+        "watch_hints": [
+            {
+                "kind": "metric_threshold",
+                "metric": "revenue_growth_yoy",
+                "operator": ">=",
+                "threshold": 0,
+                "rationale": "Revenue growth must stay positive.",
+            },
+            {
+                "kind": "metric_threshold",
+                "metric": "pe_ratio",
+                "operator": "<=",
+                "threshold": 40,
+                "rationale": "Valuation ceiling.",
+            },
+        ],
+        "proxy_signals": [],
+        "ambiguity_note": "",
+    }
+
+    result = _normalize_interpretation(interpretation)
+    kept_metrics = [hint["metric"] for hint in result["watch_hints"] if hint.get("kind") == "metric_threshold"]
+    assert "revenue_growth_yoy" not in kept_metrics
+    assert "pe_ratio" in kept_metrics
+
+
 def test_normalize_interpretation_repairs_above_threshold_metric_operator():
     from app.services.ai_thesis import _normalize_interpretation
 

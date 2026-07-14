@@ -124,11 +124,11 @@ async def _judge_output(case: dict, output_severity: str, output_analysis: str, 
     raise RuntimeError(f"Unknown judge family for model '{judge_model}'")
 
 
-async def _run_classification(case: dict) -> tuple[str, str] | None:
-    """Run event classification for a single case. Returns (severity, analysis) or None on failure.
+async def _run_classification(case: dict) -> tuple[str, str, str] | None:
+    """Run event classification for a single case. Returns (severity, analysis, direction) or None on failure.
 
     classify_event returns None both for genuine failures AND for skip decisions.
-    We disambiguate by returning ("skip", "") when None comes back — the runner
+    We disambiguate by returning ("skip", "", "") when None comes back — the runner
     will then check whether that matches the expected severity.
     """
     from app.services.ai_monitor import classify_event
@@ -147,8 +147,8 @@ async def _run_classification(case: dict) -> tuple[str, str] | None:
     if result is None:
         # Could be a genuine skip decision or an API failure.
         # Treat as skip so the runner can score it correctly for skip-expected cases.
-        return "skip", ""
-    return result.severity, result.analysis
+        return "skip", "", ""
+    return result.severity, result.analysis, result.direction
 
 
 async def run_eval(
@@ -184,8 +184,16 @@ async def run_eval(
             print("    FAILED to classify", flush=True)
             continue
 
-        output_severity, output_analysis = output
+        output_severity, output_analysis, output_direction = output
         severity_match = output_severity == case["expected_severity"]
+        expected_direction = case.get("expected_direction")
+        # Direction is scored as a deterministic label match — no LLM judge.
+        direction_match = (output_direction == expected_direction) if expected_direction else None
+        direction_fields = {
+            "expected_direction": expected_direction,
+            "actual_direction": output_direction,
+            "direction_match": direction_match,
+        }
 
         # Skip cases have no analysis to judge — score purely on severity match
         if case["expected_severity"] == "skip" or output_severity == "skip":
@@ -201,6 +209,7 @@ async def run_eval(
                 "reasons": {},
                 "total": 10 if severity_match else 0,
                 "normalised_10": score,
+                **direction_fields,
             }
             results.append(result)
             match = "✓" if severity_match else "✗"
@@ -224,6 +233,7 @@ async def run_eval(
                 "reasons": {},
                 "total": 2 if severity_match else 0,
                 "normalised_10": (2 / 8 * 10) if severity_match else 0.0,
+                **direction_fields,
             })
             continue
 
@@ -238,10 +248,15 @@ async def run_eval(
             "reasons": judgment.get("reasons", {}),
             "total": judgment.get("total", 0),
             "normalised_10": judgment.get("normalised_10", 0.0),
+            **direction_fields,
         }
         results.append(result)
         match = "✓" if result["severity_match"] else "✗"
-        print(f"    {match} {output_severity} (expected {case['expected_severity']}) — {result['normalised_10']:.1f}/10", flush=True)
+        dir_note = ""
+        if expected_direction:
+            dir_ok = "✓" if direction_match else "✗"
+            dir_note = f" | direction {dir_ok} {output_direction or 'none'} (expected {expected_direction})"
+        print(f"    {match} {output_severity} (expected {case['expected_severity']}) — {result['normalised_10']:.1f}/10{dir_note}", flush=True)
 
     return results
 
@@ -283,6 +298,10 @@ def print_table(results: list[dict], prompt_version: str) -> None:
         print("-" * 80)
         print(f"{'AVERAGE':<28} {'':>5} {'':>5} {'':>2} {'':>4} {'':>4} {'':>4} {'':>4} {avg:>5.1f}")
         print(f"  Severity accuracy: {correct}/{total} ({accuracy:.0%})")
+        directional = [r for r in results if r.get("expected_direction")]
+        if directional:
+            dir_correct = sum(1 for r in directional if r.get("direction_match"))
+            print(f"  Direction accuracy: {dir_correct}/{len(directional)}")
         if failed:
             print(f"  ({failed} case(s) failed classification)")
     print(f"{'='*80}\n")
@@ -304,6 +323,11 @@ def save_results(results: list[dict], prompt_version: str) -> Path:
                 "success_rate": len(successes) / len(results) if results else 0,
                 "severity_accuracy": sum(1 for r in successes if r["severity_match"]) / len(successes) if successes else 0,
                 "avg_score": sum(r["normalised_10"] for r in successes) / len(successes) if successes else 0,
+                "direction_cases": sum(1 for r in successes if r.get("expected_direction")),
+                "direction_accuracy": (
+                    sum(1 for r in successes if r.get("direction_match"))
+                    / max(sum(1 for r in successes if r.get("expected_direction")), 1)
+                ),
             },
         }, f, indent=2)
     return path

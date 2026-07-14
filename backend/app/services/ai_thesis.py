@@ -1369,6 +1369,13 @@ def _normalize_interpretation(interpretation: dict | None) -> dict:
                         parsed.metric, threshold, threshold / 100,
                     )
                     threshold = threshold / 100
+                # The prompt forbids 0 thresholds for growth metrics ("omit the
+                # hint entirely"), but the LLM sometimes emits them anyway. A
+                # "growth stays >= 0" floor is a vacuous check that reads as
+                # false security in the UI — enforce the rule deterministically.
+                if is_growth_metric and abs(threshold) < 1e-9:
+                    logger.warning("DROPPED zero-threshold growth hint (raw=%r)", hint)
+                    continue
                 normalized_operator = _normalize_metric_operator(parsed.operator, parsed.rationale)
                 normalized_watch_hints.append(
                     {
