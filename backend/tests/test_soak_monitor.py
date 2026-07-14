@@ -17,12 +17,73 @@ from app.models.thesis import Thesis
 from app.config import settings
 from app.services.soak_monitor import (
     SoakBasketEntry,
+    active_thesis_basket,
     build_soak_report,
     load_soak_basket_config,
     latest_soak_reports,
     persist_soak_report,
     render_soak_report_markdown,
 )
+
+
+@pytest.mark.asyncio
+async def test_active_thesis_basket_covers_live_theses_only(db, test_user):
+    covered = Holding(
+        user_id=test_user.id,
+        ticker="ASML",
+        name="ASML Holding",
+        quantity=1,
+        average_cost_basis=100,
+    )
+    uncovered = Holding(
+        user_id=test_user.id,
+        ticker="NKE",
+        name="Nike",
+        quantity=1,
+        average_cost_basis=50,
+    )
+    invalidated_only = Holding(
+        user_id=test_user.id,
+        ticker="PEP",
+        name="PepsiCo",
+        quantity=1,
+        average_cost_basis=60,
+    )
+    db.add_all([covered, uncovered, invalidated_only])
+    await db.flush()
+
+    db.add(
+        Thesis(
+            user_id=test_user.id,
+            holding_id=covered.id,
+            status="active",
+            thesis_kind="company",
+            why_own_it="EUV demand stays strong.",
+            confidence="medium",
+            review_cadence_days=7,
+            source="user",
+        )
+    )
+    db.add(
+        Thesis(
+            user_id=test_user.id,
+            holding_id=invalidated_only.id,
+            status="active",
+            thesis_kind="company",
+            why_own_it="Snacks pricing power.",
+            confidence="medium",
+            review_cadence_days=7,
+            source="user",
+            invalidated_at=datetime.now(timezone.utc),
+        )
+    )
+    await db.flush()
+
+    basket = await active_thesis_basket(db)
+
+    assert [entry.ticker for entry in basket] == ["ASML"]
+    # holding_id is always set so ticker collisions can never leave entries unresolved
+    assert basket[0].holding_id == covered.id
 
 
 def test_load_soak_basket_config(tmp_path):
@@ -312,6 +373,8 @@ async def test_monitoring_soak_reports_endpoint_returns_persisted_rows(client, d
 
 @pytest.mark.asyncio
 async def test_run_monitoring_soak_report_persists_snapshot(db):
+    """The scheduled job needs no config file — it derives its basket from the
+    DB, so an empty database still produces a clean ok snapshot."""
     from app.jobs.monitoring_soak_report import run_monitoring_soak_report
 
     mock_session_ctx = MagicMock()
@@ -321,12 +384,53 @@ async def test_run_monitoring_soak_report_persists_snapshot(db):
     with patch(
         "app.jobs.monitoring_soak_report.async_session",
         return_value=mock_session_ctx,
-    ), patch(
-        "app.jobs.monitoring_soak_report.load_default_soak_basket",
-        return_value=[],
     ):
         await run_monitoring_soak_report()
 
     rows = (await db.execute(MonitoringSoakReport.__table__.select())).all()
     assert len(rows) == 1
     assert rows[0].status == "ok"
+
+
+@pytest.mark.asyncio
+async def test_run_monitoring_soak_report_covers_active_theses(db, test_user):
+    from app.jobs.monitoring_soak_report import run_monitoring_soak_report
+
+    holding = Holding(
+        user_id=test_user.id,
+        ticker="ASML",
+        name="ASML Holding",
+        quantity=1,
+        average_cost_basis=100,
+    )
+    db.add(holding)
+    await db.flush()
+    db.add(
+        Thesis(
+            user_id=test_user.id,
+            holding_id=holding.id,
+            status="active",
+            thesis_kind="company",
+            why_own_it="EUV demand stays strong.",
+            confidence="medium",
+            review_cadence_days=7,
+            source="user",
+        )
+    )
+    await db.commit()
+
+    mock_session_ctx = MagicMock()
+    mock_session_ctx.__aenter__ = AsyncMock(return_value=db)
+    mock_session_ctx.__aexit__ = AsyncMock(return_value=None)
+
+    with patch(
+        "app.jobs.monitoring_soak_report.async_session",
+        return_value=mock_session_ctx,
+    ):
+        await run_monitoring_soak_report()
+
+    row = (await db.execute(MonitoringSoakReport.__table__.select())).one()
+    assert row.status == "ok"
+    tickers = [s["ticker"] for s in row.payload["summaries"]]
+    assert tickers == ["ASML"]
+    assert row.payload["unresolved"] == []

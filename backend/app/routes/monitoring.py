@@ -54,8 +54,8 @@ from app.services.coverage import (
 )
 from app.services.soak_monitor import (
     SoakBasketEntry,
+    active_thesis_basket,
     build_soak_report,
-    load_default_soak_basket,
     latest_soak_reports,
     render_soak_report_markdown,
     soak_window_for_days,
@@ -732,7 +732,8 @@ async def monitoring_soak_report(
 
     Railway or another scheduler can POST a basket of holdings here and receive
     the full Markdown report plus structured summary data. If no holdings are
-    supplied, the server attempts to load backend/docs/monitoring_soak.json.
+    supplied, the report covers every holding with a live thesis — the same
+    default the scheduled job uses.
     """
     if not settings.metrics_token:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Not found")
@@ -750,7 +751,7 @@ async def monitoring_soak_report(
                 for item in request.holdings
             ]
             if request.holdings
-            else load_default_soak_basket()
+            else await active_thesis_basket(db)
         )
     except Exception as exc:
         raise HTTPException(

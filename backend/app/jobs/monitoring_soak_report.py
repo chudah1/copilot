@@ -4,8 +4,9 @@ from datetime import datetime, timezone
 
 from app.database import async_session
 from app.services.soak_monitor import (
+    SoakBasketEntry,
+    active_thesis_basket,
     build_soak_report,
-    load_default_soak_basket,
     persist_soak_report,
     soak_window_for_days,
 )
@@ -21,14 +22,17 @@ async def run_monitoring_soak_report():
     started_at = datetime.now(timezone.utc)
     logger.info("Starting monitoring_soak_report run_id=%s", run_id)
 
-    basket = load_default_soak_basket()
     window_start, window_end = soak_window_for_days(
         days=SOAK_REPORT_DAYS,
         timezone_name=SOAK_REPORT_TIMEZONE,
     )
 
     async with async_session() as db:
+        # Basket resolution happens inside the try so any failure still
+        # persists an error snapshot instead of dying invisibly.
+        basket: list[SoakBasketEntry] = []
         try:
+            basket = await active_thesis_basket(db)
             report = await build_soak_report(
                 db,
                 basket=basket,

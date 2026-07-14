@@ -116,6 +116,36 @@ def load_default_soak_basket() -> list[SoakBasketEntry]:
     return load_soak_basket_config(DEFAULT_SOAK_CONFIG_PATH)
 
 
+LIVE_THESIS_STATUSES: tuple[str, ...] = ("active", "ready", "needs_review")
+
+
+async def active_thesis_basket(db: AsyncSession) -> list[SoakBasketEntry]:
+    """Basket covering every holding with a live thesis.
+
+    This is the scheduled job's default: it tracks whatever is actually being
+    monitored, needs no maintained config file, and pins entries by holding_id
+    so ticker collisions across users can never leave entries unresolved.
+    """
+    rows = await db.execute(
+        select(Holding)
+        .join(Thesis, Thesis.holding_id == Holding.id)
+        .where(
+            Thesis.invalidated_at.is_(None),
+            Thesis.status.in_(LIVE_THESIS_STATUSES),
+        )
+        .distinct()
+    )
+    holdings = sorted(rows.scalars().all(), key=lambda h: (h.ticker, str(h.id)))
+    return [
+        SoakBasketEntry(
+            label=f"{holding.ticker} — {holding.name}",
+            ticker=holding.ticker,
+            holding_id=holding.id,
+        )
+        for holding in holdings
+    ]
+
+
 def soak_window_for_days(*, days: int, timezone_name: str, today: date | None = None) -> tuple[datetime, datetime]:
     if days <= 0:
         raise ValueError("days must be positive")
