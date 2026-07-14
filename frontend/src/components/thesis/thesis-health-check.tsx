@@ -80,65 +80,52 @@ export function ThesisHealthCheck({
 
   return (
     <div className="product-panel overflow-hidden">
-      <div className="grid gap-0 border-b border-border/40 lg:grid-cols-[minmax(0,1.15fr)_minmax(13rem,16rem)]">
-        <div className="p-5 sm:p-6">
-          <div className="flex items-center justify-between gap-3">
-            <div className="space-y-1">
-              <p className="font-mono text-[10px] uppercase tracking-[0.18em] text-muted-foreground">
-                {copy.title}
-              </p>
-              <p className="font-sans text-sm leading-relaxed text-foreground/80">
-                {checksOnly
-                  ? "Baseline market conditions checked against the written case."
-                  : "Live data checked against the written case."}
-              </p>
-            </div>
-            <Badge className={assessment.className}>
-              {checksOnly ? "Conditions hold" : assessment.label}
-            </Badge>
-          </div>
-        </div>
-        <aside className="border-t border-border/40 bg-muted/15 p-5 sm:p-6 lg:border-l lg:border-t-0">
+      <div className="flex flex-wrap items-start justify-between gap-x-4 gap-y-3 border-b border-border/40 p-5 sm:p-6">
+        <div className="min-w-0 flex-1 basis-56 space-y-1">
           <p className="font-mono text-[10px] uppercase tracking-[0.18em] text-muted-foreground">
-            Coverage
+            {copy.title}
           </p>
-          <p className="mt-2 font-display text-[1.6rem] italic leading-none text-foreground">
-            {result.watch_hints_status.length + result.candidates.length}
+          <p className="font-sans text-sm leading-relaxed text-foreground/80">
+            {checksOnly
+              ? "Baseline market conditions checked against the written case."
+              : "Live data checked against the written case."}
           </p>
-          <p className="mt-2 font-sans text-xs leading-relaxed text-muted-foreground">
-            {checksOnly ? "Checks in this pass." : "Checks and findings in this pass."}
-          </p>
-        </aside>
+        </div>
+        <Badge className={`${assessment.className} shrink-0`}>
+          {checksOnly ? "Conditions hold" : assessment.label}
+        </Badge>
       </div>
 
       <div className="space-y-5 p-5 sm:p-6">
         <div className="grid grid-cols-2 gap-3 text-sm sm:grid-cols-4">
           {result.current_price != null && (
-            <div className="border border-border/60 bg-background/70 p-3">
-              <p className="font-mono text-[10px] uppercase tracking-[0.16em] text-muted-foreground">Price</p>
-              <p className="mt-2 font-display text-[1.15rem] italic leading-none text-foreground">
+            <div className="min-w-0 border border-border/60 bg-background/70 p-3">
+              <p className="truncate font-mono text-[10px] uppercase tracking-[0.16em] text-muted-foreground">Price</p>
+              <p className="mt-2 truncate font-display text-[1.15rem] italic leading-none text-foreground">
                 {formatCurrency(result.current_price, result.currency)}
               </p>
             </div>
           )}
           {result.sector && (
-            <div className="border border-border/60 bg-background/70 p-3">
-              <p className="font-mono text-[10px] uppercase tracking-[0.16em] text-muted-foreground">Sector</p>
-              <p className="mt-2 font-sans text-sm leading-relaxed text-foreground">{result.sector}</p>
+            <div className="min-w-0 border border-border/60 bg-background/70 p-3">
+              <p className="truncate font-mono text-[10px] uppercase tracking-[0.16em] text-muted-foreground">Sector</p>
+              <p className="mt-2 truncate font-sans text-sm leading-none text-foreground" title={result.sector}>
+                {result.sector}
+              </p>
             </div>
           )}
           {result.pe_ratio != null && (
-            <div className="border border-border/60 bg-background/70 p-3">
-              <p className="font-mono text-[10px] uppercase tracking-[0.16em] text-muted-foreground">P/E</p>
-              <p className="mt-2 font-display text-[1.15rem] italic leading-none text-foreground">
+            <div className="min-w-0 border border-border/60 bg-background/70 p-3">
+              <p className="truncate font-mono text-[10px] uppercase tracking-[0.16em] text-muted-foreground">P/E</p>
+              <p className="mt-2 truncate font-display text-[1.15rem] italic leading-none text-foreground">
                 {result.pe_ratio.toFixed(1)}
               </p>
             </div>
           )}
           {result.market_cap != null && (
-            <div className="border border-border/60 bg-background/70 p-3">
-              <p className="font-mono text-[10px] uppercase tracking-[0.16em] text-muted-foreground">Market cap</p>
-              <p className="mt-2 font-display text-[1.15rem] italic leading-none text-foreground">
+            <div className="min-w-0 border border-border/60 bg-background/70 p-3">
+              <p className="truncate font-mono text-[10px] uppercase tracking-[0.16em] text-muted-foreground">Market cap</p>
+              <p className="mt-2 truncate font-display text-[1.15rem] italic leading-none text-foreground">
                 {formatLargeNumber(result.market_cap)}
               </p>
             </div>
@@ -181,22 +168,34 @@ export function ThesisHealthCheck({
               {copy.findings}
             </p>
             <div className="space-y-2">
-              {result.candidates.map((c, i) => (
-                <div key={i} className="border border-border/60 bg-background/70 px-3 py-3">
-                  <div className="flex items-center gap-2">
-                    <span className={`font-medium ${SEVERITY_COLORS[c.severity ?? "info"] ?? "text-muted-foreground"}`}>
-                      {c.event_type.replace(/_/g, " ")}
-                    </span>
-                    {c.severity && (
-                      <Badge variant="outline" className="text-xs">
-                        {c.severity.replace(/_/g, " ")}
-                      </Badge>
+              {result.candidates.map((c, i) => {
+                // The AI analysis often opens by restating the description
+                // verbatim — strip that prefix so the card doesn't say the
+                // same thing twice.
+                const description = c.description?.trim() ?? "";
+                const rawAnalysis = c.ai_analysis?.trim() ?? "";
+                const analysis = description && rawAnalysis.startsWith(description)
+                  ? rawAnalysis.slice(description.length).trim()
+                  : rawAnalysis;
+                return (
+                  <div key={i} className="border border-border/60 bg-background/70 px-3 py-3">
+                    <div className="flex items-center gap-2">
+                      <span className={`font-mono text-[10px] uppercase tracking-[0.16em] ${SEVERITY_COLORS[c.severity ?? "info"] ?? "text-muted-foreground"}`}>
+                        {c.event_type.replace(/_/g, " ")}
+                      </span>
+                      {c.severity && (
+                        <Badge variant="outline" className="text-[10px]">
+                          {c.severity.replace(/_/g, " ")}
+                        </Badge>
+                      )}
+                    </div>
+                    <p className="mt-2 font-sans text-sm leading-relaxed text-foreground/90">{description}</p>
+                    {analysis && (
+                      <p className="mt-1.5 text-xs leading-relaxed text-muted-foreground">{analysis}</p>
                     )}
                   </div>
-                  <p className="mt-1 text-muted-foreground">{c.description}</p>
-                  {c.ai_analysis && <p className="mt-1 text-xs text-muted-foreground/80">{c.ai_analysis}</p>}
-                </div>
-              ))}
+                );
+              })}
             </div>
           </div>
         )}
@@ -213,8 +212,13 @@ export function ThesisHealthCheck({
           </p>
         )}
 
-        <div className="flex items-center justify-between text-xs text-muted-foreground">
-          <span>{result.recent_news_count} recent news article{result.recent_news_count !== 1 ? "s" : ""}</span>
+        <div className="flex flex-wrap items-center justify-between gap-x-4 gap-y-1 border-t border-border/40 pt-4 text-xs text-muted-foreground">
+          <span>
+            {result.watch_hints_status.length + result.candidates.length} check
+            {result.watch_hints_status.length + result.candidates.length !== 1 ? "s" : ""} in this pass
+            {" · "}
+            {result.recent_news_count} recent news article{result.recent_news_count !== 1 ? "s" : ""}
+          </span>
           {result.upcoming_earnings_date && (
             <span>Next earnings: {new Date(result.upcoming_earnings_date).toLocaleDateString()}</span>
           )}

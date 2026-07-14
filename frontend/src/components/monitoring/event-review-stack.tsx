@@ -1,7 +1,7 @@
 "use client";
 
 import { useEffect, useEffectEvent, useState } from "react";
-import { motion, useMotionValue, useTransform, AnimatePresence } from "framer-motion";
+import { motion, AnimatePresence } from "framer-motion";
 import { Textarea } from "@/components/ui/textarea";
 import { getErrorMessage } from "@/lib/errors";
 import { formatDate } from "@/lib/utils";
@@ -124,15 +124,10 @@ function verdictLabel(
   return "Neutral";
 }
 
-// ── Single draggable card ──────────────────────────────────────────────────
+// ── Event card ─────────────────────────────────────────────────────────────
 
 interface CardProps {
   event: MonitoringEvent;
-  index: number;
-  total: number;
-  isTop: boolean;
-  onSwipe: (action: ReviewAction) => void;
-  busy: boolean;
   investorProfile?: "thesis_driven" | "hearsay_driven" | null;
 }
 
@@ -146,7 +141,6 @@ function reviewCopy(investorProfile?: "thesis_driven" | "hearsay_driven" | null)
       buttonErode: "Less sure",
       buttonSkip: "Noise",
       buttonBroken: "Broken",
-      reviewHint: "drag to decide · swipe up to flag weakening confidence",
       allCaughtUp: "Every alert reviewed.",
       noteLabel: "Note",
       notePlaceholder: "Optional note",
@@ -171,7 +165,6 @@ function reviewCopy(investorProfile?: "thesis_driven" | "hearsay_driven" | null)
       buttonErode: "Less sure now",
       buttonSkip: "Noise",
       buttonBroken: "Broken",
-      reviewHint: "drag to decide · swipe up if the story feels weaker",
       allCaughtUp: "Every alert reviewed.",
       noteLabel: "Note",
       notePlaceholder: "Optional note",
@@ -195,7 +188,6 @@ function reviewCopy(investorProfile?: "thesis_driven" | "hearsay_driven" | null)
     buttonErode: "Eroding",
     buttonSkip: "Noise",
     buttonBroken: "Broken",
-    reviewHint: "drag to decide · swipe up to flag",
     allCaughtUp: "Every alert reviewed.",
     noteLabel: "Note",
     notePlaceholder: "Optional note",
@@ -211,183 +203,88 @@ function reviewCopy(investorProfile?: "thesis_driven" | "hearsay_driven" | null)
   };
 }
 
-function DraggableCard({ event, index, total, isTop, onSwipe, busy, investorProfile }: CardProps) {
-  const x = useMotionValue(0);
-  const y = useMotionValue(0);
-  const copy = reviewCopy(investorProfile);
-
-  const rotate = useTransform(x, [-220, 0, 220], [-14, 0, 14]);
-  const rightOpacity = useTransform(x, [20, 100], [0, 1]);
-  const leftOpacity = useTransform(x, [-100, -20], [1, 0]);
-  const upOpacity = useTransform(y, [-100, -20], [1, 0]);
-
+function EventCard({ event, investorProfile }: CardProps) {
   const narrative = eventDecisionCopy(event, investorProfile);
   const verdict = event.verdict;
 
-  const handleDragEnd = (_: unknown, info: { offset: { x: number; y: number }; velocity: { x: number; y: number } }) => {
-    if (busy) return;
-    const { offset, velocity } = info;
-    if (offset.x > 110 || velocity.x > 450) {
-      onSwipe("reaffirmed");
-    } else if (offset.x < -110 || velocity.x < -450) {
-      onSwipe("not_relevant");
-    } else if (offset.y < -110 || velocity.y < -450) {
-      onSwipe("lowered_confidence");
-    } else {
-      // snap back
-      x.set(0);
-      y.set(0);
-    }
-  };
-
-  // Stack visual: each card behind is slightly smaller and lower
-  const stackY = index * 6;
-  const stackScale = 1 - index * 0.045;
-
   return (
-    <motion.div
-      className="absolute inset-0"
-      style={{
-        y: isTop ? y : stackY,
-        x: isTop ? x : 0,
-        rotate: isTop ? rotate : 0,
-        scale: stackScale,
-        zIndex: total - index,
-      }}
-      drag={isTop && !busy}
-      dragConstraints={{ left: 0, right: 0, top: 0, bottom: 0 }}
-      dragElastic={0.65}
-      onDragEnd={handleDragEnd}
-      initial={isTop ? { scale: 1, y: 0 } : undefined}
-      whileDrag={{ cursor: "grabbing" }}
-    >
-      <div
-        className={`h-full w-full overflow-hidden rounded-sm border border-border bg-card shadow-md flex flex-col ${isTop ? "cursor-grab" : "pointer-events-none select-none"}`}
-      >
-        {/* Severity stripe */}
-        <div className={`h-1 w-full flex-shrink-0 ${severityStripe[event.severity] ?? "bg-border"}`} />
+    <div className="overflow-hidden rounded-sm border border-border bg-card shadow-md">
+      {/* Severity stripe */}
+      <div className={`h-1 w-full ${severityStripe[event.severity] ?? "bg-border"}`} />
 
-        {/* Card body */}
-        <div className="flex flex-col flex-1 p-5 overflow-hidden">
-
-          {/* Meta row */}
-          <div className="flex items-center justify-between mb-3">
-            <div className="flex items-center gap-2">
-              <span className="font-mono text-[10px] uppercase tracking-[0.15em] text-muted-foreground border border-border px-1.5 py-0.5">
-                {event.severity.replace("_", " ")}
-              </span>
-              {narrative.assumption && (
-                <span className="font-mono text-[10px] uppercase tracking-[0.12em] text-primary/70">
-                  {narrative.assumption}
-                </span>
-              )}
-            </div>
-            <span className="font-mono text-[10px] text-muted-foreground/80">
-              {formatDate(event.created_at)}
+      <div className="p-5">
+        {/* Meta row */}
+        <div className="flex items-center justify-between mb-3">
+          <div className="flex items-center gap-2">
+            <span className="font-mono text-[10px] uppercase tracking-[0.15em] text-muted-foreground border border-border px-1.5 py-0.5">
+              {event.severity.replace("_", " ")}
             </span>
-          </div>
-
-          {/* Thesis clause quoted */}
-          {narrative.thesisLine && (
-            <blockquote className="border-l-2 border-primary/30 pl-3 mb-3">
-              <p className="font-sans text-xs italic text-muted-foreground leading-relaxed line-clamp-2">
-                &ldquo;{narrative.thesisLine}&rdquo;
-              </p>
-            </blockquote>
-          )}
-
-          <div className="space-y-3 flex-1 overflow-hidden">
-            <div>
-              <p className="font-mono text-[10px] uppercase tracking-[0.14em] text-muted-foreground/80 mb-1">
-                What changed
-              </p>
-              <p className="font-sans text-sm text-foreground leading-relaxed line-clamp-4">
-                {narrative.whatChanged}
-              </p>
-            </div>
-
-            {narrative.whyItMatters && (
-              <div>
-                <p className="font-mono text-[10px] uppercase tracking-[0.14em] text-muted-foreground/80 mb-1">
-                  Why it matters
-                </p>
-                <p className="font-sans text-sm text-foreground/80 leading-relaxed line-clamp-4">
-                  {narrative.whyItMatters}
-                </p>
-              </div>
+            {narrative.assumption && (
+              <span className="font-mono text-[10px] uppercase tracking-[0.12em] text-primary/70">
+                {narrative.assumption}
+              </span>
             )}
           </div>
+          <span className="font-mono text-[10px] text-muted-foreground/80">
+            {formatDate(event.created_at)}
+          </span>
+        </div>
 
-          {/* Verdict chip */}
-          {verdict && (
-            <div className={`mt-3 inline-flex self-start items-center border rounded-sm px-2 py-0.5 font-mono text-[10px] uppercase tracking-[0.12em] ${verdictBg[verdict] ?? verdictBg.neutral}`}>
-              {verdictLabel(verdict, investorProfile)}
+        {/* Thesis clause quoted */}
+        {narrative.thesisLine && (
+          <blockquote className="border-l-2 border-primary/30 pl-3 mb-3">
+            <p className="font-sans text-xs italic text-muted-foreground leading-relaxed line-clamp-2">
+              &ldquo;{narrative.thesisLine}&rdquo;
+            </p>
+          </blockquote>
+        )}
+
+        <div className="space-y-3">
+          <div>
+            <p className="font-mono text-[10px] uppercase tracking-[0.14em] text-muted-foreground/80 mb-1">
+              What changed
+            </p>
+            <p className="font-sans text-sm text-foreground leading-relaxed">
+              {narrative.whatChanged}
+            </p>
+          </div>
+
+          {narrative.whyItMatters && (
+            <div>
+              <p className="font-mono text-[10px] uppercase tracking-[0.14em] text-muted-foreground/80 mb-1">
+                Why it matters
+              </p>
+              <p className="font-sans text-sm text-foreground/80 leading-relaxed">
+                {narrative.whyItMatters}
+              </p>
             </div>
-          )}
-
-          <p className="mt-3 font-mono text-[10px] uppercase tracking-[0.14em] text-foreground/60">
-            {narrative.prompt}
-          </p>
-
-          {/* Source */}
-          {event.source_url && (
-            <a
-              href={event.source_url}
-              target="_blank"
-              rel="noreferrer"
-              onClick={(e) => e.stopPropagation()}
-              className="mt-2 font-mono text-[10px] uppercase tracking-[0.12em] text-primary/60 hover:text-primary transition-colors underline underline-offset-2"
-            >
-              Source ↗
-            </a>
           )}
         </div>
 
-        {/* Swipe hint row at bottom */}
-        {isTop && (
-          <div className="flex items-center justify-between border-t border-border px-5 py-2.5 bg-muted/30">
-            <span className="font-mono text-[10px] uppercase tracking-[0.1em] text-muted-foreground/80">← {copy.left}</span>
-            <span className="font-mono text-[10px] uppercase tracking-[0.1em] text-muted-foreground/80">↑ {copy.up}</span>
-            <span className="font-mono text-[10px] uppercase tracking-[0.1em] text-muted-foreground/80">{copy.right} →</span>
+        {/* Verdict chip */}
+        {verdict && (
+          <div className={`mt-3 inline-flex items-center border rounded-sm px-2 py-0.5 font-mono text-[10px] uppercase tracking-[0.12em] ${verdictBg[verdict] ?? verdictBg.neutral}`}>
+            {verdictLabel(verdict, investorProfile)}
           </div>
         )}
+
+        <p className="mt-3 font-mono text-[10px] uppercase tracking-[0.14em] text-foreground/60">
+          {narrative.prompt}
+        </p>
+
+        {/* Source */}
+        {event.source_url && (
+          <a
+            href={event.source_url}
+            target="_blank"
+            rel="noreferrer"
+            className="mt-2 inline-block font-mono text-[10px] uppercase tracking-[0.12em] text-primary/60 hover:text-primary transition-colors underline underline-offset-2"
+          >
+            Source ↗
+          </a>
+        )}
       </div>
-
-      {/* Drag direction overlays — fade in as card is dragged */}
-      {isTop && (
-        <>
-          {/* RIGHT — Thesis holds */}
-          <motion.div
-            style={{ opacity: rightOpacity }}
-            className="pointer-events-none absolute inset-0 flex items-center justify-start pl-6 rounded-sm"
-          >
-            <div className="border-2 border-emerald-500 rounded-sm px-3 py-1.5 rotate-[-12deg]">
-              <span className="font-mono text-sm font-bold tracking-[0.2em] text-emerald-600 uppercase">{copy.right}</span>
-            </div>
-          </motion.div>
-
-          {/* LEFT — Irrelevant */}
-          <motion.div
-            style={{ opacity: leftOpacity }}
-            className="pointer-events-none absolute inset-0 flex items-center justify-end pr-6 rounded-sm"
-          >
-            <div className="border-2 border-muted-foreground/40 rounded-sm px-3 py-1.5 rotate-[12deg]">
-              <span className="font-mono text-sm font-bold tracking-[0.2em] text-muted-foreground uppercase">{copy.left}</span>
-            </div>
-          </motion.div>
-
-          {/* UP — Eroding confidence */}
-          <motion.div
-            style={{ opacity: upOpacity }}
-            className="pointer-events-none absolute inset-0 flex items-end justify-center pb-14 rounded-sm"
-          >
-            <div className="border-2 border-amber-500 rounded-sm px-3 py-1.5">
-              <span className="font-mono text-sm font-bold tracking-[0.2em] text-amber-600 uppercase">{copy.up}</span>
-            </div>
-          </motion.div>
-        </>
-      )}
-    </motion.div>
+    </div>
   );
 }
 
@@ -462,9 +359,6 @@ export function EventReviewStack({ events, onReview, reviewingEventId, investorP
     );
   }
 
-  // Show up to 3 cards in the stack (current + 2 behind)
-  const visibleCards = pending.slice(0, 3);
-
   return (
     <div className="space-y-5">
       {/* Counter */}
@@ -478,40 +372,22 @@ export function EventReviewStack({ events, onReview, reviewingEventId, investorP
           </p>
         </div>
         <p className="font-mono text-[10px] text-muted-foreground/80">
-          swipe or keys
+          keys or buttons
         </p>
       </div>
 
-      {/* Card stack */}
-      <div className="relative h-[340px] sm:h-[360px]">
-        <AnimatePresence>
-          {visibleCards.map((event, index) => (
-            <motion.div
-              key={event.id}
-              className="absolute inset-0"
-              exit={
-                index === 0
-                  ? {
-                      opacity: 0,
-                      scale: 0.88,
-                      transition: { duration: 0.22, ease: "easeIn" },
-                    }
-                  : {}
-              }
-            >
-              <DraggableCard
-                event={event}
-                index={index}
-                total={visibleCards.length}
-                isTop={index === 0}
-                onSwipe={(action) => void submitReview(action)}
-                busy={!!reviewingEventId}
-                investorProfile={investorProfile}
-              />
-            </motion.div>
-          ))}
-        </AnimatePresence>
-      </div>
+      {/* Current event */}
+      <AnimatePresence mode="wait" initial={false}>
+        <motion.div
+          key={topEvent.id}
+          initial={{ opacity: 0, y: 10 }}
+          animate={{ opacity: 1, y: 0 }}
+          exit={{ opacity: 0, scale: 0.96 }}
+          transition={{ duration: 0.2, ease: "easeOut" }}
+        >
+          <EventCard event={topEvent} investorProfile={investorProfile} />
+        </motion.div>
+      </AnimatePresence>
 
       <div className="product-panel overflow-hidden">
         <div className="grid gap-0 lg:grid-cols-[minmax(0,1fr)_minmax(0,1.05fr)]">

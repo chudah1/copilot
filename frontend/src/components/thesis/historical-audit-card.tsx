@@ -108,7 +108,7 @@ export function HistoricalAuditCard({ audit }: Props) {
       <p className="text-sm font-medium text-foreground mb-3">
         {coverageOnly
           ? "No active signal fired, but coverage is still thin for part of this thesis."
-          : "If you&apos;d held this thesis for the last 90 days, these signals would have fired:"}
+          : "If you'd held this thesis for the last 90 days, these signals would have fired:"}
       </p>
       <div>
         {results.map((item) => (

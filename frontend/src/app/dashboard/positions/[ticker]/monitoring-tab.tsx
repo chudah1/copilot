@@ -244,7 +244,7 @@ export function MonitoringTab({
                     </p>
                   </div>
                   <span className="shrink-0 self-end pb-0.5 font-mono text-[10px] text-muted-foreground/70">
-                    drag to decide
+                    one at a time
                   </span>
                 </div>
 

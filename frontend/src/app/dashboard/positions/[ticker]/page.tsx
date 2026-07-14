@@ -1222,7 +1222,7 @@ function PositionDetailInner() {
                               </button>
                             </div>
                             {showAnalysis && (
-                              <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} className="mt-4 grid gap-4 lg:grid-cols-2">
+                              <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} className={`mt-4 grid gap-4 ${showCounterThesis && (healthCheck || healthCheckLoading) ? "lg:grid-cols-2" : ""}`}>
                                 {(healthCheck || healthCheckLoading) && (
                                   <ThesisHealthCheck result={healthCheck} loading={healthCheckLoading} investorProfile={onboardingState?.investor_profile ?? null} />
                                 )}
