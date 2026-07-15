@@ -24,13 +24,15 @@ def upgrade():
 
     op.create_table(
         "claim_reviews",
-        sa.Column("id", sa.String(length=36), nullable=False),
-        sa.Column("thesis_id", sa.String(length=36), sa.ForeignKey("theses.id"), nullable=False),
-        sa.Column("claim_id", sa.String(length=36), sa.ForeignKey("thesis_claims.id"), nullable=True),
-        sa.Column("session_id", sa.String(length=36), nullable=False),
+        sa.Column("id", sa.Uuid(), nullable=False),
+        sa.Column("thesis_id", sa.Uuid(), nullable=False),
+        sa.Column("claim_id", sa.Uuid(), nullable=True),
+        sa.Column("session_id", sa.Uuid(), nullable=False),
         sa.Column("status", sa.String(length=20), nullable=False),
         sa.Column("notes", sa.Text(), nullable=True),
         sa.Column("created_at", sa.DateTime(timezone=True), server_default=sa.func.now(), nullable=False),
+        sa.ForeignKeyConstraint(["thesis_id"], ["theses.id"]),
+        sa.ForeignKeyConstraint(["claim_id"], ["thesis_claims.id"]),
         sa.PrimaryKeyConstraint("id"),
     )
     op.create_index("ix_claim_reviews_thesis_id", "claim_reviews", ["thesis_id"], unique=False)
