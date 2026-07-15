@@ -151,6 +151,34 @@ async def capture_event_decision(
         return None
 
 
+async def capture_check_in_decision(
+    db: AsyncSession,
+    *,
+    thesis: Thesis,
+    holding: Holding,
+    claim_verdict_summary: str,
+    exited: bool,
+    notes: str | None = None,
+    now: datetime | None = None,
+) -> DecisionSnapshot | None:
+    """Snapshot a thesis check-in: one position-level conviction call per
+    sitting. Claim verdicts are detail; the mirrored bet is keep vs exit.
+    Same best-effort contract as the other capture sites."""
+    try:
+        now = now or datetime.now(timezone.utc)
+        return await _persist_snapshot(
+            db, thesis=thesis, holding=holding,
+            verdict="exited" if exited else "held",
+            bucket="exited" if exited else "held",
+            decision_source="thesis_check_in",
+            bet_text=claim_verdict_summary or thesis.why_own_it,
+            event=None, notes=notes, now=now,
+        )
+    except Exception:
+        logger.exception("Failed to capture check-in decision snapshot for thesis %s", getattr(thesis, "id", None))
+        return None
+
+
 async def capture_quarterly_decision(
     db: AsyncSession,
     *,

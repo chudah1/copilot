@@ -12,6 +12,7 @@ from app.models.monitoring_event import MonitoringEvent
 from app.models.monitoring_gap import MonitoringGap
 from app.models.monitoring_soak_report import MonitoringSoakReport
 from app.models.thesis_review import ThesisReview
+from app.models.claim_review import ClaimReview
 from app.models.digest import Digest
 from app.models.portfolio_snapshot import PortfolioSnapshot
 from app.models.conviction_log_entry import ConvictionLogEntry
@@ -39,6 +40,7 @@ __all__ = [
     "MonitoringGap",
     "MonitoringSoakReport",
     "ThesisReview",
+    "ClaimReview",
     "Digest",
     "PortfolioSnapshot",
     "ConvictionLogEntry",

@@ -1,16 +1,15 @@
 "use client";
 
-import { EventReviewStack } from "@/components/monitoring/event-review-stack";
 import { EventTimeline } from "@/components/monitoring/event-timeline";
 import { HeldUpThisWeek } from "@/components/monitoring/held-up-this-week";
 import { ReviewedThisWeek } from "@/components/monitoring/reviewed-this-week";
-import type { MonitoringEvent, ReviewedItem, SupportingItem } from "@/types";
+import { ThesisCheckIn } from "@/components/thesis/thesis-check-in";
+import type { MonitoringEvent, ReviewedItem, SubmitClaimReviewsResponse, SupportingItem } from "@/types";
 import type { getMonitoringCalmState } from "./position-helpers";
-
-type ReviewAction = "reaffirmed" | "ignored" | "lowered_confidence" | "invalidated" | "not_relevant";
 
 interface MonitoringTabProps {
   hasThesis: boolean;
+  thesisId: string | null;
   investorProfile: "thesis_driven" | "hearsay_driven" | null;
   events: MonitoringEvent[];
   unreviewedEvents: number;
@@ -20,19 +19,19 @@ interface MonitoringTabProps {
   firstPendingAssumptionLabel: string | null;
   isFirstLiveEvidenceMoment: boolean;
   calmState: ReturnType<typeof getMonitoringCalmState>;
-  reviewingEventId: string | null;
   decompositionLoading: boolean;
   emptyCopy: { title: string; body: string; cta: string };
   reviewedItems: ReviewedItem[];
   supportingItems: SupportingItem[];
-  onReview: (event: MonitoringEvent, action: ReviewAction, notes?: string) => Promise<void>;
+  onFlagEvent: (eventId: string) => Promise<void>;
+  onAfterCheckIn: (result: SubmitClaimReviewsResponse, thesisAction: "keep_lowered" | "rewrite" | "invalidate" | null) => Promise<void> | void;
   onWriteThesis: () => void;
 }
 
 export function MonitoringTab({
-  hasThesis, investorProfile, events, unreviewedEvents, activeSignalCount, hasSignals, firstPendingEvent,
-  firstPendingAssumptionLabel, isFirstLiveEvidenceMoment, calmState, reviewingEventId,
-  decompositionLoading, emptyCopy, reviewedItems, supportingItems, onReview, onWriteThesis,
+  hasThesis, thesisId, investorProfile, events, unreviewedEvents, activeSignalCount, hasSignals, firstPendingEvent,
+  firstPendingAssumptionLabel, isFirstLiveEvidenceMoment, calmState,
+  decompositionLoading, emptyCopy, reviewedItems, supportingItems, onFlagEvent, onAfterCheckIn, onWriteThesis,
 }: MonitoringTabProps) {
   const reviewedEventsCount = events.filter((event) => Boolean(event.review_action)).length;
   const monitoringCopy = investorProfile === "hearsay_driven"
@@ -147,13 +146,13 @@ export function MonitoringTab({
             <div className="grid gap-3 sm:grid-cols-3 lg:grid-cols-1">
               <div className="product-panel p-4">
                 <p className="font-mono text-[10px] uppercase tracking-[0.18em] text-muted-foreground">
-                  Queue
+                  Evidence
                 </p>
                 <p className="mt-2 font-display text-[1.55rem] italic leading-none text-foreground">
                   {unreviewedEvents}
                 </p>
                 <p className="mt-2 font-sans text-xs leading-relaxed text-muted-foreground">
-                  {unreviewedEvents === 1 ? "1 verdict waiting" : `${unreviewedEvents} verdicts waiting`}
+                  {unreviewedEvents === 1 ? "1 item since your last check-in" : `${unreviewedEvents} items since your last check-in`}
                 </p>
               </div>
 
@@ -224,36 +223,14 @@ export function MonitoringTab({
                   </div>
                 )}
 
-                <div className="flex items-baseline justify-between gap-4">
-                  <div>
-                    <p className="mb-1 font-mono text-[10px] uppercase tracking-[0.2em] text-muted-foreground">
-                      Review queue
-                    </p>
-                    <p className="font-display italic text-[1.6rem] leading-tight text-foreground">
-                      {investorProfile === "thesis_driven"
-                        ? (unreviewedEvents === 1
-                            ? "One signal needs your verdict."
-                            : `${unreviewedEvents} signals need your verdict.`)
-                        : investorProfile === "hearsay_driven"
-                          ? (unreviewedEvents === 1
-                              ? "One change to your reason needs a decision."
-                              : `${unreviewedEvents} changes to your reason need decisions.`)
-                          : (unreviewedEvents === 1
-                              ? "One signal needs your verdict."
-                              : `${unreviewedEvents} signals need your verdict.`)}
-                    </p>
-                  </div>
-                  <span className="shrink-0 self-end pb-0.5 font-mono text-[10px] text-muted-foreground/70">
-                    one at a time
-                  </span>
-                </div>
-
-                <EventReviewStack
-                  events={events.filter((e) => !e.review_action)}
-                  onReview={onReview}
-                  reviewingEventId={reviewingEventId}
-                  investorProfile={investorProfile ?? null}
-                />
+                {thesisId && (
+                  <ThesisCheckIn
+                    thesisId={thesisId}
+                    investorProfile={investorProfile ?? null}
+                    onFlagEvent={onFlagEvent}
+                    onAfterSubmit={onAfterCheckIn}
+                  />
+                )}
               </div>
             ) : (
               <div className="grid gap-5 lg:grid-cols-[minmax(0,1.2fr)_minmax(16rem,20rem)]">
@@ -356,7 +333,6 @@ export function MonitoringTab({
               </div>
               <EventTimeline
                 events={events.filter((e) => e.review_action)}
-                reviewingEventId={reviewingEventId}
                 investorProfile={investorProfile ?? null}
               />
             </section>

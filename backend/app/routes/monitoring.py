@@ -338,6 +338,15 @@ async def review_event(
     user: User = Depends(get_current_user),
     db: AsyncSession = Depends(get_db),
 ):
+    # Thesis-level decisions moved to the claim check-in (POST
+    # /api/theses/{id}/claim-reviews); per-event review is now only the
+    # lightweight noise flag, which still drives signal decay + telemetry.
+    if body.action not in ("not_relevant", "ignored"):
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="Per-event review only supports flagging as not relevant; thesis decisions happen in the claim check-in.",
+        )
+
     event = await _load_reviewable_event(db, event_id=event_id, user_id=user.id)
     if event is None:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Monitoring event not found")

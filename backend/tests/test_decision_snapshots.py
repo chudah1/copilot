@@ -118,14 +118,19 @@ async def test_benchmark_by_currency(db, test_user):
     assert snap.benchmark_ticker == "ISF.L"
 
 
-async def test_review_endpoint_writes_a_snapshot(client, auth_headers, db, test_user):
+async def test_check_in_endpoint_writes_a_snapshot(client, auth_headers, db, test_user):
+    """Thesis-level conviction calls moved from the per-event review endpoint
+    to the claim check-in — the snapshot now captures one call per sitting."""
     holding, thesis = await _setup(db, test_user.id)
-    event = await _event(db, holding, thesis)
+    await _event(db, holding, thesis)
     await db.commit()
 
     resp = await client.post(
-        f"/api/monitoring/events/{event.id}/review",
-        json={"action": "reaffirmed", "notes": "Still believe Azure re-accelerates."},
+        f"/api/theses/{thesis.id}/claim-reviews",
+        json={
+            "decisions": [{"claim_id": None, "status": "holds"}],
+            "notes": "Still believe Azure re-accelerates.",
+        },
         headers=auth_headers,
     )
     assert resp.status_code == 200
@@ -133,6 +138,7 @@ async def test_review_endpoint_writes_a_snapshot(client, auth_headers, db, test_
     snaps = (await db.execute(select(DecisionSnapshot).where(DecisionSnapshot.thesis_id == thesis.id))).scalars().all()
     assert len(snaps) == 1
     assert snaps[0].bucket == "held"
+    assert snaps[0].decision_source == "thesis_check_in"
     assert snaps[0].condition_snapshot["verdict_note"] == "Still believe Azure re-accelerates."
 
 

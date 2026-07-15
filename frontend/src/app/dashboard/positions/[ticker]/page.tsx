@@ -29,11 +29,11 @@ import type {
   Holding,
   HoldingPulse,
   MonitoringEvent,
-  MonitoringEventReviewResponse,
   MonitoringGap,
   OnboardingState,
   PortfolioPulse,
   ReviewedItem,
+  SubmitClaimReviewsResponse,
   SupportingItem,
   Thesis,
   ThesisAssistResponse,
@@ -85,7 +85,6 @@ function PositionDetailInner() {
   const [reaffirming, setReaffirming] = useState(false);
   const [decompositionLoading, setDecompositionLoading] = useState(false);
   const [decompositionSaving, setDecompositionSaving] = useState(false);
-  const [reviewingEventId, setReviewingEventId] = useState<string | null>(null);
   const [convictionLog, setConvictionLog] = useState<ConvictionLogResponse | null>(null);
   const [convictionLogLoading, setConvictionLogLoading] = useState(false);
   const [noteSaving, setNoteSaving] = useState(false);
@@ -505,47 +504,43 @@ function PositionDetailInner() {
     }
   };
 
-  const handleReviewEvent = async (
-    event: MonitoringEvent,
-    action: "reaffirmed" | "ignored" | "lowered_confidence" | "invalidated" | "not_relevant",
-    notes?: string,
-  ) => {
+  const handleFlagEvent = async (eventId: string) => {
     try {
-      setReviewingEventId(event.id);
-      const result = await api.post<MonitoringEventReviewResponse>(`/api/monitoring/events/${event.id}/review`, {
-        action,
-        notes: notes?.trim() ? notes.trim() : undefined,
-      });
-      setTheses((current) => current.map((thesis) => (thesis.id === result.thesis.id ? result.thesis : thesis)));
-      const [refreshedEvents] = await Promise.all([refreshEvents(), refreshConvictionLog()]);
-      if (action === "invalidated") {
-        setActiveTab("thesis");
-        setNextStepNotice(buildPostInvalidationNotice(onboardingState?.investor_profile ?? null));
-      } else if (refreshedEvents && refreshedEvents.every((candidate) => candidate.review_action)) {
-        setActiveTab("monitoring");
-        setNextStepNotice(buildPostReviewClearNotice(onboardingState?.investor_profile ?? null));
-      }
-      if (typeof window !== "undefined") {
-        window.localStorage.setItem(
-          "dashboard_recent_review",
-          JSON.stringify({
-            ticker: holding?.ticker,
-            action,
-            assumption_label: event.signal_label || event.title || null,
-            resolved_all: Boolean(refreshedEvents && refreshedEvents.every((candidate) => candidate.review_action)),
-            thesis_status: result.thesis.status,
-            saved_at: new Date().toISOString(),
-          }),
-        );
-      }
-      const ageText = result.reason_age_days != null ? ` Reason age: ${result.reason_age_days} days.` : "";
-      toast.success(`Logged. Reason is now ${result.thesis.status.replace("_", " ")}.${ageText}`);
+      await api.post(`/api/monitoring/events/${eventId}/review`, { action: "not_relevant" });
+      await Promise.all([refreshEvents(), refreshConvictionLog()]);
     } catch (error) {
       console.error(error);
-      toast.error("Failed to save review");
+      toast.error("Failed to flag the event");
       throw error;
-    } finally {
-      setReviewingEventId(null);
+    }
+  };
+
+  const handleCheckInComplete = async (
+    result: SubmitClaimReviewsResponse,
+    thesisAction: "keep_lowered" | "rewrite" | "invalidate" | null,
+  ) => {
+    const [refreshedEvents] = await Promise.all([refreshEvents(), refreshConvictionLog(), refreshCurrentThesis()]);
+    if (thesisAction === "invalidate") {
+      setActiveTab("thesis");
+      setNextStepNotice(buildPostInvalidationNotice(onboardingState?.investor_profile ?? null));
+    } else if (thesisAction === "rewrite") {
+      setActiveTab("thesis");
+      setEditing(true);
+    } else if (refreshedEvents && refreshedEvents.every((candidate) => candidate.review_action)) {
+      setNextStepNotice(buildPostReviewClearNotice(onboardingState?.investor_profile ?? null));
+    }
+    if (typeof window !== "undefined") {
+      window.localStorage.setItem(
+        "dashboard_recent_review",
+        JSON.stringify({
+          ticker: holding?.ticker,
+          action: thesisAction ?? "check_in",
+          assumption_label: null,
+          resolved_all: Boolean(refreshedEvents && refreshedEvents.every((candidate) => candidate.review_action)),
+          thesis_status: result.thesis_status,
+          saved_at: new Date().toISOString(),
+        }),
+      );
     }
   };
 
@@ -1052,20 +1047,6 @@ function PositionDetailInner() {
               </p>
             </div>
             <div className="flex flex-wrap gap-2">
-              {recentEarningsEvent && [
-                { action: "reaffirmed" as const, label: "Reason holds", cls: "border-emerald-500/30 text-emerald-700 hover:bg-emerald-500/8" },
-                { action: "lowered_confidence" as const, label: "Lower confidence", cls: "border-amber-500/30 text-amber-700 hover:bg-amber-500/8" },
-                { action: "invalidated" as const, label: "Reason broken", cls: "border-red-500/30 text-red-600 hover:bg-red-500/8" },
-              ].map(({ action, label, cls }) => (
-                <button
-                  key={action}
-                  disabled={reviewingEventId === recentEarningsEvent.id}
-                  onClick={() => void handleReviewEvent(recentEarningsEvent, action)}
-                  className={`font-mono text-[10px] uppercase tracking-[0.15em] border px-4 py-2 transition-colors disabled:opacity-40 ${cls}`}
-                >
-                  {label}
-                </button>
-              ))}
               <button
                 onClick={() => setShowEarningsReview(true)}
                 className="font-mono text-[10px] uppercase tracking-[0.15em] border border-amber-600/40 text-amber-700 bg-amber-50 hover:bg-amber-100 px-4 py-2 transition-colors"
@@ -1433,6 +1414,7 @@ function PositionDetailInner() {
               <div className="space-y-10">
                 <MonitoringTab
                   hasThesis={Boolean(activeThesis)}
+                  thesisId={activeThesis?.id ?? null}
                   investorProfile={onboardingState?.investor_profile ?? null}
                   events={events}
                   unreviewedEvents={unreviewedEvents}
@@ -1442,12 +1424,12 @@ function PositionDetailInner() {
                   firstPendingAssumptionLabel={firstPendingAssumptionLabel}
                   isFirstLiveEvidenceMoment={isFirstLiveEvidenceMoment}
                   calmState={monitoringCalmState}
-                  reviewingEventId={reviewingEventId}
                   decompositionLoading={decompositionLoading}
                   emptyCopy={{ title: copy.monitoringEmptyTitle, body: copy.monitoringEmptyBody, cta: copy.monitoringEmptyCta }}
                   reviewedItems={reviewedItems}
                   supportingItems={supportingItems}
-                  onReview={handleReviewEvent}
+                  onFlagEvent={handleFlagEvent}
+                  onAfterCheckIn={handleCheckInComplete}
                   onWriteThesis={() => { setEditing(true); setActiveTab("thesis"); }}
                 />
                 {holding && (

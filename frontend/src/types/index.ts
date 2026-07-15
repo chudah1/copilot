@@ -165,6 +165,42 @@ export interface MonitoringEvent {
   created_at: string;
 }
 
+export interface ClaimEvidenceItem {
+  id: string;
+  event_type: string;
+  severity: "info" | "warning" | "thesis_breaking";
+  verdict: "supports" | "threatens" | "neutral" | "review" | null;
+  title: string;
+  summary: string;
+  ai_analysis: string | null;
+  source_url: string | null;
+  created_at: string;
+}
+
+export interface ClaimCheckInState {
+  claim_id: string | null;
+  label: string;
+  status: "holds" | "weakened" | "broken";
+  last_reviewed_at: string | null;
+  needs_review: boolean;
+  needs_review_reason: string;
+  supports: ClaimEvidenceItem[];
+  threatens: ClaimEvidenceItem[];
+  neutral: ClaimEvidenceItem[];
+}
+
+export interface ThesisCheckIn {
+  thesis_id: string;
+  claims: ClaimCheckInState[];
+  needs_review_count: number;
+}
+
+export interface SubmitClaimReviewsResponse {
+  session_id: string;
+  thesis_status: string;
+  thesis_confidence: string;
+}
+
 export interface ThesisHealthSnapshot {
   score: number;
   label: string;

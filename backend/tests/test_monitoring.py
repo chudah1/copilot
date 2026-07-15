@@ -1243,7 +1243,7 @@ async def test_run_monitoring_deduplicates_across_direct_and_proxy(db, job_sessi
     assert len(proxy_events) == 2  # one per thesis
 
 
-async def test_review_monitoring_event_lowers_confidence_and_returns_updated_thesis(client, auth_headers, db, test_user):
+async def test_review_monitoring_event_rejects_thesis_level_actions(client, auth_headers, db, test_user):
     holding_row = Holding(
         user_id=test_user.id,
         ticker="AAPL",
@@ -1281,23 +1281,18 @@ async def test_review_monitoring_event_lowers_confidence_and_returns_updated_the
     db.add(event)
     await db.commit()
 
+    # Thesis-level actions moved to the claim check-in; the per-event endpoint
+    # must refuse them and leave the thesis untouched.
     response = await client.post(
         f"/api/monitoring/events/{event.id}/review",
         headers=auth_headers,
         json={"action": "lowered_confidence", "notes": "Less certain after the margin commentary."},
     )
 
-    assert response.status_code == 200
-    data = response.json()
-    assert data["action"] == "lowered_confidence"
-    assert data["notes"] == "Less certain after the margin commentary."
-    assert data["thesis"]["confidence"] == "medium"
-    assert data["thesis"]["status"] == "active"
-
-    follow_up = await client.get(f"/api/monitoring/holdings/{holding_row.id}/events", headers=auth_headers)
-    assert follow_up.status_code == 200
-    assert follow_up.json()[0]["review_action"] == "lowered_confidence"
-    assert follow_up.json()[0]["review_notes"] == "Less certain after the margin commentary."
+    assert response.status_code == 400
+    await db.refresh(thesis)
+    assert thesis.confidence == "high"
+    assert thesis.status == "needs_review"
 
 
 async def test_get_events_for_holding_includes_latest_review_state(client, auth_headers, db, test_user):

@@ -15,6 +15,11 @@ from app.models.thesis_claim import ThesisClaim
 from app.models.thesis_decomposition import ThesisDecomposition
 from app.models.thesis_entity import ThesisEntity
 from app.models.user import User
+from app.schemas.claim_review import (
+    SubmitClaimReviewsRequest,
+    SubmitClaimReviewsResponse,
+    ThesisCheckInResponse,
+)
 from app.schemas.thesis import (
     AssistThesisRequest,
     AssistThesisResponse,
@@ -745,3 +750,78 @@ async def get_health_history(
         {"score": s.score, "label": s.label, "computed_at": s.computed_at.isoformat()}
         for s in snaps.scalars().all()
     ]
+
+
+# ── Thesis check-in (claim-level review) ─────────────────────────────────────
+
+
+@router.get("/{thesis_id}/check-in", response_model=ThesisCheckInResponse)
+async def thesis_check_in(
+    thesis_id: uuid.UUID,
+    current_user: User = Depends(get_current_user),
+    db: AsyncSession = Depends(get_db),
+):
+    from app.schemas.claim_review import ClaimCheckInStateResponse, ClaimEvidenceItem
+    from app.services.claim_review import compute_check_in
+
+    thesis = await _load_user_thesis(db, thesis_id=thesis_id, user_id=current_user.id)
+    if thesis is None:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Thesis not found")
+
+    states = await compute_check_in(db, thesis)
+    claims = [
+        ClaimCheckInStateResponse(
+            claim_id=state.claim_id,
+            label=state.label,
+            status=state.status,
+            last_reviewed_at=state.last_reviewed_at,
+            needs_review=state.needs_review,
+            needs_review_reason=state.needs_review_reason,
+            supports=[ClaimEvidenceItem.model_validate(e) for e in state.supports_events],
+            threatens=[ClaimEvidenceItem.model_validate(e) for e in state.threatens_events],
+            neutral=[ClaimEvidenceItem.model_validate(e) for e in state.neutral_events],
+        )
+        for state in states
+    ]
+    return ThesisCheckInResponse(
+        thesis_id=thesis.id,
+        claims=claims,
+        needs_review_count=sum(1 for c in claims if c.needs_review),
+    )
+
+
+@router.post("/{thesis_id}/claim-reviews", response_model=SubmitClaimReviewsResponse)
+async def submit_thesis_claim_reviews(
+    thesis_id: uuid.UUID,
+    body: SubmitClaimReviewsRequest,
+    current_user: User = Depends(get_current_user),
+    db: AsyncSession = Depends(get_db),
+):
+    from app.services.claim_review import submit_claim_reviews
+
+    thesis = await _load_user_thesis(db, thesis_id=thesis_id, user_id=current_user.id)
+    if thesis is None:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Thesis not found")
+    holding_result = await db.execute(select(Holding).where(Holding.id == thesis.holding_id))
+    holding = holding_result.scalar_one()
+
+    try:
+        session_id = await submit_claim_reviews(
+            db,
+            thesis=thesis,
+            holding=holding,
+            user_id=current_user.id,
+            decisions=[decision.model_dump() for decision in body.decisions],
+            thesis_action=body.thesis_action,
+            notes=body.notes,
+        )
+    except ValueError as exc:
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=str(exc)) from exc
+
+    await db.commit()
+    await db.refresh(thesis)
+    return SubmitClaimReviewsResponse(
+        session_id=session_id,
+        thesis_status=thesis.status,
+        thesis_confidence=thesis.confidence,
+    )
