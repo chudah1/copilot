@@ -19,12 +19,76 @@ from datetime import datetime, timedelta, timezone
 import re
 from typing import Any
 
+import httpx
 from pydantic import BaseModel, Field
 
 from app.config import settings
 from app.services.news_watch import expand_watch_queries
 
 logger = logging.getLogger(__name__)
+
+# URL liveness gate: Gemini composes item URLs as text, so it can invent links
+# (and whole articles). Dead statuses that prove the article doesn't exist at
+# that address; bot-blocks/paywalls (401/403/429/…) pass — the page exists,
+# it just refuses robots.
+_URL_CHECK_TIMEOUT = 6.0
+_URL_CHECK_CONCURRENCY = 8
+_URL_DEAD_STATUSES = frozenset({404, 410})
+
+
+async def filter_live_url_candidates(
+    candidates: list[dict[str, Any]],
+    *,
+    transport: httpx.AsyncBaseTransport | None = None,
+) -> list[dict[str, Any]]:
+    """Deterministic gate: a gemini_news item only becomes evidence if its
+    source URL resolves. Invented links (fake domain -> connect error, fake
+    path -> 404) and URL-less items are dropped; redirects are followed and
+    the final URL stored so expiring redirect links don't go stale later."""
+    if not candidates:
+        return []
+
+    semaphore = asyncio.Semaphore(_URL_CHECK_CONCURRENCY)
+    async with httpx.AsyncClient(
+        follow_redirects=True,
+        timeout=_URL_CHECK_TIMEOUT,
+        transport=transport,
+        headers={"User-Agent": settings.edgar_user_agent},
+    ) as client:
+
+        async def check(candidate: dict[str, Any]) -> dict[str, Any] | None:
+            evidence = candidate.get("evidence") or {}
+            url = evidence.get("url")
+            if not url:
+                logger.warning(
+                    "DROPPED gemini_news item without source URL: %r",
+                    (candidate.get("description") or "")[:120],
+                )
+                return None
+            try:
+                async with semaphore:
+                    response = await client.head(url)
+            except httpx.HTTPError as exc:
+                logger.warning(
+                    "DROPPED gemini_news item, source URL unreachable (%s): %s",
+                    type(exc).__name__,
+                    url,
+                )
+                return None
+            if response.status_code in _URL_DEAD_STATUSES:
+                logger.warning(
+                    "DROPPED gemini_news item, source URL returned %d: %s",
+                    response.status_code,
+                    url,
+                )
+                return None
+            final_url = str(response.url)
+            if final_url != url:
+                evidence["url"] = final_url
+            return candidate
+
+        results = await asyncio.gather(*(check(candidate) for candidate in candidates))
+    return [candidate for candidate in results if candidate is not None]
 
 MAX_SIGNALS = 12
 _GEMINI_MODEL = "gemini-2.5-flash"
@@ -514,6 +578,7 @@ or clearly a roundup / market-recap / "why the stock moved" explainer where the 
             )
 
         candidates = _to_candidates(items, ticker=ticker, name=name, grounded_urls=grounded_urls)
+        candidates = await filter_live_url_candidates(candidates)
         # When items were extracted but the candidate filter dropped them all
         # (roundup noise, target-company mismatch, low-relevance, no matched
         # signal), log at WARNING so the silent-zero case is diagnosable.

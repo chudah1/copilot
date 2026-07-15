@@ -1,5 +1,8 @@
+import pytest
+
 from app.services.news_collector import (
     _parse_news_response_tolerant,
+    filter_live_url_candidates,
     _select_focused_signal_labels,
     _signal_search_bullets,
     _to_candidates,
@@ -222,3 +225,89 @@ def test_parse_news_response_tolerant_skips_non_dict_array_entries():
     items = _parse_news_response_tolerant(payload)
     assert len(items) == 1
     assert items[0]["headline"] == "X"
+
+
+# ── URL liveness gate ────────────────────────────────────────────────────────
+
+
+def _candidate(url):
+    return {
+        "event_type": "gemini_news",
+        "description": "Headline — summary",
+        "evidence": {"headline": "Headline", "url": url},
+    }
+
+
+def _transport(handler):
+    import httpx
+
+    return httpx.MockTransport(handler)
+
+
+@pytest.mark.asyncio
+async def test_liveness_gate_keeps_resolving_urls_and_stores_final_url():
+    import httpx
+
+    def handler(request):
+        if request.url.path == "/redirect":
+            return httpx.Response(301, headers={"location": "https://real.example/article"})
+        return httpx.Response(200)
+
+    survivors = await filter_live_url_candidates(
+        [_candidate("https://real.example/redirect")],
+        transport=_transport(handler),
+    )
+
+    assert len(survivors) == 1
+    assert survivors[0]["evidence"]["url"] == "https://real.example/article"
+
+
+@pytest.mark.asyncio
+async def test_liveness_gate_drops_404_urls():
+    import httpx
+
+    survivors = await filter_live_url_candidates(
+        [_candidate("https://real.example/invented-path"), _candidate("https://real.example/live")],
+        transport=_transport(
+            lambda request: httpx.Response(404 if "invented" in request.url.path else 200)
+        ),
+    )
+
+    assert [c["evidence"]["url"] for c in survivors] == ["https://real.example/live"]
+
+
+@pytest.mark.asyncio
+async def test_liveness_gate_drops_unreachable_urls():
+    import httpx
+
+    def handler(request):
+        raise httpx.ConnectError("DNS failure")
+
+    survivors = await filter_live_url_candidates(
+        [_candidate("https://invented-domain.example/article")],
+        transport=_transport(handler),
+    )
+
+    assert survivors == []
+
+
+@pytest.mark.asyncio
+async def test_liveness_gate_drops_items_without_url():
+    survivors = await filter_live_url_candidates(
+        [_candidate(None)],
+        transport=_transport(lambda request: (_ for _ in ()).throw(AssertionError("no request expected"))),
+    )
+
+    assert survivors == []
+
+
+@pytest.mark.asyncio
+async def test_liveness_gate_passes_bot_blocked_urls():
+    import httpx
+
+    survivors = await filter_live_url_candidates(
+        [_candidate("https://paywalled.example/article")],
+        transport=_transport(lambda request: httpx.Response(403)),
+    )
+
+    assert len(survivors) == 1
