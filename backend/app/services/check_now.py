@@ -721,6 +721,28 @@ async def run_first_pulse(
         logger.exception("First pulse failed for user %s", user_id)
 
 
+# In-flight guard: a running pass has persisted nothing yet, so the event-based
+# rate limit can't see it — without this, every POST during a pass's ~2-minute
+# flight spawns another full LLM pipeline run. In-memory is sufficient for the
+# single-process deployment; the TTL self-heals if a task dies without release.
+_INFLIGHT_CHECK_NOW: dict[uuid.UUID, datetime] = {}
+INFLIGHT_CHECK_NOW_TTL = timedelta(minutes=10)
+
+
+def claim_check_now_slot(holding_id: uuid.UUID, *, now: datetime | None = None) -> bool:
+    """Atomically claim the in-flight slot for a holding. False = already running."""
+    now = now or datetime.now(timezone.utc)
+    started = _INFLIGHT_CHECK_NOW.get(holding_id)
+    if started is not None and now - started < INFLIGHT_CHECK_NOW_TTL:
+        return False
+    _INFLIGHT_CHECK_NOW[holding_id] = now
+    return True
+
+
+def release_check_now_slot(holding_id: uuid.UUID) -> None:
+    _INFLIGHT_CHECK_NOW.pop(holding_id, None)
+
+
 async def run_check_now_background(
     user_id: uuid.UUID,
     holding_id: uuid.UUID,
@@ -758,6 +780,8 @@ async def run_check_now_background(
             await run_check_now(holding, thesis, db)
     except Exception:
         logger.exception("Background check-now failed for holding %s", holding_id)
+    finally:
+        release_check_now_slot(holding_id)
 
 
 HISTORICAL_AUDIT_LOOKBACK_DAYS = 90

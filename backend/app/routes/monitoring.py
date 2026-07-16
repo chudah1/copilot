@@ -44,7 +44,12 @@ from app.services.adjacency import (
     curate_reviewed_but_dropped,
     load_reviewed_but_dropped,
 )
-from app.services.check_now import RATE_LIMIT_HOURS, run_check_now, run_check_now_background
+from app.services.check_now import (
+    RATE_LIMIT_HOURS,
+    claim_check_now_slot,
+    run_check_now,
+    run_check_now_background,
+)
 from app.services.conviction_log import REASON_CREATED
 from app.services.support_evidence import load_curated_supporting_items_for_holding
 from app.services.coverage import (
@@ -443,6 +448,17 @@ async def check_now(
             status="rate_limited",
             events_created=0,
             next_available_at=next_available,
+            snapshot=None,
+        )
+
+    # A pass already in flight has persisted nothing yet, so the event-based
+    # rate limit above can't see it — claim the in-flight slot before
+    # scheduling or a poll-happy client spawns one LLM pipeline per POST.
+    if not claim_check_now_slot(holding.id, now=now):
+        return CheckNowResponse(
+            status="running",
+            events_created=0,
+            next_available_at=None,
             snapshot=None,
         )
 

@@ -615,3 +615,49 @@ async def test_check_now_records_gemini_failure_as_monitoring_gap(db, test_user)
     assert gap.source == "gemini_news"
     assert "RESOURCE_EXHAUSTED" in gap.error_message
     assert gap.run_id.startswith("check_now:")
+
+
+# ── In-flight guard ──────────────────────────────────────────────────────────
+
+
+def test_check_now_slot_claim_release():
+    import uuid as _uuid
+    from datetime import datetime, timedelta, timezone
+
+    from app.services.check_now import (
+        claim_check_now_slot,
+        release_check_now_slot,
+        _INFLIGHT_CHECK_NOW,
+    )
+
+    holding_id = _uuid.uuid4()
+    now = datetime.now(timezone.utc)
+    try:
+        assert claim_check_now_slot(holding_id, now=now) is True
+        # Second claim while in flight is refused
+        assert claim_check_now_slot(holding_id, now=now + timedelta(seconds=30)) is False
+        release_check_now_slot(holding_id)
+        assert claim_check_now_slot(holding_id, now=now + timedelta(seconds=60)) is True
+    finally:
+        release_check_now_slot(holding_id)
+
+
+def test_check_now_slot_expires_after_ttl():
+    """A crashed task must not wedge the holding forever."""
+    import uuid as _uuid
+    from datetime import datetime, timedelta, timezone
+
+    from app.services.check_now import (
+        INFLIGHT_CHECK_NOW_TTL,
+        claim_check_now_slot,
+        release_check_now_slot,
+    )
+
+    holding_id = _uuid.uuid4()
+    now = datetime.now(timezone.utc)
+    try:
+        assert claim_check_now_slot(holding_id, now=now) is True
+        stale = now + INFLIGHT_CHECK_NOW_TTL + timedelta(seconds=1)
+        assert claim_check_now_slot(holding_id, now=stale) is True
+    finally:
+        release_check_now_slot(holding_id)
