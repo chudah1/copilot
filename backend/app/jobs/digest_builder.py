@@ -109,12 +109,22 @@ def _age_in_days(timestamp: datetime, *, now: datetime) -> int:
     return (now - _normalize_datetime(timestamp)).days
 
 
-def _digest_headline(reasons_flagged: int, stale_count: int, missing_count: int, stable_count: int) -> str:
-    # reasons_flagged counts distinct holdings with events, not raw events — a
-    # single position firing two signals is still one reason to review.
+def _digest_headline(
+    reasons_flagged: int,
+    stale_count: int,
+    missing_count: int,
+    stable_count: int,
+    evidence_count: int = 0,
+) -> str:
+    # reasons_flagged counts holdings whose claim check-in is actually asking
+    # for review (the same deterministic rules the app uses), so the email
+    # never claims a review the app doesn't. evidence_count counts holdings
+    # that saw alert-shaped events below that threshold.
     if reasons_flagged > 0:
         verb = "needs" if reasons_flagged == 1 else "need"
         return f"{reasons_flagged} of your reasons {verb} review this week."
+    if evidence_count > 0:
+        return f"Evidence came in on {evidence_count} of your reasons — nothing needs a decision."
     if stale_count > 0:
         return f"{stale_count} thesis{'es' if stale_count != 1 else ''} went stale this week."
     if missing_count > 0:
@@ -132,10 +142,14 @@ def _digest_subject(
     oldest_stale_name: str | None = None,
     oldest_stale_days: int | None = None,
     missing_count: int = 0,
+    evidence_count: int = 0,
 ) -> str:
     if reasons_flagged > 0:
         verb = "needs" if reasons_flagged == 1 else "need"
         return f"{reasons_flagged} of your reasons {verb} review this week"
+    if evidence_count > 0:
+        noun = "reason" if evidence_count == 1 else "reasons"
+        return f"Evidence noted on {evidence_count} {noun} — no decisions needed"
     # Quiet week — lead with something worth opening for
     if upcoming_earnings:
         next_e = upcoming_earnings[0]
@@ -1112,20 +1126,35 @@ async def build_and_persist_user_digest(
     }
     alert_events_data = [event for event in events_data if event.get("verdict") != "supports"]
     supporting_events_data = [event for event in events_data if event.get("verdict") == "supports"]
-    # Count distinct holdings with alert-shaped events, not raw events — so a
-    # position that fired two signals reads as one reason to review, not two.
-    # Supporting-verdict events are excluded here: they're rendered separately
-    # as reassurance, so counting them as "reasons that need review" would
-    # flatly contradict the emotional framing.
-    reasons_flagged = len({
+    # Distinct holdings with alert-shaped events — rendered as "evidence came
+    # in", never as "needs review" on its own.
+    evidence_holdings = len({
         e.get("holding_id") or e.get("ticker")
         for e in alert_events_data
     })
+    # "Needs review" is the claim check-in's call, computed with the same
+    # deterministic rules the app uses — the email must never claim a review
+    # the app then denies.
+    from app.services.claim_review import compute_check_in
+
+    reasons_flagged = 0
+    for holding in holdings:
+        thesis = thesis_by_holding.get(str(holding.id))
+        if thesis is None or thesis.invalidated_at is not None:
+            continue
+        try:
+            states = await compute_check_in(db, thesis)
+        except Exception:
+            logger.exception("Digest check-in computation failed for thesis %s", thesis.id)
+            continue
+        if any(state.needs_review for state in states):
+            reasons_flagged += 1
     headline = _digest_headline(
         reasons_flagged,
         len(stale_theses),
         len(missing_theses),
         len(stable_holdings),
+        evidence_count=evidence_holdings,
     )
     _stale_nudge_item = max(
         [item for item in holdings_with_theses if item.get("why_own_it") and item.get("reason_age_days", 0) >= 90],
@@ -1139,6 +1168,7 @@ async def build_and_persist_user_digest(
         oldest_stale_name=_stale_nudge_item["name"] if _stale_nudge_item else None,
         oldest_stale_days=_stale_nudge_item["reason_age_days"] if _stale_nudge_item else None,
         missing_count=len(missing_theses),
+        evidence_count=evidence_holdings,
     )
     receipt = _monitoring_receipt(
         len(holdings),

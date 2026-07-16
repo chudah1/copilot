@@ -176,13 +176,16 @@ async def test_digest_happy_path_after_monitoring_event(client, auth_headers, db
     assert "I own it for resilient ecosystem demand." in digest.content["html"]
     assert digest.content["events_count"] == 1
     assert digest.content["stable_holdings_count"] == 0
-    assert digest.content["headline"] == "1 of your reasons needs review this week."
+    # One warning-grade event is below the claim check-in's review threshold
+    # (two warnings, or one thesis-breaking), so the email reports evidence
+    # without claiming a review the app wouldn't ask for.
+    assert digest.content["headline"] == "Evidence came in on 1 of your reasons — nothing needs a decision."
     assert digest.content["digest_mode"] == "events"
-    assert digest.content["subject_line"] == "1 of your reasons needs review this week"
+    assert digest.content["subject_line"] == "Evidence noted on 1 reason — no decisions needed"
     assert digest.content["summary_points"][0].startswith("AAPL:")
     assert "Monitoring receipt" in digest.content["html"]
     send_mock.assert_awaited_once()
-    assert send_mock.await_args.kwargs["subject"] == "1 of your reasons needs review this week"
+    assert send_mock.await_args.kwargs["subject"] == "Evidence noted on 1 reason — no decisions needed"
 
     thesis = await client.get(f"/api/theses/{thesis_id}", headers=auth_headers)
     assert thesis.status_code == 200
@@ -285,3 +288,62 @@ async def test_digest_builder_uses_hearsay_profile_copy(db, job_session_factory)
     # Hearsay-profile quiet-week receipt frames the check against the reasons the user attached.
     assert "against your reasons" in digest.content["monitoring_receipt"]
     assert "Would the same story still convince you today" in (digest.content["quiet_nudge"] or "")
+
+
+async def test_digest_headline_flags_review_only_when_check_in_asks(db, test_user):
+    """The email must agree with the app: a thesis_breaking event crosses the
+    claim check-in threshold and reads 'needs review'; see the happy-path test
+    for the below-threshold 'evidence came in' case."""
+    from app.jobs.digest_builder import build_and_persist_user_digest
+    from app.models.monitoring_event import MonitoringEvent
+
+    now = datetime.now(timezone.utc)
+    holding = Holding(
+        user_id=test_user.id,
+        ticker="NOW",
+        name="ServiceNow",
+        quantity=1,
+        average_cost_basis=100,
+        current_price=100,
+        current_value=100,
+    )
+    db.add(holding)
+    await db.flush()
+    thesis = Thesis(
+        user_id=test_user.id,
+        holding_id=holding.id,
+        status="active",
+        thesis_kind="company",
+        why_own_it="Workflow lock-in.",
+        confidence="medium",
+        review_cadence_days=7,
+        source="user",
+    )
+    db.add(thesis)
+    await db.flush()
+    db.add(
+        MonitoringEvent(
+            holding_id=holding.id,
+            thesis_id=thesis.id,
+            event_type="gemini_news",
+            severity="thesis_breaking",
+            title="Break condition occurred",
+            summary="A stated break condition occurred.",
+            verdict="threatens",
+            created_at=now - timedelta(days=1),
+        )
+    )
+    await db.commit()
+
+    digest = await build_and_persist_user_digest(
+        db,
+        test_user,
+        now=now,
+        period_start=now - timedelta(days=7),
+        period_end=now,
+        send_email=False,
+        update_streak=False,
+    )
+    await db.commit()
+
+    assert digest.content["headline"] == "1 of your reasons needs review this week."
