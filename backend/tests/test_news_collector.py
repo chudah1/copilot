@@ -311,3 +311,28 @@ async def test_liveness_gate_passes_bot_blocked_urls():
     )
 
     assert len(survivors) == 1
+
+
+@pytest.mark.asyncio
+async def test_liveness_gate_stabilizes_article_id_and_dedupes_by_final_url():
+    """The same article reached via two different per-run redirect URLs must
+    collapse to one candidate with a URL-stable article_id, so story anchors
+    stop churning across passes."""
+    import hashlib
+
+    import httpx
+
+    def handler(request):
+        return httpx.Response(301, headers={"location": "https://real.example/article"}) if "redirect" in request.url.path else httpx.Response(200)
+
+    a = _candidate("https://vertex.example/redirect-run1")
+    b = _candidate("https://vertex.example/redirect-run2")
+    a["evidence"]["headline"] = b["evidence"]["headline"] = "Headline"
+    a["evidence"]["article_id"] = "run1hash"
+    b["evidence"]["article_id"] = "run2hash"
+
+    survivors = await filter_live_url_candidates([a, b], transport=_transport(handler))
+
+    assert len(survivors) == 1
+    expected = hashlib.sha256("Headlinehttps://real.example/article".encode()).hexdigest()[:16]
+    assert survivors[0]["evidence"]["article_id"] == expected

@@ -3,6 +3,7 @@ from __future__ import annotations
 import logging
 import re
 import uuid
+from datetime import timedelta
 from typing import Any
 
 logger = logging.getLogger(__name__)
@@ -35,7 +36,13 @@ from app.services.news_watch import (
     judge_news_watch,
     match_news_watches,
 )
-from app.services.noise_filter import EVIDENCE_TYPE_MAP, record_signal_fired, story_anchor_for_candidate
+from app.services.noise_filter import (
+    DEFAULT_COOLDOWN_HOURS,
+    EVIDENCE_TYPE_MAP,
+    _story_anchor_uses_cooldown,
+    record_signal_fired,
+    story_anchor_for_candidate,
+)
 from app.services.signal_matching import build_evidence_summary, determine_verdict
 
 
@@ -669,11 +676,37 @@ async def persist_classified_candidates(
     now,
     investor_profile: str | None = None,
 ) -> list[uuid.UUID]:
+    # Write-time anchor guard. The read-at-start noise filter can't see events
+    # committed by a concurrently running pass (check-now, edgar_watch and
+    # monitoring_run can overlap), so the same story would persist once per
+    # pass. Re-checking recent anchors here, in the same session as the
+    # insert, closes that window.
+    anchor_rows = await db.execute(
+        select(MonitoringEvent.story_anchor).where(
+            MonitoringEvent.holding_id == holding.id,
+            MonitoringEvent.created_at >= now - timedelta(hours=DEFAULT_COOLDOWN_HOURS),
+            MonitoringEvent.story_anchor.is_not(None),
+        )
+    )
+    recent_anchors: set[str] = set(anchor_rows.scalars().all())
+
     events: list[MonitoringEvent] = []
     for candidate, severity, ai_analysis in classified:
         evidence = candidate.get("evidence", {})
         source_url = evidence.get("url")
         has_proxy_context = bool(evidence.get("proxy_ticker"))
+
+        candidate_anchor = story_anchor_for_candidate(candidate)
+        if (
+            candidate_anchor
+            and candidate_anchor in recent_anchors
+            and _story_anchor_uses_cooldown(str(candidate.get("event_type", "")))
+        ):
+            logger.warning(
+                "Skipped persist for holding %s: story anchor %s already persisted within %dh",
+                holding.id, candidate_anchor, DEFAULT_COOLDOWN_HOURS,
+            )
+            continue
 
         evidence_signal_id = evidence.get("signal_id")
         evidence_claim_id = evidence.get("claim_id")
@@ -721,12 +754,14 @@ async def persist_classified_candidates(
             claim_id=uuid.UUID(evidence_claim_id) if evidence_claim_id else None,
             signal_id=uuid.UUID(evidence_signal_id) if evidence_signal_id else None,
             evidence_type=evidence_type,
-            story_anchor=story_anchor_for_candidate(candidate),
+            story_anchor=candidate_anchor,
             evidence_summary=evidence_summary,
             verdict=verdict,
         )
         db.add(event)
         events.append(event)
+        if candidate_anchor:
+            recent_anchors.add(candidate_anchor)
         # Mark cooldown on every matched signal, not just the primary, so a
         # multi-pillar article doesn't fire warnings on the same Services
         # margin signal again next pass just because it was a "secondary"

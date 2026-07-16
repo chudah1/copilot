@@ -85,10 +85,32 @@ async def filter_live_url_candidates(
             final_url = str(response.url)
             if final_url != url:
                 evidence["url"] = final_url
+                # Recompute the article id from the *final* URL. Gemini reaches
+                # the same article through a fresh grounding-redirect URL every
+                # run, so an id derived from the raw URL churns per pass and
+                # story anchors never match across runs.
+                evidence["article_id"] = hashlib.sha256(
+                    f"{evidence.get('headline') or ''}{final_url}".encode()
+                ).hexdigest()[:16]
             return candidate
 
         results = await asyncio.gather(*(check(candidate) for candidate in candidates))
-    return [candidate for candidate in results if candidate is not None]
+
+    # Re-dedupe by final URL: two redirect URLs in one pass can resolve to the
+    # same article.
+    survivors: list[dict[str, Any]] = []
+    seen_final_urls: set[str] = set()
+    for candidate in results:
+        if candidate is None:
+            continue
+        final_key = str((candidate.get("evidence") or {}).get("url") or "").strip().lower()
+        if final_key and final_key in seen_final_urls:
+            logger.info("Merged duplicate gemini_news item resolving to %s", final_key)
+            continue
+        if final_key:
+            seen_final_urls.add(final_key)
+        survivors.append(candidate)
+    return survivors
 
 MAX_SIGNALS = 12
 _GEMINI_MODEL = "gemini-2.5-flash"
