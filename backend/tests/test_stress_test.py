@@ -299,3 +299,46 @@ async def test_generate_stress_test_analysis_falls_back_to_anthropic_when_openai
     assert mock_anthropic.await_count == 1
     assert result.bear_case == "The multiple may be too rich for the execution risk."
     assert result.candidate_signals[0].signal_type == "revenue_growth"
+
+
+@pytest.mark.asyncio
+async def test_empty_structured_output_falls_through_to_anthropic():
+    """A reasoning model that burns its whole completion budget returns empty
+    content; that must count as a provider failure, not a valid {} to parse
+    into an invented default bear case."""
+    repaired = {
+        "bear_case": "Real bear case from the fallback provider.",
+        "key_risks": ["Execution risk"],
+        "risk_groups": [{"category": "Business risk", "items": ["Execution risk"]}],
+        "blind_spots": [],
+        "what_to_watch": ["Revenue growth"],
+        "candidate_signals": [],
+    }
+
+    with patch("app.services.ai_thesis.settings.openai_api_key", "test-openai-key"):
+        with patch("app.services.ai_thesis.settings.anthropic_api_key", "test-anthropic-key"):
+            with patch(
+                "app.services.ai_thesis._call_openai_json",
+                new_callable=AsyncMock,
+                return_value={},
+            ):
+                with patch(
+                    "app.services.ai_thesis._call_anthropic_json",
+                    new_callable=AsyncMock,
+                    return_value=repaired,
+                ) as mock_anthropic:
+                    result = await generate_stress_test_analysis(
+                        ticker="NOW",
+                        draft_thesis="Enterprise AI workflow demand stays strong.",
+                        company_data=None,
+                    )
+
+    assert mock_anthropic.await_count == 1
+    assert result.bear_case == "Real bear case from the fallback provider."
+
+
+def test_parse_stress_test_output_rejects_empty_payload():
+    from app.services.ai_thesis import _parse_stress_test_output
+
+    with pytest.raises(ValueError):
+        _parse_stress_test_output({})

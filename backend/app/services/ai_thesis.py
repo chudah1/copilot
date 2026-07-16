@@ -1058,8 +1058,18 @@ async def _call_openai_json(
     }
     if not model.startswith(("gpt-5", "o1", "o3", "o4")):
         request_kwargs["temperature"] = 0
+    else:
+        # Reasoning models spend completion tokens on hidden reasoning before
+        # emitting any content. A budget sized for the visible JSON alone gets
+        # fully consumed by reasoning, yielding empty content.
+        request_kwargs[token_param_key] = max(max_tokens, 4096)
     response = await client.chat.completions.create(**request_kwargs)
-    return json.loads(strip_code_fences(response.choices[0].message.content or "{}"))
+    content = strip_code_fences(response.choices[0].message.content or "")
+    if not content.strip():
+        # Coercing empty content to {} lets junk parse "successfully" and
+        # bypasses every provider fallback downstream.
+        raise ValueError(f"{model} returned empty structured output (finish_reason={response.choices[0].finish_reason})")
+    return json.loads(content)
 
 
 def _coalesce_assist_fields(
@@ -2238,7 +2248,12 @@ def _coalesce_float(value: Any) -> float | None:
 def _parse_stress_test_output(data: dict) -> "StressTestOutput":
     from app.services.stress_test import StressTestOutput, StressTestRiskGroup
 
-    bear_case = data.get("bear_case") or "Valuation risk not addressed."
+    bear_case = str(data.get("bear_case") or "").strip()
+    if not bear_case:
+        # An empty/contentless payload is a provider failure — raising here
+        # lets the caller's provider chain (OpenAI -> Anthropic -> honest
+        # fallback) proceed instead of serving an invented bear case.
+        raise ValueError("stress test output missing bear_case")
     risk_groups: list[StressTestRiskGroup] = []
     for group in (data.get("risk_groups") or [])[:4]:
         if not isinstance(group, dict):
