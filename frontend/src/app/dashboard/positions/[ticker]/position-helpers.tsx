@@ -11,7 +11,7 @@ import { aiAssistWeakMessaging } from "@/lib/ai-assisted-thesis";
 // Pure presentational helpers + local types extracted from the position
 // page to shrink the god-component. No hooks/state — unit-testable in isolation.
 
-export type TabId = "thesis" | "monitoring";
+export type TabId = "thesis" | "monitoring" | "decisions";
 export type ThesisSubTab = "thesis" | "signals" | "log";
 export type NextStepAction = "edit" | "generate_signals" | "confirm_signals" | "monitoring";
 

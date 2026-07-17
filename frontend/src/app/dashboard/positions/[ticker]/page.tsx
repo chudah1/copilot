@@ -714,8 +714,9 @@ function PositionDetailInner() {
       : "Next: review the first monitoring rules and tighten anything vague.";
 
   const tabs: { id: TabId; label: string; badge?: number | string }[] = [
-    { id: "thesis", label: onboardingState?.investor_profile === "thesis_driven" ? "Thesis" : "Reason" },
-    { id: "monitoring", label: "Monitoring", badge: unreviewedEvents > 0 ? unreviewedEvents : undefined },
+    { id: "thesis", label: "Original case" },
+    { id: "monitoring", label: "What changed", badge: unreviewedEvents > 0 ? unreviewedEvents : undefined },
+    { id: "decisions", label: "Decisions" },
   ];
 
   const steps = [
@@ -1411,7 +1412,7 @@ function PositionDetailInner() {
 
             {/* ─── MONITORING TAB ──────────────────────────────────────── */}
             {activeTab === "monitoring" && (
-              <div className="space-y-10">
+              <div>
                 <MonitoringTab
                   hasThesis={Boolean(activeThesis)}
                   thesisId={activeThesis?.id ?? null}
@@ -1432,10 +1433,12 @@ function PositionDetailInner() {
                   onAfterCheckIn={handleCheckInComplete}
                   onWriteThesis={() => { setEditing(true); setActiveTab("thesis"); }}
                 />
-                {holding && (
-                  <PositionDecisions holdingId={holding.id} reloadKey={reviewedEventsCount} />
-                )}
               </div>
+            )}
+
+            {/* ─── DECISIONS TAB ───────────────────────────────────────── */}
+            {activeTab === "decisions" && holding && (
+              <PositionDecisions holdingId={holding.id} reloadKey={reviewedEventsCount} />
             )}
 
           </motion.div>
