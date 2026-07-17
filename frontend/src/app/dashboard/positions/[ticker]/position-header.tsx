@@ -142,20 +142,19 @@ export function PositionHeader({
               </span>
             </div>
             {activeThesis && (
-                <>
-                  <span className="text-border text-[10px]">·</span>
-                  <span className="font-mono text-[10px] text-muted-foreground/60">
-                    updated {ageInDays(activeThesis.updated_at)}d ago
-                  </span>
-                  {stalePressure && (
-                    <>
-                      <span className="text-border text-[10px]">·</span>
-                      <span className="font-mono text-[10px] text-amber-700/80">
-                        {stalePressure.cadenceDays}d cadence
-                      </span>
-                    </>
-                  )}
-                </>
+              <div className="flex flex-wrap items-center gap-2">
+                <span className="font-mono text-[10px] text-muted-foreground/60">
+                  updated {ageInDays(activeThesis.updated_at)}d ago
+                </span>
+                {stalePressure && (
+                  <>
+                    <span className="text-border text-[10px]">·</span>
+                    <span className="font-mono text-[10px] text-amber-700/80">
+                      {stalePressure.cadenceDays}d cadence
+                    </span>
+                  </>
+                )}
+              </div>
               )}
           </div>
 
