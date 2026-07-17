@@ -127,10 +127,9 @@ function clearState() {
 }
 
 function inferInitialStep(state: WizardState): Step {
-  if (state.synthesisResult) return "REVIEW";
   if (state.answer2) return "QUESTION_2";
-  if (state.answer1) return "QUESTION_1";
-  return "WELCOME";
+  if (state.answer1) return "QUESTION_2";
+  return "QUESTION_1";
 }
 
 // ---------------------------------------------------------------------------
@@ -175,9 +174,8 @@ function WizardInner() {
   const [wizardState, setWizardState] = useState<WizardState>(() => initialWizardState);
   const [holding, setHolding] = useState<HoldingContext | null>(null);
   const [error, setError] = useState("");
-  const [loadingHolding, setLoadingHolding] = useState(Boolean(initialWizardState.holdingId));
   const [savingThesis, setSavingThesis] = useState(false);
-  const [groundingResult, setGroundingResult] = useState<GroundingResponse | null>(null);
+  const [groundingResult] = useState<GroundingResponse | null>(null);
   const [selectedSignalIdx, setSelectedSignalIdx] = useState<Set<number>>(new Set());
   const [draftingForMe, setDraftingForMe] = useState(false);
   const profile = wizardState.investorProfile;
@@ -205,7 +203,6 @@ function WizardInner() {
           .filter((h) => !withThesis.has(h.id))
           .sort((a, b) => (b.current_value ?? 0) - (a.current_value ?? 0));
         if (undrafted[0]) {
-          setLoadingHolding(true);
           setWizardState((prev) => ({ ...prev, holdingId: undrafted[0].id }));
         } else {
           // Every position already has a reason — nothing to onboard.
@@ -235,10 +232,10 @@ function WizardInner() {
         // A persisted holdingId can outlive the holding it points at — deleted
         // position, different account, or state carried over from another env.
         // Wipe the stale wizard state so the picker above re-fires; otherwise
-        // holding stays null and "Build thesis" silent-returns on click.
+        // holding stays null and the save action silent-returns on click.
         if (e instanceof Error && e.message === "Holding not found") {
           setHolding(null);
-          setStep("WELCOME");
+          setStep("QUESTION_1");
           setWizardState((prev) => ({
             ...prev,
             holdingId: null,
@@ -247,8 +244,7 @@ function WizardInner() {
             synthesisResult: null,
           }));
         }
-      })
-      .finally(() => setLoadingHolding(false));
+      });
   }, [wizardState.holdingId]);
 
   const goTo = (s: Step) => {
@@ -264,66 +260,30 @@ function WizardInner() {
     router.push("/dashboard");
   };
 
-  const handleSynthesize = async () => {
+  const handleQuickSave = async () => {
     if (!wizardState.holdingId || !holding) return;
-    goTo("SYNTHESISING");
+    if (wizardState.answer1.trim().length < 5 || wizardState.answer2.trim().length < 5) return;
+    setSavingThesis(true);
     setError("");
-    // Bound the LLM call so a slow provider can't strand the user on the
-    // "~10 seconds" spinner indefinitely. The backend has its own 30–60s
-    // timeout; this aborts a touch sooner and recovers gracefully.
-    const controller = new AbortController();
-    const timeoutId = setTimeout(() => controller.abort(), 45000);
     try {
-      const activeProfile = wizardState.investorProfile ?? "thesis_driven";
-      const promptContent = PROFILE_CONTENT[activeProfile];
-      const result = await api.post<SynthesisResponse>("/api/onboarding/synthesize", {
+      await api.post<Thesis>("/api/theses", {
         holding_id: wizardState.holdingId,
-        investor_profile: activeProfile,
-        question1: promptContent.q1,
-        answer1: wizardState.answer1,
-        question2: promptContent.q2,
-        answer2: wizardState.answer2,
-      }, { signal: controller.signal });
-      setWizardState((prev) => ({ ...prev, synthesisResult: result }));
-
-      // Hype-buyer climb: if the reason is too vague to monitor, ground it
-      // (bear case + measurable watches to pick) before review. Best-effort and
-      // separately bounded — a slow grounding pass should never block the thesis
-      // we already have in hand.
-      if (result.needs_grounding) {
-        const groundController = new AbortController();
-        const groundTimeoutId = setTimeout(() => groundController.abort(), 30000);
-        try {
-          const grounding = await api.post<GroundingResponse>("/api/onboarding/ground", {
-            holding_id: wizardState.holdingId,
-            investor_profile: activeProfile,
-            why_own_it: wizardState.answer1,
-            what_would_change_my_mind: wizardState.answer2,
-          }, { signal: groundController.signal });
-          if (grounding.candidate_signals.length > 0 || grounding.bear_case) {
-            setGroundingResult(grounding);
-            setSelectedSignalIdx(new Set(grounding.candidate_signals.map((_, i) => i)));
-            goTo("CLIMB");
-            return;
-          }
-        } catch {
-          // Grounding is best-effort — never block the thesis on it.
-        } finally {
-          clearTimeout(groundTimeoutId);
-        }
-      }
-
-      goTo("REVIEW");
+        thesis_kind: "company",
+        why_own_it: wizardState.answer1.trim(),
+        must_remain_true: null,
+        what_would_change_my_mind: wizardState.answer2.trim(),
+        status: "active",
+        confidence: "medium",
+        review_cadence_days: 30,
+        source: "user",
+      });
+      await api.post("/api/onboarding/complete").catch(() => null);
+      clearState();
+      router.push(`/dashboard/positions/${holding.ticker}?source=onboarding`);
     } catch (e) {
-      const aborted = e instanceof DOMException && e.name === "AbortError";
-      setError(
-        aborted
-          ? "That took longer than usual to build. Your answers are saved — tap Build thesis to try again."
-          : getErrorMessage(e, "Something went wrong. Please try again.")
-      );
-      goTo("QUESTION_2");
+      setError(getErrorMessage(e, "We couldn't save this record yet. Please try again."));
     } finally {
-      clearTimeout(timeoutId);
+      setSavingThesis(false);
     }
   };
 
@@ -634,8 +594,9 @@ function WizardInner() {
           <Button
             onClick={onNext}
             disabled={wizardState[qKey].trim().length < 5}
+            loading={qKey === "answer2" && savingThesis}
           >
-            {qKey === "answer2" ? "Build thesis" : "Continue"}
+            {qKey === "answer2" ? "Save record" : "Continue"}
           </Button>
           <button
             onClick={handleSkip}
@@ -952,7 +913,7 @@ function WizardInner() {
                       "answer2",
                       profileContent.q2,
                       profileContent.q2Placeholder,
-                      handleSynthesize,
+                      handleQuickSave,
                       "Question 02"
                     )}
                   {step === "SYNTHESISING" && renderSynthesising()}
