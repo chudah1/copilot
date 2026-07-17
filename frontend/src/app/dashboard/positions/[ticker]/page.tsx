@@ -126,10 +126,13 @@ function PositionDetailInner() {
   };
 
   useEffect(() => {
+    let cancelled = false;
+
     async function load() {
       try {
         setDecompositionLoading(true);
         const workspace = await loadPositionWorkspace(api, ticker);
+        if (cancelled) return;
         setHoldings(workspace.holdings);
         setTheses(workspace.theses);
         setEvents(workspace.events);
@@ -156,13 +159,18 @@ function PositionDetailInner() {
           setActiveTab("monitoring");
         }
       } catch (err) {
-        console.error(err);
+        if (!cancelled) console.error(err);
       } finally {
-        setDecompositionLoading(false);
-        setLoading(false);
+        if (!cancelled) {
+          setDecompositionLoading(false);
+          setLoading(false);
+        }
       }
     }
-    load();
+    void load();
+    return () => {
+      cancelled = true;
+    };
   }, [ticker]);
 
   useEffect(() => {
