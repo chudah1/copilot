@@ -129,3 +129,17 @@ Default model: `claude-sonnet-4-20250514`.
 - `ENABLE_SCHEDULER=false` disables all background jobs (useful during testing).
 - Rate limiting via SlowAPI; errors tracked via Sentry if `SENTRY_DSN` is set.
 - All UUIDs and datetimes use custom SQLAlchemy types (`UUIDType`, `TZDateTime`) for SQLite/PostgreSQL compatibility.
+
+## Agent skills
+
+### Issue tracker
+
+Issues and PRDs are tracked in GitHub Issues. See `docs/agents/issue-tracker.md`.
+
+### Triage labels
+
+Use the standard triage labels: `needs-triage`, `needs-info`, `ready-for-agent`, `ready-for-human`, and `wontfix`. See `docs/agents/triage-labels.md`.
+
+### Domain docs
+
+This is a single-context repository. Read `CONTEXT.md` and relevant decisions under `docs/adr/`. See `docs/agents/domain.md`.
