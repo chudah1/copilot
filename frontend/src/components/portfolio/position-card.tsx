@@ -5,20 +5,21 @@ import { motion } from "framer-motion";
 import { formatAssumptionLabel } from "@/lib/assumption-label";
 import { tightenInvestorCopy } from "@/lib/investor-language";
 import { formatCurrency, formatPercent } from "@/lib/utils";
-import { classifyThesisQuality } from "@/lib/thesis-quality";
+import { classifyCaseQuality, getDecisionState } from "@/lib/decision-state";
 import { aiAssistWeakMessaging } from "@/lib/ai-assisted-thesis";
 import type { Holding, Thesis, HoldingPulse, LivePrice, UpcomingEarnings } from "@/types";
 import { WatchReceipt } from "./watch-receipt";
 
-const PULSE_DOT: Record<string, string> = {
-  intact: "bg-emerald-500",
-  watch: "bg-amber-400",
-  review: "bg-red-500",
+const DECISION_DOT: Record<string, string> = {
+  calm: "bg-emerald-500",
+  changed: "bg-amber-400",
+  needs_decision: "bg-red-500",
+  needs_written_case: "bg-border",
 };
 
-const PULSE_RING: Record<string, string> = {
-  review: "ring-1 ring-red-500/20",
-  watch: "ring-1 ring-amber-500/20",
+const DECISION_RING: Record<string, string> = {
+  needs_decision: "ring-1 ring-red-500/20",
+  changed: "ring-1 ring-amber-500/20",
 };
 
 function cardStatusCopy(args: {
@@ -29,7 +30,6 @@ function cardStatusCopy(args: {
 }) {
   const { hasThesis, pulse, thesis, investorProfile } = args;
   const aiAssistCopy = aiAssistWeakMessaging(investorProfile);
-  const cadencePressure = Boolean(pulse?.reason?.includes("review cadence"));
   const assumptionLabel = formatAssumptionLabel(pulse?.assumption_label, investorProfile, {
     maxLength: 54,
     sentenceCaseFallback: true,
@@ -37,8 +37,9 @@ function cardStatusCopy(args: {
   const pulseReason = pulse?.reason
     ? tightenInvestorCopy(pulse.reason, investorProfile)
     : null;
-  const quality = classifyThesisQuality(thesis);
-  if (!hasThesis) {
+  const quality = classifyCaseQuality(thesis);
+  const decisionState = getDecisionState({ thesis, pulse });
+  if (decisionState.kind === "needs_written_case" || !hasThesis) {
     return {
       eyebrow: "Missing",
       headline:
@@ -53,38 +54,28 @@ function cardStatusCopy(args: {
     };
   }
 
-  if (pulse?.pulse_status === "review") {
+  if (decisionState.kind === "needs_decision") {
     return {
-      eyebrow: "Review",
-      headline: cadencePressure
-        ? investorProfile === "hearsay_driven"
-          ? "This reason is overdue."
-          : "This thesis is overdue."
-        : `${assumptionLabel} needs a call.`,
+      eyebrow: "Needs decision",
+      headline: `${assumptionLabel} needs a call.`,
       detail: pulseReason || "Something meaningful changed.",
       tone: "text-red-600",
-      subLabel: cadencePressure ? "Cadence missed" : null,
     };
   }
 
-  if (pulse?.pulse_status === "watch") {
+  if (decisionState.kind === "changed") {
     return {
-      eyebrow: "Watch",
-      headline: cadencePressure
-        ? investorProfile === "hearsay_driven"
-          ? "This reason is stale."
-          : "This thesis is stale."
-        : `${assumptionLabel} is under pressure.`,
+      eyebrow: "Changed",
+      headline: `${assumptionLabel} is under pressure.`,
       detail: pulseReason || "Not broken, but no longer quiet.",
       tone: "text-amber-700",
-      subLabel: cadencePressure ? "Cadence drifting" : null,
     };
   }
 
   if (quality.kind === "weak") {
     const assisted = thesis?.source === "ai_assisted";
     return {
-      eyebrow: "Weak",
+      eyebrow: "Calm",
       headline:
         assisted
           ? aiAssistCopy.cardHeadline
@@ -92,34 +83,31 @@ function cardStatusCopy(args: {
             ? "This reason is too soft."
             : "This thesis is too soft.",
       detail: assisted ? aiAssistCopy.cardDetail : "Too vague to trust.",
-      tone: "text-amber-700",
-      subLabel: null,
+      tone: "text-emerald-700",
     };
   }
 
-  if (quality.kind === "stale") {
+  if (quality.kind === "review_overdue") {
     return {
-      eyebrow: "Stale",
+      eyebrow: "Calm",
       headline:
         investorProfile === "hearsay_driven"
-          ? "This reason is stale."
-          : "This thesis is stale.",
+          ? "Reason intact."
+          : "Thesis intact.",
       detail: `${quality.daysOld}d old. Cadence ${quality.cadenceDays}d.`,
-      tone: "text-amber-700",
-      subLabel: "Cadence missed",
+      tone: "text-emerald-700",
     };
   }
 
   if (quality.kind === "workable") {
     return {
-      eyebrow: "Workable",
+      eyebrow: "Calm",
       headline:
         investorProfile === "hearsay_driven"
           ? "The reason works, but it is not sharp yet."
           : "The thesis works, but it is not sharp yet.",
       detail: "Usable now. Still needs tightening.",
-      tone: "text-amber-700",
-      subLabel: null,
+      tone: "text-emerald-700",
     };
   }
 
@@ -131,7 +119,6 @@ function cardStatusCopy(args: {
         : "Thesis intact.",
     detail: "Nothing needs a call right now.",
     tone: "text-emerald-700",
-    subLabel: null,
   };
 }
 
@@ -173,26 +160,20 @@ export function PositionCard({
     investorProfile === "hearsay_driven"
       ? "Write reason"
       : "Write thesis";
-  const quality = classifyThesisQuality(thesis);
-  const pulseStatus = pulse?.pulse_status ?? (thesis ? "intact" : null);
-  const qualityAdjustedStatus =
-    pulseStatus === "intact" && (quality.kind === "weak" || quality.kind === "stale" || quality.kind === "workable")
-      ? "watch"
-      : pulseStatus;
-  const dotColor = qualityAdjustedStatus ? (PULSE_DOT[qualityAdjustedStatus] ?? "bg-border") : "bg-border";
-  const ringClass = qualityAdjustedStatus ? (PULSE_RING[qualityAdjustedStatus] ?? "") : "";
+  const quality = classifyCaseQuality(thesis);
+  const decisionState = getDecisionState({ thesis, pulse });
+  const dotColor = DECISION_DOT[decisionState.kind];
+  const ringClass = DECISION_RING[decisionState.kind] ?? "";
   const qualityChipLabel =
     quality.kind === "sharp"
       ? "Sharp"
-      : quality.kind === "stale"
-        ? "Stale"
+      : quality.kind === "review_overdue"
+        ? "Review overdue"
         : quality.kind === "workable"
           ? "Workable"
           : quality.kind === "weak"
             ? "Weak"
-            : quality.kind === "review"
-              ? "Review"
-              : "Missing";
+            : "Missing";
   const statusCopy = cardStatusCopy({
     hasThesis,
     pulse,
@@ -290,23 +271,18 @@ export function PositionCard({
                   <span className={`font-mono text-[9px] uppercase tracking-[0.12em] px-1.5 py-0.5 ${
                     quality.kind === "sharp"
                       ? "text-emerald-700 bg-emerald-500/10"
-                      : quality.kind === "stale" || quality.kind === "workable" || quality.kind === "weak"
+                      : quality.kind === "review_overdue" || quality.kind === "workable" || quality.kind === "weak"
                         ? "text-amber-700 bg-amber-500/10"
                         : "text-red-600 bg-red-500/10"
                   }`}>
                     {qualityChipLabel}
                   </span>
                 )}
-                {qualityAdjustedStatus && hasThesis && (
+                {hasThesis && (
                   <span className={`h-1.5 w-1.5 rounded-full ${dotColor}`} />
                 )}
               </div>
             </div>
-            {statusCopy.subLabel && (
-              <p className="font-mono text-[10px] uppercase tracking-[0.14em] text-foreground/45">
-                {statusCopy.subLabel}
-              </p>
-            )}
             <p className="font-sans text-[11px] text-foreground/85 leading-relaxed line-clamp-1">
               {statusCopy.headline}
             </p>

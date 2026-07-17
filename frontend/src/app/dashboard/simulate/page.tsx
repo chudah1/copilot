@@ -5,7 +5,7 @@ import { useRouter } from "next/navigation";
 import Link from "next/link";
 import { motion, AnimatePresence } from "framer-motion";
 import { api } from "@/lib/api";
-import { classifyThesisQuality } from "@/lib/thesis-quality";
+import { classifyCaseQuality } from "@/lib/decision-state";
 import { TickerSearch } from "@/components/portfolio/ticker-search";
 import { Button } from "@/components/ui/button";
 import { formatCurrency } from "@/lib/utils";
@@ -40,7 +40,7 @@ function getTradeIntervention(
           (thesis.status === "draft" || thesis.status === "active" || thesis.status === "needs_review"),
       ) ?? null
     : null;
-  const quality = classifyThesisQuality(currentThesis ?? undefined);
+  const quality = classifyCaseQuality(currentThesis ?? undefined);
   const monitorability = getMonitorability(currentThesis);
   const ambiguityNote =
     currentThesis?.interpretation && typeof currentThesis.interpretation.ambiguity_note === "string"
@@ -83,7 +83,7 @@ function getTradeIntervention(
     };
   }
 
-  if (matchingHolding && currentThesis && quality.kind === "stale") {
+  if (matchingHolding && currentThesis && quality.kind === "review_overdue") {
     return {
       tone: "border-amber-500/25 bg-amber-500/6 text-amber-800",
       eyebrow: "Before you add more",

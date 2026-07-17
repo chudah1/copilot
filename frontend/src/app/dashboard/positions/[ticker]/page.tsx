@@ -5,6 +5,7 @@ import { useParams, useRouter, useSearchParams } from "next/navigation";
 import { motion, AnimatePresence } from "framer-motion";
 import { api } from "@/lib/api";
 import { getErrorMessage } from "@/lib/errors";
+import { ageInDays, getCaseReviewPressure } from "@/lib/decision-state";
 import { formatCurrency, formatDate } from "@/lib/utils";
 import { toast } from "sonner";
 import { ThesisCard } from "@/components/thesis/thesis-card";
@@ -50,8 +51,6 @@ import type {
 } from "./position-helpers";
 import {
   cleanTicker,
-  ageInDays,
-  getStalePressure,
   getThesisInsights,
   positionCopy,
   getDecisionPrompt,
@@ -748,7 +747,7 @@ function PositionDetailInner() {
     ? getEventAssumptionLabel(firstPendingEvent, onboardingState?.investor_profile ?? null)
     : null;
   const editorSeedThesis = activeThesis ?? latestInvalidatedThesis ?? null;
-  const stalePressure = activeThesis ? getStalePressure(activeThesis) : null;
+  const stalePressure = getCaseReviewPressure(activeThesis);
   const editorMode: "write" | "first_write" | "tighten" | "rewrite" =
     !activeThesis && latestInvalidatedThesis
       ? "rewrite"

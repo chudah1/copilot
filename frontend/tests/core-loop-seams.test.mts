@@ -1,7 +1,7 @@
 import test from "node:test";
 import assert from "node:assert/strict";
 
-import { classifyThesisQuality } from "../src/lib/thesis-quality.ts";
+import { classifyCaseQuality } from "../src/lib/decision-state.ts";
 import { aiAssistWeakMessaging } from "../src/lib/ai-assisted-thesis.ts";
 import type { Thesis } from "../src/types/index.ts";
 
@@ -44,7 +44,7 @@ function thesis(overrides: Partial<Thesis> = {}): Thesis {
 }
 
 test("ai-assisted thesis with concrete conditions is not weak once monitorability is medium", () => {
-  const result = classifyThesisQuality(thesis(), { now: Date.parse("2026-06-06T00:00:00.000Z") });
+  const result = classifyCaseQuality(thesis(), { now: Date.parse("2026-06-06T00:00:00.000Z") });
   assert.equal(result.kind, "workable");
 });
 

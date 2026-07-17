@@ -2,7 +2,7 @@
 
 import { useState } from "react";
 import { formatDate } from "@/lib/utils";
-import { classifyThesisQuality } from "@/lib/thesis-quality";
+import { classifyCaseQuality } from "@/lib/decision-state";
 import { describeWatchHint } from "@/lib/watch-hints";
 import { aiAssistWeakMessaging } from "@/lib/ai-assisted-thesis";
 import type { Thesis, ThesisDecomposition, MonitoringGap } from "@/types";
@@ -145,11 +145,11 @@ export function ThesisCard({ thesis, decomposition, investorProfile, monitoringG
     .map((hint) => describeWatchHint(hint))
     .filter((d): d is string => Boolean(d));
   const activeSignals = getActiveSignals(decomposition);
-  const quality = classifyThesisQuality(thesis);
+  const quality = classifyCaseQuality(thesis);
   const qualityState =
     quality.kind === "sharp"
       ? "strong"
-      : quality.kind === "workable" || quality.kind === "stale"
+      : quality.kind === "workable" || quality.kind === "review_overdue"
         ? "workable"
         : "weak";
   const qualityHeadline =
@@ -157,11 +157,9 @@ export function ThesisCard({ thesis, decomposition, investorProfile, monitoringG
       ? "Sharp"
       : quality.kind === "workable"
         ? "Workable"
-        : quality.kind === "stale"
-          ? "Stale"
-          : quality.kind === "review"
-            ? "Needs review"
-            : "Weak";
+        : quality.kind === "review_overdue"
+          ? "Review overdue"
+          : "Weak";
   const qualityChecks = [
     {
       label: "Must remain true",
@@ -176,10 +174,10 @@ export function ThesisCard({ thesis, decomposition, investorProfile, monitoringG
     {
       label: "Freshness",
       detail:
-        quality.kind === "stale"
+        quality.kind === "review_overdue"
           ? `${quality.daysOld}d old vs ${quality.cadenceDays}d cadence`
           : `${quality.daysOld}d old`,
-      tone: quality.kind === "stale" ? "text-amber-700" : "text-foreground",
+      tone: quality.kind === "review_overdue" ? "text-amber-700" : "text-foreground",
     },
   ];
   const copy = investorProfile === "thesis_driven"
@@ -194,7 +192,7 @@ export function ThesisCard({ thesis, decomposition, investorProfile, monitoringG
         qualitySummary:
           quality.kind === "sharp"
             ? "Specific enough to rely on."
-            : quality.kind === "stale"
+            : quality.kind === "review_overdue"
               ? "Overdue for refresh."
               : qualityState === "workable"
                 ? "Usable, but still worth sharpening."
@@ -214,7 +212,7 @@ export function ThesisCard({ thesis, decomposition, investorProfile, monitoringG
           qualitySummary:
             quality.kind === "sharp"
               ? "Specific enough to rely on."
-              : quality.kind === "stale"
+              : quality.kind === "review_overdue"
                 ? "Overdue for refresh."
               : qualityState === "workable"
                   ? "Usable, but the story still needs sharpening."
@@ -233,7 +231,7 @@ export function ThesisCard({ thesis, decomposition, investorProfile, monitoringG
           qualitySummary:
             quality.kind === "sharp"
               ? "Specific enough to rely on."
-              : quality.kind === "stale"
+              : quality.kind === "review_overdue"
                 ? "Overdue for refresh."
               : qualityState === "workable"
                   ? "Usable, but still worth sharpening."

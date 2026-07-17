@@ -6,8 +6,10 @@ import { formatCurrency } from "@/lib/utils";
 import { CheckNowButton } from "@/components/monitoring/check-now-button";
 import type { CheckNowResponse, Holding, HoldingPulse, Thesis } from "@/types";
 import { WatchReceipt } from "@/components/portfolio/watch-receipt";
-import { cleanTicker, ageInDays } from "./position-helpers";
-import type { TabId, getStalePressure } from "./position-helpers";
+import { ageInDays, getDecisionState } from "@/lib/decision-state";
+import type { CaseReviewPressure } from "@/lib/decision-state";
+import { cleanTicker } from "./position-helpers";
+import type { TabId } from "./position-helpers";
 
 interface PositionHeaderProps {
   holding: Holding;
@@ -19,7 +21,7 @@ interface PositionHeaderProps {
   value: number;
   pnl: number;
   pnlPct: string;
-  stalePressure: ReturnType<typeof getStalePressure>;
+  stalePressure: CaseReviewPressure | null;
   tabs: { id: TabId; label: string; badge?: number | string }[];
   activeTab: TabId;
   unreviewedEvents: number;
@@ -36,20 +38,13 @@ export function PositionHeader({
   stalePressure, tabs, activeTab, unreviewedEvents, deleteConfirming,
   deleteLoading, onDelete, onSetDeleteConfirming, onCheckNowComplete, onSelectTab,
 }: PositionHeaderProps) {
-  const decisionStatus = !activeThesis
-    ? "Needs a written case"
-    : pulse?.pulse_status === "review"
-      ? "Needs a decision"
-      : pulse?.pulse_status === "watch"
-        ? "Changed"
-        : "Calm";
-  const decisionStatusDot = !activeThesis
-    ? "bg-border"
-    : pulse?.pulse_status === "review"
-      ? "bg-red-500"
-      : pulse?.pulse_status === "watch"
-        ? "bg-amber-500"
-        : "bg-emerald-500";
+  const decisionState = getDecisionState({ thesis: activeThesis, pulse });
+  const decisionStatusDot = {
+    needs_written_case: "bg-border",
+    needs_decision: "bg-red-500",
+    changed: "bg-amber-500",
+    calm: "bg-emerald-500",
+  }[decisionState.kind];
 
   return (
       <div className="sticky top-[52px] z-20 bg-background border-b border-border/60">
@@ -143,7 +138,7 @@ export function PositionHeader({
             <div className="flex flex-wrap items-center gap-2">
               <span className={`h-1.5 w-1.5 rounded-full ${decisionStatusDot}`} />
               <span className="font-mono text-[10px] uppercase tracking-[0.2em] text-muted-foreground">
-                {decisionStatus}
+                {decisionState.label}
               </span>
             </div>
             {activeThesis && (

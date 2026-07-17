@@ -14,7 +14,7 @@ import useSWR from "swr";
 import { api, fetcher } from "@/lib/api";
 import { formatAssumptionLabel } from "@/lib/assumption-label";
 import { getErrorMessage } from "@/lib/errors";
-import { classifyThesisQuality } from "@/lib/thesis-quality";
+import { classifyCaseQuality, getDecisionState } from "@/lib/decision-state";
 import { formatCurrency, formatPercent } from "@/lib/utils";
 import { OnboardingBanner } from "@/components/onboarding/onboarding-banner";
 import { QuickAddHolding } from "@/components/portfolio/quick-add-holding";
@@ -461,10 +461,10 @@ function DashboardInner() {
     missingHolding,
     nextUpcomingEarnings: nearTermEarnings,
   });
-  const thesisQualityStats = useMemo(() => {
-    const counts = { missing: 0, review: 0, weak: 0, stale: 0, workable: 0, sharp: 0 };
+  const caseQualityStats = useMemo(() => {
+    const counts = { missing: 0, weak: 0, review_overdue: 0, workable: 0, sharp: 0 };
     for (const holding of holdings ?? []) {
-      const quality = classifyThesisQuality(thesesByHolding[holding.id]);
+      const quality = classifyCaseQuality(thesesByHolding[holding.id]);
       counts[quality.kind] += 1;
     }
     return counts;
@@ -473,47 +473,43 @@ function DashboardInner() {
     if (!holdings) return null;
     return [...holdings]
       .sort((a, b) => {
-        const qualityDiff = classifyThesisQuality(thesesByHolding[a.id]).rank - classifyThesisQuality(thesesByHolding[b.id]).rank;
+        const qualityDiff = classifyCaseQuality(thesesByHolding[a.id]).rank - classifyCaseQuality(thesesByHolding[b.id]).rank;
         if (qualityDiff !== 0) return qualityDiff;
         return (b.current_value ?? 0) - (a.current_value ?? 0);
       })[0] ?? null;
   }, [holdings, thesesByHolding]);
   const weakestQuality = weakestHolding
-    ? classifyThesisQuality(thesesByHolding[weakestHolding.id])
+    ? classifyCaseQuality(thesesByHolding[weakestHolding.id])
     : null;
-  const thesisQualityHeadline =
-    thesisQualityStats.missing > 0
+  const caseQualityHeadline =
+    caseQualityStats.missing > 0
       ? weakestHolding
         ? investorProfile === "hearsay_driven"
           ? `${cleanTicker(weakestHolding.ticker)} has no reason yet.`
           : `${cleanTicker(weakestHolding.ticker)} has no thesis yet.`
         : investorProfile === "hearsay_driven"
-          ? `${thesisQualityStats.missing} ${thesisQualityStats.missing === 1 ? "position has" : "positions have"} no reason yet.`
-          : `${thesisQualityStats.missing} ${thesisQualityStats.missing === 1 ? "position has" : "positions have"} no thesis yet.`
-      : thesisQualityStats.review > 0
-        ? `${thesisQualityStats.review} ${thesisQualityStats.review === 1 ? "thesis needs" : "theses need"} a fresh decision.`
-      : thesisQualityStats.weak > 0
-        ? `${thesisQualityStats.weak} ${thesisQualityStats.weak === 1 ? "thesis is" : "theses are"} still too fuzzy.`
-        : thesisQualityStats.stale > 0
-          ? `${thesisQualityStats.stale} ${thesisQualityStats.stale === 1 ? "thesis is" : "theses are"} drifting stale.`
-          : thesisQualityStats.workable > 0
-            ? `${thesisQualityStats.workable} ${thesisQualityStats.workable === 1 ? "thesis is" : "theses are"} usable but not sharp yet.`
+          ? `${caseQualityStats.missing} ${caseQualityStats.missing === 1 ? "position has" : "positions have"} no reason yet.`
+          : `${caseQualityStats.missing} ${caseQualityStats.missing === 1 ? "position has" : "positions have"} no thesis yet.`
+      : caseQualityStats.weak > 0
+        ? `${caseQualityStats.weak} ${caseQualityStats.weak === 1 ? "thesis is" : "theses are"} still too fuzzy.`
+        : caseQualityStats.review_overdue > 0
+          ? `${caseQualityStats.review_overdue} ${caseQualityStats.review_overdue === 1 ? "thesis is" : "theses are"} overdue for a fresh read.`
+          : caseQualityStats.workable > 0
+            ? `${caseQualityStats.workable} ${caseQualityStats.workable === 1 ? "thesis is" : "theses are"} usable but not sharp yet.`
             : "Your written thinking looks sharp across the portfolio.";
-  const thesisQualityDetail =
-    thesisQualityStats.missing > 0
+  const caseQualityDetail =
+    caseQualityStats.missing > 0
       ? investorProfile === "hearsay_driven"
         ? "Write the reason, then monitoring can judge it."
         : "Write the thesis, then monitoring can judge it."
-      : thesisQualityStats.review > 0
-        ? "These positions were tested and still need a verdict."
-      : thesisQualityStats.weak > 0
+      : caseQualityStats.weak > 0
         ? "These theses are still too fuzzy to trust under pressure."
-      : thesisQualityStats.stale > 0
-        ? "Nothing broke yet, but stale reasoning lowers the next decision quality."
-        : thesisQualityStats.workable > 0
+      : caseQualityStats.review_overdue > 0
+        ? "Nothing changed, but old reasoning is harder to rely on when the next decision arrives."
+        : caseQualityStats.workable > 0
           ? "Usable, but still not crisp enough to trust fully under pressure."
           : "Most positions now have explicit, current thinking behind them."
-  const thesisQualityCta = weakestHolding
+  const caseQualityCta = weakestHolding
     ? {
         href: `/dashboard/positions/${weakestHolding.ticker}`,
         label:
@@ -521,9 +517,7 @@ function DashboardInner() {
             ? investorProfile === "hearsay_driven"
               ? `Write ${cleanTicker(weakestHolding.ticker)} →`
               : `Write ${cleanTicker(weakestHolding.ticker)} →`
-            : weakestQuality?.kind === "review"
-              ? `Review ${cleanTicker(weakestHolding.ticker)} →`
-            : weakestQuality?.kind === "stale"
+            : weakestQuality?.kind === "review_overdue"
               ? `Refresh ${cleanTicker(weakestHolding.ticker)} →`
             : weakestQuality?.kind === "weak" || weakestQuality?.kind === "workable"
               ? `Tighten ${cleanTicker(weakestHolding.ticker)} →`
@@ -537,12 +531,14 @@ function DashboardInner() {
       const pulseA = pulseByHolding[a.id];
       const pulseB = pulseByHolding[b.id];
       const groupOrder = (holding: Holding, pulse?: PortfolioPulse["pulses"][number]) => {
-        if (pulse?.has_thesis && pulse.pulse_status === "review") return 0;
-        if (pulse?.has_thesis && pulse.pulse_status === "watch") return 1;
-        if (!thesesByHolding[holding.id]) return 2;
-        const quality = classifyThesisQuality(thesesByHolding[holding.id]).kind;
+        const thesis = thesesByHolding[holding.id];
+        const decisionState = getDecisionState({ thesis, pulse });
+        if (decisionState.kind === "needs_decision") return 0;
+        if (decisionState.kind === "changed") return 1;
+        if (decisionState.kind === "needs_written_case") return 2;
+        const quality = classifyCaseQuality(thesis).kind;
         if (quality === "weak") return 3;
-        if (quality === "stale" || quality === "review") return 4;
+        if (quality === "review_overdue") return 4;
         if (quality === "workable") return 5;
         return 6;
       };
@@ -741,14 +737,14 @@ function DashboardInner() {
                     <CircleAlert className="mt-0.5 h-4 w-4 shrink-0 text-primary" />
                     <div className="space-y-1">
                       <p className="font-sans text-sm leading-relaxed text-foreground/85">
-                        {thesisQualityHeadline}
+                        {caseQualityHeadline}
                       </p>
                       <p className="font-sans text-xs leading-relaxed text-muted-foreground">
-                        {thesisQualityDetail}
+                        {caseQualityDetail}
                       </p>
-                      {thesisQualityCta && (
-                        <Link href={thesisQualityCta.href} className="inline-flex items-center gap-1.5 font-mono text-[10px] uppercase tracking-[0.14em] text-primary hover:text-primary/75">
-                          {thesisQualityCta.label.replace(" →", "")}
+                      {caseQualityCta && (
+                        <Link href={caseQualityCta.href} className="inline-flex items-center gap-1.5 font-mono text-[10px] uppercase tracking-[0.14em] text-primary hover:text-primary/75">
+                          {caseQualityCta.label.replace(" →", "")}
                           <ArrowRight className="h-3 w-3" />
                         </Link>
                       )}

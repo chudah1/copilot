@@ -1,7 +1,7 @@
 import test from "node:test";
 import assert from "node:assert/strict";
 
-import { classifyThesisQuality } from "../src/lib/thesis-quality.ts";
+import { classifyCaseQuality } from "../src/lib/decision-state.ts";
 import type { Thesis } from "../src/types/index.ts";
 
 function thesis(overrides: Partial<Thesis> = {}): Thesis {
@@ -37,17 +37,17 @@ function thesis(overrides: Partial<Thesis> = {}): Thesis {
 const now = Date.parse("2026-06-03T00:00:00.000Z");
 
 test("classifies missing thesis", () => {
-  const result = classifyThesisQuality(undefined, { now });
+  const result = classifyCaseQuality(undefined, { now });
   assert.equal(result.kind, "missing");
 });
 
-test("classifies thesis needing review", () => {
-  const result = classifyThesisQuality(thesis({ status: "needs_review" }), { now });
-  assert.equal(result.kind, "review");
+test("keeps decision state out of case quality", () => {
+  const result = classifyCaseQuality(thesis({ status: "needs_review" }), { now });
+  assert.equal(result.kind, "sharp");
 });
 
 test("classifies vague thesis as weak", () => {
-  const result = classifyThesisQuality(
+  const result = classifyCaseQuality(
     thesis({
       interpretation: {
         labels: ["theme"],
@@ -64,19 +64,19 @@ test("classifies vague thesis as weak", () => {
   assert.equal(result.kind, "weak");
 });
 
-test("classifies stale thesis outside cadence", () => {
-  const result = classifyThesisQuality(
+test("classifies a case overdue for review", () => {
+  const result = classifyCaseQuality(
     thesis({
       review_cadence_days: 14,
       updated_at: "2026-04-20T00:00:00.000Z",
     }),
     { now },
   );
-  assert.equal(result.kind, "stale");
+  assert.equal(result.kind, "review_overdue");
 });
 
 test("classifies medium-monitorability thesis as workable, not sharp", () => {
-  const result = classifyThesisQuality(
+  const result = classifyCaseQuality(
     thesis({
       interpretation: {
         labels: ["growth"],
@@ -92,6 +92,6 @@ test("classifies medium-monitorability thesis as workable, not sharp", () => {
 });
 
 test("classifies fully explicit thesis as sharp", () => {
-  const result = classifyThesisQuality(thesis(), { now });
+  const result = classifyCaseQuality(thesis(), { now });
   assert.equal(result.kind, "sharp");
 });

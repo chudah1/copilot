@@ -7,6 +7,7 @@ import type {
 } from "@/types";
 import { describeWatchHint as baseDescribeWatchHint } from "@/lib/watch-hints";
 import { aiAssistWeakMessaging } from "@/lib/ai-assisted-thesis";
+import { getCaseReviewPressure } from "@/lib/decision-state";
 
 // Pure presentational helpers + local types extracted from the position
 // page to shrink the god-component. No hooks/state — unit-testable in isolation.
@@ -25,54 +26,6 @@ export interface NextStepNotice {
 
 export function cleanTicker(ticker: string) {
   return ticker.replace(/_US_EQ$/, "").replace(/_EQ$/, "");
-}
-
-export function ageInDays(dateString: string) {
-  const now = Date.now();
-  const then = new Date(dateString).getTime();
-  return Math.max(0, Math.floor((now - then) / (1000 * 60 * 60 * 24)));
-}
-
-export function getStalePressure(thesis: Thesis | undefined) {
-  if (!thesis) return null;
-
-  const daysOld = ageInDays(thesis.updated_at);
-  const cadenceDays = Math.max(thesis.review_cadence_days || 30, 14);
-  const monitorability =
-    thesis.interpretation && typeof thesis.interpretation.monitorability === "string"
-      ? thesis.interpretation.monitorability
-      : null;
-
-  let watchThreshold = Math.max(cadenceDays, 21);
-  let reviewThreshold = Math.max(cadenceDays * 3, 120);
-
-  if (thesis.confidence === "high") {
-    watchThreshold = Math.max(watchThreshold - 7, 21);
-    reviewThreshold = Math.max(reviewThreshold - 14, 90);
-  }
-
-  if (monitorability === "low") {
-    watchThreshold = Math.max(watchThreshold - 7, 14);
-    reviewThreshold = Math.max(reviewThreshold - 14, 75);
-  }
-
-  if (daysOld >= reviewThreshold) {
-    return {
-      level: "review" as const,
-      daysOld,
-      cadenceDays,
-    };
-  }
-
-  if (daysOld >= watchThreshold) {
-    return {
-      level: "watch" as const,
-      daysOld,
-      cadenceDays,
-    };
-  }
-
-  return null;
 }
 
 export function getThesisInsights(
@@ -101,7 +54,7 @@ export function getThesisInsights(
   const interpretation = thesis.interpretation ?? {};
   const monitorability = typeof interpretation.monitorability === "string" ? interpretation.monitorability : "medium";
   const ambiguity = typeof interpretation.ambiguity_note === "string" ? interpretation.ambiguity_note : "";
-  const stalePressure = getStalePressure(thesis);
+  const stalePressure = getCaseReviewPressure(thesis);
   const latestEvent = events[0];
   const isAiAssist = thesis.source === "ai_assisted";
 
@@ -238,7 +191,7 @@ export function getDecisionPrompt(
     thesis.interpretation && typeof thesis.interpretation.ambiguity_note === "string"
       ? thesis.interpretation.ambiguity_note
       : "";
-  const stalePressure = getStalePressure(thesis);
+  const stalePressure = getCaseReviewPressure(thesis);
   const unresolvedEvent = events.find((event) => !event.review_action);
 
   if (thesis.status === "needs_review" && unresolvedEvent) {
