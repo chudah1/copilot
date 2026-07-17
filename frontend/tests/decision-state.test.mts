@@ -34,12 +34,16 @@ function makeThesis(overrides: Partial<Thesis> = {}): Thesis {
   };
 }
 
-function makePulse(status: HoldingPulse["pulse_status"]): HoldingPulse {
+function makePulse(
+  status: HoldingPulse["pulse_status"],
+  basis: HoldingPulse["pulse_basis"] = status === "intact" ? "none" : "evidence",
+): HoldingPulse {
   return {
     holding_id: "holding-1",
     ticker: "TEST",
     name: "Test Holding",
     pulse_status: status,
+    pulse_basis: basis,
     urgency_score: 0,
     reason: "",
     assumption_label: null,
@@ -62,10 +66,22 @@ test("decision state precedence is missing, decision, changed, calm", () => {
   assert.equal(getDecisionState({ thesis: makeThesis(), pulse: makePulse("intact") }).kind, "calm");
 });
 
+test("decision priority puts unresolved evidence before missing writing", () => {
+  assert.equal(getDecisionState({ thesis: makeThesis(), pulse: makePulse("review") }).priority, 0);
+  assert.equal(getDecisionState({ thesis: makeThesis(), pulse: makePulse("watch") }).priority, 1);
+  assert.equal(getDecisionState({}).priority, 2);
+  assert.equal(getDecisionState({ thesis: makeThesis() }).priority, 3);
+});
+
 test("an overdue case remains calm when no evidence changed", () => {
   const thesis = makeThesis({ updated_at: "2026-01-01T12:00:00Z" });
   assert.equal(getDecisionState({ thesis, pulse: makePulse("intact") }).kind, "calm");
   assert.equal(classifyCaseQuality(thesis, { now: NOW }).kind, "review_overdue");
+});
+
+test("review timing from the pulse API does not become changed evidence", () => {
+  assert.equal(getDecisionState({ thesis: makeThesis(), pulse: makePulse("watch", "case_review") }).kind, "calm");
+  assert.equal(getDecisionState({ thesis: makeThesis(), pulse: makePulse("review", "case_review") }).kind, "calm");
 });
 
 test("review pressure uses the shared watch and review thresholds", () => {

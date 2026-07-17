@@ -639,6 +639,7 @@ async def portfolio_pulse(
                 "ticker": p.ticker,
                 "name": p.name,
                 "pulse_status": p.pulse_status,
+                "pulse_basis": p.pulse_basis,
                 "reason": p.reason,
                 "assumption_label": p.assumption_label,
                 "latest_event_summary": p.latest_event_summary,

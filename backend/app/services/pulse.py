@@ -21,6 +21,7 @@ class HoldingPulse:
     ticker: str
     name: str
     pulse_status: str  # intact | watch | review
+    pulse_basis: str  # evidence | case_review | missing_case | none
     reason: str
     latest_event_summary: str | None
     days_since_thesis_update: int | None
@@ -395,6 +396,7 @@ async def compute_portfolio_pulse(user_id: uuid.UUID, db: AsyncSession) -> tuple
                 ticker=holding.ticker,
                 name=holding.name,
                 pulse_status="review",
+                pulse_basis="missing_case",
                 reason="No thesis — this position has no documented reason to exist.",
                 latest_event_summary=None,
                 days_since_thesis_update=None,
@@ -435,6 +437,7 @@ async def compute_portfolio_pulse(user_id: uuid.UUID, db: AsyncSession) -> tuple
                 ticker=holding.ticker,
                 name=holding.name,
                 pulse_status=pulse_status,
+                pulse_basis="evidence",
                 reason=latest_summary or (
                     f"{latest_assumption} needs a decision."
                     if latest_assumption
@@ -457,13 +460,16 @@ async def compute_portfolio_pulse(user_id: uuid.UUID, db: AsyncSession) -> tuple
                 sources_count=sources_count_by_thesis.get(thesis.id),
             ))
         elif "warning" in severities or stale_status in {"watch", "review"}:
-            pulse_status = stale_status or "watch"
-            reason = latest_summary or stale_reason or f"Thesis is {days_since_update} days old — consider reviewing."
+            has_changed_evidence = "warning" in severities
+            pulse_status = "watch" if has_changed_evidence else stale_status or "watch"
+            reason = latest_summary if has_changed_evidence else stale_reason
+            reason = reason or f"Thesis is {days_since_update} days old — consider reviewing."
             pulses.append(HoldingPulse(
                 holding_id=holding.id,
                 ticker=holding.ticker,
                 name=holding.name,
                 pulse_status=pulse_status,
+                pulse_basis="evidence" if has_changed_evidence else "case_review",
                 reason=reason,
                 assumption_label=latest_assumption,
                 latest_event_summary=latest_summary,
@@ -488,6 +494,7 @@ async def compute_portfolio_pulse(user_id: uuid.UUID, db: AsyncSession) -> tuple
                 ticker=holding.ticker,
                 name=holding.name,
                 pulse_status=pulse_status,
+                pulse_basis="none",
                 reason="Nothing meaningful changed — your assumptions still hold.",
                 assumption_label=latest_assumption,
                 latest_event_summary=latest_summary,

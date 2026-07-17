@@ -365,6 +365,7 @@ export interface HoldingPulse {
   ticker: string;
   name: string;
   pulse_status: "intact" | "watch" | "review";
+  pulse_basis: "evidence" | "case_review" | "missing_case" | "none";
   reason: string;
   assumption_label: string | null;
   latest_event_summary: string | null;

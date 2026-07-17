@@ -38,13 +38,13 @@ export function getDecisionState(args: {
 }): DecisionState {
   const { thesis, pulse } = args;
   if (!thesis?.why_own_it.trim()) {
-    return { kind: "needs_written_case", label: "Needs a written case", priority: 0 };
+    return { kind: "needs_written_case", label: "Needs a written case", priority: 2 };
   }
-  if (pulse?.pulse_status === "review" || thesis.status === "needs_review") {
-    return { kind: "needs_decision", label: "Needs a decision", priority: 1 };
+  if ((pulse?.pulse_basis !== "case_review" && pulse?.pulse_status === "review") || thesis.status === "needs_review") {
+    return { kind: "needs_decision", label: "Needs a decision", priority: 0 };
   }
-  if (pulse?.pulse_status === "watch") {
-    return { kind: "changed", label: "Changed", priority: 2 };
+  if (pulse?.pulse_basis !== "case_review" && pulse?.pulse_status === "watch") {
+    return { kind: "changed", label: "Changed", priority: 1 };
   }
   return { kind: "calm", label: "Calm", priority: 3 };
 }

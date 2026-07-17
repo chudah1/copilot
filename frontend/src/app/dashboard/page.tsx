@@ -14,7 +14,8 @@ import useSWR from "swr";
 import { api, fetcher } from "@/lib/api";
 import { formatAssumptionLabel } from "@/lib/assumption-label";
 import { getErrorMessage } from "@/lib/errors";
-import { classifyCaseQuality, getDecisionState } from "@/lib/decision-state";
+import { buildDecisionInbox } from "@/lib/decision-inbox";
+import type { DecisionInboxEntry } from "@/lib/decision-inbox";
 import { formatCurrency, formatPercent } from "@/lib/utils";
 import { OnboardingBanner } from "@/components/onboarding/onboarding-banner";
 import { QuickAddHolding } from "@/components/portfolio/quick-add-holding";
@@ -90,7 +91,6 @@ function dashboardStateCopy(
   recentReview: RecentReviewBannerState | null,
 ) {
   const topAttentionLabel = formatAssumptionLabel(topAttention?.assumption_label, investorProfile, { maxLength: 72 });
-  const topAttentionIsCadencePressure = Boolean(topAttention?.reason?.includes("review cadence"));
   if (counts.review > 0) {
     return {
       tone: "border-amber-500/25 bg-amber-500/8",
@@ -101,9 +101,7 @@ function dashboardStateCopy(
           : `${counts.review} position${counts.review > 1 ? "s need" : " needs"} a call.`,
       body:
         topAttention
-          ? topAttentionIsCadencePressure
-            ? `${cleanTicker(topAttention.ticker)} first. ${topAttentionLabel} is overdue.${recentReview ? ` ${cleanTicker(recentReview.ticker)} cleared.` : ""}`
-            : `${cleanTicker(topAttention.ticker)} first. ${topAttentionLabel} is closest to a call.${recentReview ? ` ${cleanTicker(recentReview.ticker)} cleared.` : ""}`
+          ? `${cleanTicker(topAttention.ticker)} first. ${topAttentionLabel} is closest to a call.${recentReview ? ` ${cleanTicker(recentReview.ticker)} cleared.` : ""}`
           : counts.watch > 0
             ? `${counts.watch} more position${counts.watch > 1 ? "s are" : " is"} on watch behind it.`
             : "Start with the review items.",
@@ -119,9 +117,7 @@ function dashboardStateCopy(
           ? `${counts.watch} position${counts.watch > 1 ? "s need" : " needs"} a look.`
           : `${counts.watch} position${counts.watch > 1 ? "s need" : " needs"} a look.`,
       body: topAttention
-        ? topAttentionIsCadencePressure
-          ? `${cleanTicker(topAttention.ticker)} first. ${topAttentionLabel} is overdue.${recentReview ? ` ${cleanTicker(recentReview.ticker)} cleared.` : ""}`
-          : `${cleanTicker(topAttention.ticker)} first. ${topAttentionLabel} has the freshest pressure.${recentReview ? ` ${cleanTicker(recentReview.ticker)} cleared.` : ""}`
+        ? `${cleanTicker(topAttention.ticker)} first. ${topAttentionLabel} has the freshest pressure.${recentReview ? ` ${cleanTicker(recentReview.ticker)} cleared.` : ""}`
         : "Nothing looks broken. These names still need a look.",
     };
   }
@@ -154,53 +150,45 @@ function dashboardStateCopy(
 }
 
 function dashboardStateCta(args: {
-  needsAttention: PortfolioPulse["pulses"];
-  holdings: Holding[];
-  missingHolding: Holding | null;
-  nextUpcomingEarnings: UpcomingEarnings | null;
+  primaryEntry: DecisionInboxEntry | null;
+  nearTermEarnings: UpcomingEarnings | null;
 }) {
-  const { needsAttention, holdings, missingHolding, nextUpcomingEarnings } = args;
-  const topReview = needsAttention.find((pulse) => pulse.pulse_status === "review") ?? null;
-  if (topReview) {
+  const { primaryEntry, nearTermEarnings } = args;
+  if (!primaryEntry) return null;
+  const ticker = primaryEntry.holding.ticker;
+
+  if (primaryEntry.decisionState.kind === "needs_decision") {
     return {
-      href: `/dashboard/positions/${topReview.ticker}`,
-      label: `Review ${cleanTicker(topReview.ticker)} →`,
+      href: `/dashboard/positions/${ticker}`,
+      label: `Review ${cleanTicker(ticker)} →`,
     };
   }
 
-  const topWatch = needsAttention.find((pulse) => pulse.pulse_status === "watch") ?? null;
-  if (topWatch) {
+  if (primaryEntry.decisionState.kind === "changed") {
     return {
-      href: `/dashboard/positions/${topWatch.ticker}`,
-      label: `Open ${cleanTicker(topWatch.ticker)} →`,
+      href: `/dashboard/positions/${ticker}`,
+      label: `Open ${cleanTicker(ticker)} →`,
     };
   }
 
-  if (missingHolding) {
+  if (primaryEntry.decisionState.kind === "needs_written_case") {
     return {
-      href: `/dashboard/positions/${missingHolding.ticker}?source=dashboard_blind_spot`,
-      label: `Write ${cleanTicker(missingHolding.ticker)} →`,
+      href: `/dashboard/positions/${ticker}?source=dashboard_blind_spot`,
+      label: `Write ${cleanTicker(ticker)} →`,
     };
   }
 
-  if (nextUpcomingEarnings) {
+  if (nearTermEarnings?.holding_id === primaryEntry.holding.id) {
     return {
-      href: `/dashboard/positions/${nextUpcomingEarnings.ticker}`,
-      label: `Open ${cleanTicker(nextUpcomingEarnings.ticker)} before earnings →`,
+      href: `/dashboard/positions/${ticker}`,
+      label: `Open ${cleanTicker(ticker)} before earnings →`,
     };
   }
 
-  const largestHolding = holdings
-    .slice()
-    .sort((a, b) => (b.current_value ?? 0) - (a.current_value ?? 0))[0] ?? null;
-  if (largestHolding) {
-    return {
-      href: `/dashboard/positions/${largestHolding.ticker}`,
-      label: `Open ${cleanTicker(largestHolding.ticker)} →`,
-    };
-  }
-
-  return null;
+  return {
+    href: `/dashboard/positions/${ticker}`,
+    label: `Open ${cleanTicker(ticker)} →`,
+  };
 }
 
 function isRecentIsoDate(value: string | null | undefined, days: number) {
@@ -385,10 +373,13 @@ function DashboardInner() {
   };
 
   // ── Derived state ─────────────────────────────────────────────────────
-  const thesesByHolding = useMemo(() => {
-    if (!currentTheses) return {};
-    return Object.fromEntries(currentTheses.map((t) => [t.holding_id, t]));
-  }, [currentTheses]);
+  const decisionInbox = useMemo(() => buildDecisionInbox({
+    holdings: holdings ?? [],
+    theses: currentTheses ?? [],
+    pulses: pulse?.pulses ?? [],
+    upcomingEarnings,
+  }), [holdings, currentTheses, pulse, upcomingEarnings]);
+  const thesesByHolding = decisionInbox.thesesByHoldingId;
 
   const hasLivePrices = Object.keys(livePrices).length > 0;
   const liveTotalValue = useMemo(() => {
@@ -400,87 +391,27 @@ function DashboardInner() {
   const livePnl = liveTotalValue != null && summary ? liveTotalValue - summary.total_cost : null;
   const livePnlPct = livePnl != null && summary && summary.total_cost > 0 ? (livePnl / summary.total_cost) * 100 : null;
 
-  const pulseByHolding = useMemo(() => {
-    if (!pulse?.pulses) return {};
-    return Object.fromEntries(pulse.pulses.map((p) => [p.holding_id, p]));
-  }, [pulse]);
-
-  const earningsByHolding = useMemo(() => {
-    if (!upcomingEarnings) return {};
-    return Object.fromEntries(upcomingEarnings.map((e) => [e.holding_id, e]));
-  }, [upcomingEarnings]);
-
-  // Attention = real monitoring signals only (watch/review from events), not "no thesis" bookkeeping
-  const needsAttention = useMemo(() => {
-    if (!pulse?.pulses) return [];
-    return pulse.pulses
-      .filter(
-        (p) => (p.pulse_status === "review" || p.pulse_status === "watch") && p.has_thesis,
-      )
-      .sort((a, b) => b.urgency_score - a.urgency_score);
-  }, [pulse]);
-
-  const reviewCount = useMemo(() => {
-    return needsAttention.filter((p) => p.pulse_status === "review").length;
-  }, [needsAttention]);
-
-  const missingThesisCount = useMemo(
-    () => (holdings ?? []).filter((h) => !thesesByHolding[h.id]).length,
-    [holdings, thesesByHolding],
-  );
-  const nextUpcomingEarnings = useMemo(() => {
-    if (!upcomingEarnings.length) return null;
-    return [...upcomingEarnings].sort((a, b) => a.days_until - b.days_until)[0] ?? null;
-  }, [upcomingEarnings]);
-  // Only frame earnings as "the next decision point" when they're actually near
-  // term — surfacing one 58 days out as the headline reads as noise.
-  const EARNINGS_HORIZON_DAYS = 21;
-  const nearTermEarnings =
-    nextUpcomingEarnings && nextUpcomingEarnings.days_until <= EARNINGS_HORIZON_DAYS
-      ? nextUpcomingEarnings
-      : null;
-  // Same horizon for the footer calendar — don't list earnings weeks out as
-  // "upcoming"; they're not actionable yet.
-  const visibleEarnings = upcomingEarnings.filter((e) => e.days_until <= EARNINGS_HORIZON_DAYS);
+  const pulseByHolding = decisionInbox.pulsesByHoldingId;
+  const earningsByHolding = decisionInbox.earningsByHoldingId;
+  const needsAttention = decisionInbox.attentionEntries.flatMap((entry) => entry.pulse ? [entry.pulse] : []);
+  const reviewCount = decisionInbox.counts.needsDecision;
+  const missingThesisCount = decisionInbox.counts.needsWrittenCase;
+  const nearTermEarnings = decisionInbox.nearTermEarnings;
+  const visibleEarnings = decisionInbox.visibleEarnings;
   const dashboardState = dashboardStateCopy(
     onboardingState?.investor_profile ?? null,
-    { review: reviewCount, watch: needsAttention.filter((p) => p.pulse_status === "watch").length, missing: missingThesisCount },
+    { review: reviewCount, watch: decisionInbox.counts.changed, missing: missingThesisCount },
     nearTermEarnings,
     needsAttention[0] ?? null,
     recentReviewBanner,
   );
-  const missingHolding = useMemo(() => {
-    if (!holdings) return null;
-    return holdings
-      .filter((holding) => !thesesByHolding[holding.id])
-      .sort((a, b) => (b.current_value ?? 0) - (a.current_value ?? 0))[0] ?? null;
-  }, [holdings, thesesByHolding]);
   const dashboardStatePrimaryCta = dashboardStateCta({
-    needsAttention,
-    holdings: holdings ?? [],
-    missingHolding,
-    nextUpcomingEarnings: nearTermEarnings,
+    primaryEntry: decisionInbox.primaryEntry,
+    nearTermEarnings,
   });
-  const caseQualityStats = useMemo(() => {
-    const counts = { missing: 0, weak: 0, review_overdue: 0, workable: 0, sharp: 0 };
-    for (const holding of holdings ?? []) {
-      const quality = classifyCaseQuality(thesesByHolding[holding.id]);
-      counts[quality.kind] += 1;
-    }
-    return counts;
-  }, [holdings, thesesByHolding]);
-  const weakestHolding = useMemo(() => {
-    if (!holdings) return null;
-    return [...holdings]
-      .sort((a, b) => {
-        const qualityDiff = classifyCaseQuality(thesesByHolding[a.id]).rank - classifyCaseQuality(thesesByHolding[b.id]).rank;
-        if (qualityDiff !== 0) return qualityDiff;
-        return (b.current_value ?? 0) - (a.current_value ?? 0);
-      })[0] ?? null;
-  }, [holdings, thesesByHolding]);
-  const weakestQuality = weakestHolding
-    ? classifyCaseQuality(thesesByHolding[weakestHolding.id])
-    : null;
+  const caseQualityStats = decisionInbox.caseQualityCounts;
+  const weakestHolding = decisionInbox.weakestCaseEntry?.holding ?? null;
+  const weakestQuality = decisionInbox.weakestCaseEntry?.caseQuality ?? null;
   const caseQualityHeadline =
     caseQualityStats.missing > 0
       ? weakestHolding
@@ -525,30 +456,7 @@ function DashboardInner() {
       }
     : null;
 
-  const sortedHoldings = useMemo(() => {
-    if (!holdings) return [];
-    return [...holdings].sort((a, b) => {
-      const pulseA = pulseByHolding[a.id];
-      const pulseB = pulseByHolding[b.id];
-      const groupOrder = (holding: Holding, pulse?: PortfolioPulse["pulses"][number]) => {
-        const thesis = thesesByHolding[holding.id];
-        const decisionState = getDecisionState({ thesis, pulse });
-        if (decisionState.kind === "needs_decision") return 0;
-        if (decisionState.kind === "changed") return 1;
-        if (decisionState.kind === "needs_written_case") return 2;
-        const quality = classifyCaseQuality(thesis).kind;
-        if (quality === "weak") return 3;
-        if (quality === "review_overdue") return 4;
-        if (quality === "workable") return 5;
-        return 6;
-      };
-      const groupDiff = groupOrder(a, pulseA) - groupOrder(b, pulseB);
-      if (groupDiff !== 0) return groupDiff;
-      const urgencyDiff = (pulseB?.urgency_score ?? 0) - (pulseA?.urgency_score ?? 0);
-      if (urgencyDiff !== 0) return urgencyDiff;
-      return (b.current_value ?? 0) - (a.current_value ?? 0);
-    });
-  }, [holdings, pulseByHolding, thesesByHolding]);
+  const sortedHoldings = decisionInbox.entries.map((entry) => entry.holding);
 
   const recentActivation = isRecentIsoDate(onboardingState?.wizard_completed_at, 7) || isRecentIsoDate(onboardingState?.drafts_reviewed_at, 7);
   const activationSource = searchParams.get("source");

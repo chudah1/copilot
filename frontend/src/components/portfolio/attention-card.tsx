@@ -30,38 +30,27 @@ function attentionCopy(
 ) {
   const isReview = pulse.pulse_status === "review";
   const target = assumptionHeadline(pulse.assumption_label, investorProfile);
-  const cadencePressure = pulse.reason.includes("review cadence");
   const pulseReason = tightenInvestorCopy(pulse.reason, investorProfile);
   if (isReview) {
     return {
       eyebrow: "Review",
-      headline: cadencePressure
-        ? investorProfile === "hearsay_driven"
-          ? "This reason is overdue."
-          : "This thesis is overdue."
-        : `${target} may have changed.`,
+      headline: `${target} may have changed.`,
       detail:
         pulseReason ||
         (investorProfile === "hearsay_driven"
           ? "This story now needs a clear call."
           : "This thesis now needs a clear call."),
-      subLabel: cadencePressure ? "Cadence missed" : null,
     };
   }
 
   return {
     eyebrow: "Watch",
-    headline: cadencePressure
-      ? investorProfile === "hearsay_driven"
-        ? "This reason is stale."
-        : "This thesis is stale."
-      : `${target} is under pressure.`,
+    headline: `${target} is under pressure.`,
     detail:
       pulseReason ||
       (investorProfile === "hearsay_driven"
         ? "Nothing looks broken yet, but the story needs a closer look."
         : "Nothing looks broken yet, but this thesis needs a closer look."),
-    subLabel: cadencePressure ? "Cadence drifting" : null,
   };
 }
 
@@ -99,11 +88,6 @@ export function AttentionCard({ holding, pulse, investorProfile, index }: Attent
             </span>
           </div>
           <div className="space-y-1">
-            {copy.subLabel && (
-              <p className="font-mono text-[10px] uppercase tracking-[0.14em] text-foreground/45">
-                {copy.subLabel}
-              </p>
-            )}
             <p className="font-sans text-[11px] text-foreground/90 leading-relaxed line-clamp-2">
               {copy.headline}
             </p>

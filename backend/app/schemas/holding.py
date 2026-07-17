@@ -46,6 +46,7 @@ class HoldingPulseResponse(BaseModel):
     ticker: str
     name: str
     pulse_status: str  # intact | watch | review
+    pulse_basis: str  # evidence | case_review | missing_case | none
     reason: str
     assumption_label: str | None = None
     latest_event_summary: str | None = None

@@ -154,6 +154,7 @@ async def test_pulse_watch_on_warning_event(client, auth_headers, test_user, db:
     pulses = resp.json()["pulses"]
     assert len(pulses) == 1
     assert pulses[0]["pulse_status"] == "watch"
+    assert pulses[0]["pulse_basis"] == "evidence"
     assert pulses[0]["assumption_label"] == "Azure growth slowing"
     assert pulses[0]["latest_event_summary"] == "Azure growth is being tested after the slowdown. Review whether the cloud thesis still holds."
     assert pulses[0]["latest_event_at"] is not None
@@ -286,6 +287,7 @@ async def test_pulse_stale_thesis_uses_review_cadence_for_watch_status(client, a
     assert resp.status_code == 200
     pulse = resp.json()["pulses"][0]
     assert pulse["pulse_status"] == "watch"
+    assert pulse["pulse_basis"] == "case_review"
     assert pulse["reason"] == "This thesis is 52 days old and 22 days past its review cadence."
     assert pulse["urgency_score"] > 55
 
@@ -313,6 +315,7 @@ async def test_pulse_stale_high_confidence_thesis_can_escalate_to_review(client,
     assert resp.status_code == 200
     pulse = resp.json()["pulses"][0]
     assert pulse["pulse_status"] == "review"
+    assert pulse["pulse_basis"] == "case_review"
     assert pulse["reason"] == "This thesis is 108 days old and far past its 30-day review cadence."
     assert pulse["urgency_score"] >= 90
 

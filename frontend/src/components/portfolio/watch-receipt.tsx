@@ -19,10 +19,11 @@ function timeAgo(iso: string): string {
   return `${months}mo ago`;
 }
 
-function stateWords(status: HoldingPulse["pulse_status"], hasThesis: boolean) {
+function stateWords(pulse: HoldingPulse, hasThesis: boolean) {
   if (!hasThesis) return { text: "no thesis yet", color: "text-muted-foreground/70" };
-  if (status === "review") return { text: "worth reviewing", color: "text-red-700" };
-  if (status === "watch") return { text: "watching closely", color: "text-amber-700" };
+  if (pulse.pulse_basis === "case_review") return { text: "review overdue", color: "text-amber-700" };
+  if (pulse.pulse_status === "review") return { text: "worth reviewing", color: "text-red-700" };
+  if (pulse.pulse_status === "watch") return { text: "watching closely", color: "text-amber-700" };
   return { text: "thesis intact", color: "text-emerald-700" };
 }
 
@@ -49,7 +50,7 @@ export function WatchReceipt({ pulse, hasThesis, className = "" }: Props) {
     );
   }
 
-  const state = stateWords(pulse.pulse_status, hasThesis);
+  const state = stateWords(pulse, hasThesis);
   const sources = pulse.sources_count;
 
   return (
