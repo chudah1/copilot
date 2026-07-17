@@ -75,7 +75,7 @@ export default function RefundsPage() {
           any time from your account settings. Cancelling stops future renewals and keeps your access
           until the end of the current paid period. <Fill>[State here whether part-period refunds are
           given — e.g. &ldquo;we don&apos;t refund part-used months, but you keep access until the
-          period ends.&rdquo;]</Fill> Founding lifetime members keep their access.
+          period ends.&rdquo;]</Fill>
         </P>
       </LegalSection>
 

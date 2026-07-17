@@ -49,7 +49,7 @@ export function MarketingFooter() {
             <span style={{ fontSize: 13, color: mk.pencil }}>© 2026</span>
           </div>
           <p style={{ margin: 0, maxWidth: 420, fontSize: 14, lineHeight: 1.55, color: mk.pencil }}>
-            Write the reason you own it. Revisit it when the evidence changes. Stay quiet the rest of the time.
+            Write down why you own it. See those notes again when something important changes.
           </p>
           <div style={{ display: "flex", gap: 10, flexWrap: "wrap", paddingTop: 4 }}>
             <Link

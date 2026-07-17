@@ -233,7 +233,7 @@ export default function LandingPage() {
                   color: mk.ink,
                 }}
               >
-                We watch your stocks against the reason you bought them.
+                Your broker records the trade. penKeep remembers the decision.
               </h1>
 
               <p
@@ -247,8 +247,8 @@ export default function LandingPage() {
                   margin: "0 0 clamp(28px, 4vw, 40px)",
                 }}
               >
-                When that reason starts to break,{" "}
-                <em style={{ color: mk.accent }}>we tell you.</em>
+                Write down why you bought. If something important changes, penKeep brings those
+                notes back so you can decide what to do.
               </p>
 
               <p
@@ -260,7 +260,8 @@ export default function LandingPage() {
                   margin: "0 0 clamp(28px, 4vw, 40px)",
                 }}
               >
-                Every earnings call, SEC filing, analyst note, and news event. We read all of it, and ignore everything that doesn&apos;t touch what you wrote.
+                Your original notes, the relevant filings and news, and the decisions you made
+                afterward, kept together in one place.
               </p>
 
               <div style={{ display: "flex", alignItems: "center", gap: 14, flexWrap: "wrap" }}>
@@ -281,7 +282,7 @@ export default function LandingPage() {
                     whiteSpace: "nowrap",
                   }}
                 >
-                  Create free account →
+                  Record your first decision →
                 </Link>
                 <a
                   href="#try-it"
@@ -373,7 +374,7 @@ export default function LandingPage() {
       >
         <div style={{ maxWidth: 1180, margin: "0 auto" }}>
           <div style={{ maxWidth: 820 }}>
-            <Kicker>The problem</Kicker>
+            <Kicker>The missing record</Kicker>
             <h2
               style={{
                 fontFamily: mk.display,
@@ -384,10 +385,10 @@ export default function LandingPage() {
                 margin: 0,
               }}
             >
-              You bought it for a reason.
+              The market remembers the price.
               <br />
               <span style={{ fontStyle: "italic", color: mk.accent }}>
-                Since then, you&apos;ve been checking the price.
+                It does not remember your reasoning.
               </span>
             </h2>
             <div
@@ -400,12 +401,12 @@ export default function LandingPage() {
               }}
             >
               <p style={{ margin: "0 0 22px", color: mk.ink }}>
-                Green feels like being right. Red feels like being wrong. Neither tells you whether
-                the reason you bought still holds.
+                Six months later, every decision has a neat explanation. The original uncertainty,
+                the warning you dismissed, and the condition you promised to watch have disappeared.
               </p>
               <p style={{ margin: 0, color: mk.inkSoft }}>
-                An earnings miss. A CEO departure. A competitor move. You see it happen. You just
-                can&apos;t tell if it touches the reason you own it.
+                A gain can hide a poor decision. A loss does not always mean the thinking was bad.
+                Without the original notes, it is hard to learn much from either one.
               </p>
             </div>
           </div>
@@ -435,9 +436,9 @@ export default function LandingPage() {
               maxWidth: 800,
             }}
           >
-            Write any reason.
+            Put one belief on record.
             <br />
-            <span style={{ color: mk.accent }}>See what comes back.</span>
+            <span style={{ color: mk.accent }}>See what is worth watching.</span>
           </h2>
           <ThesisDemo />
         </div>
@@ -464,7 +465,7 @@ export default function LandingPage() {
               margin: 0,
             }}
           >
-            Three steps.{" "}
+            Write it down. Keep watch.{" "}
             <span style={{ fontStyle: "italic", color: mk.accent }}>
               That is the whole thing.
             </span>
@@ -475,18 +476,18 @@ export default function LandingPage() {
               [
                 [
                   "01",
-                  "Write the reason",
-                  "A sentence or two. Why you own it and what would make you sell. That becomes your exit condition.",
+                  "Record the decision",
+                  "Write why you own it and what would change your mind. Do it now, while you still remember what you were thinking.",
                 ],
                 [
                   "02",
-                  "We stand watch",
-                  "penKeep reads the earnings, filings, analyst notes and news, then ignores everything that does not touch the reason you wrote.",
+                  "Watch the evidence",
+                  "penKeep reads the earnings, filings and news, then ignores everything that does not touch a condition you put on record.",
                 ],
                 [
                   "03",
-                  "You decide",
-                  "When something real tests your reason, we put your own words back in front of you. You make the call. We keep a record of it.",
+                  "Revisit the call",
+                  "If one of those conditions changes, penKeep shows you what you wrote and what happened. You decide what to do next.",
                 ],
               ] as const
             ).map(([n, title, desc]) => (
@@ -572,7 +573,7 @@ export default function LandingPage() {
             className="grid grid-cols-1 lg:grid-cols-2"
           >
             <div>
-              <Kicker>When it matters</Kicker>
+              <Kicker>At the decision point</Kicker>
               <h2
                 style={{
                   fontFamily: mk.display,
@@ -584,10 +585,10 @@ export default function LandingPage() {
                   color: mk.cream,
                 }}
               >
-                Your own words,
+                Your original decision,
                 <br />
-                right when{" "}
-                <span style={{ fontStyle: "italic", color: mk.accent }}>evidence fires.</span>
+                returned with{" "}
+                <span style={{ fontStyle: "italic", color: mk.accent }}>the evidence.</span>
               </h2>
               <p
                 style={{
@@ -600,8 +601,8 @@ export default function LandingPage() {
                   maxWidth: 460,
                 }}
               >
-                Not a price alert. Not noise. The exit condition you wrote, put back in front of
-                you the moment something starts to test it. Think it through. Don&apos;t react.
+                Not an AI recommendation. Just the condition you wrote, the new information, and
+                the decision you made afterward, kept together.
               </p>
             </div>
 
@@ -702,7 +703,7 @@ export default function LandingPage() {
               margin: "0 0 clamp(10px, 2vw, 16px)",
             }}
           >
-            One thesis.
+            One decision.
             <br />
             <span style={{ color: mk.accent }}>Eight months.</span>
           </h2>
@@ -716,9 +717,8 @@ export default function LandingPage() {
               margin: "0 0 clamp(32px, 5vw, 48px)",
             }}
           >
-            One TSLA thesis, followed from entry to the first real test. Here is how the evidence
-            moved, and the moment penKeep would have put the written exit condition back in front
-            of the investor.
+            One TSLA decision, followed from the original belief to its first real test. The record
+            preserves what the investor knew, when the evidence changed, and the call made next.
           </p>
           <WatchThesisChange />
           <p
@@ -744,7 +744,7 @@ export default function LandingPage() {
         }}
       >
         <div style={{ maxWidth: 1180, margin: "0 auto" }}>
-          <Kicker>What we don&apos;t do</Kicker>
+          <Kicker>What makes the record useful</Kicker>
           <h2
             style={{
               fontFamily: mk.display,
@@ -755,28 +755,28 @@ export default function LandingPage() {
               margin: 0,
             }}
           >
-            Built around{" "}
-            <span style={{ fontStyle: "italic", color: mk.accent }}>your reason</span>.
+            A decision record, not{" "}
+            <span style={{ fontStyle: "italic", color: mk.accent }}>another investing feed</span>.
           </h2>
 
           <div style={{ marginTop: 48 }}>
             {(
               [
                 [
-                  "Price alerts",
-                  "A price can fall for a hundred reasons that have nothing to do with why you bought. We wait for the real evidence. An earnings line, a filing, a lost customer. That is what reaches you.",
+                  "Not just alerts",
+                  "An alert tells you what happened today. penKeep also shows what you wrote before it happened and keeps the decision you made next.",
                 ],
                 [
-                  "A social feed",
-                  "There’s no one else in here. The only portfolio we pay attention to is the one you actually own.",
+                  "Not a social feed",
+                  "There is no crowd to perform for and no hot-stock loop. This is a private record of the portfolio and decisions that are actually yours.",
                 ],
                 [
-                  "Buy / sell signals",
-                  "Every decision stays yours. When something tests your reason, we set your own words beside it and let you make the call.",
+                  "No buy or sell calls",
+                  "penKeep shows you the notes and the new information. It does not make the decision for you.",
                 ],
                 [
-                  "Daily engagement",
-                  "Most days you won’t hear from us. We stay quiet until something touches a reason you wrote, then say so plainly. Once a week, a short digest.",
+                  "Not daily engagement",
+                  "Most days the record stays quiet. It returns only when evidence touches a condition you wrote or a decision is ready to be reviewed.",
                 ],
               ] as const
             ).map(([label, answer]) => (
@@ -858,7 +858,7 @@ export default function LandingPage() {
       {/* ─── NO THESIS YET — light ───────────────────────────────── */}
       <section style={{ background: mk.paper, padding: `${vPad} ${hPad}` }}>
         <div style={{ maxWidth: 1180, margin: "0 auto" }}>
-          <Kicker>No reason yet?</Kicker>
+          <Kicker>Before the decision</Kicker>
           <div
             style={{
               fontFamily: mk.display,
@@ -870,8 +870,8 @@ export default function LandingPage() {
               color: mk.ink,
             }}
           >
-            Bought on a hunch?{" "}
-            <span style={{ fontStyle: "italic", color: mk.accent }}>Start anyway.</span>
+            Make the bear case part of{" "}
+            <span style={{ fontStyle: "italic", color: mk.accent }}>the record.</span>
           </div>
           <div
             style={{
@@ -884,11 +884,9 @@ export default function LandingPage() {
               marginTop: 28,
             }}
           >
-            Maybe a friend keeps bringing it up. Maybe it was all over your feed and you
-            didn&apos;t want to be the one who missed it. Tell us the ticker. We&apos;ll build
-            the case against it, the ways it could go wrong that never come up in the group
-            chat, and a short list of things worth watching. Then we keep an eye on those
-            signals for you, so the hunch turns into a reason you can actually defend.
+            Run a ticker through the counter-thesis before you buy. penKeep surfaces the bear case,
+            blind spots and measurable conditions worth watching, so the eventual decision begins
+            with a testable record instead of a story reconstructed afterward.
           </div>
         </div>
       </section>
@@ -916,7 +914,7 @@ export default function LandingPage() {
           }}
         />
         <div style={{ maxWidth: 1180, margin: "0 auto", position: "relative" }}>
-          <Kicker>What you&apos;re really building</Kicker>
+          <Kicker>After a year</Kicker>
           <div
             style={{
               fontFamily: mk.display,
@@ -928,8 +926,8 @@ export default function LandingPage() {
               color: mk.cream,
             }}
           >
-            Every reason you write is a record of{" "}
-            <span style={{ fontStyle: "italic", color: mk.accent }}>how you think</span>. 
+            Build a private track record of{" "}
+            <span style={{ fontStyle: "italic", color: mk.accent }}>how you decide</span>.
           </div>
           <div
             style={{
@@ -942,8 +940,8 @@ export default function LandingPage() {
               marginTop: 28,
             }}
           >
-            Give it a year and you have an honest record of your own judgment: what you believed,
-            what actually happened, and whether you got it right.
+            You can look back at which assumptions held, which warnings you ignored, and what you
+            were thinking when you chose to hold, trim, or sell.
           </div>
           <div
             style={{
@@ -992,8 +990,8 @@ export default function LandingPage() {
                   "You can connect it read-only to track positions, or just add your holdings by hand. We never place trades and never touch your money.",
                 ],
                 [
-                  "What does “watching” actually mean?",
-                  "For each reason you write, we keep an eye on the things that could prove it wrong: earnings, filings, competitor moves. Everything else, we leave alone.",
+                  "How is this different from another alert app?",
+                  "Alerts disappear after telling you what happened. penKeep ties evidence to the belief you recorded, captures the decision you made, and returns it later when the outcome can be reviewed.",
                 ],
                 [
                   "Will I get spammed with alerts?",
@@ -1068,7 +1066,7 @@ export default function LandingPage() {
               marginBottom: "clamp(20px, 3vw, 28px)",
             }}
           >
-            Free tier live · founding seats optional
+            Your notes stay private · free to start
           </div>
           <h2
             style={{
@@ -1081,9 +1079,9 @@ export default function LandingPage() {
               color: mk.cream,
             }}
           >
-            Write your first
+            Put your first decision
             <br />
-            <span style={{ fontStyle: "italic", color: mk.accent }}>real reason.</span>
+            <span style={{ fontStyle: "italic", color: mk.accent }}>on the record.</span>
           </h2>
           <p
             style={{
@@ -1096,8 +1094,7 @@ export default function LandingPage() {
               lineHeight: 1.5,
             }}
           >
-            Create a free account to write your first thesis now, or start with a free stress
-            test if you want the bear case first.
+            Start with a position you already own, or run the bear case before the next one.
           </p>
           <div style={{ display: "flex", justifyContent: "center" }}>
             <LaunchActions dark />

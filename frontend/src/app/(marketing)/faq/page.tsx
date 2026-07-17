@@ -9,11 +9,13 @@ const FAQS = [
     cat: "The product",
     items: [
       ["Will penKeep tell me what to buy?",
-        "No, and we don't intend to. penKeep is not an advisor, broker, or stock picker. It's a tool for writing down why you bought, and noticing when that reason might have changed."],
+        "No. penKeep shows you what you wrote, what changed, and what you decided afterward. It does not tell you what to do."],
+      ["How is this different from a news alert or an AI investing chat?",
+        "A news alert tells you what happened. An AI chat answers the question you ask today. penKeep keeps the notes you wrote before the event and puts them beside the decision you made afterward."],
       ["What's the thesis health score?",
         "A number from 0 to 100 that reflects how well the picture has held up since you wrote your thesis. Healthy (75 and above) means the signals are broadly supportive. At Risk (45 to 74) means some things have moved against you. Broken is below 45: the core of the reason has weakened. It's not a buy or sell signal. It's a prompt to re-read what you wrote."],
       ["What if I'm a complete beginner?",
-        "We can help, but we're not a learning app. If you don't yet have a reason for owning a stock, you probably haven't done the work. penKeep can't substitute for it. That's by design."],
+        "You can use the counter-thesis to expose risks and turn a rough idea into testable conditions, but penKeep is not a stock-picking course. It works best when you want to take responsibility for your own decisions."],
       ["What stocks does it support?",
         "Major listings on US (NYSE, NASDAQ), UK (LSE), and major European exchanges at launch. Crypto, options, and ETFs are not in scope for v1."],
     ],
@@ -24,7 +26,7 @@ const FAQS = [
       ["What kinds of signals do you watch?",
         "Earnings & guidance, news & press releases, SEC filings (10-Q, 8-K), earnings call transcripts, insider transactions, and price moves relative to your thesis."],
       ["How often will I hear from you?",
-        "Almost never. The product is silent by default. The only push you'll get is a \"your reason may have changed\" note, typically a few per quarter across a portfolio of 10 to 15 stocks."],
+        "Almost never. The product is silent by default. It reaches out when evidence tests a condition you recorded, when earnings create a natural decision point, or when an earlier call is ready to be reviewed."],
       ["What if a signal is wrong?",
         "Every signal has sources you can click. If we flagged something that doesn't actually touch your reason, hit dismiss and we'll learn from it."],
       ["Do you predict prices?",
@@ -46,7 +48,7 @@ const FAQS = [
     cat: "Money",
     items: [
       ["How do you make money?",
-        "Subscription. Free tier lets you keep up to 5 active theses, and the premium tier unlocks unlimited theses, broker connections, full history, and the counter-thesis assistant. Pricing announced closer to launch."],
+        "Subscription. The free tier lets you keep up to 5 active theses. Founding Membership is £99 per year and adds unlimited theses, broker connections, full history, follow-up reviews, and the counter-thesis assistant."],
       ["Will there ever be ads?",
         "No. Showing you a sponsored \"hot stock\" would break the whole product."],
       ["Are you regulated?",
@@ -56,8 +58,8 @@ const FAQS = [
 ] as const;
 
 const CATEGORY_INTROS: Record<string, string> = {
-  "The product": "What penKeep is, what it is not, and who it is actually built for.",
-  "Signals & alerts": "How the product decides when to stay quiet and when a reason may have changed.",
+  "The product": "What penKeep keeps, when it contacts you, and what it leaves up to you.",
+  "Signals & alerts": "How evidence returns to the decision that made it relevant.",
   "Connections & data": "What gets connected, what does not, and how your information is treated.",
   Money: "How the business works without turning the app into a feed of incentives and noise.",
 };
@@ -164,9 +166,9 @@ export default function FAQPage() {
           className="grid grid-cols-1 md:grid-cols-3"
         >
           {[
-            ["No stock tips", "The product never tells you what to buy."],
-            ["Quiet by default", "Most weeks, if nothing relevant changed, it says nothing."],
-            ["Read-only data", "Broker links are optional and never execute trades."],
+            ["Your decisions", "The product keeps the notes. You make the call."],
+            ["Long memory", "Beliefs, evidence, calls and outcomes stay connected."],
+            ["Quiet by default", "If nothing relevant changed, it says nothing."],
           ].map(([label, value]) => (
             <div
               key={label}
@@ -244,7 +246,7 @@ export default function FAQPage() {
           Still curious? <span style={{ color: mk.accent }}>Just try it.</span>
         </h2>
         <p style={{ fontFamily: mk.sans, fontSize: "clamp(15px,1.6vw,17px)", color: "#bdb4ab", lineHeight: 1.6, margin: "16px 0 0", maxWidth: 560 }}>
-          The fastest way to understand penKeep is to put one real position through the thesis and review loop.
+          The fastest way to understand penKeep is to put one real decision on the record.
         </p>
         </div>
         <div style={{ marginTop: "clamp(24px,3vw,36px)" }}>

@@ -3,24 +3,24 @@ import { mk } from "../../_mkt/tokens";
 
 export const metadata = {
   title: "Blog · penKeep",
-  description: "The reason we built penKeep",
+  description: "Why we built a memory for investment decisions",
 };
 
 const STORY_POINTS = [
   {
     eyebrow: "The problem",
-    title: "The original reason disappears.",
-    body: "Most investing mistakes start when the first rationale becomes fuzzy and gets replaced by emotion or hindsight.",
+    title: "The original decision disappears.",
+    body: "The uncertainty, assumptions and warnings present at the time are quickly replaced by emotion and hindsight.",
   },
   {
     eyebrow: "The response",
-    title: "Write the reason down while it is still honest.",
-    body: "That gives the product something real to compare future evidence against.",
+    title: "Record the reasoning while it is still honest.",
+    body: "That gives future evidence—and future-you—something real to test.",
   },
   {
     eyebrow: "The result",
-    title: "The app stays quiet until the reason changes.",
-    body: "No endless feed, no fake urgency, just a sharper loop around conviction and evidence.",
+    title: "Bring the old notes back at the right time.",
+    body: "When something changes, put the original reason beside the new information and the next decision.",
   },
 ];
 
@@ -31,7 +31,7 @@ const CONTRAST = [
   ],
   [
     "What penKeep optimizes for",
-    "Remembering why you own it, noticing when the case changes, and acting from evidence instead of mood.",
+    "Keeping the original notes, the relevant update, and the next decision in one place.",
   ],
 ];
 
@@ -97,10 +97,9 @@ export default function BlogPage() {
             margin: 0,
           }}
         >
-          The honest reason most retail investors lose money is not because they&apos;re stupid.
-          It&apos;s because they bought a stock for a reason that{" "}
-          <em style={{ fontStyle: "italic", color: mk.accent }}>made sense at the time</em>, and
-          then never wrote it down.
+          The market keeps a perfect record of the price. It keeps no record of what you knew,
+          what you assumed, or why a decision{" "}
+          <em style={{ fontStyle: "italic", color: mk.accent }}>made sense at the time</em>.
         </p>
 
         <div
@@ -195,9 +194,10 @@ export default function BlogPage() {
             letterSpacing: "-0.015em",
           }}
         >
-          The tools we had were trying to help us{" "}
-          <em style={{ fontStyle: "italic", color: mk.accent }}>trade</em>. We wanted to{" "}
-          <em style={{ fontStyle: "italic", color: mk.accent }}>invest</em>.
+          The tools we had recorded the{" "}
+          <em style={{ fontStyle: "italic", color: mk.accent }}>transaction</em>. We wanted one
+          that remembered the{" "}
+          <em style={{ fontStyle: "italic", color: mk.accent }}>decision</em>.
         </div>
 
         <div
@@ -343,7 +343,8 @@ export default function BlogPage() {
             times a day, we built this for you.
           </p>
           <p style={{ margin: 0, fontStyle: "italic", color: mk.ink }}>
-            Never forget why you bought. Know when the reason changes. That&apos;s the whole thing.
+            Write down why you bought. See those notes again when something changes. Keep the
+            decision you made next. That&apos;s the whole thing.
           </p>
         </div>
 

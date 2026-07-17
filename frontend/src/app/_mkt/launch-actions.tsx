@@ -28,7 +28,7 @@ export function LaunchActions({ dark = false }: { dark?: boolean }) {
           whiteSpace: "nowrap",
         }}
       >
-        Create free account →
+        Record your first decision →
       </Link>
       <Link
         href="/research"
@@ -48,7 +48,7 @@ export function LaunchActions({ dark = false }: { dark?: boolean }) {
           whiteSpace: "nowrap",
         }}
       >
-        Run a free stress test →
+        Stress-test a ticker →
       </Link>
     </div>
   );

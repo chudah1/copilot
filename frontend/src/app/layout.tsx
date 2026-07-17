@@ -39,8 +39,8 @@ const geistMono = Geist_Mono({
 });
 
 export const metadata: Metadata = {
-  title: "penKeep · Never forget why you bought",
-  description: "Write the reason you bought each stock. Get told when that reason might have changed.",
+  title: "penKeep · Your investment decisions, remembered",
+  description: "Record what you believed, watch the evidence, and revisit the decision when reality has tested it.",
 };
 
 export default function RootLayout({ children }: { children: React.ReactNode }) {

@@ -4,35 +4,37 @@ import { mk } from "../../_mkt/tokens";
 
 const FREE_FEATURES = [
   "Up to 5 active theses",
-  "Core signals: earnings, filings, news, insider transactions",
+  "A structured record of your reasoning and decisions",
+  "Core evidence: earnings, filings, news, insider transactions",
   "Thesis health score (Healthy / At Risk / Broken)",
   "Weekly digest email",
-  "12 months of signal history",
+  "12 months of decision history",
 ];
 
 const PREMIUM_FEATURES = [
   "Unlimited theses",
   "Broker connection (Trading 212 + more)",
   "Counter-thesis assistant",
-  "Full history, unlimited",
+  "Full decision history, unlimited",
+  "Decision follow-through: what happened after your call",
   "Pre-earnings nudges and post-earnings review",
-  "Quarterly review prep",
+  "Quarterly decision-pattern review",
   "Everything in Free",
 ];
 
 const SHARED_PROMISES = [
   {
-    eyebrow: "Same product logic",
+    eyebrow: "No recommendations",
     title: "No tier gives buy or sell calls.",
-    body: "Free and premium both stay grounded in your written reason, not in stock-picking prompts dressed up as certainty.",
+    body: "penKeep preserves the context and challenges the reasoning. The decision remains yours.",
   },
   {
-    eyebrow: "Same discipline",
-    title: "The workflow stays thesis-first.",
-    body: "The upgrade is more coverage, more history, and more tooling around the same core decision loop.",
+    eyebrow: "Full history",
+    title: "Keep the earlier notes.",
+    body: "See what you wrote, what changed, and what you decided afterward.",
   },
   {
-    eyebrow: "Same ownership",
+    eyebrow: "Your data",
     title: "Your notes stay yours.",
     body: "The product still acts like a decision record, not a social feed or recommendation engine.",
   },
@@ -79,12 +81,12 @@ export default function PricingPage() {
             margin: 0,
           }}
         >
-          Free to start.<br />
-          <span style={{ color: mk.accent }}>Found it for life.</span>
+          Start the record free.<br />
+          <span style={{ color: mk.accent }}>Keep the whole history.</span>
         </h1>
         <p style={{ fontFamily: mk.sans, fontSize: "clamp(17px,1.8vw,19px)", lineHeight: 1.55, color: mk.pencil, marginTop: "clamp(18px,2vw,24px)", maxWidth: 600 }}>
-          The free tier is live now. A limited run of founding seats locks in Premium at the
-          lowest price it will ever be — refundable until Premium opens.
+          Start with the free account. Founding membership adds unlimited positions, full history,
+          and follow-up reviews. The annual rate stays the same while you remain a member.
         </p>
 
         <div
@@ -96,9 +98,9 @@ export default function PricingPage() {
           className="grid grid-cols-1 md:grid-cols-3"
         >
           {[
-            ["Access", "Free tier live now"],
-            ["Commitment", "No card to start free"],
-            ["Upgrade path", "Founding Premium when you want more depth"],
+            ["Start", "Record up to 5 active theses free"],
+            ["Build", "Evidence and decisions stay connected"],
+            ["Review", "Look back at what you wrote and decided"],
           ].map(([label, value]) => (
             <div
               key={label}
@@ -165,7 +167,7 @@ export default function PricingPage() {
                 Best for
               </div>
               <div style={{ fontFamily: mk.sans, fontSize: 15, lineHeight: 1.45, color: mk.inkSoft, marginTop: 8 }}>
-                Writing your first positions down properly and seeing whether the product changes how you review them.
+                Putting real decisions on record and seeing whether the review loop changes how you respond to new evidence.
               </div>
             </div>
 
@@ -232,7 +234,7 @@ export default function PricingPage() {
             <div>
               <div style={{ display: "flex", alignItems: "center", gap: 8, marginBottom: 10 }}>
                 <div style={{ fontFamily: mk.mono, fontSize: 11, letterSpacing: "0.14em", textTransform: "uppercase", color: "#999" }}>
-                  Founding Premium
+                  Founding Membership
                 </div>
                 <span
                   style={{
@@ -250,10 +252,10 @@ export default function PricingPage() {
                 </span>
               </div>
               <div style={{ fontFamily: mk.sans, fontSize: "clamp(36px,5vw,52px)", fontWeight: 600, letterSpacing: "-0.03em", lineHeight: 1 }}>
-                from £59
+                £99/year
               </div>
               <div style={{ fontFamily: mk.sans, fontSize: 14, color: "#aaa", marginTop: 6 }}>
-                Founding price, locked for life.
+                Founding rate, locked while active.
               </div>
             </div>
 
@@ -269,7 +271,7 @@ export default function PricingPage() {
                 Best for
               </div>
               <div style={{ fontFamily: mk.sans, fontSize: 15, lineHeight: 1.45, color: "#d3cdc6", marginTop: 8 }}>
-                People who already rely on the workflow and want deeper coverage, more history, and less setup friction.
+                Investors who want a permanent, searchable record of what they believed, decided, and learned.
               </div>
             </div>
 
@@ -307,7 +309,7 @@ export default function PricingPage() {
               color: mk.ink,
             }}
           >
-            The upgrade is more depth, not a different philosophy.
+            Pay for more positions and history. The decisions stay yours.
           </h2>
         </div>
 

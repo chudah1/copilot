@@ -62,7 +62,7 @@ export default function TermsPage() {
       <LegalSection n="04" title="The founding-member presale">
         <P>
           The founding presale lets you pre-purchase access to penKeep Premium before public
-          launch, at a price that is locked for the lifetime of your membership. By completing
+          launch, at a founding rate that stays locked while your membership remains active. By completing
           checkout you understand and agree that:
         </P>
         <L

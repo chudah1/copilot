@@ -298,7 +298,7 @@ export function ThesisDemo() {
               marginTop: 4,
             }}
           >
-            We&apos;ll watch →
+            Put it on record →
           </div>
           <div style={{ display: "flex", flexDirection: "column", gap: 8 }}>
             {picked.signals.map((s, i) => (

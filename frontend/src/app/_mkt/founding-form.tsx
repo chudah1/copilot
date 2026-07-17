@@ -8,17 +8,10 @@ import { mk } from "./tokens";
 const TIERS = [
   {
     key: "annual",
-    label: "Founding Year",
-    price: "£59",
-    cadence: "first year, price locked",
-    blurb: "One year of Premium at the founding rate — locked for as long as you stay.",
-  },
-  {
-    key: "lifetime",
-    label: "Founding Lifetime",
-    price: "£149",
-    cadence: "once, then never again",
-    blurb: "Premium for life. Pay once. Best value if you're in for the long run.",
+    label: "Founding Membership",
+    price: "£99/year",
+    cadence: "price locked while active",
+    blurb: "Unlimited positions, full history, monitoring, and follow-up reviews at the founding rate.",
   },
 ] as const;
 
@@ -26,7 +19,7 @@ type TierKey = (typeof TIERS)[number]["key"];
 
 export function FoundingForm({ dark = false }: { dark?: boolean }) {
   const [email, setEmail] = useState("");
-  const [tier, setTier] = useState<TierKey>("lifetime");
+  const [tier, setTier] = useState<TierKey>("annual");
   const [status, setStatus] = useState<"idle" | "loading" | "done" | "error">("idle");
   const [error, setError] = useState("");
   const [seats, setSeats] = useState<{ remaining: number; total: number } | null>(null);

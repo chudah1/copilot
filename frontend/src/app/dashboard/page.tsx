@@ -9,7 +9,6 @@ import {
   BellRing,
   CalendarClock,
   CircleAlert,
-  ShieldCheck,
 } from "lucide-react";
 import useSWR from "swr";
 import { api, fetcher } from "@/lib/api";
@@ -19,7 +18,6 @@ import { classifyThesisQuality } from "@/lib/thesis-quality";
 import { formatCurrency, formatPercent } from "@/lib/utils";
 import { OnboardingBanner } from "@/components/onboarding/onboarding-banner";
 import { QuickAddHolding } from "@/components/portfolio/quick-add-holding";
-import { SmartMetricCard } from "@/components/portfolio/smart-metric-card";
 import { SinceLastVisit } from "@/components/portfolio/since-last-visit";
 import { DigestCountdown } from "@/components/portfolio/digest-countdown";
 import { PositionCard, cleanTicker } from "@/components/portfolio/position-card";
@@ -96,7 +94,7 @@ function dashboardStateCopy(
   if (counts.review > 0) {
     return {
       tone: "border-amber-500/25 bg-amber-500/8",
-      eyebrow: "Review queue",
+      eyebrow: "Needs a decision",
       title:
         investorProfile === "hearsay_driven"
           ? `${counts.review} position${counts.review > 1 ? "s need" : " needs"} a call.`
@@ -115,7 +113,7 @@ function dashboardStateCopy(
   if (counts.watch > 0) {
     return {
       tone: "border-sky-500/25 bg-sky-500/8",
-      eyebrow: "Under watch",
+      eyebrow: "Changed",
       title:
         investorProfile === "hearsay_driven"
           ? `${counts.watch} position${counts.watch > 1 ? "s need" : " needs"} a look.`
@@ -131,7 +129,7 @@ function dashboardStateCopy(
   if (counts.missing > 0) {
     return {
       tone: "border-border bg-card",
-      eyebrow: "Missing thesis",
+      eyebrow: "Needs a written case",
       title:
         investorProfile === "hearsay_driven"
           ? `${counts.missing} position${counts.missing > 1 ? "s need" : " needs"} a reason.`
@@ -145,7 +143,7 @@ function dashboardStateCopy(
 
   return {
     tone: "border-emerald-500/25 bg-emerald-500/8",
-    eyebrow: "All clear",
+    eyebrow: "Calm",
     title: "Nothing needs a call right now.",
     body: nextEarnings
       ? `${cleanTicker(nextEarnings.ticker)} is the next likely decision point in ${nextEarnings.days_until === 0 ? "today" : nextEarnings.days_until === 1 ? "1 day" : `${nextEarnings.days_until} days`}.${recentReview ? ` ${cleanTicker(recentReview.ticker)} was just resolved.` : ""}`
@@ -203,19 +201,6 @@ function dashboardStateCta(args: {
   }
 
   return null;
-}
-
-function decisionDebtVerdict(args: {
-  missing: number;
-  weak: number;
-  unmonitored: number;
-}) {
-  const { missing, weak, unmonitored } = args;
-  if (unmonitored === 0) return "Everything watchable";
-  if (missing > 0 && weak > 0) return `${missing} missing · ${weak} weak`;
-  if (missing > 0) return `${missing} missing thesis${missing === 1 ? "" : "es"}`;
-  if (weak > 0) return `${weak} thesis${weak === 1 ? "" : "es"} too vague`;
-  return `${unmonitored} not watchable yet`;
 }
 
 function isRecentIsoDate(value: string | null | undefined, days: number) {
@@ -689,69 +674,22 @@ function DashboardInner() {
         />
         <div className="relative grid gap-4 xl:grid-cols-[minmax(0,1.45fr)_minmax(18rem,24rem)]">
           <section id="dashboard-overview" className="product-panel product-panel-muted overflow-hidden p-5 sm:p-6 scroll-mt-24">
-            <div className="flex flex-wrap items-start justify-between gap-4">
+            <div className="grid gap-5 lg:grid-cols-[minmax(0,1.55fr)_minmax(17rem,23rem)]">
               <div className="space-y-4">
-                {hasLivePrices && (
-                  <div className="flex flex-wrap items-center gap-2">
-                    <span className="flex items-center gap-2 border border-emerald-500/20 bg-emerald-500/8 px-2.5 py-1 font-mono text-[10px] uppercase tracking-[0.14em] text-emerald-700">
-                      <span className="inline-block h-1.5 w-1.5 rounded-full bg-emerald-500 animate-pulse" />
-                      Live pricing active
-                    </span>
-                  </div>
-                )}
-
-                <div className="space-y-2">
-                  <p className="font-mono text-[10px] uppercase tracking-[0.16em] text-muted-foreground">
-                    Portfolio value
+                <div>
+                  <p className="font-mono text-[10px] uppercase tracking-[0.22em] text-muted-foreground">
+                    Decision inbox
                   </p>
-                  <div className="flex flex-wrap items-baseline gap-x-3 gap-y-2">
-                    <span className="font-display text-[2.4rem] italic leading-none tracking-tight text-foreground sm:text-[3rem]">
-                      {formatCurrency(displayTotalValue)}
-                    </span>
-                    {(livePnlPct != null ? livePnlPct : summary?.total_pnl_pct) != null && (
-                      <span
-                        className={`border px-2 py-1 font-mono text-[11px] tabular-nums ${
-                          (livePnl ?? summary?.total_pnl ?? 0) >= 0
-                            ? "border-emerald-500/20 bg-emerald-500/8 text-emerald-700"
-                            : "border-red-500/20 bg-red-500/8 text-red-600"
-                        }`}
-                      >
-                        {formatPercent(livePnlPct ?? summary?.total_pnl_pct ?? 0)}
-                      </span>
-                    )}
-                  </div>
+                  <h1 className="mt-2 font-display text-[2rem] italic leading-tight text-foreground sm:text-[2.5rem]">
+                    What needs your attention.
+                  </h1>
                 </div>
-              </div>
 
-              <div className="flex flex-wrap items-center gap-2">
-                <Link
-                  href="/dashboard/simulate"
-                  className="border border-border/80 px-3 py-2 font-mono text-[10px] uppercase tracking-[0.16em] text-muted-foreground transition-colors hover:border-foreground/20 hover:text-foreground"
-                >
-                  Simulate trade
-                </Link>
-                <Link
-                  href="/connect?return=dashboard"
-                  className="border border-border/80 px-3 py-2 font-mono text-[10px] uppercase tracking-[0.16em] text-muted-foreground transition-colors hover:border-foreground/20 hover:text-foreground"
-                >
-                  Import data
-                </Link>
-              </div>
-            </div>
-
-            {summary && (
-              <div className="mt-4">
-                <SinceLastVisit summary={summary} trend={trend} recentEventCount={recentEventCount} />
-              </div>
-            )}
-
-            <div className="mt-6 grid gap-5 lg:grid-cols-[minmax(0,1fr)_minmax(17rem,22rem)]">
-              <div className="space-y-3">
-                <div className={`border px-4 py-4 ${dashboardState.tone}`}>
+                <div className={`border px-5 py-5 sm:px-6 sm:py-6 ${dashboardState.tone}`}>
                   <p className="font-mono text-[10px] uppercase tracking-[0.18em] text-foreground/60">
                     {dashboardState.eyebrow}
                   </p>
-                  <p className="mt-2 font-display text-[1.55rem] italic leading-tight text-foreground sm:text-[1.8rem]">
+                  <p className="mt-2 font-display text-[1.65rem] italic leading-tight text-foreground sm:text-[2rem]">
                     {dashboardState.title}
                   </p>
                   <p className="mt-2 max-w-2xl font-sans text-sm leading-relaxed text-foreground/85">
@@ -760,7 +698,7 @@ function DashboardInner() {
                   {dashboardStatePrimaryCta && (
                     <Link
                       href={dashboardStatePrimaryCta.href}
-                      className="mt-4 inline-flex items-center gap-2 font-mono text-[10px] uppercase tracking-[0.16em] text-primary transition-colors hover:text-primary/75"
+                      className="mt-5 inline-flex items-center gap-2 border border-primary/25 bg-background/70 px-3 py-2 font-mono text-[10px] uppercase tracking-[0.16em] text-primary transition-colors hover:border-primary/50"
                     >
                       {dashboardStatePrimaryCta.label.replace(" →", "")}
                       <ArrowRight className="h-3.5 w-3.5" />
@@ -768,84 +706,40 @@ function DashboardInner() {
                   )}
                 </div>
 
-                <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
-                  <SmartMetricCard
-                    label="Concentration"
-                    value={summary ? `${Math.round(summary.top_3_concentration_pct)}%` : "—"}
-                    verdict={
-                      summary && summary.holdings_count < 4
-                        ? "Add more positions to read this"
-                        : summary && summary.top_3_concentration_pct >= 50
-                          ? "Top 3 dominate"
-                          : "Spread looks fine"
-                    }
-                    color={summary && summary.holdings_count >= 4 && summary.top_3_concentration_pct >= 50 ? "amber" : "neutral"}
-                    trend={
-                      trend?.top_3_concentration_pct != null && summary && summary.holdings_count >= 4
-                        ? {
-                            previous: `${Math.round(trend.top_3_concentration_pct)}%`,
-                            improving: summary.top_3_concentration_pct < trend.top_3_concentration_pct,
-                          }
-                        : null
-                    }
-                  />
-                  <SmartMetricCard
-                    label="Thesis coverage"
-                    value={summary ? `${Math.round(summary.thesis_coverage_pct)}%` : "—"}
-                    verdict={summary && summary.thesis_coverage_pct < 80 ? "Coverage incomplete" : "Coverage in place"}
-                    color={summary && summary.thesis_coverage_pct < 80 ? "amber" : "green"}
-                    trend={
-                      trend?.thesis_coverage_pct != null && summary
-                        ? {
-                            previous: `${Math.round(trend.thesis_coverage_pct)}%`,
-                            improving: summary.thesis_coverage_pct > trend.thesis_coverage_pct,
-                          }
-                        : null
-                    }
-                  />
-                  <SmartMetricCard
-                    label="Watchable"
-                    value={summary ? `${Math.round(summary.monitorable_thesis_coverage_pct)}%` : "—"}
-                    verdict={summary && summary.monitorable_thesis_coverage_pct < 50 ? "Needs sharpening" : "Mostly watchable"}
-                    color={summary && summary.monitorable_thesis_coverage_pct >= 50 ? "green" : "amber"}
-                    trend={
-                      trend?.monitorable_pct != null && summary
-                        ? {
-                            previous: `${Math.round(trend.monitorable_pct)}%`,
-                            improving: summary.monitorable_thesis_coverage_pct > trend.monitorable_pct,
-                          }
-                        : null
-                    }
-                  />
-                  <SmartMetricCard
-                    label="Blind spots"
-                    value={summary ? String(summary.unmonitored_holdings_count) : "—"}
-                    verdict={summary ? decisionDebtVerdict({
-                      missing: thesisQualityStats.missing,
-                      weak: thesisQualityStats.weak,
-                      unmonitored: summary.unmonitored_holdings_count,
-                    }) : "—"}
-                    color="neutral"
-                    trend={
-                      trend?.unmonitored_count != null && summary
-                        ? {
-                            previous: String(trend.unmonitored_count),
-                            improving: summary.unmonitored_holdings_count < trend.unmonitored_count,
-                          }
-                        : null
-                    }
-                  />
-                </div>
+                {summary && (
+                  <SinceLastVisit summary={summary} trend={trend} recentEventCount={recentEventCount} />
+                )}
               </div>
 
-              <div className="grid gap-3">
-                <div className="border border-border/80 bg-background/75 p-4">
+              <aside className="border border-border/80 bg-background/70 p-4 sm:p-5">
+                <div className="flex items-start justify-between gap-3">
+                  <div>
+                    <p className="font-mono text-[10px] uppercase tracking-[0.16em] text-muted-foreground">
+                      Portfolio snapshot
+                    </p>
+                    <div className="mt-3 flex flex-wrap items-baseline gap-2">
+                      <span className="font-display text-[1.9rem] italic leading-none tracking-tight text-foreground">
+                        {formatCurrency(displayTotalValue)}
+                      </span>
+                      {(livePnlPct != null ? livePnlPct : summary?.total_pnl_pct) != null && (
+                        <span className={`font-mono text-[10px] tabular-nums ${
+                          (livePnl ?? summary?.total_pnl ?? 0) >= 0 ? "text-emerald-700" : "text-red-600"
+                        }`}>
+                          {formatPercent(livePnlPct ?? summary?.total_pnl_pct ?? 0)}
+                        </span>
+                      )}
+                    </div>
+                    <p className="mt-2 font-sans text-xs text-muted-foreground">
+                      {holdings.length} position{holdings.length === 1 ? "" : "s"}
+                      {hasLivePrices ? " · prices checked recently" : ""}
+                    </p>
+                  </div>
+                </div>
+
+                <div className="mt-5 space-y-3 border-t border-border/60 pt-4">
                   <div className="flex items-start gap-3">
-                    <CircleAlert className="mt-0.5 h-4 w-4 text-primary" />
+                    <CircleAlert className="mt-0.5 h-4 w-4 shrink-0 text-primary" />
                     <div className="space-y-1">
-                      <p className="font-mono text-[10px] uppercase tracking-[0.16em] text-muted-foreground">
-                        Weakest area
-                      </p>
                       <p className="font-sans text-sm leading-relaxed text-foreground/85">
                         {thesisQualityHeadline}
                       </p>
@@ -853,76 +747,45 @@ function DashboardInner() {
                         {thesisQualityDetail}
                       </p>
                       {thesisQualityCta && (
-                        <Link
-                          href={thesisQualityCta.href}
-                          className="inline-flex items-center gap-2 font-mono text-[10px] uppercase tracking-[0.15em] text-primary transition-colors hover:text-primary/75"
-                        >
+                        <Link href={thesisQualityCta.href} className="inline-flex items-center gap-1.5 font-mono text-[10px] uppercase tracking-[0.14em] text-primary hover:text-primary/75">
                           {thesisQualityCta.label.replace(" →", "")}
-                          <ArrowRight className="h-3.5 w-3.5" />
+                          <ArrowRight className="h-3 w-3" />
                         </Link>
                       )}
                     </div>
                   </div>
-                </div>
 
-                <div className="border border-border/80 bg-background/75 p-4">
-                  <div className="flex items-start gap-3">
-                    <BellRing className="mt-0.5 h-4 w-4 text-primary" />
-                    {pulse?.next_digest_at && (
-                      <div className="space-y-2">
-                        <p className="font-mono text-[10px] uppercase tracking-[0.16em] text-muted-foreground">
-                          Digest
+                  <div className="flex items-start gap-3 border-t border-border/60 pt-3">
+                    <CalendarClock className="mt-0.5 h-4 w-4 shrink-0 text-primary" />
+                    <p className="font-sans text-sm leading-relaxed text-foreground/85">
+                      {nearTermEarnings
+                        ? `${cleanTicker(nearTermEarnings.ticker)} reports ${daysUntilLabel(nearTermEarnings.days_until)}.`
+                        : "No earnings need preparation in the next three weeks."}
+                    </p>
+                  </div>
+
+                  {pulse?.next_digest_at && (
+                    <div className="flex items-start gap-3 border-t border-border/60 pt-3">
+                      <BellRing className="mt-0.5 h-4 w-4 shrink-0 text-primary" />
+                      <div className="space-y-1">
+                        <p className="font-mono text-[10px] uppercase tracking-[0.14em] text-muted-foreground">
+                          Next written digest
                         </p>
                         <DigestCountdown nextDigestAt={pulse.next_digest_at} />
                       </div>
-                    )}
-                  </div>
+                    </div>
+                  )}
                 </div>
 
-                <div className="border border-border/80 bg-background/75 p-4">
-                  <div className="flex items-start gap-3">
-                    {nearTermEarnings ? (
-                      <CalendarClock className="mt-0.5 h-4 w-4 text-primary" />
-                    ) : (
-                      <ShieldCheck className="mt-0.5 h-4 w-4 text-primary" />
-                    )}
-                    <div className="space-y-1">
-                      <p className="font-sans text-sm leading-relaxed text-foreground/85">
-                        {nearTermEarnings
-                          ? `${cleanTicker(nearTermEarnings.ticker)} reports ${daysUntilLabel(nearTermEarnings.days_until)}.`
-                          : "The near-term calendar is quiet."}
-                      </p>
-                    </div>
-                  </div>
+                <div className="mt-5 flex flex-wrap gap-2 border-t border-border/60 pt-4">
+                  <Link href="/dashboard/simulate" className="border border-border/80 px-3 py-2 font-mono text-[10px] uppercase tracking-[0.14em] text-muted-foreground hover:text-foreground">
+                    Simulate trade
+                  </Link>
+                  <Link href="/connect?return=dashboard" className="border border-border/80 px-3 py-2 font-mono text-[10px] uppercase tracking-[0.14em] text-muted-foreground hover:text-foreground">
+                    Import data
+                  </Link>
                 </div>
-
-                <div className="border border-border/80 bg-background/75 p-4">
-                  <div className="space-y-2">
-                    <div className="grid gap-2 sm:grid-cols-2">
-                      <div className="flex items-center justify-between border border-border/60 bg-background/70 px-3 py-2">
-                        <span className="font-sans text-xs text-foreground/80">Sharp</span>
-                        <span className="font-mono text-[10px] text-emerald-700">{thesisQualityStats.sharp}</span>
-                      </div>
-                      <div className="flex items-center justify-between border border-border/60 bg-background/70 px-3 py-2">
-                        <span className="font-sans text-xs text-foreground/80">Stale</span>
-                        <span className="font-mono text-[10px] text-amber-700">{thesisQualityStats.stale}</span>
-                      </div>
-                      <div className="flex items-center justify-between border border-border/60 bg-background/70 px-3 py-2">
-                        <span className="font-sans text-xs text-foreground/80">Weak</span>
-                        <span className="font-mono text-[10px] text-amber-700">{thesisQualityStats.weak}</span>
-                      </div>
-                      <div className="flex items-center justify-between border border-border/60 bg-background/70 px-3 py-2">
-                        <span className="font-sans text-xs text-foreground/80">Workable</span>
-                        <span className="font-mono text-[10px] text-foreground/70">{thesisQualityStats.workable}</span>
-                      </div>
-                      <div className="flex items-center justify-between border border-border/60 bg-background/70 px-3 py-2">
-                        <span className="font-sans text-xs text-foreground/80">Missing</span>
-                        <span className="font-mono text-[10px] text-red-600">{thesisQualityStats.missing}</span>
-                      </div>
-                    </div>
-                  </div>
-                </div>
-              </div>
+              </aside>
             </div>
           </section>
         </div>
@@ -1060,14 +923,14 @@ function DashboardInner() {
               <div className="mb-4 flex items-center justify-between gap-3">
                 <div>
                   <p className="font-mono text-[10px] uppercase tracking-[0.18em] text-muted-foreground">
-                    Live pressure
+                    What changed
                   </p>
                   <p className="mt-1 font-sans text-sm text-foreground/80">
-                    Fresh evidence on live theses.
+                    New evidence connected to something you wrote.
                   </p>
                 </div>
                 <span className="border border-primary/20 bg-primary/6 px-2 py-1 font-mono text-[10px] uppercase tracking-[0.14em] text-primary/75">
-                  {needsAttention.length} live
+                  {needsAttention.length} to read
                 </span>
               </div>
               <ErrorBoundary>

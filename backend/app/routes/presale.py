@@ -30,14 +30,9 @@ router = APIRouter(prefix="/api/presale", tags=["presale"])
 # objects or subscription/dunning machinery for the presale.
 FOUNDING_TIERS: dict[str, dict] = {
     "annual": {
-        "label": "Founding Year",
-        "amount": 5900,  # £59 — first year of Premium, price locked for life
-        "description": "One year of penKeep Premium at the founding price, locked for as long as you stay.",
-    },
-    "lifetime": {
-        "label": "Founding Lifetime",
-        "amount": 14900,  # £149 once — Premium forever
-        "description": "penKeep Premium for life. Pay once, never again.",
+        "label": "Founding Membership",
+        "amount": 9900,  # £99 for the first year, renewable at the locked founding rate
+        "description": "One year of penKeep Premium at the founding rate, locked while membership stays active.",
     },
 }
 
