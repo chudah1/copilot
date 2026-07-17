@@ -10,7 +10,7 @@ import { fetcher } from "@/lib/api";
 import type { PortfolioSummary } from "@/types";
 
 const NAV_LINKS = [
-  { href: "/dashboard", label: "Dashboard" },
+  { href: "/dashboard", label: "Portfolio" },
   { href: "/research", label: "Research" },
   { href: "/digests", label: "Digests" },
   { href: "/settings", label: "Settings" },
@@ -35,6 +35,9 @@ export function Navbar() {
     (item) => item.priority === "critical" || item.priority === "high"
   ).length ?? 0;
   const alertsHref = alertCount > 0 ? "/dashboard#live-pressure" : "/dashboard#positions";
+  const reviewStatus = alertCount > 0
+    ? `${alertCount} decision${alertCount === 1 ? "" : "s"} waiting`
+    : "Nothing waiting";
 
   return (
     <nav className="sticky top-0 z-40 border-b border-border/80 bg-background/88 backdrop-blur-xl">
@@ -49,10 +52,16 @@ export function Navbar() {
               </div>
             </Link>
             {isAuthenticated && (
-              <div className="hidden lg:flex items-center gap-2 border border-emerald-500/20 bg-emerald-500/8 px-2.5 py-1">
-                <span className="inline-block h-1.5 w-1.5 rounded-full bg-emerald-500 animate-pulse" />
-                <span className="font-mono text-[10px] uppercase tracking-[0.14em] text-emerald-700">
-                  Monitoring live
+              <div className={`hidden lg:flex items-center gap-2 border px-2.5 py-1 ${
+                alertCount > 0
+                  ? "border-amber-500/25 bg-amber-500/8"
+                  : "border-border/70 bg-background/70"
+              }`}>
+                <span className={`inline-block h-1.5 w-1.5 rounded-full ${alertCount > 0 ? "bg-amber-500" : "bg-emerald-500"}`} />
+                <span className={`font-mono text-[10px] uppercase tracking-[0.14em] ${
+                  alertCount > 0 ? "text-amber-700" : "text-muted-foreground"
+                }`}>
+                  {reviewStatus}
                 </span>
               </div>
             )}
@@ -82,11 +91,11 @@ export function Navbar() {
                 <Link
                   href={alertsHref}
                   className="relative flex items-center gap-2 border border-border/80 bg-background/70 px-3 py-2 text-muted-foreground transition-colors hover:text-foreground"
-                  aria-label={alertCount > 0 ? `${alertCount} alerts` : "No alerts"}
+                  aria-label={reviewStatus}
                 >
                   <Bell className="w-4 h-4" />
                   <span className="font-mono text-[10px] uppercase tracking-[0.14em]">
-                    Alerts
+                    Review
                   </span>
                   {alertCount > 0 && (
                     <span className="inline-flex min-w-5 items-center justify-center bg-destructive px-1.5 py-0.5 font-mono text-[10px] text-white">
@@ -159,7 +168,7 @@ export function Navbar() {
                 >
                   <span className="flex items-center gap-3">
                     <Bell className="w-3.5 h-3.5" />
-                    Alerts
+                    Review
                   </span>
                   {alertCount > 0 && (
                     <span className="inline-flex min-w-5 items-center justify-center bg-destructive px-1.5 py-0.5 text-[10px] text-white">
