@@ -14,6 +14,23 @@ TestSession = async_sessionmaker(engine, class_=AsyncSession, expire_on_commit=F
 
 
 @pytest.fixture(autouse=True)
+def _stub_analyst_consensus(request, monkeypatch):
+    """shortlist_qualitative_candidates fetches live yfinance analyst data when
+    given a ticker; without this stub every candidate-count assertion depends on
+    the network and on real tickers' current rating momentum. Tests that exercise
+    the fetch itself opt out with @pytest.mark.real_analyst_fetch."""
+    if request.node.get_closest_marker("real_analyst_fetch"):
+        return
+    from app.services import market_data
+
+    monkeypatch.setattr(
+        market_data,
+        "_fetch_analyst_consensus_sync",
+        lambda ticker, previous_target=None: None,
+    )
+
+
+@pytest.fixture(autouse=True)
 async def setup_db():
     async with engine.begin() as conn:
         await conn.run_sync(Base.metadata.create_all)

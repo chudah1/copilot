@@ -1069,6 +1069,7 @@ def test_expanded_keywords_include_founder_and_executive_terms():
     assert expected.issubset(set(QUALITATIVE_KEYWORDS))
 
 
+@pytest.mark.real_analyst_fetch
 def test_analyst_revision_candidate_fires_on_net_downgrades():
     import pandas as pd
     from unittest.mock import patch, MagicMock
@@ -1130,6 +1131,7 @@ def test_analyst_revision_not_fired_below_threshold():
     assert candidate is None
 
 
+@pytest.mark.real_analyst_fetch
 def test_fetch_analyst_consensus_handles_missing_columns():
     import pandas as pd
     from unittest.mock import patch, MagicMock

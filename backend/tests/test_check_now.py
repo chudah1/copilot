@@ -2,12 +2,27 @@ import uuid
 from datetime import datetime, timedelta, timezone
 from unittest.mock import AsyncMock, patch
 
+import pytest
+
 from app.models.holding import Holding
 from app.models.monitoring_event import MonitoringEvent
 from app.models.monitoring_gap import MonitoringGap
 from app.models.thesis import Thesis
 from app.services.check_now import run_check_now
 from app.services.market_data import CompanyData, MAX_CURRENT_TRANSCRIPT_AGE_DAYS
+
+
+@pytest.fixture(autouse=True)
+def _stub_edgar():
+    """run_check_now pulls live 8-K filings and Form 4 transactions from SEC
+    EDGAR for the holding's ticker; with a real ticker a fresh filing injects
+    an extra event and breaks count assertions. Stub both fetches off."""
+    with patch(
+        "app.services.check_now.get_recent_8k_filings", new_callable=AsyncMock, return_value=[]
+    ), patch(
+        "app.services.check_now.get_recent_form4_transactions", new_callable=AsyncMock, return_value=[]
+    ):
+        yield
 
 
 def _make_company_data(ticker="AAPL", current_price=120.0):

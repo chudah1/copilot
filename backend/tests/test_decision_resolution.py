@@ -200,7 +200,11 @@ async def test_no_market_data_leaves_open_for_retry(db, test_user):
 async def test_job_resolves_ready_leaves_unready(db, job_session_factory, test_user):
     ready, *_ = await _snapshot(db, test_user.id, bucket="held", watch_hints=_HINT,
                                 next_test_at=_NOW - timedelta(days=1))
-    pending, *_ = await _snapshot(db, test_user.id, next_test_at=_NOW + timedelta(days=30))
+    # The job runs against the real clock, so "not yet due" must be relative to
+    # real now — a frozen _NOW offset silently expires as the calendar advances.
+    pending, *_ = await _snapshot(
+        db, test_user.id, next_test_at=datetime.now(timezone.utc) + timedelta(days=30)
+    )
     await db.commit()
 
     with patch(f"{_RES}.async_session", job_session_factory), patch(

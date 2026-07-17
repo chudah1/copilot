@@ -45,6 +45,7 @@ asyncio_mode = "auto"
 testpaths = ["tests"]
 markers = [
     "eval: prompt quality eval suite — requires live API keys, excluded from default runs",
+    "real_analyst_fetch: opts out of the autouse analyst-consensus stub in conftest",
 ]
 
 [tool.setuptools.packages.find]

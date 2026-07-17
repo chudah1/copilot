@@ -1,5 +1,7 @@
 docs/superpowers/
 .superpowers/
+.claude/
+backend/docs/soak-reports/
 __pycache__/
 *.pyc
 .env

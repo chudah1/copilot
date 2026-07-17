@@ -118,6 +118,8 @@ async def test_market_context_passed_to_generator():
 
     mock_company_data = MagicMock()
     mock_company_data.current_price = 420.0
+    mock_company_data.news_items = []
+    mock_company_data.earnings_call = None
 
     with patch("app.services.stress_test._generate", generate_mock):
         await run_stress_test(

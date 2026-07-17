@@ -17,12 +17,17 @@ from app.services.ai_thesis import (
 async def test_counter_thesis_generates_structured_response(mock_settings, mock_anthropic):
     mock_settings.anthropic_api_key = "test-key"
 
+    tool_block = MagicMock()
+    tool_block.type = "tool_use"
+    tool_block.input = {
+        "bear_case": "Growth may stall as competition intensifies. The premium valuation leaves little room for error.",
+        "key_risks": ["Competition from Android", "Regulatory scrutiny", "China revenue risk"],
+        "blind_spots": ["Supply chain concentration", "Currency headwinds"],
+        "suggested_additions": ["Exit if services growth drops below 10%", "Review if PE exceeds 35x"],
+    }
     mock_response = MagicMock()
-    mock_response.content = [
-        MagicMock(
-            text='{"bear_case": "Growth may stall as competition intensifies. The premium valuation leaves little room for error.", "key_risks": ["Competition from Android", "Regulatory scrutiny", "China revenue risk"], "blind_spots": ["Supply chain concentration", "Currency headwinds"], "suggested_additions": ["Exit if services growth drops below 10%", "Review if PE exceeds 35x"]}'
-        )
-    ]
+    mock_response.stop_reason = "end_turn"
+    mock_response.content = [tool_block]
     mock_client = AsyncMock()
     mock_client.messages.create.return_value = mock_response
     mock_anthropic.AsyncAnthropic.return_value = mock_client

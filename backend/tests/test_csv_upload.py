@@ -9,9 +9,17 @@ from app.services.csv_parser import parse_csv, parse_trading212_csv, parse_gener
 @pytest.fixture(autouse=True)
 def _stub_price_fetch():
     """The upload endpoint now revalues each imported holding via a live price
-    fetch (yfinance) like broker sync. Stub it so these tests don't hit the
-    network; the FX cost-basis normalisation (apply_broker_position) still runs."""
-    with patch("app.routes.portfolio.refresh_holding_price", new_callable=AsyncMock, return_value=False):
+    fetch (yfinance) and resolves the native currency from the provider (USD for
+    AAPL → FX conversion of the cost basis). Stub both so these tests don't hit
+    the network and imported figures stay in the account currency as written."""
+
+    async def fake_enrich(ticker, *, name, sector=None, geography=None, currency=None):
+        return name, sector, geography, currency or "GBP"
+
+    with (
+        patch("app.routes.portfolio.refresh_holding_price", new_callable=AsyncMock, return_value=False),
+        patch("app.routes.portfolio._enrich_holding_metadata", side_effect=fake_enrich),
+    ):
         yield
 
 
