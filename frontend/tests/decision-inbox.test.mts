@@ -71,6 +71,7 @@ function pulse(
     pnl_pct: null,
     last_checked_at: null,
     recent_event_count: 0,
+    unresolved_event_count: 0,
     sources_count: null,
   };
 }

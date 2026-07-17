@@ -57,6 +57,7 @@ class HoldingPulseResponse(BaseModel):
     pnl_pct: float | None = None
     last_checked_at: datetime | None = None
     recent_event_count: int = 0
+    unresolved_event_count: int = 0
     sources_count: int | None = None
 
 

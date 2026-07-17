@@ -105,12 +105,12 @@ export function AttentionCard({ holding, pulse, investorProfile, index }: Attent
               {formatThesisUpdateAge(pulse.days_since_thesis_update)}
             </p>
           )}
-          {pulse.recent_event_count > 0 && (
+          {pulse.unresolved_event_count > 0 && (
             <p className={`font-mono text-[10px] ${isReview ? "text-red-600/80" : "text-amber-700/80"}`}>
-              {pulse.recent_event_count} recent event{pulse.recent_event_count !== 1 ? "s" : ""}
+              {pulse.unresolved_event_count} unresolved item{pulse.unresolved_event_count !== 1 ? "s" : ""}
             </p>
           )}
-          {!pulse.recent_event_count && pulse.last_checked_at && (
+          {!pulse.unresolved_event_count && pulse.last_checked_at && (
             <p className="font-mono text-[10px] text-muted-foreground/60">
               Checked recently
             </p>

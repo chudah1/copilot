@@ -117,7 +117,7 @@ function dashboardStateCopy(
           ? `${counts.watch} position${counts.watch > 1 ? "s need" : " needs"} a look.`
           : `${counts.watch} position${counts.watch > 1 ? "s need" : " needs"} a look.`,
       body: topAttention
-        ? `${cleanTicker(topAttention.ticker)} first. ${topAttentionLabel} has the freshest pressure.${recentReview ? ` ${cleanTicker(recentReview.ticker)} cleared.` : ""}`
+        ? `${cleanTicker(topAttention.ticker)} first. ${topAttentionLabel} is still unresolved.${recentReview ? ` ${cleanTicker(recentReview.ticker)} cleared.` : ""}`
         : "Nothing looks broken. These names still need a look.",
     };
   }
@@ -145,7 +145,7 @@ function dashboardStateCopy(
       ? `${cleanTicker(nextEarnings.ticker)} is the next likely decision point in ${nextEarnings.days_until === 0 ? "today" : nextEarnings.days_until === 1 ? "1 day" : `${nextEarnings.days_until} days`}.${recentReview ? ` ${cleanTicker(recentReview.ticker)} was just resolved.` : ""}`
       : recentReview
         ? `${cleanTicker(recentReview.ticker)} was just resolved. Nothing else needs attention right now.`
-        : "No live pressure. Tighten stale or weak theses next.",
+        : "No live pressure. Tighten an overdue or weak case next.",
   };
 }
 
@@ -576,7 +576,7 @@ function DashboardInner() {
           aria-hidden
           className="pointer-events-none absolute inset-0 bg-[radial-gradient(circle_at_top_left,rgba(121,83,48,0.18),transparent_30%),linear-gradient(180deg,rgba(255,255,255,0.35),transparent_80%)]"
         />
-        <div className="relative grid gap-4 xl:grid-cols-[minmax(0,1.45fr)_minmax(18rem,24rem)]">
+        <div className="relative">
           <section id="dashboard-overview" className="product-panel product-panel-muted overflow-hidden p-5 sm:p-6 scroll-mt-24">
             <div className="grid gap-5 lg:grid-cols-[minmax(0,1.55fr)_minmax(17rem,23rem)]">
               <div className="space-y-4">
@@ -830,7 +830,7 @@ function DashboardInner() {
                     What changed
                   </p>
                   <p className="mt-1 font-sans text-sm text-foreground/80">
-                    New evidence connected to something you wrote.
+                    Evidence connected to something you wrote.
                   </p>
                 </div>
                 <span className="border border-primary/20 bg-primary/6 px-2 py-1 font-mono text-[10px] uppercase tracking-[0.14em] text-primary/75">

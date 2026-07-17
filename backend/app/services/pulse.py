@@ -32,6 +32,7 @@ class HoldingPulse:
     pnl_pct: float | None = None
     last_checked_at: datetime | None = None
     recent_event_count: int = 0
+    unresolved_event_count: int = 0
     # How many pipeline sources produced at least one candidate on the most
     # recent monitoring pass for this holding — powers the passive-receipt line
     # ("checked X ago · N sources · <state>") that proves the quiet is
@@ -338,11 +339,12 @@ async def compute_portfolio_pulse(user_id: uuid.UUID, db: AsyncSession) -> tuple
     for t in all_theses:
         thesis_by_holding.setdefault(t.holding_id, t)
 
-    # Load recent events per holding (last 7 days)
+    # Decision state follows unresolved evidence, regardless of age. Reviewed
+    # events stay in the decision log but must not keep a position on watch.
     events_result = await db.execute(
         select(MonitoringEvent).where(
             MonitoringEvent.holding_id.in_(holding_ids),
-            MonitoringEvent.created_at >= cutoff,
+            ~MonitoringEvent.reviews.any(),
         ).order_by(MonitoringEvent.created_at.desc())
     )
     all_events = list(events_result.scalars().all())
@@ -381,6 +383,11 @@ async def compute_portfolio_pulse(user_id: uuid.UUID, db: AsyncSession) -> tuple
     for holding in holdings:
         thesis = thesis_by_holding.get(holding.id)
         events = events_by_holding.get(holding.id, [])
+        recent_event_count = sum(
+            1
+            for event in events
+            if event.created_at is not None and _normalize_datetime(event.created_at) >= cutoff
+        )
 
         # P&L percent
         pnl_pct = _compute_pnl_pct(holding)
@@ -405,7 +412,8 @@ async def compute_portfolio_pulse(user_id: uuid.UUID, db: AsyncSession) -> tuple
                 urgency_score=100,
                 pnl_pct=pnl_pct,
                 last_checked_at=last_checked,
-                recent_event_count=len(events),
+                recent_event_count=recent_event_count,
+                unresolved_event_count=len(events),
                 sources_count=None,
             ))
             continue
@@ -456,7 +464,8 @@ async def compute_portfolio_pulse(user_id: uuid.UUID, db: AsyncSession) -> tuple
                 ),
                 pnl_pct=pnl_pct,
                 last_checked_at=last_checked,
-                recent_event_count=len(events),
+                recent_event_count=recent_event_count,
+                unresolved_event_count=len(events),
                 sources_count=sources_count_by_thesis.get(thesis.id),
             ))
         elif "warning" in severities or stale_status in {"watch", "review"}:
@@ -484,7 +493,8 @@ async def compute_portfolio_pulse(user_id: uuid.UUID, db: AsyncSession) -> tuple
                 ),
                 pnl_pct=pnl_pct,
                 last_checked_at=last_checked,
-                recent_event_count=len(events),
+                recent_event_count=recent_event_count,
+                unresolved_event_count=len(events),
                 sources_count=sources_count_by_thesis.get(thesis.id),
             ))
         else:
@@ -509,7 +519,8 @@ async def compute_portfolio_pulse(user_id: uuid.UUID, db: AsyncSession) -> tuple
                 ),
                 pnl_pct=pnl_pct,
                 last_checked_at=last_checked,
-                recent_event_count=len(events),
+                recent_event_count=recent_event_count,
+                unresolved_event_count=len(events),
                 sources_count=sources_count_by_thesis.get(thesis.id),
             ))
 

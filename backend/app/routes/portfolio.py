@@ -650,6 +650,7 @@ async def portfolio_pulse(
                 "pnl_pct": p.pnl_pct,
                 "last_checked_at": p.last_checked_at,
                 "recent_event_count": p.recent_event_count,
+                "unresolved_event_count": p.unresolved_event_count,
                 "sources_count": p.sources_count,
             }
             for p in pulses

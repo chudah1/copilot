@@ -133,8 +133,8 @@ export function MonitoringTab({
                 <p className="font-display italic text-[1.55rem] leading-tight text-foreground sm:text-[1.75rem]">
                   {unreviewedEvents > 0
                     ? investorProfile === "hearsay_driven"
-                      ? "Fresh evidence is waiting for your call."
-                      : "Fresh evidence is waiting for your call."
+                      ? "Unresolved evidence is waiting for your call."
+                      : "Unresolved evidence is waiting for your call."
                     : calmState.title}
                 </p>
                 <p className="font-sans text-sm leading-relaxed text-foreground/80">

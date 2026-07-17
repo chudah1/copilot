@@ -67,6 +67,7 @@ function pulse(): HoldingPulse {
     pnl_pct: null,
     last_checked_at: null,
     recent_event_count: 0,
+    unresolved_event_count: 0,
     sources_count: null,
   };
 }
@@ -136,6 +137,28 @@ test("turns a decomposition failure into workspace state", async () => {
   const result = await loadPositionWorkspace(fake, "TEST");
   assert.equal(result.decompositionEnvelope?.status, "failed");
   assert.equal(result.decompositionEnvelope?.message, "Coverage service unavailable");
+});
+
+test("does not let a hanging optional request block the workspace", async () => {
+  const active = thesis("thesis-active", "active");
+  const never = new Promise<never>(() => {});
+  const fake = reader({
+    "/api/portfolio/holdings": [holding()],
+    "/api/theses/holding/holding-1": [active],
+    "/api/monitoring/holdings/holding-1/events": [],
+    "/api/portfolio/holdings/holding-1/conviction-log": null,
+    "/api/portfolio/upcoming-earnings": never,
+    "/api/onboarding/state": null,
+    "/api/monitoring/gaps": [],
+    "/api/portfolio/pulse": null,
+    "/api/monitoring/holdings/holding-1/reviewed": [],
+    "/api/monitoring/holdings/holding-1/supporting": [],
+    "/api/theses/thesis-active/decomposition": null,
+  });
+
+  const result = await loadPositionWorkspace(fake, "TEST", { optionalTimeoutMs: 10 });
+  assert.equal(result.holding?.id, "holding-1");
+  assert.equal(result.upcomingEarnings, null);
 });
 
 test("workspace selectors keep active and historical cases distinct", () => {

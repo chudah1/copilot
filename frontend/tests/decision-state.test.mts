@@ -48,6 +48,7 @@ function makePulse(
     reason: "",
     assumption_label: null,
     recent_event_count: 0,
+    unresolved_event_count: 0,
     days_since_thesis_update: 0,
     has_thesis: true,
     latest_event_summary: null,

@@ -8,6 +8,7 @@ from app.models.coverage_pass import CoveragePass
 from app.models.holding import Holding
 from app.models.monitoring_event import MonitoringEvent
 from app.models.thesis import Thesis
+from app.models.thesis_review import ThesisReview
 
 
 @pytest.mark.asyncio
@@ -159,6 +160,74 @@ async def test_pulse_watch_on_warning_event(client, auth_headers, test_user, db:
     assert pulses[0]["latest_event_summary"] == "Azure growth is being tested after the slowdown. Review whether the cloud thesis still holds."
     assert pulses[0]["latest_event_at"] is not None
     assert pulses[0]["urgency_score"] > 55
+
+
+@pytest.mark.asyncio
+async def test_pulse_keeps_old_unresolved_evidence_in_the_decision_inbox(client, auth_headers, test_user, db: AsyncSession):
+    holding = Holding(
+        id=uuid.uuid4(), ticker="AMD", name="AMD",
+        quantity=5, average_cost_basis=100, currency="GBP",
+        user_id=test_user.id,
+    )
+    db.add(holding)
+    await db.commit()
+    thesis = Thesis(
+        id=uuid.uuid4(), holding_id=holding.id, user_id=test_user.id,
+        status="active", why_own_it="AI infrastructure share gains", confidence="medium",
+    )
+    db.add(thesis)
+    await db.commit()
+    db.add(MonitoringEvent(
+        id=uuid.uuid4(), holding_id=holding.id, thesis_id=thesis.id,
+        event_type="price_move", severity="warning",
+        title="Price moved", summary="Price moved sharply.",
+        created_at=datetime.now(timezone.utc) - timedelta(days=30),
+    ))
+    await db.commit()
+
+    resp = await client.get("/api/portfolio/pulse", headers=auth_headers)
+    pulse = resp.json()["pulses"][0]
+    assert pulse["pulse_status"] == "watch"
+    assert pulse["pulse_basis"] == "evidence"
+    assert pulse["recent_event_count"] == 0
+    assert pulse["unresolved_event_count"] == 1
+
+
+@pytest.mark.asyncio
+async def test_pulse_does_not_keep_reviewed_evidence_on_watch(client, auth_headers, test_user, db: AsyncSession):
+    holding = Holding(
+        id=uuid.uuid4(), ticker="MSFT", name="Microsoft",
+        quantity=5, average_cost_basis=300, currency="GBP",
+        user_id=test_user.id,
+    )
+    db.add(holding)
+    await db.commit()
+    thesis = Thesis(
+        id=uuid.uuid4(), holding_id=holding.id, user_id=test_user.id,
+        status="active", why_own_it="Cloud demand", confidence="medium",
+    )
+    db.add(thesis)
+    await db.commit()
+    reviewed_event = MonitoringEvent(
+        id=uuid.uuid4(), holding_id=holding.id, thesis_id=thesis.id,
+        event_type="news", severity="warning",
+        title="Cloud growth slowed", summary="Growth slowed.",
+        created_at=datetime.now(timezone.utc),
+    )
+    db.add(reviewed_event)
+    await db.flush()
+    db.add(ThesisReview(
+        id=uuid.uuid4(), thesis_id=thesis.id,
+        monitoring_event_id=reviewed_event.id,
+        action="not_relevant",
+    ))
+    await db.commit()
+
+    resp = await client.get("/api/portfolio/pulse", headers=auth_headers)
+    pulse = resp.json()["pulses"][0]
+    assert pulse["pulse_status"] == "intact"
+    assert pulse["recent_event_count"] == 0
+    assert pulse["unresolved_event_count"] == 0
 
 
 @pytest.mark.asyncio

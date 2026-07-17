@@ -116,6 +116,9 @@ export function ThesisCheckIn({ thesisId, investorProfile, onFlagEvent, onAfterS
       claim.needs_review ||
       claim.supports.length + claim.threatens.length + claim.neutral.length > 0,
   );
+  const hasUnsortedEvidence = claims.some(
+    (claim) => claim.supports.length + claim.threatens.length + claim.neutral.length > 0,
+  );
   const pendingClaims = claims.filter((claim) => claim.needs_review);
   const undecided = pendingClaims.filter((claim) => !decisions[claimKey(claim)]);
   const anyBroken = Object.values(decisions).includes("broken");
@@ -170,7 +173,9 @@ export function ThesisCheckIn({ thesisId, investorProfile, onFlagEvent, onAfterS
           </p>
           <p className="font-display italic text-[1.6rem] leading-tight text-foreground">
             {data.needs_review_count === 0
-              ? `Nothing is testing the ${subject} right now.`
+              ? hasUnsortedEvidence
+                ? "Evidence is waiting to be sorted."
+                : `Nothing is testing the ${subject} right now.`
               : data.needs_review_count === 1
                 ? "One part of the story needs your call."
                 : `${data.needs_review_count} parts of the story need your call.`}

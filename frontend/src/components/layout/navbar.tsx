@@ -7,7 +7,7 @@ import { Bell, Menu, X } from "lucide-react";
 import useSWR from "swr";
 import { useAuth } from "@/lib/auth";
 import { fetcher } from "@/lib/api";
-import type { PortfolioSummary } from "@/types";
+import type { PortfolioPulse } from "@/types";
 
 const NAV_LINKS = [
   { href: "/dashboard", label: "Portfolio" },
@@ -26,17 +26,21 @@ export function Navbar() {
   const [open, setOpen] = useState(false);
   const visibleLinks = isAuthenticated ? NAV_LINKS : PUBLIC_NAV_LINKS;
 
-  const { data: summary } = useSWR<PortfolioSummary>(
-    isAuthenticated ? "/api/portfolio/summary" : null,
+  const { data: pulse } = useSWR<PortfolioPulse>(
+    isAuthenticated ? "/api/portfolio/pulse" : null,
     fetcher,
-    { refreshInterval: 5 * 60 * 1000 }
+    { refreshInterval: 60 * 1000 }
   );
-  const alertCount = summary?.attention_queue?.filter(
-    (item) => item.priority === "critical" || item.priority === "high"
-  ).length ?? 0;
+  const evidencePulses = pulse?.pulses.filter(
+    (item) => item.has_thesis && item.pulse_basis === "evidence" && item.pulse_status !== "intact",
+  ) ?? [];
+  const alertCount = evidencePulses.length;
+  const decisionCount = evidencePulses.filter((item) => item.pulse_status === "review").length;
   const alertsHref = alertCount > 0 ? "/dashboard#live-pressure" : "/dashboard#positions";
-  const reviewStatus = alertCount > 0
-    ? `${alertCount} decision${alertCount === 1 ? "" : "s"} waiting`
+  const reviewStatus = decisionCount > 0
+    ? `${decisionCount} decision${decisionCount === 1 ? "" : "s"} waiting`
+    : alertCount > 0
+      ? `${alertCount} change${alertCount === 1 ? "" : "s"} waiting`
     : "Nothing waiting";
 
   return (

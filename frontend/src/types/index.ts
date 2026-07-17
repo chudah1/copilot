@@ -376,6 +376,7 @@ export interface HoldingPulse {
   pnl_pct: number | null;
   last_checked_at: string | null;
   recent_event_count: number;
+  unresolved_event_count: number;
   sources_count: number | null;
 }
 
