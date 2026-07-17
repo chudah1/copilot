@@ -6,6 +6,11 @@ import { motion, AnimatePresence } from "framer-motion";
 import { api } from "@/lib/api";
 import { getErrorMessage } from "@/lib/errors";
 import { ageInDays, getCaseReviewPressure } from "@/lib/decision-state";
+import {
+  loadPositionWorkspace,
+  selectActiveThesis,
+  selectLatestInvalidatedThesis,
+} from "@/lib/position-workspace";
 import { formatCurrency, formatDate } from "@/lib/utils";
 import { toast } from "sonner";
 import { ThesisCard } from "@/components/thesis/thesis-card";
@@ -110,12 +115,10 @@ function PositionDetailInner() {
   const [historicalAudit, setHistoricalAudit] = useState<HistoricalAuditResponse | null>(null);
 
   const holding = holdings.find((h) => h.ticker === ticker);
-  const activeThesis = theses.find((t) => t.status === "active" || t.status === "draft" || t.status === "needs_review");
+  const activeThesis = selectActiveThesis(theses);
   const fromOnboarding = searchParams.get("source") === "onboarding";
   const fromBlindSpot = searchParams.get("source") === "dashboard_blind_spot";
-  const latestInvalidatedThesis = [...theses]
-    .filter((t) => t.status === "invalidated")
-    .sort((a, b) => new Date(b.updated_at).getTime() - new Date(a.updated_at).getTime())[0];
+  const latestInvalidatedThesis = selectLatestInvalidatedThesis(theses);
 
   const refreshPulse = async (holdingId: string) => {
     const portfolioPulse = await api.get<PortfolioPulse>("/api/portfolio/pulse").catch(() => null);
@@ -125,46 +128,21 @@ function PositionDetailInner() {
   useEffect(() => {
     async function load() {
       try {
-        const h = await api.get<Holding[]>("/api/portfolio/holdings");
-        setHoldings(h);
-        const match = h.find((x) => x.ticker === ticker);
-        if (match) {
-          const [t, e, log, earnings, onboarding, gaps, portfolioPulse, reviewed, supporting] = await Promise.all([
-            api.get<Thesis[]>(`/api/theses/holding/${match.id}`),
-            api.get<MonitoringEvent[]>(`/api/monitoring/holdings/${match.id}/events`),
-            api.get<ConvictionLogResponse>(`/api/portfolio/holdings/${match.id}/conviction-log`).catch(() => null),
-            api.get<UpcomingEarnings[]>("/api/portfolio/upcoming-earnings").catch(() => []),
-            api.get<OnboardingState>("/api/onboarding/state").catch(() => null),
-            api.get<MonitoringGap[]>(`/api/monitoring/gaps`).catch(() => []),
-            api.get<PortfolioPulse>("/api/portfolio/pulse").catch(() => null),
-            api.get<ReviewedItem[]>(`/api/monitoring/holdings/${match.id}/reviewed`).catch(() => []),
-            api.get<SupportingItem[]>(`/api/monitoring/holdings/${match.id}/supporting`).catch(() => []),
-          ]);
-          setTheses(t);
-          setEvents(e);
-          setConvictionLog(log);
-          setUpcomingEarnings(earnings.find((item) => item.holding_id === match.id) ?? null);
-          setOnboardingState(onboarding);
-          setAllGaps(gaps);
-          setPulse(portfolioPulse?.pulses.find((p) => p.holding_id === match.id) ?? null);
-          setReviewedItems(reviewed);
-          setSupportingItems(supporting);
-          const latestThesis = t.find((item) => item.status === "active" || item.status === "draft" || item.status === "needs_review");
-          if (latestThesis) {
-            setDecompositionLoading(true);
-            try {
-              const envelope = await api.get<ThesisDecompositionEnvelope>(`/api/theses/${latestThesis.id}/decomposition`);
-              setDecompositionEnvelope(envelope);
-            } catch (error: unknown) {
-              const message = getErrorMessage(error, "Failed to load decomposition");
-              if (message.includes("Decomposition not found")) {
-                setDecompositionEnvelope(null);
-              } else {
-                setDecompositionEnvelope({ status: "failed", message, decomposition: null });
-              }
-            } finally {
-              setDecompositionLoading(false);
-            }
+        setDecompositionLoading(true);
+        const workspace = await loadPositionWorkspace(api, ticker);
+        setHoldings(workspace.holdings);
+        setTheses(workspace.theses);
+        setEvents(workspace.events);
+        setConvictionLog(workspace.convictionLog);
+        setUpcomingEarnings(workspace.upcomingEarnings);
+        setOnboardingState(workspace.onboardingState);
+        setAllGaps(workspace.monitoringGaps);
+        setPulse(workspace.pulse);
+        setReviewedItems(workspace.reviewedItems);
+        setSupportingItems(workspace.supportingItems);
+        setDecompositionEnvelope(workspace.decompositionEnvelope);
+        if (workspace.activeThesis) {
+          const latestThesis = workspace.activeThesis;
             // Background health check — detects recent earnings without requiring a monitoring event
             void api.post<HealthCheckResult>(`/api/theses/${latestThesis.id}/health-check`)
               .then(setHealthCheck)
@@ -172,17 +150,15 @@ function PositionDetailInner() {
             void api.get<ThesisHealthSnapshot[]>(`/api/theses/${latestThesis.id}/health-history`)
               .then(setHealthSnapshots)
               .catch(() => null);
-          } else {
-            setDecompositionEnvelope(null);
-          }
-          // Auto-switch to monitoring if there are unreviewed events
-          if (e.some((ev) => !ev.review_action)) {
-            setActiveTab("monitoring");
-          }
+        }
+        // Auto-switch to monitoring if there are unreviewed events
+        if (workspace.events.some((event) => !event.review_action)) {
+          setActiveTab("monitoring");
         }
       } catch (err) {
         console.error(err);
       } finally {
+        setDecompositionLoading(false);
         setLoading(false);
       }
     }
