@@ -6,8 +6,8 @@ import { formatCurrency } from "@/lib/utils";
 import { CheckNowButton } from "@/components/monitoring/check-now-button";
 import type { CheckNowResponse, Holding, HoldingPulse, Thesis } from "@/types";
 import { WatchReceipt } from "@/components/portfolio/watch-receipt";
-import { cleanTicker, ageInDays, STATUS_DOT, HEALTH_CHIP } from "./position-helpers";
-import type { TabId, getThesisInsights, getStalePressure } from "./position-helpers";
+import { cleanTicker, ageInDays } from "./position-helpers";
+import type { TabId, getStalePressure } from "./position-helpers";
 
 interface PositionHeaderProps {
   holding: Holding;
@@ -19,9 +19,7 @@ interface PositionHeaderProps {
   value: number;
   pnl: number;
   pnlPct: string;
-  thesisInsights: ReturnType<typeof getThesisInsights>;
   stalePressure: ReturnType<typeof getStalePressure>;
-  steps: { done: boolean; partial?: boolean; label: string }[];
   tabs: { id: TabId; label: string; badge?: number | string }[];
   activeTab: TabId;
   unreviewedEvents: number;
@@ -35,9 +33,24 @@ interface PositionHeaderProps {
 
 export function PositionHeader({
   holding, activeThesis, pulse, investorProfile, headerCollapsed, hasPrice, value, pnl, pnlPct,
-  thesisInsights, stalePressure, steps, tabs, activeTab, unreviewedEvents, deleteConfirming,
+  stalePressure, tabs, activeTab, unreviewedEvents, deleteConfirming,
   deleteLoading, onDelete, onSetDeleteConfirming, onCheckNowComplete, onSelectTab,
 }: PositionHeaderProps) {
+  const decisionStatus = !activeThesis
+    ? "Needs a written case"
+    : pulse?.pulse_status === "review"
+      ? "Needs a decision"
+      : pulse?.pulse_status === "watch"
+        ? "Changed"
+        : "Calm";
+  const decisionStatusDot = !activeThesis
+    ? "bg-border"
+    : pulse?.pulse_status === "review"
+      ? "bg-red-500"
+      : pulse?.pulse_status === "watch"
+        ? "bg-amber-500"
+        : "bg-emerald-500";
+
   return (
       <div className="sticky top-[52px] z-20 bg-background border-b border-border/60">
         <div className="max-w-5xl mx-auto px-4 sm:px-6 lg:px-10">
@@ -127,21 +140,12 @@ export function PositionHeader({
 
           {/* Status ribbon */}
           <div className={`flex flex-col items-start gap-3 pb-3 overflow-hidden transition-all duration-200 sm:flex-row sm:items-center sm:gap-4 ${headerCollapsed ? "max-h-0 pb-0 opacity-0 sm:max-h-20 sm:pb-3 sm:opacity-100" : "max-h-48 sm:max-h-20"}`}>
-            {/* Pulse dot + label */}
             <div className="flex flex-wrap items-center gap-2">
-              <span className={`h-1.5 w-1.5 rounded-full ${STATUS_DOT[activeThesis?.status ?? "no_thesis"] ?? "bg-border"}`} />
+              <span className={`h-1.5 w-1.5 rounded-full ${decisionStatusDot}`} />
               <span className="font-mono text-[10px] uppercase tracking-[0.2em] text-muted-foreground">
-                {thesisInsights.qualityLabel}
+                {decisionStatus}
               </span>
             </div>
-            {activeThesis?.health_label && (
-              <>
-                <span className="text-border text-[10px]">·</span>
-                <span className={`font-mono text-[10px] uppercase tracking-[0.12em] px-1.5 py-0.5 ${HEALTH_CHIP[activeThesis.health_label] ?? ""}`}>
-                  {activeThesis.health_score != null ? `${activeThesis.health_score} · ` : ""}{activeThesis.health_label}
-                </span>
-              </>
-            )}
             {activeThesis && (
                 <>
                   <span className="text-border text-[10px]">·</span>
@@ -158,19 +162,6 @@ export function PositionHeader({
                   )}
                 </>
               )}
-            {/* Progress indicators */}
-            <div className="flex flex-wrap items-center gap-3 sm:ml-auto sm:justify-end">
-              {steps.map((step, i) => (
-                <div key={step.label} className="flex items-center gap-2">
-                  {i > 0 && <span className="text-border text-[10px]">·</span>}
-                  <span className={`font-mono text-[10px] uppercase tracking-[0.12em] ${
-                    step.done ? "text-emerald-600" : step.partial ? "text-amber-600" : "text-muted-foreground/70"
-                  }`}>
-                    {step.done ? "●" : step.partial ? "◐" : "○"} {step.label}
-                  </span>
-                </div>
-              ))}
-            </div>
           </div>
 
           {/* Tab strip */}

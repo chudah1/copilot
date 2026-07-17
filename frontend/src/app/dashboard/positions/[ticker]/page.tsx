@@ -667,7 +667,6 @@ function PositionDetailInner() {
     onboardingState?.investor_profile ?? null,
   );
   const copy = positionCopy(onboardingState?.investor_profile ?? null);
-  const latestEvent = events[0];
   const recentEarningsEvent =
     events.find(
       (e) => ["earnings_surprise", "earnings_call_transcript"].includes(e.event_type) && !e.review_action && isRecentEvent(e.created_at, 14),
@@ -717,12 +716,6 @@ function PositionDetailInner() {
     { id: "thesis", label: "Original case" },
     { id: "monitoring", label: "What changed", badge: unreviewedEvents > 0 ? unreviewedEvents : undefined },
     { id: "decisions", label: "Decisions" },
-  ];
-
-  const steps = [
-    { done: !!activeThesis, label: "Thesis" },
-    { done: hasActiveSignals, partial: hasSignals && !hasActiveSignals, label: "Signals" },
-    { done: !!(latestEvent && latestEvent.review_action), partial: !!(latestEvent && !latestEvent.review_action), label: "Review" },
   ];
 
   const lastReviewedEvent = events.filter((e) => e.review_action).sort((a, b) =>
@@ -849,9 +842,7 @@ function PositionDetailInner() {
         value={value}
         pnl={pnl}
         pnlPct={pnlPct}
-        thesisInsights={thesisInsights}
         stalePressure={stalePressure}
-        steps={steps}
         tabs={tabs}
         activeTab={activeTab}
         unreviewedEvents={unreviewedEvents}
