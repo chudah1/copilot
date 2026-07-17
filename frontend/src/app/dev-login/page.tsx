@@ -1,6 +1,6 @@
 "use client";
 
-import { Suspense, useEffect, useState } from "react";
+import { Suspense, useEffect, useState, useSyncExternalStore } from "react";
 import { useSearchParams } from "next/navigation";
 import { getApiBaseUrl } from "@/lib/api-base";
 import { storeTokens } from "@/lib/auth-tokens";
@@ -8,6 +8,11 @@ import { storeTokens } from "@/lib/auth-tokens";
 function isLocalHost() {
   if (typeof window === "undefined") return false;
   return window.location.hostname === "127.0.0.1" || window.location.hostname === "localhost";
+}
+
+function subscribeToHost(onStoreChange: () => void) {
+  queueMicrotask(onStoreChange);
+  return () => {};
 }
 
 function safeRedirect(target: string | null) {
@@ -24,13 +29,13 @@ function safeRedirect(target: string | null) {
 function DevLoginInner() {
   const searchParams = useSearchParams();
   const [message, setMessage] = useState("Signing you in…");
-  const localHost = isLocalHost();
+  const localHost = useSyncExternalStore(subscribeToHost, isLocalHost, () => false);
   const email = searchParams.get("email")?.trim().toLowerCase() || "";
   const password = searchParams.get("password")?.trim() || "PenkeepTest123!";
   const redirect = safeRedirect(searchParams.get("redirect"));
 
   useEffect(() => {
-    if (!localHost || !email) {
+    if (localHost !== true || !email) {
       return;
     }
 
