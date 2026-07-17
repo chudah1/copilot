@@ -1,7 +1,7 @@
 [
   {
     "id": "info_nvda_001",
-    "description": "Market-wide rally \u2014 NVDA moves with index, thesis is AI GPU fundamentals",
+    "description": "Market-wide rally — NVDA moves with index, thesis is AI GPU fundamentals",
     "expected_severity": "info",
     "investor_profile": "thesis_driven",
     "input": {
@@ -15,7 +15,7 @@
   },
   {
     "id": "info_aapl_002",
-    "description": "New retail store opening \u2014 irrelevant to Services margin thesis",
+    "description": "New retail store opening — irrelevant to Services margin thesis",
     "expected_severity": "info",
     "investor_profile": "thesis_driven",
     "input": {
@@ -29,7 +29,7 @@
   },
   {
     "id": "info_o_003",
-    "description": "Fed holds rates unchanged \u2014 consistent with income thesis assumptions",
+    "description": "Fed holds rates unchanged — consistent with income thesis assumptions",
     "expected_severity": "info",
     "investor_profile": "thesis_driven",
     "input": {
@@ -43,7 +43,7 @@
   },
   {
     "id": "info_vz_004",
-    "description": "New iPhone launch boosts phone sales \u2014 irrelevant to FCF/dividend thesis",
+    "description": "New iPhone launch boosts phone sales — irrelevant to FCF/dividend thesis",
     "expected_severity": "info",
     "investor_profile": "general",
     "input": {
@@ -57,7 +57,7 @@
   },
   {
     "id": "info_msft_005",
-    "description": "Competitor funding round \u2014 OpenAI raises capital, does not threaten Azure thesis",
+    "description": "Competitor funding round — OpenAI raises capital, does not threaten Azure thesis",
     "expected_severity": "info",
     "investor_profile": "thesis_driven",
     "input": {
@@ -71,7 +71,7 @@
   },
   {
     "id": "info_googl_006",
-    "description": "Google wins another search quality survey \u2014 confirms existing dominant position",
+    "description": "Google wins another search quality survey — confirms existing dominant position",
     "expected_severity": "info",
     "investor_profile": "thesis_driven",
     "input": {
@@ -85,7 +85,7 @@
   },
   {
     "id": "warning_nvda_007",
-    "description": "AMD announces competitive GPU \u2014 thesis is about NVDA's moat, competitor progress is a pillar risk",
+    "description": "AMD announces competitive GPU — thesis is about NVDA's moat, competitor progress is a pillar risk",
     "expected_severity": "warning",
     "investor_profile": "thesis_driven",
     "input": {
@@ -99,7 +99,7 @@
   },
   {
     "id": "warning_amzn_008",
-    "description": "AWS growth decelerates to 18% \u2014 thesis requires >20%, approaching threshold",
+    "description": "AWS growth decelerates to 18% — thesis requires >20%, approaching threshold",
     "expected_severity": "warning",
     "investor_profile": "thesis_driven",
     "input": {
@@ -113,7 +113,7 @@
   },
   {
     "id": "warning_lulu_009",
-    "description": "Gross margin slips to 53% and promotional discounting confirmed \u2014 both quantitative and qualitative conditions triggered",
+    "description": "Gross margin slips to 53% and promotional discounting confirmed — both quantitative and qualitative conditions triggered",
     "expected_severity": "thesis_breaking",
     "investor_profile": "thesis_driven",
     "input": {
@@ -127,7 +127,7 @@
   },
   {
     "id": "warning_crm_010",
-    "description": "Salesforce NRR falls to 109% \u2014 thesis requires >110%, borderline breach",
+    "description": "Salesforce NRR falls to 109% — thesis requires >110%, borderline breach",
     "expected_severity": "warning",
     "investor_profile": "thesis_driven",
     "input": {
@@ -141,7 +141,7 @@
   },
   {
     "id": "warning_meta_011",
-    "description": "Zuckerberg sells shares \u2014 hearsay investor takes this as CEO conviction signal",
+    "description": "Zuckerberg sells shares — hearsay investor takes this as CEO conviction signal",
     "expected_severity": "warning",
     "investor_profile": "hearsay_driven",
     "input": {
@@ -155,7 +155,7 @@
   },
   {
     "id": "warning_bx_012",
-    "description": "Middle-market defaults rise \u2014 thesis depends on private credit market health",
+    "description": "Middle-market defaults rise — thesis depends on private credit market health",
     "expected_severity": "warning",
     "investor_profile": "thesis_driven",
     "input": {
@@ -169,7 +169,7 @@
   },
   {
     "id": "warning_shop_013",
-    "description": "GMV growth at 22% \u2014 barely above 20% floor, Amazon competing harder for merchants",
+    "description": "GMV growth at 22% — barely above 20% floor, Amazon competing harder for merchants",
     "expected_severity": "warning",
     "investor_profile": "thesis_driven",
     "input": {
@@ -183,7 +183,7 @@
   },
   {
     "id": "warning_arkk_014",
-    "description": "ARK underperforms S&P for second consecutive year \u2014 nearing stated condition",
+    "description": "ARK underperforms S&P for second consecutive year — nearing stated condition",
     "expected_severity": "warning",
     "investor_profile": "hearsay_driven",
     "input": {
@@ -197,7 +197,7 @@
   },
   {
     "id": "thesis_breaking_nvda_015",
-    "description": "US export ban on AI chips to China \u2014 China is a material revenue source, directly stated in thesis",
+    "description": "US export ban on AI chips to China — China is a material revenue source, directly stated in thesis",
     "expected_severity": "thesis_breaking",
     "investor_profile": "thesis_driven",
     "input": {
@@ -211,7 +211,7 @@
   },
   {
     "id": "thesis_breaking_aapl_016",
-    "description": "EU forces App Store fee cut to 15% \u2014 directly stated as the thesis-breaking condition",
+    "description": "EU forces App Store fee cut to 15% — directly stated as the thesis-breaking condition",
     "expected_severity": "thesis_breaking",
     "investor_profile": "thesis_driven",
     "input": {
@@ -225,7 +225,7 @@
   },
   {
     "id": "thesis_breaking_vz_017",
-    "description": "Verizon cuts dividend by 20% \u2014 directly breaks the stated income thesis condition",
+    "description": "Verizon cuts dividend by 20% — directly breaks the stated income thesis condition",
     "expected_severity": "thesis_breaking",
     "investor_profile": "thesis_driven",
     "input": {
@@ -239,7 +239,7 @@
   },
   {
     "id": "thesis_breaking_googl_018",
-    "description": "Apple switches Safari default search to Bing \u2014 explicitly stated as thesis-breaking condition",
+    "description": "Apple switches Safari default search to Bing — explicitly stated as thesis-breaking condition",
     "expected_severity": "thesis_breaking",
     "investor_profile": "thesis_driven",
     "input": {
@@ -253,7 +253,7 @@
   },
   {
     "id": "thesis_breaking_coin_019",
-    "description": "SEC enforcement action \u2014 directly breaks stated regulatory thesis condition",
+    "description": "SEC enforcement action — directly breaks stated regulatory thesis condition",
     "expected_severity": "thesis_breaking",
     "investor_profile": "hearsay_driven",
     "input": {
@@ -267,7 +267,7 @@
   },
   {
     "id": "thesis_breaking_o_020",
-    "description": "Occupancy drops to 93% for two consecutive quarters \u2014 explicitly breaks the stated floor condition",
+    "description": "Occupancy drops to 93% for two consecutive quarters — explicitly breaks the stated floor condition",
     "expected_severity": "thesis_breaking",
     "investor_profile": "thesis_driven",
     "input": {
@@ -281,8 +281,8 @@
   },
   {
     "id": "info_tsla_021",
-    "description": "Rivian raises $1.5B \u2014 EV competitor funding round, TSLA thesis is about FSD and energy margins",
-    "expected_severity": "info",
+    "description": "Rivian raises $1.5B for vans/manufacturing — thesis explicitly disclaims EV market share ('hardware margins secondary, not EV market share'), and the raise doesn't move Rivian toward the stated autonomy trigger. Explicit disclaimers suppress: skip. Relabelled from info 2026-07-17.",
+    "expected_severity": "skip",
     "investor_profile": "thesis_driven",
     "input": {
       "ticker": "TSLA",
@@ -295,7 +295,7 @@
   },
   {
     "id": "info_googl_022",
-    "description": "YouTube hits 3B monthly users \u2014 positive milestone but thesis is about search share, not YouTube",
+    "description": "YouTube hits 3B monthly users — positive milestone but thesis is about search share, not YouTube",
     "expected_severity": "info",
     "investor_profile": "thesis_driven",
     "input": {
@@ -309,7 +309,7 @@
   },
   {
     "id": "info_jpm_023",
-    "description": "Fed releases new bank capital framework \u2014 directly threatens stated ROE condition",
+    "description": "Fed releases new bank capital framework — directly threatens stated ROE condition",
     "expected_severity": "warning",
     "investor_profile": "thesis_driven",
     "input": {
@@ -323,7 +323,7 @@
   },
   {
     "id": "warning_tsla_024",
-    "description": "Tesla automotive gross margin at 16.8% \u2014 1.2pp below the stated 18% floor",
+    "description": "Tesla automotive gross margin at 16.8% — 1.2pp below the stated 18% floor",
     "expected_severity": "warning",
     "investor_profile": "thesis_driven",
     "input": {
@@ -337,7 +337,7 @@
   },
   {
     "id": "warning_dis_025",
-    "description": "Disney+ loses 2M subscribers \u2014 first quarter of decline, two-quarter condition not yet triggered",
+    "description": "Disney+ loses 2M subscribers — first quarter of decline, two-quarter condition not yet triggered",
     "expected_severity": "warning",
     "investor_profile": "thesis_driven",
     "input": {
@@ -351,7 +351,7 @@
   },
   {
     "id": "warning_uber_026",
-    "description": "Lyft expands aggressively \u2014 direct competitor taking market share, thesis requires Uber above 65%",
+    "description": "Lyft expands aggressively — direct competitor taking market share, thesis requires Uber above 65%",
     "expected_severity": "warning",
     "investor_profile": "thesis_driven",
     "input": {
@@ -365,7 +365,7 @@
   },
   {
     "id": "warning_jpm_027",
-    "description": "Jamie Dimon hints at succession \u2014 hearsay investor owns JPM because of Dimon specifically",
+    "description": "Jamie Dimon hints at succession — hearsay investor owns JPM because of Dimon specifically",
     "expected_severity": "warning",
     "investor_profile": "hearsay_driven",
     "input": {
@@ -379,7 +379,7 @@
   },
   {
     "id": "thesis_breaking_tsla_028",
-    "description": "Tesla cuts prices again, margin guidance slashed to 12% \u2014 investor stated below-15% margin as a sell condition",
+    "description": "Tesla cuts prices again, margin guidance slashed to 12% — investor stated below-15% margin as a sell condition",
     "expected_severity": "thesis_breaking",
     "investor_profile": "thesis_driven",
     "input": {
@@ -393,7 +393,7 @@
   },
   {
     "id": "thesis_breaking_dis_029",
-    "description": "Disney+ declines for second consecutive quarter \u2014 investor's explicit two-quarter exit condition triggered",
+    "description": "Disney+ declines for second consecutive quarter — investor's explicit two-quarter exit condition triggered",
     "expected_severity": "thesis_breaking",
     "investor_profile": "thesis_driven",
     "input": {
@@ -407,7 +407,7 @@
   },
   {
     "id": "skip_nvda_032",
-    "description": "ETF named after ticker \u2014 NVDY distribution announcement, article is about the ETF not NVIDIA",
+    "description": "ETF named after ticker — NVDY distribution announcement, article is about the ETF not NVIDIA",
     "expected_severity": "skip",
     "investor_profile": "thesis_driven",
     "input": {
@@ -422,8 +422,8 @@
   },
   {
     "id": "skip_nvda_033",
-    "description": "Competitor product launch mentioning NVIDIA in passing \u2014 article is primarily about AMD",
-    "expected_severity": "skip",
+    "description": "AMD record revenue on MI300X — named competitor's routine strong results bear on the 'AMD gains real GPU market share' trigger: info, not skip; and not warning (no share-shift evidence, just strong quarter + guidance). Relabelled from skip 2026-07-17. Contested: model consistently answers warning (quantified traction toward the named trigger); info kept per the competitor bar — routine strong results without share-shift evidence.",
+    "expected_severity": "info",
     "investor_profile": "thesis_driven",
     "input": {
       "ticker": "NVDA",
@@ -437,8 +437,8 @@
   },
   {
     "id": "skip_msft_034",
-    "description": "Customer earnings report \u2014 Oracle cloud results appear in Microsoft feed because article mentions Azure",
-    "expected_severity": "skip",
+    "description": "Oracle OCI +49%, 'winning enterprise workloads' — bears (weakly, as threat context) on the stated 'Azure grows faster than AWS and GCP' claim, so a quiet info line in the evidence feed, not erasure. Relabelled from skip 2026-07-17 under claim-review semantics.",
+    "expected_severity": "info",
     "investor_profile": "thesis_driven",
     "input": {
       "ticker": "MSFT",
@@ -452,7 +452,7 @@
   },
   {
     "id": "skip_aapl_035",
-    "description": "Leveraged ETF rebalance \u2014 ProShares 3x Apple ETF distribution, not about Apple itself",
+    "description": "Leveraged ETF rebalance — ProShares 3x Apple ETF distribution, not about Apple itself",
     "expected_severity": "skip",
     "investor_profile": "thesis_driven",
     "input": {
@@ -467,8 +467,8 @@
   },
   {
     "id": "skip_nvda_036",
-    "description": "Supplier news \u2014 TSMC capacity expansion mentioned alongside NVDA as a customer, article is primarily about TSMC",
-    "expected_severity": "skip",
+    "description": "TSMC $40B capacity buildout citing NVIDIA demand — supplier capex driven by the holding's own demand bears on the data-center demand pillar (supports), so a quiet info line, not erasure. Relabelled from skip 2026-07-17 under claim-review semantics.",
+    "expected_severity": "info",
     "investor_profile": "thesis_driven",
     "input": {
       "ticker": "NVDA",
@@ -482,7 +482,7 @@
   },
   {
     "id": "thesis_breaking_amzn_031",
-    "description": "FTC wins antitrust case requiring AWS divestiture \u2014 investor explicitly stated structural breakup as a sell condition",
+    "description": "FTC wins antitrust case requiring AWS divestiture — investor explicitly stated structural breakup as a sell condition",
     "expected_severity": "thesis_breaking",
     "investor_profile": "thesis_driven",
     "input": {
@@ -496,7 +496,7 @@
   },
   {
     "id": "direction_now_037",
-    "description": "Dramatic negative headline (36% drop, 'AI concerns') around vague fundamentals that affirm the pillar \u2014 direction must follow substance",
+    "description": "Dramatic negative headline (36% drop, 'AI concerns') around vague fundamentals that affirm the pillar — direction must follow substance",
     "expected_severity": "warning",
     "expected_direction": "supports",
     "investor_profile": "hearsay_driven",
@@ -508,12 +508,12 @@
       "must_remain_true": "Subscription revenue grows above 20% YoY. Renewal rate stays above 97%.",
       "what_would_change_my_mind": "Two consecutive quarters of sub-20% subscription growth, or renewal rate slipping below 95%.",
       "ai_summary": "NOW is owned for durable subscription growth driven by enterprise workflow lock-in and AI upsell.",
-      "event_description": "ServiceNow Shares Drop 36% Amid AI Concerns \u2014 Despite a significant stock decline, ServiceNow's subscription growth remains solid, and the company serves over 8,800 enterprise clients, positioning itself as a workflow orchestration platform. The company is betting on its Control Tower AI platform to lock customers into a data-rich, AI-governed ecosystem and monetize this deeper engagement."
+      "event_description": "ServiceNow Shares Drop 36% Amid AI Concerns — Despite a significant stock decline, ServiceNow's subscription growth remains solid, and the company serves over 8,800 enterprise clients, positioning itself as a workflow orchestration platform. The company is betting on its Control Tower AI platform to lock customers into a data-rich, AI-governed ecosystem and monetize this deeper engagement."
     }
   },
   {
     "id": "direction_nke_038",
-    "description": "Positive headline + price pop, but article substance breaches a stated margin floor \u2014 direction must follow substance",
+    "description": "Positive headline + price pop, but article substance breaches a stated margin floor — direction must follow substance",
     "expected_severity": "warning",
     "expected_direction": "threatens",
     "investor_profile": "thesis_driven",
@@ -530,7 +530,7 @@
   },
   {
     "id": "direction_pep_039",
-    "description": "Pure price move on sector rotation, no company fundamentals in the article \u2014 direction is neutral, not threatens",
+    "description": "Pure price move on sector rotation, no company fundamentals in the article — direction is neutral, not threatens",
     "expected_severity": "info",
     "expected_direction": "neutral",
     "investor_profile": "thesis_driven",
@@ -547,7 +547,7 @@
   },
   {
     "id": "direction_abnb_040",
-    "description": "Aligned positive case: price up and substance affirms stated pillars \u2014 control for supports direction",
+    "description": "Aligned positive case: price up and substance affirms stated pillars — control for supports direction",
     "expected_severity": "info",
     "expected_direction": "supports",
     "investor_profile": "thesis_driven",
