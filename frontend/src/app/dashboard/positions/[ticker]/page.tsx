@@ -77,7 +77,16 @@ function PositionDetailInner() {
   const { ticker } = useParams<{ ticker: string }>();
   const searchParams = useSearchParams();
   const router = useRouter();
-  const [activeTab, setActiveTab] = useState<TabId>("thesis");
+  const requestedTab = searchParams.get("tab");
+  const [activeTab, setActiveTab] = useState<TabId>(
+    requestedTab === "monitoring" || requestedTab === "decisions" ? requestedTab : "thesis",
+  );
+  useEffect(() => {
+    if (requestedTab === "monitoring" || requestedTab === "decisions") {
+      // eslint-disable-next-line react-hooks/set-state-in-effect -- navigation can change the requested tab without remounting this route
+      setActiveTab(requestedTab);
+    }
+  }, [requestedTab]);
   const [holdings, setHoldings] = useState<Holding[]>([]);
   const [theses, setTheses] = useState<Thesis[]>([]);
   const [events, setEvents] = useState<MonitoringEvent[]>([]);

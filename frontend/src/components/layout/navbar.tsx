@@ -41,7 +41,7 @@ export function Navbar() {
     null,
   );
   const alertsHref = primaryReviewPulse
-    ? `/dashboard/positions/${primaryReviewPulse.ticker}`
+    ? `/dashboard/positions/${primaryReviewPulse.ticker}?tab=monitoring`
     : "/dashboard#positions";
   const reviewStatus = decisionCount > 0
     ? `${decisionCount} decision${decisionCount === 1 ? "" : "s"} waiting`

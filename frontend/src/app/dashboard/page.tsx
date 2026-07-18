@@ -159,14 +159,14 @@ function dashboardStateCta(args: {
 
   if (primaryEntry.decisionState.kind === "needs_decision") {
     return {
-      href: `/dashboard/positions/${ticker}`,
+      href: `/dashboard/positions/${ticker}?tab=monitoring`,
       label: `Review ${cleanTicker(ticker)} →`,
     };
   }
 
   if (primaryEntry.decisionState.kind === "changed") {
     return {
-      href: `/dashboard/positions/${ticker}`,
+      href: `/dashboard/positions/${ticker}?tab=monitoring`,
       label: `Open ${cleanTicker(ticker)} →`,
     };
   }

@@ -73,7 +73,7 @@ export function AttentionCard({ holding, pulse, investorProfile, index }: Attent
       animate={{ opacity: 1, x: 0 }}
       transition={{ duration: 0.25, delay: index * 0.06 }}
     >
-      <Link href={`/dashboard/positions/${holding.ticker}`}>
+      <Link href={`/dashboard/positions/${holding.ticker}?tab=monitoring`}>
         <div className={`w-56 shrink-0 border bg-card p-4 space-y-2 transition-all hover:shadow-md cursor-pointer ${
           isReview
             ? "border-l-2 border-l-red-500 border-border hover:border-l-red-600"
