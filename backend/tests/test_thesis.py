@@ -152,7 +152,7 @@ async def test_debug_decompose_returns_provider_and_gateway_results(client, auth
     assert data["gateway_result"]["success"] is True
 
 
-async def test_update_thesis(client, auth_headers, holding, db):
+async def test_update_thesis_rebuilds_case_map(client, auth_headers, holding, db, monkeypatch):
     create = await client.post(
         "/api/theses",
         json={
@@ -170,10 +170,26 @@ async def test_update_thesis(client, auth_headers, holding, db):
     thesis_id = create.json()["id"]
 
     from app.models.thesis import Thesis
+    from app.models.thesis_decomposition import ThesisDecomposition
     thesis = await db.get(Thesis, thesis_id)
     thesis.historical_audit_status = "ready"
     thesis.historical_audit_results = [{"description": "old"}]
+    db.add(ThesisDecomposition(
+        thesis_id=thesis.id,
+        version=1,
+        status="confirmed",
+    ))
     await db.commit()
+
+    rebuilt: list[str] = []
+
+    async def fake_rebuild(updated_thesis_id, _session_factory):
+        rebuilt.append(str(updated_thesis_id))
+
+    monkeypatch.setattr(
+        "app.routes.thesis.rebuild_decomposition_for_thesis",
+        fake_rebuild,
+    )
 
     response = await client.put(
         f"/api/theses/{thesis_id}",
@@ -190,11 +206,80 @@ async def test_update_thesis(client, auth_headers, holding, db):
     assert response.json()["status"] == "active"
     assert response.json()["confidence"] == "high"
     assert response.json()["must_remain_true"] == "Demand remains strong."
+    assert rebuilt == [thesis_id]
 
     await db.refresh(thesis)
     refreshed = thesis
     assert refreshed.historical_audit_status is None
     assert refreshed.historical_audit_results is None
+
+
+async def test_rebuild_decomposition_supersedes_the_old_case_map(
+    db, job_session_factory, test_user, monkeypatch
+):
+    from sqlalchemy import select
+
+    from app.models.holding import Holding
+    from app.models.thesis import Thesis
+    from app.models.thesis_decomposition import ThesisDecomposition
+    from app.services import decomposition as service
+
+    holding = Holding(
+        ticker="NOW",
+        name="ServiceNow",
+        quantity=1,
+        average_cost_basis=500,
+        currency="GBP",
+        user_id=test_user.id,
+    )
+    db.add(holding)
+    await db.flush()
+    thesis = Thesis(
+        holding_id=holding.id,
+        user_id=test_user.id,
+        status="active",
+        why_own_it="Workflow lock-in",
+        must_remain_true="Customers keep expanding",
+        what_would_change_my_mind="Core workflows are replaced",
+        confidence="medium",
+    )
+    db.add(thesis)
+    await db.flush()
+    old = ThesisDecomposition(
+        thesis_id=thesis.id,
+        version=1,
+        status="confirmed",
+    )
+    db.add(old)
+    await db.commit()
+    thesis_id = thesis.id
+
+    async def fake_generate(*, db, thesis, holding):
+        replacement = ThesisDecomposition(
+            thesis_id=thesis.id,
+            version=2,
+            status="confirmed",
+        )
+        db.add(replacement)
+        await db.flush()
+        await db.commit()
+        return service.PersistedDecompositionResult(
+            status="confirmed",
+            message=None,
+            decomposition=replacement,
+        )
+
+    monkeypatch.setattr(service, "generate_decomposition_for_thesis", fake_generate)
+    await service.rebuild_decomposition_for_thesis(thesis_id, job_session_factory)
+
+    db.expire_all()
+    rows = await db.execute(
+        select(ThesisDecomposition)
+        .where(ThesisDecomposition.thesis_id == thesis_id)
+        .order_by(ThesisDecomposition.version)
+    )
+    versions = list(rows.scalars().all())
+    assert [item.status for item in versions] == ["superseded", "confirmed"]
 
 
 async def test_list_current_theses_returns_latest_current_per_holding(client, auth_headers, holding):

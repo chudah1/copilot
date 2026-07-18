@@ -11,7 +11,11 @@ interface MonitoringTabProps {
   hasThesis: boolean;
   thesisId: string | null;
   ticker: string;
-  writtenCase: string;
+  writtenCase: {
+    whyOwnIt: string;
+    stillTrueIf: string | null;
+    breaksIf: string | null;
+  };
   investorProfile: "thesis_driven" | "hearsay_driven" | null;
   events: MonitoringEvent[];
   unreviewedEvents: number;

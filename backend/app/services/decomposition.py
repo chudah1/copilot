@@ -4,8 +4,8 @@ from dataclasses import dataclass
 from datetime import datetime, timezone
 from typing import Any
 
-from sqlalchemy import func, select
-from sqlalchemy.ext.asyncio import AsyncSession
+from sqlalchemy import func, select, update
+from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker
 from sqlalchemy.orm import selectinload
 
 from app.models.holding import Holding
@@ -1272,6 +1272,51 @@ async def generate_decomposition_for_thesis(
     else:
         message = "We saved your thesis and set up baseline monitoring. You can refine what we watch anytime."
     return PersistedDecompositionResult(status="draft", message=message, decomposition=decomposition)
+
+
+async def rebuild_decomposition_for_thesis(
+    thesis_id,
+    session_factory: async_sessionmaker[AsyncSession],
+) -> None:
+    """Rebuild the claim map after any part of the written case changes.
+
+    The new version is persisted before older versions are retired, so live
+    monitoring never loses its map halfway through a rebuild. Once complete,
+    no future evidence can bind to claims extracted from stale case text.
+    """
+    try:
+        async with session_factory() as db:
+            thesis = (
+                await db.execute(
+                    select(Thesis)
+                    .where(Thesis.id == thesis_id)
+                    .options(selectinload(Thesis.holding))
+                )
+            ).scalar_one_or_none()
+            if thesis is None or thesis.holding is None:
+                return
+
+            result = await generate_decomposition_for_thesis(
+                db=db,
+                thesis=thesis,
+                holding=thesis.holding,
+            )
+            replacement = result.decomposition
+            if replacement is None:
+                return
+
+            await db.execute(
+                update(ThesisDecomposition)
+                .where(
+                    ThesisDecomposition.thesis_id == thesis_id,
+                    ThesisDecomposition.id != replacement.id,
+                    ThesisDecomposition.status.in_(["draft", "confirmed", "partially_confirmed"]),
+                )
+                .values(status="superseded")
+            )
+            await db.commit()
+    except Exception:
+        logger.exception("Failed to rebuild decomposition for thesis %s", thesis_id)
 
 
 async def confirm_decomposition_for_thesis(

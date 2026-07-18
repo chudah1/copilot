@@ -1406,7 +1406,11 @@ function PositionDetailInner() {
                   hasThesis={Boolean(activeThesis)}
                   thesisId={activeThesis?.id ?? null}
                   ticker={holding?.ticker ?? ticker}
-                  writtenCase={activeThesis?.why_own_it ?? ""}
+                  writtenCase={{
+                    whyOwnIt: activeThesis?.why_own_it ?? "",
+                    stillTrueIf: activeThesis?.must_remain_true ?? null,
+                    breaksIf: activeThesis?.what_would_change_my_mind ?? null,
+                  }}
                   investorProfile={onboardingState?.investor_profile ?? null}
                   events={events}
                   unreviewedEvents={unreviewedEvents}

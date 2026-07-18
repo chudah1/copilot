@@ -20,7 +20,11 @@ type ThesisAction = "keep_lowered" | "rewrite" | "invalidate";
 interface Props {
   thesisId: string;
   ticker: string;
-  writtenCase: string;
+  writtenCase: {
+    whyOwnIt: string;
+    stillTrueIf: string | null;
+    breaksIf: string | null;
+  };
   onFlagEvent: (eventId: string) => Promise<void>;
   onAfterSubmit: (result: SubmitClaimReviewsResponse, thesisAction: ThesisAction | null) => Promise<void> | void;
 }
@@ -188,7 +192,24 @@ export function ThesisCheckIn({ thesisId, ticker, writtenCase, onFlagEvent, onAf
 
         <div className="border-l-2 border-primary/25 bg-background/55 px-4 py-3">
           <p className="font-mono text-[10px] uppercase tracking-[0.16em] text-muted-foreground">Your written case</p>
-          <p className="mt-2 font-sans text-sm leading-relaxed text-foreground/85">{writtenCase}</p>
+          <div className="mt-3 grid gap-4 lg:grid-cols-3">
+            <div>
+              <p className="font-mono text-[10px] uppercase tracking-[0.14em] text-muted-foreground/80">Why I own it</p>
+              <p className="mt-1.5 font-sans text-sm leading-relaxed text-foreground/85">{writtenCase.whyOwnIt}</p>
+            </div>
+            {writtenCase.stillTrueIf && (
+              <div>
+                <p className="font-mono text-[10px] uppercase tracking-[0.14em] text-muted-foreground/80">Still true if</p>
+                <p className="mt-1.5 font-sans text-sm leading-relaxed text-foreground/85">{writtenCase.stillTrueIf}</p>
+              </div>
+            )}
+            {writtenCase.breaksIf && (
+              <div>
+                <p className="font-mono text-[10px] uppercase tracking-[0.14em] text-muted-foreground/80">Breaks if</p>
+                <p className="mt-1.5 font-sans text-sm leading-relaxed text-foreground/85">{writtenCase.breaksIf}</p>
+              </div>
+            )}
+          </div>
         </div>
       </div>
 

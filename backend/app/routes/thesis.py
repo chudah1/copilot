@@ -5,7 +5,7 @@ from fastapi import APIRouter, BackgroundTasks, Depends, HTTPException, status
 from fastapi.responses import JSONResponse
 from sqlalchemy import select
 from sqlalchemy.orm import selectinload
-from sqlalchemy.ext.asyncio import AsyncSession
+from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker
 
 from app.database import get_db
 from app.dependencies import get_current_user
@@ -53,6 +53,7 @@ from app.services.decomposition import (
     confirm_decomposition_for_thesis,
     debug_compare_decomposition_providers,
     generate_decomposition_for_thesis,
+    rebuild_decomposition_for_thesis,
 )
 
 router = APIRouter(prefix="/api/theses", tags=["theses"])
@@ -420,6 +421,7 @@ async def get_thesis(
 async def update_thesis(
     thesis_id: uuid.UUID,
     body: UpdateThesisRequest,
+    background_tasks: BackgroundTasks,
     current_user: User = Depends(get_current_user),
     db: AsyncSession = Depends(get_db),
 ):
@@ -435,6 +437,7 @@ async def update_thesis(
 
     changed_fields: dict[str, str] = {}
     reason_text_changed = False
+    case_text_changed = False
     audit_inputs_changed = False
 
     if body.thesis_kind is not None:
@@ -444,14 +447,17 @@ async def update_thesis(
         changed_fields["why_own_it"] = body.why_own_it
         thesis.why_own_it = body.why_own_it
         reason_text_changed = True
+        case_text_changed = True
         audit_inputs_changed = True
     if body.must_remain_true is not None:
         if body.must_remain_true != thesis.must_remain_true:
             audit_inputs_changed = True
+            case_text_changed = True
         thesis.must_remain_true = body.must_remain_true
     if body.what_would_change_my_mind is not None:
         if body.what_would_change_my_mind != thesis.what_would_change_my_mind:
             audit_inputs_changed = True
+            case_text_changed = True
         thesis.what_would_change_my_mind = body.what_would_change_my_mind
     if body.confidence is not None and body.confidence != thesis.confidence:
         changed_fields["confidence"] = body.confidence
@@ -484,8 +490,32 @@ async def update_thesis(
             metadata=changed_fields if changed_fields else None,
         )
 
+    should_rebuild_decomposition = False
+    if case_text_changed:
+        existing_decomposition = await db.execute(
+            select(ThesisDecomposition.id)
+            .where(
+                ThesisDecomposition.thesis_id == thesis.id,
+                ThesisDecomposition.status.in_(["draft", "confirmed", "partially_confirmed"]),
+            )
+            .limit(1)
+        )
+        should_rebuild_decomposition = existing_decomposition.scalar_one_or_none() is not None
+
+    session_factory = None
+    if should_rebuild_decomposition:
+        bind = getattr(db, "bind", None)
+        if bind is not None:
+            session_factory = async_sessionmaker(bind, class_=AsyncSession, expire_on_commit=False)
+
     await db.commit()
     await db.refresh(thesis)
+    if session_factory is not None:
+        background_tasks.add_task(
+            rebuild_decomposition_for_thesis,
+            thesis.id,
+            session_factory,
+        )
     return thesis
 
 
