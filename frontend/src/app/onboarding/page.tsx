@@ -2,7 +2,6 @@
 
 import { Suspense, useEffect, useState } from "react";
 import { useRouter, useSearchParams } from "next/navigation";
-import { AnimatePresence, motion } from "framer-motion";
 import { AuthGuard } from "@/components/layout/auth-guard";
 import { Button } from "@/components/ui/button";
 import { api } from "@/lib/api";
@@ -86,12 +85,6 @@ function clearState() {
 function inferInitialStep(state: WizardState): Step {
   return state.answer1.trim() ? "QUESTION_2" : "QUESTION_1";
 }
-
-const stepVariants = {
-  enter: { opacity: 0, y: 18 },
-  center: { opacity: 1, y: 0 },
-  exit: { opacity: 0, y: -12 },
-};
 
 function WizardInner() {
   const router = useRouter();
@@ -231,15 +224,14 @@ function WizardInner() {
     key: "answer1" | "answer2",
     question: string,
     placeholder: string,
-    onNext: () => void,
+    onNext: () => void | Promise<void>,
   ) => (
-    <motion.div
+    <form
       key={key}
-      variants={stepVariants}
-      initial="enter"
-      animate="center"
-      exit="exit"
-      transition={{ duration: 0.4, ease: [0.22, 1, 0.36, 1] }}
+      onSubmit={(event) => {
+        event.preventDefault();
+        void onNext();
+      }}
       className="space-y-8"
     >
       <div className="space-y-3">
@@ -275,13 +267,14 @@ function WizardInner() {
       <div className="space-y-3">
         <div className="flex items-center gap-4">
           <Button
-            onClick={onNext}
+            type="submit"
             disabled={!holding || wizardState[key].trim().length < 5}
             loading={key === "answer2" && saving}
           >
             {key === "answer2" ? "Save record" : "Continue"}
           </Button>
           <button
+            type="button"
             onClick={handleSkip}
             className="font-mono text-xs text-muted-foreground underline underline-offset-4 transition-colors hover:text-foreground"
           >
@@ -290,6 +283,7 @@ function WizardInner() {
         </div>
         {wizardState[key].trim().length < 10 && (
           <button
+            type="button"
             onClick={handleDraftForMe}
             disabled={drafting || !holding}
             className="flex items-center gap-2 font-mono text-sm text-primary transition-colors hover:text-primary/80 disabled:opacity-50"
@@ -299,7 +293,7 @@ function WizardInner() {
           </button>
         )}
       </div>
-    </motion.div>
+    </form>
   );
 
   const holdingValueLabel = holding?.current_value
@@ -350,21 +344,19 @@ function WizardInner() {
           <div className="grid gap-5 xl:grid-cols-[minmax(0,1fr)_18rem]">
             <section className="min-w-0">
               <div className="product-panel product-panel-muted p-6 sm:p-8">
-                <AnimatePresence mode="wait">
-                  {step === "QUESTION_1"
-                    ? renderQuestion(
-                        "answer1",
-                        profileContent.q1,
-                        profileContent.q1Placeholder,
-                        () => goTo("QUESTION_2"),
-                      )
-                    : renderQuestion(
-                        "answer2",
-                        profileContent.q2,
-                        profileContent.q2Placeholder,
-                        handleSave,
-                      )}
-                </AnimatePresence>
+                {step === "QUESTION_1"
+                  ? renderQuestion(
+                      "answer1",
+                      profileContent.q1,
+                      profileContent.q1Placeholder,
+                      () => goTo("QUESTION_2"),
+                    )
+                  : renderQuestion(
+                      "answer2",
+                      profileContent.q2,
+                      profileContent.q2Placeholder,
+                      handleSave,
+                    )}
               </div>
             </section>
 
