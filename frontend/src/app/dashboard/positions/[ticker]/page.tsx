@@ -136,6 +136,28 @@ function PositionDetailInner() {
     setPulse(portfolioPulse?.pulses.find((p) => p.holding_id === holdingId) ?? null);
   };
 
+  const waitForRebuiltSignalMap = async (thesisId: string, previousMapId: string) => {
+    setDecompositionLoading(true);
+    try {
+      for (let attempt = 0; attempt < 30; attempt += 1) {
+        if (attempt > 0) {
+          await new Promise((resolve) => window.setTimeout(resolve, 2000));
+        }
+        const envelope = await api.get<ThesisDecompositionEnvelope>(`/api/theses/${thesisId}/decomposition`);
+        if (envelope.decomposition?.id && envelope.decomposition.id !== previousMapId) {
+          setDecompositionEnvelope(envelope);
+          return;
+        }
+      }
+      toast.message("The signal map is still updating. It will appear when the rebuild finishes.");
+    } catch (error) {
+      console.error(error);
+      toast.error("The case was saved, but the signal map could not be refreshed yet.");
+    } finally {
+      setDecompositionLoading(false);
+    }
+  };
+
   useEffect(() => {
     let cancelled = false;
 
@@ -361,6 +383,7 @@ function PositionDetailInner() {
     source: "user" | "ai_assisted";
     status: "active";
   }) => {
+    const previousMapId = decompositionEnvelope?.decomposition?.id ?? null;
     try {
       let savedThesisId: string | null = null;
       if (activeThesis) {
@@ -390,11 +413,16 @@ function PositionDetailInner() {
           }
         }
       }
-      setDecompositionEnvelope(null);
+      if (!previousMapId) {
+        setDecompositionEnvelope(null);
+      }
       setHistoricalAudit(null);
       setHistoricalAuditThesisId(null);
       setEditing(false);
       if (savedThesisId) {
+        if (previousMapId) {
+          void waitForRebuiltSignalMap(savedThesisId, previousMapId);
+        }
         runHealthCheck(savedThesisId);
         setShowCounterThesis(true);
         setShowAnalysis(true);

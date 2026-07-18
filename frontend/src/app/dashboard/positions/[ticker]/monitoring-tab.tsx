@@ -179,7 +179,7 @@ export function MonitoringTab({
                 </p>
                 <p className="mt-2 font-sans text-xs leading-relaxed text-muted-foreground">
                   {decompositionLoading
-                    ? "Building the map"
+                    ? "Updating signal map"
                     : hasSignals
                       ? "Signals live"
                       : "No live signals yet"}

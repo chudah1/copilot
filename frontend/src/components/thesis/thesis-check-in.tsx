@@ -41,6 +41,12 @@ const SEVERITY_TEXT: Record<string, string> = {
   info: "text-sky-700",
 };
 
+const CASE_SECTION_LABEL: Record<NonNullable<ClaimCheckInState["case_section"]>, string> = {
+  why_own_it: "Why I own it",
+  must_remain_true: "Still true if",
+  what_would_change_my_mind: "Breaks if",
+};
+
 function claimKey(claim: ClaimCheckInState): string {
   return claim.claim_id ?? "general";
 }
@@ -233,6 +239,11 @@ export function ThesisCheckIn({ thesisId, ticker, writtenCase, onFlagEvent, onAf
                   </span>
                 )}
               </div>}
+              {claim.case_section && (
+                <p className="mt-2 font-mono text-[10px] uppercase tracking-[0.14em] text-primary/70">
+                  Tests · {CASE_SECTION_LABEL[claim.case_section]}
+                </p>
+              )}
               <p className="mt-2 font-sans text-sm leading-relaxed text-foreground">
                 {claim.claim_id ? `“${claim.label}”` : "Not tied to a specific part of your written case"}
               </p>

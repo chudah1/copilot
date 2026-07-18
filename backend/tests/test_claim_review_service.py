@@ -38,6 +38,8 @@ async def _make_thesis(db, test_user, *, with_decomposition=True):
         status="active",
         thesis_kind="company",
         why_own_it="Workflow lock-in plus AI upsell.",
+        must_remain_true="Subscription revenue keeps growing above 20%.",
+        what_would_change_my_mind="Customers stop expanding their spending.",
         confidence="high",
         review_cadence_days=30,
         source="user",
@@ -53,6 +55,7 @@ async def _make_thesis(db, test_user, *, with_decomposition=True):
         claim = ThesisClaim(
             decomposition_id=decomposition.id,
             claim_text="Subscription revenue keeps growing above 20%",
+            raw_extraction_json={"source_field": "must_remain_true"},
             position=0,
         )
         db.add(claim)
@@ -95,6 +98,7 @@ async def test_signal_bound_event_resolves_to_parent_claim(db, test_user):
     states = await compute_check_in(db, thesis)
     claim_state = next(s for s in states if s.claim_id == claim.id)
     assert len(claim_state.threatens_events) == 1
+    assert claim_state.case_section == "must_remain_true"
 
 
 @pytest.mark.asyncio

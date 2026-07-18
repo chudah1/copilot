@@ -55,6 +55,11 @@ VALID_SIGNAL_TYPES = {
     "dividend_change",
     "macro_series_change",
 }
+VALID_CLAIM_SOURCE_FIELDS = {
+    "why_own_it",
+    "must_remain_true",
+    "what_would_change_my_mind",
+}
 VAGUE_PATTERNS = (
     r"\bfriend recommended\b",
     r"\brecommended it\b",
@@ -114,6 +119,9 @@ def normalize_decomposition_output(raw_output: dict[str, Any]) -> dict[str, Any]
         claim_type = str(claim.get("claim_type", "")).strip() or "other"
         if claim_type not in VALID_CLAIM_TYPES:
             claim_type = "other"
+        source_field = str(claim.get("source_field", "")).strip() or None
+        if source_field not in VALID_CLAIM_SOURCE_FIELDS:
+            source_field = None
         entities: list[dict[str, Any]] = []
         for entity in claim.get("entities", []) if isinstance(claim.get("entities"), list) else []:
             if not isinstance(entity, dict):
@@ -161,6 +169,7 @@ def normalize_decomposition_output(raw_output: dict[str, Any]) -> dict[str, Any]
         claims.append(
             {
                 "claim_text": claim_text,
+                "source_field": source_field,
                 "claim_type": claim_type,
                 "confidence": to_float(claim.get("confidence")),
                 "position": position,

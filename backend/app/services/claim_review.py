@@ -9,6 +9,7 @@ which keeps feeding signal decay and relevance telemetry.
 
 from __future__ import annotations
 
+import re
 import uuid
 from dataclasses import dataclass, field
 from datetime import datetime, timezone
@@ -33,12 +34,24 @@ WARNING_THREATENS_THRESHOLD = 2  # threatens at warning+ severity since last rev
 ANY_THREATENS_THRESHOLD = 4  # threatens at any severity since last review
 
 GENERAL_BUCKET = "General evidence"
+CASE_SECTION_FIELDS = (
+    "why_own_it",
+    "must_remain_true",
+    "what_would_change_my_mind",
+)
+_SECTION_STOPWORDS = {
+    "about", "after", "again", "against", "also", "because", "being", "could",
+    "from", "have", "into", "keep", "more", "rather", "should", "their", "there",
+    "these", "they", "this", "through", "under", "what", "when", "where", "which",
+    "with", "would",
+}
 
 
 @dataclass
 class ClaimCheckInState:
     claim_id: uuid.UUID | None  # None = thesis-level general bucket
     label: str
+    case_section: str | None  # why_own_it | must_remain_true | what_would_change_my_mind
     status: str  # holds | weakened | broken — latest review, default holds
     last_reviewed_at: datetime | None
     needs_review: bool
@@ -46,6 +59,38 @@ class ClaimCheckInState:
     supports_events: list[MonitoringEvent] = field(default_factory=list)
     threatens_events: list[MonitoringEvent] = field(default_factory=list)
     neutral_events: list[MonitoringEvent] = field(default_factory=list)
+
+
+def _case_section_for_claim(claim, thesis: Thesis) -> str | None:
+    raw = claim.raw_extraction_json or {}
+    source_field = raw.get("source_field") if isinstance(raw, dict) else None
+    if source_field in CASE_SECTION_FIELDS:
+        return source_field
+
+    # Existing decompositions predate source_field. Use a conservative lexical
+    # fallback until the map is next rebuilt with explicit attribution.
+    claim_words = {
+        word
+        for word in re.findall(r"[a-z0-9]+", (claim.claim_text or "").lower())
+        if len(word) >= 4 and word not in _SECTION_STOPWORDS
+    }
+    if not claim_words:
+        return None
+
+    scores: list[tuple[float, str]] = []
+    for field in CASE_SECTION_FIELDS:
+        field_words = {
+            word
+            for word in re.findall(r"[a-z0-9]+", (getattr(thesis, field, None) or "").lower())
+            if len(word) >= 4 and word not in _SECTION_STOPWORDS
+        }
+        overlap = len(claim_words & field_words)
+        if overlap:
+            scores.append((overlap / len(claim_words), field))
+    scores.sort(reverse=True)
+    if not scores or (len(scores) > 1 and scores[0][0] == scores[1][0]):
+        return None
+    return scores[0][1]
 
 
 def _needs_review(threatens: list[MonitoringEvent]) -> tuple[bool, str]:
@@ -97,10 +142,11 @@ async def compute_check_in(db: AsyncSession, thesis: Thesis) -> list[ClaimCheckI
     events = [event for event in event_rows.scalars().all() if not event.reviews]
 
     states: list[ClaimCheckInState] = []
-    buckets: list[tuple[uuid.UUID | None, str]] = [
-        (claim.id, claim.claim_text) for claim in claims
+    buckets: list[tuple[uuid.UUID | None, str, str | None]] = [
+        (claim.id, claim.claim_text, _case_section_for_claim(claim, thesis))
+        for claim in claims
     ]
-    buckets.append((None, GENERAL_BUCKET))
+    buckets.append((None, GENERAL_BUCKET, None))
     claim_ids = {claim.id for claim in claims}
 
     def bucket_for(event: MonitoringEvent) -> uuid.UUID | None:
@@ -114,7 +160,7 @@ async def compute_check_in(db: AsyncSession, thesis: Thesis) -> list[ClaimCheckI
     for event in events:
         events_by_bucket.setdefault(bucket_for(event), []).append(event)
 
-    for claim_id, label in buckets:
+    for claim_id, label, case_section in buckets:
         review = latest_reviews.get(claim_id)
         cutoff = review.created_at if review else None
         bucket_events = [
@@ -138,6 +184,7 @@ async def compute_check_in(db: AsyncSession, thesis: Thesis) -> list[ClaimCheckI
             ClaimCheckInState(
                 claim_id=claim_id,
                 label=label,
+                case_section=case_section,
                 status=review.status if review else "holds",
                 last_reviewed_at=review.created_at if review else None,
                 needs_review=needs,

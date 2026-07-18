@@ -803,6 +803,7 @@ async def thesis_check_in(
         ClaimCheckInStateResponse(
             claim_id=state.claim_id,
             label=state.label,
+            case_section=state.case_section,
             status=state.status,
             last_reviewed_at=state.last_reviewed_at,
             needs_review=state.needs_review,

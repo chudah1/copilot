@@ -41,7 +41,13 @@ async def test_gateway_stops_on_first_successful_provider():
                         "reason_type": "business_performance",
                         "monitorability": "medium",
                         "decomposition_confidence": 0.8,
-                        "claims": [{"claim_text": "Revenue remains healthy.", "claim_type": "growth", "confidence": 0.8, "entities": []}],
+                        "claims": [{
+                            "claim_text": "Revenue remains healthy.",
+                            "source_field": "must_remain_true",
+                            "claim_type": "growth",
+                            "confidence": 0.8,
+                            "entities": [],
+                        }],
                     },
                     confidence=None,
                     latency_ms=50,
@@ -55,6 +61,7 @@ async def test_gateway_stops_on_first_successful_provider():
     assert result.success is True
     assert result.provider == "openai"
     assert result.normalized_output is not None
+    assert result.normalized_output["claims"][0]["source_field"] == "must_remain_true"
 
 
 async def test_gateway_escalates_when_first_provider_returns_weak_output():

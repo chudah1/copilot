@@ -1,4 +1,4 @@
-DECOMPOSITION_PROMPT_VERSION = "v7"
+DECOMPOSITION_PROMPT_VERSION = "v8"
 
 DECOMPOSITION_JSON_SCHEMA = {
     "type": "object",
@@ -33,6 +33,10 @@ DECOMPOSITION_JSON_SCHEMA = {
                 "additionalProperties": False,
                 "properties": {
                     "claim_text": {"type": "string"},
+                    "source_field": {
+                        "type": "string",
+                        "enum": ["why_own_it", "must_remain_true", "what_would_change_my_mind"],
+                    },
                     "claim_type": {
                         "type": "string",
                         "enum": [
@@ -147,6 +151,7 @@ DECOMPOSITION_JSON_SCHEMA = {
                 },
                 "required": [
                     "claim_text",
+                    "source_field",
                     "claim_type",
                     "confidence",
                     "entities",
@@ -169,6 +174,7 @@ Return only schema-conforming JSON (no extra keys, no prose). Be concise: ration
 Rules:
 - Extract at least one claim whenever any investment rationale is present (even one sentence). Zero claims only if the text is purely descriptive with zero investment intent.
 - When must_remain_true or what_would_change_my_mind are non-empty, extract at least one claim from each. Skip only fields that say "None provided".
+- Set source_field to the part of the user's case that directly produced the claim. Do not label a break condition as why_own_it merely because the topics overlap.
 - Phrase each claim_text as a falsifiable assertion with an implied pass/fail condition — e.g. "Data center revenue grows >20% YoY", not "Company is growing fast."
 - signal_label must be a search-ready phrase that uniquely identifies the signal — include the ticker or company name and the specific metric: e.g. "NVDA data center revenue growth", NOT "revenue growth". Bad: "earnings beat". Good: "AMZN AWS operating income margin".
 - REQUIRED: For every quantitative signal (revenue_growth, earnings_growth, dividend_change, etc.) where the user provides a number, populate signal_config_json with {metric, operator, threshold or threshold_pct}. Example: user says "margins stay above 70%" → {"metric": "gross_margin", "operator": ">=", "threshold_pct": 70}.
@@ -191,6 +197,7 @@ Example output:
   "claims": [
     {
       "claim_text": "NVDA data center revenue grows above 20% YoY on AI GPU demand",
+      "source_field": "why_own_it",
       "claim_type": "growth", "confidence": 0.9,
       "entities": [
         {
@@ -210,6 +217,7 @@ Example output:
     },
     {
       "claim_text": "NVDA gross margin stays above 70%",
+      "source_field": "must_remain_true",
       "claim_type": "margins", "confidence": 0.85,
       "entities": [
         {
@@ -226,6 +234,7 @@ Example output:
     },
     {
       "claim_text": "AMD does not take meaningful AI GPU market share from NVDA",
+      "source_field": "what_would_change_my_mind",
       "claim_type": "demand", "confidence": 0.75,
       "entities": [
         {

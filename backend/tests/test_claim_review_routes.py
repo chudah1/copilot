@@ -57,6 +57,7 @@ async def test_check_in_returns_general_bucket_needing_review(client, db, test_u
     assert body["needs_review_count"] == 1
     general = body["claims"][0]
     assert general["claim_id"] is None
+    assert general["case_section"] is None
     assert general["needs_review"] is True
     assert len(general["threatens"]) == 1
 

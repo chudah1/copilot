@@ -22,6 +22,7 @@ class ClaimEvidenceItem(BaseModel):
 class ClaimCheckInStateResponse(BaseModel):
     claim_id: uuid.UUID | None
     label: str
+    case_section: Literal["why_own_it", "must_remain_true", "what_would_change_my_mind"] | None
     status: str
     last_reviewed_at: datetime | None
     needs_review: bool

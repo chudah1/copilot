@@ -180,6 +180,7 @@ export interface ClaimEvidenceItem {
 export interface ClaimCheckInState {
   claim_id: string | null;
   label: string;
+  case_section: "why_own_it" | "must_remain_true" | "what_would_change_my_mind" | null;
   status: "holds" | "weakened" | "broken";
   last_reviewed_at: string | null;
   needs_review: boolean;
