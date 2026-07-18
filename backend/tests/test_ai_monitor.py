@@ -83,9 +83,10 @@ def test_classify_system_forbids_positive_thesis_breaking():
     assert 'Positive or thesis-confirming events are never "thesis_breaking"' in _CLASSIFY_SYSTEM
 
 
-async def test_classify_event_uses_profile_aware_fallback_when_no_key():
+async def test_classify_event_stays_quiet_when_no_classifier_is_available():
     with patch("app.services.ai_monitor.settings") as mock_settings:
         mock_settings.anthropic_api_key = None
+        mock_settings.openai_api_key = None
         result = await classify_event(
             why_own_it="AI demand should keep the story alive",
             must_remain_true=None,
@@ -95,9 +96,7 @@ async def test_classify_event_uses_profile_aware_fallback_when_no_key():
             investor_profile="hearsay_driven",
         )
 
-    assert result is not None
-    assert result.severity == "warning"
-    assert "story" in result.analysis
+    assert result is None
 
 
 def test_normalize_classification_result_caps_supportive_thesis_breaking():

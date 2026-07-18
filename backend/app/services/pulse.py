@@ -338,12 +338,15 @@ async def compute_portfolio_pulse(user_id: uuid.UUID, db: AsyncSession) -> tuple
     thesis_by_holding: dict[uuid.UUID, Thesis] = {}
     for t in all_theses:
         thesis_by_holding.setdefault(t.holding_id, t)
+    active_thesis_ids = [thesis.id for thesis in thesis_by_holding.values()]
 
     # Decision state follows unresolved evidence, regardless of age. Reviewed
     # events stay in the decision log but must not keep a position on watch.
+    # Evidence from an invalidated written case belongs to that case's history,
+    # not to the decision state of its replacement.
     events_result = await db.execute(
         select(MonitoringEvent).where(
-            MonitoringEvent.holding_id.in_(holding_ids),
+            MonitoringEvent.thesis_id.in_(active_thesis_ids),
             ~MonitoringEvent.reviews.any(),
         ).order_by(MonitoringEvent.created_at.desc())
     )
@@ -377,7 +380,6 @@ async def compute_portfolio_pulse(user_id: uuid.UUID, db: AsyncSession) -> tuple
         row[0]: _normalize_datetime(row[1])
         for row in last_event_result.fetchall()
     }
-    active_thesis_ids = [thesis.id for thesis in thesis_by_holding.values()]
     sources_count_by_thesis = await _latest_sources_by_thesis(db, active_thesis_ids)
 
     for holding in holdings:

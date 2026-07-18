@@ -102,23 +102,6 @@ def _classification_profile_context(investor_profile: str | None) -> tuple[str, 
     )
 
 
-def _default_classification(investor_profile: str | None) -> ClassificationResult:
-    if investor_profile == "thesis_driven":
-        return ClassificationResult(
-            severity="warning",
-            analysis="This looks relevant to one of your assumptions. It may be weakening a pillar, not just market noise. Re-read that assumption before you add, trim, or shrug it off.",
-        )
-    if investor_profile == "hearsay_driven":
-        return ClassificationResult(
-            severity="warning",
-            analysis="This touches the story behind the position. The question is whether it's showing up in real results yet, not just hype. Check if the story is getting stronger or starting to crack.",
-        )
-    return ClassificationResult(
-        severity="warning",
-        analysis="Something changed that may matter to why you own this. Decide if the original case still holds before you call it noise.",
-    )
-
-
 def _next_step_sentence(severity: str, investor_profile: str | None) -> str:
     if severity == "thesis_breaking":
         return (
@@ -315,13 +298,9 @@ async def classify_event(
         except Exception as e:
             logger.error("OpenAI classification also failed (%s): %s", type(e).__name__, e)
 
-    default = _default_classification(investor_profile)
-    return ClassificationResult(
-        severity=default.severity,
-        analysis=_normalize_analysis_text(
-            event_description=event_description,
-            analysis=default.analysis,
-            severity=default.severity,
-            investor_profile=investor_profile,
-        ),
-    )
+    # Qualitative evidence needs an actual thesis judgment. Manufacturing a
+    # warning when every classifier is unavailable turns an outage into noise.
+    # The monitoring pipeline separately preserves objective threshold breaches
+    # and signal-bound transcript evidence, so returning None here stays quiet
+    # without hiding deterministic changes.
+    return None

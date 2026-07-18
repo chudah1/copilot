@@ -194,6 +194,47 @@ async def test_pulse_keeps_old_unresolved_evidence_in_the_decision_inbox(client,
 
 
 @pytest.mark.asyncio
+async def test_pulse_ignores_unresolved_evidence_from_an_invalidated_case(
+    client, auth_headers, test_user, db: AsyncSession
+):
+    holding = Holding(
+        id=uuid.uuid4(), ticker="AMD", name="AMD",
+        quantity=5, average_cost_basis=100, currency="GBP",
+        user_id=test_user.id,
+    )
+    db.add(holding)
+    await db.commit()
+
+    old_thesis = Thesis(
+        id=uuid.uuid4(), holding_id=holding.id, user_id=test_user.id,
+        status="invalidated", why_own_it="PC demand recovers", confidence="medium",
+        created_at=datetime.now(timezone.utc) - timedelta(days=60),
+    )
+    active_thesis = Thesis(
+        id=uuid.uuid4(), holding_id=holding.id, user_id=test_user.id,
+        status="active", why_own_it="AI accelerator share gains", confidence="medium",
+        created_at=datetime.now(timezone.utc),
+    )
+    db.add_all([old_thesis, active_thesis])
+    await db.commit()
+
+    db.add(MonitoringEvent(
+        id=uuid.uuid4(), holding_id=holding.id, thesis_id=old_thesis.id,
+        event_type="news_or_earnings_candidate", severity="thesis_breaking",
+        title="PC demand weakened", summary="The old written case broke.",
+        created_at=datetime.now(timezone.utc) - timedelta(days=30),
+    ))
+    await db.commit()
+
+    resp = await client.get("/api/portfolio/pulse", headers=auth_headers)
+    pulse = resp.json()["pulses"][0]
+    assert pulse["pulse_status"] == "intact"
+    assert pulse["pulse_basis"] == "none"
+    assert pulse["recent_event_count"] == 0
+    assert pulse["unresolved_event_count"] == 0
+
+
+@pytest.mark.asyncio
 async def test_pulse_does_not_keep_reviewed_evidence_on_watch(client, auth_headers, test_user, db: AsyncSession):
     holding = Holding(
         id=uuid.uuid4(), ticker="MSFT", name="Microsoft",
