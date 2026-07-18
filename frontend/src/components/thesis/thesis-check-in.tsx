@@ -79,9 +79,9 @@ function EvidenceRow({
           type="button"
           disabled={flagging}
           onClick={() => void onFlag(item.id)}
-          className="shrink-0 font-mono text-[10px] uppercase tracking-[0.12em] text-muted-foreground/70 underline underline-offset-2 transition-colors hover:text-foreground disabled:opacity-40"
+          className="shrink-0 border border-border/70 bg-background px-2.5 py-1.5 font-sans text-xs text-muted-foreground transition-colors hover:border-foreground/30 hover:text-foreground disabled:cursor-not-allowed disabled:opacity-40"
         >
-          Not relevant
+          {flagging ? "Removing…" : "Remove from this case"}
         </button>
       </div>
     </div>
@@ -202,16 +202,16 @@ export function ThesisCheckIn({ thesisId, ticker, writtenCase, onFlagEvent, onAf
               key={key}
               className={`product-panel p-4 sm:p-5 ${claim.needs_review ? "border-amber-500/30" : ""}`}
             >
-              <div className="flex flex-wrap items-center gap-2">
-                <span className={`inline-flex items-center border px-2 py-0.5 font-mono text-[10px] uppercase tracking-[0.12em] ${claim.needs_review ? "border-amber-500/30 bg-amber-500/10 text-amber-700" : "border-border/60 bg-background/70 text-muted-foreground"}`}>
-                  {claim.needs_review ? "Needs your decision" : "No decision needed"}
-                </span>
+              {(claim.needs_review || claim.last_reviewed_at) && <div className="flex flex-wrap items-center gap-2">
+                {claim.needs_review && <span className="inline-flex items-center border border-amber-500/30 bg-amber-500/10 px-2 py-0.5 font-mono text-[10px] uppercase tracking-[0.12em] text-amber-700">
+                  Needs your decision
+                </span>}
                 {claim.last_reviewed_at && !claim.needs_review && (
                   <span className="font-mono text-[10px] text-muted-foreground/70">
                     Reviewed {formatDate(claim.last_reviewed_at)}
                   </span>
                 )}
-              </div>
+              </div>}
               <p className="mt-2 font-sans text-sm leading-relaxed text-foreground">
                 {claim.claim_id ? `“${claim.label}”` : "Not tied to a specific part of your written case"}
               </p>
