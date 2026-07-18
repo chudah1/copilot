@@ -288,6 +288,7 @@ async def test_quarterly_review_nudge_sent_on_new_review(db, test_user, job_sess
         user_id=test_user.id, holding_id=holding.id, status="active",
         thesis_kind="company", why_own_it="EUV monopoly.", confidence="high",
         review_cadence_days=30, source="user",
+        created_at=datetime(2026, 3, 1, tzinfo=timezone.utc),
     ))
     test_user.preferences = {"email_enabled": True, "quarterly_review_reminders": True}
     await db.commit()
@@ -318,6 +319,7 @@ async def test_quarterly_review_nudge_skipped_when_reminders_off(db, test_user, 
         user_id=test_user.id, holding_id=holding.id, status="active",
         thesis_kind="company", why_own_it="AI chips.", confidence="high",
         review_cadence_days=30, source="user",
+        created_at=datetime(2026, 3, 1, tzinfo=timezone.utc),
     ))
     test_user.preferences = {"email_enabled": True, "quarterly_review_reminders": False}
     await db.commit()
@@ -345,6 +347,7 @@ async def test_quarterly_review_nudge_not_sent_twice(db, test_user, job_session_
         user_id=test_user.id, holding_id=holding.id, status="active",
         thesis_kind="company", why_own_it="E-commerce platform.", confidence="medium",
         review_cadence_days=30, source="user",
+        created_at=datetime(2026, 3, 1, tzinfo=timezone.utc),
     ))
     test_user.preferences = {"email_enabled": True, "quarterly_review_reminders": True}
     await db.commit()

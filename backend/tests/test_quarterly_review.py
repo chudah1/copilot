@@ -34,7 +34,15 @@ async def _create_holding(db, user, *, ticker: str, price: float = 150.0):
     return holding
 
 
-async def _create_thesis(db, user, holding, *, status: str = "active", why_own_it: str | None = None):
+async def _create_thesis(
+    db,
+    user,
+    holding,
+    *,
+    status: str = "active",
+    why_own_it: str | None = None,
+    created_at: datetime | None = None,
+):
     thesis = Thesis(
         user_id=user.id,
         holding_id=holding.id,
@@ -44,6 +52,7 @@ async def _create_thesis(db, user, holding, *, status: str = "active", why_own_i
         confidence="high",
         review_cadence_days=30,
         source="user",
+        created_at=created_at or datetime(2025, 1, 1, tzinfo=timezone.utc),
     )
     db.add(thesis)
     await db.flush()
@@ -175,6 +184,37 @@ async def test_build_current_review_snapshot_uses_reference_now_for_reason_age(d
 
     assert len(items) == 1
     assert items[0].reason_age_days == 90
+
+
+async def test_current_quarter_position_is_not_immediately_due_for_quarterly_review(db, test_user):
+    holding = await _create_holding(db, test_user, ticker="NOW", price=900.0)
+    await _create_thesis(
+        db,
+        test_user,
+        holding,
+        created_at=datetime(2026, 7, 18, 10, 0, tzinfo=timezone.utc),
+    )
+    await db.commit()
+
+    review, items = await build_current_review_snapshot(
+        db,
+        user_id=test_user.id,
+        now=datetime(2026, 7, 18, 12, 0, tzinfo=timezone.utc),
+    )
+
+    assert review.quarter == "2026-Q3"
+    assert items == []
+    assert review.status == "completed"
+
+    next_review, next_items = await build_current_review_snapshot(
+        db,
+        user_id=test_user.id,
+        now=datetime(2026, 10, 6, 12, 0, tzinfo=timezone.utc),
+    )
+
+    assert next_review.quarter == "2026-Q4"
+    assert [item.ticker for item in next_items] == ["NOW"]
+    assert next_review.status == "pending"
 
 
 async def test_submit_quarterly_review_response_reuses_existing_row_and_updates_status(db, test_user):

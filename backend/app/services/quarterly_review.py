@@ -43,10 +43,15 @@ def current_quarter_key(now: datetime | None = None) -> str:
     return f"{reference.year}-Q{quarter}"
 
 
-def quarterly_review_release_at(now: datetime | None = None) -> datetime:
+def quarterly_review_period_start(now: datetime | None = None) -> datetime:
     reference = now or datetime.now(timezone.utc)
     quarter_start_month = (((reference.month - 1) // 3) * 3) + 1
-    release = datetime(reference.year, quarter_start_month, 1, 8, 0, 0, tzinfo=timezone.utc)
+    return datetime(reference.year, quarter_start_month, 1, tzinfo=timezone.utc)
+
+
+def quarterly_review_release_at(now: datetime | None = None) -> datetime:
+    reference = now or datetime.now(timezone.utc)
+    release = quarterly_review_period_start(reference).replace(hour=8)
     while release.weekday() != 0:
         release += timedelta(days=1)
     return release
@@ -134,9 +139,10 @@ def _build_review_items(
     now: datetime,
 ) -> list[QuarterlyReviewHoldingItem]:
     items: list[QuarterlyReviewHoldingItem] = []
+    review_period_start = quarterly_review_period_start(now)
     for holding in holdings:
         thesis = thesis_by_holding.get(holding.id)
-        if thesis is None:
+        if thesis is None or _normalize_datetime(thesis.created_at) >= review_period_start:
             continue
 
         response = response_by_holding.get(holding.id)
