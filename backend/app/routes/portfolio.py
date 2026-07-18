@@ -1,9 +1,9 @@
 import uuid
-from datetime import datetime, timezone
+from datetime import datetime, time, timezone
 
 import httpx
 from fastapi import APIRouter, BackgroundTasks, Depends, HTTPException, Request, UploadFile, File, status
-from sqlalchemy import select, and_
+from sqlalchemy import select, and_, func
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.limiter import limiter
@@ -37,6 +37,7 @@ from app.services.market_data import detect_native_currency, fetch_company_data,
 from app.services.valuation import apply_broker_position, refresh_holding_price, to_account_value
 
 router = APIRouter(prefix="/api/portfolio", tags=["portfolio"])
+_REAL_DATETIME = datetime
 
 
 async def _enrich_holding_metadata(
@@ -937,8 +938,22 @@ async def portfolio_trend(
     snap = result.scalar_one_or_none()
     if snap is None:
         return PortfolioTrendResponse()
+    from app.models.monitoring_event import MonitoringEvent
+
+    snapshot_start = _REAL_DATETIME.combine(snap.snapshot_date, time.min, tzinfo=timezone.utc)
+    active_thesis_ids = select(Thesis.id).where(
+        Thesis.user_id == current_user.id,
+        Thesis.status.in_(["active", "draft", "needs_review"]),
+    )
+    event_count = await db.scalar(
+        select(func.count(MonitoringEvent.id)).where(
+            MonitoringEvent.thesis_id.in_(active_thesis_ids),
+            MonitoringEvent.created_at >= snapshot_start,
+        )
+    )
     return PortfolioTrendResponse(
         snapshot_date=snap.snapshot_date.isoformat(),
+        new_event_count=event_count or 0,
         top_3_concentration_pct=float(snap.top_3_concentration_pct),
         thesis_coverage_pct=float(snap.thesis_coverage_pct),
         monitorable_pct=float(snap.monitorable_pct),

@@ -407,6 +407,7 @@ export interface UserPreferences {
 
 export interface PortfolioTrend {
   snapshot_date: string | null;
+  new_event_count: number;
   top_3_concentration_pct: number | null;
   thesis_coverage_pct: number | null;
   monitorable_pct: number | null;

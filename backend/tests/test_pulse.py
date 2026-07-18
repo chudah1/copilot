@@ -163,6 +163,52 @@ async def test_pulse_watch_on_warning_event(client, auth_headers, test_user, db:
 
 
 @pytest.mark.asyncio
+async def test_pulse_only_counts_evidence_that_needs_a_decision(
+    client, auth_headers, test_user, db: AsyncSession
+):
+    holding = Holding(
+        id=uuid.uuid4(), ticker="NOW", name="ServiceNow",
+        quantity=2, average_cost_basis=600, currency="GBP",
+        user_id=test_user.id,
+    )
+    thesis = Thesis(
+        id=uuid.uuid4(), holding_id=holding.id, user_id=test_user.id,
+        status="active", why_own_it="Subscription growth", confidence="medium",
+    )
+    db.add_all([holding, thesis])
+    await db.commit()
+
+    now = datetime.now(timezone.utc)
+    db.add_all([
+        MonitoringEvent(
+            id=uuid.uuid4(), holding_id=holding.id, thesis_id=thesis.id,
+            event_type="news", severity="warning", verdict="supports",
+            title="Growth held up", summary="Subscription growth remained solid.",
+            created_at=now,
+        ),
+        MonitoringEvent(
+            id=uuid.uuid4(), holding_id=holding.id, thesis_id=thesis.id,
+            event_type="news", severity="info", verdict="neutral",
+            title="Background", summary="No direct bearing on the case.",
+            created_at=now - timedelta(minutes=1),
+        ),
+        MonitoringEvent(
+            id=uuid.uuid4(), holding_id=holding.id, thesis_id=thesis.id,
+            event_type="news", severity="warning", verdict="threatens",
+            title="Growth slowed", summary="Subscription growth decelerated.",
+            created_at=now - timedelta(minutes=2),
+        ),
+    ])
+    await db.commit()
+
+    resp = await client.get("/api/portfolio/pulse", headers=auth_headers)
+    pulse = resp.json()["pulses"][0]
+    assert pulse["pulse_status"] == "watch"
+    assert pulse["unresolved_event_count"] == 1
+    assert pulse["latest_event_summary"] == "Subscription growth decelerated."
+
+
+@pytest.mark.asyncio
 async def test_pulse_keeps_old_unresolved_evidence_in_the_decision_inbox(client, auth_headers, test_user, db: AsyncSession):
     holding = Holding(
         id=uuid.uuid4(), ticker="AMD", name="AMD",

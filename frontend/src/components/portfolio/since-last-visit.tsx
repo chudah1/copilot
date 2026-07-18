@@ -5,10 +5,9 @@ import type { PortfolioTrend, PortfolioSummary } from "@/types";
 interface SinceLastVisitProps {
   summary: PortfolioSummary;
   trend: PortfolioTrend | null;
-  recentEventCount: number;
 }
 
-export function SinceLastVisit({ summary, trend, recentEventCount }: SinceLastVisitProps) {
+export function SinceLastVisit({ summary, trend }: SinceLastVisitProps) {
   if (!trend || !trend.snapshot_date) return null;
 
   const snapshotDate = new Date(trend.snapshot_date);
@@ -17,8 +16,8 @@ export function SinceLastVisit({ summary, trend, recentEventCount }: SinceLastVi
 
   const changes: string[] = [];
 
-  if (recentEventCount > 0) {
-    changes.push(`${recentEventCount} new event${recentEventCount !== 1 ? "s" : ""}`);
+  if (trend.new_event_count > 0) {
+    changes.push(`${trend.new_event_count} new evidence item${trend.new_event_count !== 1 ? "s" : ""}`);
   }
 
   if (trend.holdings_count != null && summary.holdings_count !== trend.holdings_count) {

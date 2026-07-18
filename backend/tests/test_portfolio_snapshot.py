@@ -8,6 +8,9 @@ from sqlalchemy import text
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.models.holding import Holding
+from app.models.monitoring_event import MonitoringEvent
+from app.models.portfolio_snapshot import PortfolioSnapshot
+from app.models.thesis import Thesis
 from tests.conftest import engine
 
 
@@ -96,6 +99,53 @@ async def test_trend_returns_previous_snapshot(client, auth_headers, test_user, 
     utc_today = datetime.now(timezone.utc).date()
     assert data["snapshot_date"] == utc_today.isoformat()
     assert data["holdings_count"] == 1
+
+
+@pytest.mark.asyncio
+async def test_trend_counts_events_from_the_snapshot_date_only(
+    client, auth_headers, test_user, db: AsyncSession
+):
+    holding = Holding(
+        id=uuid.uuid4(), ticker="NOW", name="ServiceNow",
+        quantity=2, average_cost_basis=600, currency="GBP",
+        current_value=1300, user_id=test_user.id,
+    )
+    thesis = Thesis(
+        id=uuid.uuid4(), holding_id=holding.id, user_id=test_user.id,
+        status="active", why_own_it="Subscription growth", confidence="medium",
+    )
+    yesterday = datetime.now(timezone.utc).date() - timedelta(days=1)
+    snapshot = PortfolioSnapshot(
+        id=uuid.uuid4(), user_id=test_user.id, snapshot_date=yesterday,
+        total_value=1300, total_cost=1200, top_3_concentration_pct=100,
+        thesis_coverage_pct=100, monitorable_pct=100,
+        unmonitored_count=0, holdings_count=1,
+    )
+    db.add_all([holding, thesis, snapshot])
+    await db.commit()
+
+    snapshot_start = datetime.combine(yesterday, datetime.min.time(), tzinfo=timezone.utc)
+    db.add_all([
+        MonitoringEvent(
+            id=uuid.uuid4(), holding_id=holding.id, thesis_id=thesis.id,
+            event_type="news", severity="info", verdict="supports",
+            title="New evidence", summary="Created after the comparison snapshot.",
+            created_at=snapshot_start + timedelta(hours=1),
+        ),
+        MonitoringEvent(
+            id=uuid.uuid4(), holding_id=holding.id, thesis_id=thesis.id,
+            event_type="news", severity="warning", verdict="threatens",
+            title="Old evidence", summary="Created before the comparison snapshot.",
+            created_at=snapshot_start - timedelta(seconds=1),
+        ),
+    ])
+    await db.commit()
+
+    resp = await client.get("/api/portfolio/summary/trend", headers=auth_headers)
+    assert resp.status_code == 200
+    data = resp.json()
+    assert data["snapshot_date"] == yesterday.isoformat()
+    assert data["new_event_count"] == 1
 
 
 @pytest.mark.asyncio

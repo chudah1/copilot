@@ -494,10 +494,6 @@ function DashboardInner() {
     ? recentReviewBannerCopy(recentReviewBanner, onboardingState?.investor_profile ?? null)
     : null;
   const shouldRenderOnboardingBanner = missingThesisCount === 0;
-  const recentEventCount = useMemo(
-    () => pulse?.pulses.reduce((s, p) => s + p.recent_event_count, 0) ?? 0,
-    [pulse],
-  );
 
   // Loading state
   const loading = !holdings && !holdingsError;
@@ -611,7 +607,7 @@ function DashboardInner() {
                 </div>
 
                 {summary && (
-                  <SinceLastVisit summary={summary} trend={trend} recentEventCount={recentEventCount} />
+                  <SinceLastVisit summary={summary} trend={trend} />
                 )}
               </div>
 

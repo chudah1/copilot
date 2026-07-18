@@ -210,6 +210,18 @@ def _event_decision_summary(event: MonitoringEvent) -> str:
     return event.title.strip()
 
 
+def _requires_decision(event: MonitoringEvent) -> bool:
+    """Return whether an unreviewed event belongs in the decision inbox.
+
+    Direction wins over headline severity: a warning-level article that
+    supports the written case is evidence, but it is not an unresolved call.
+    Legacy rows without a verdict retain the old severity fallback.
+    """
+    if event.verdict in {"supports", "neutral"}:
+        return False
+    return event.severity in {"warning", "thesis_breaking"}
+
+
 async def _latest_sources_by_thesis(
     db: AsyncSession, thesis_ids: list[uuid.UUID]
 ) -> dict[uuid.UUID, int]:
@@ -385,9 +397,10 @@ async def compute_portfolio_pulse(user_id: uuid.UUID, db: AsyncSession) -> tuple
     for holding in holdings:
         thesis = thesis_by_holding.get(holding.id)
         events = events_by_holding.get(holding.id, [])
+        decision_events = [event for event in events if _requires_decision(event)]
         recent_event_count = sum(
             1
-            for event in events
+            for event in decision_events
             if event.created_at is not None and _normalize_datetime(event.created_at) >= cutoff
         )
 
@@ -397,7 +410,7 @@ async def compute_portfolio_pulse(user_id: uuid.UUID, db: AsyncSession) -> tuple
         # Prefer the explicit monitored-at stamp (set on every check, even quiet
         # ones) so "checked X ago" is truthful; fall back to the last event time.
         last_checked = _normalize_datetime(holding.last_monitored_at) or last_checked_map.get(holding.id)
-        latest_event_at = _normalize_datetime(events[0].created_at) if events else None
+        latest_event_at = _normalize_datetime(decision_events[0].created_at) if decision_events else None
 
         if not thesis:
             pulses.append(HoldingPulse(
@@ -415,31 +428,31 @@ async def compute_portfolio_pulse(user_id: uuid.UUID, db: AsyncSession) -> tuple
                 pnl_pct=pnl_pct,
                 last_checked_at=last_checked,
                 recent_event_count=recent_event_count,
-                unresolved_event_count=len(events),
+                unresolved_event_count=len(decision_events),
                 sources_count=None,
             ))
             continue
 
         days_since_update = _days_since_update(thesis.updated_at, now=now)
         latest_summary = _combined_event_summary(
-            events,
+            decision_events,
             now=now,
             signal_labels=signal_labels,
             ticker=holding.ticker,
         )
         latest_assumption = (
             _event_assumption_label(
-                events[0],
+                decision_events[0],
                 signal_labels=signal_labels,
                 ticker=holding.ticker,
             )
-            if events
+            if decision_events
             else None
         )
         stale_status, stale_reason = _stale_pressure(thesis, days_since_update=days_since_update)
 
         # Determine pulse
-        severities = {e.severity for e in events}
+        severities = {e.severity for e in decision_events}
         if thesis.status == "needs_review" or "thesis_breaking" in severities:
             pulse_status = "review"
             pulses.append(HoldingPulse(
@@ -460,14 +473,14 @@ async def compute_portfolio_pulse(user_id: uuid.UUID, db: AsyncSession) -> tuple
                 latest_event_at=latest_event_at,
                 urgency_score=_urgency_score(
                     pulse_status=pulse_status,
-                    recent_event_count=len(events),
+                    recent_event_count=recent_event_count,
                     latest_event_at=latest_event_at,
                     days_since_update=days_since_update,
                 ),
                 pnl_pct=pnl_pct,
                 last_checked_at=last_checked,
                 recent_event_count=recent_event_count,
-                unresolved_event_count=len(events),
+                unresolved_event_count=len(decision_events),
                 sources_count=sources_count_by_thesis.get(thesis.id),
             ))
         elif "warning" in severities or stale_status in {"watch", "review"}:
@@ -489,14 +502,14 @@ async def compute_portfolio_pulse(user_id: uuid.UUID, db: AsyncSession) -> tuple
                 latest_event_at=latest_event_at,
                 urgency_score=_urgency_score(
                     pulse_status=pulse_status,
-                    recent_event_count=len(events),
+                    recent_event_count=recent_event_count,
                     latest_event_at=latest_event_at,
                     days_since_update=days_since_update,
                 ),
                 pnl_pct=pnl_pct,
                 last_checked_at=last_checked,
                 recent_event_count=recent_event_count,
-                unresolved_event_count=len(events),
+                unresolved_event_count=len(decision_events),
                 sources_count=sources_count_by_thesis.get(thesis.id),
             ))
         else:
@@ -515,14 +528,14 @@ async def compute_portfolio_pulse(user_id: uuid.UUID, db: AsyncSession) -> tuple
                 latest_event_at=latest_event_at,
                 urgency_score=_urgency_score(
                     pulse_status=pulse_status,
-                    recent_event_count=len(events),
+                    recent_event_count=recent_event_count,
                     latest_event_at=latest_event_at,
                     days_since_update=days_since_update,
                 ),
                 pnl_pct=pnl_pct,
                 last_checked_at=last_checked,
                 recent_event_count=recent_event_count,
-                unresolved_event_count=len(events),
+                unresolved_event_count=len(decision_events),
                 sources_count=sources_count_by_thesis.get(thesis.id),
             ))
 

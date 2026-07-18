@@ -121,6 +121,7 @@ class CheckNowResponse(BaseModel):
 
 class PortfolioTrendResponse(BaseModel):
     snapshot_date: str | None = None
+    new_event_count: int = 0
     top_3_concentration_pct: float | None = None
     thesis_coverage_pct: float | None = None
     monitorable_pct: float | None = None
