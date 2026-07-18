@@ -10,14 +10,13 @@ import type { getMonitoringCalmState } from "./position-helpers";
 interface MonitoringTabProps {
   hasThesis: boolean;
   thesisId: string | null;
+  ticker: string;
+  writtenCase: string;
   investorProfile: "thesis_driven" | "hearsay_driven" | null;
   events: MonitoringEvent[];
   unreviewedEvents: number;
   activeSignalCount: number;
   hasSignals: boolean;
-  firstPendingEvent: MonitoringEvent | null;
-  firstPendingAssumptionLabel: string | null;
-  isFirstLiveEvidenceMoment: boolean;
   calmState: ReturnType<typeof getMonitoringCalmState>;
   decompositionLoading: boolean;
   emptyCopy: { title: string; body: string; cta: string };
@@ -29,8 +28,7 @@ interface MonitoringTabProps {
 }
 
 export function MonitoringTab({
-  hasThesis, thesisId, investorProfile, events, unreviewedEvents, activeSignalCount, hasSignals, firstPendingEvent,
-  firstPendingAssumptionLabel, isFirstLiveEvidenceMoment, calmState,
+  hasThesis, thesisId, ticker, writtenCase, investorProfile, events, unreviewedEvents, activeSignalCount, hasSignals, calmState,
   decompositionLoading, emptyCopy, reviewedItems, supportingItems, onFlagEvent, onAfterCheckIn, onWriteThesis,
 }: MonitoringTabProps) {
   const reviewedEventsCount = events.filter((event) => Boolean(event.review_action)).length;
@@ -125,20 +123,20 @@ export function MonitoringTab({
       ) : (
         <>
           <section className="grid gap-4 lg:grid-cols-[minmax(0,1.2fr)_minmax(16rem,20rem)]">
-            <div className="product-panel product-panel-muted p-5 sm:p-6">
+            <div className="product-panel product-panel-muted self-start p-5 sm:p-6">
               <div className="space-y-2">
                 <p className="font-mono text-[10px] uppercase tracking-[0.2em] text-primary">
                   {monitoringCopy.controlTitle}
                 </p>
                 <p className="font-display italic text-[1.55rem] leading-tight text-foreground sm:text-[1.75rem]">
                   {unreviewedEvents > 0
-                    ? investorProfile === "hearsay_driven"
-                      ? "Unresolved evidence is waiting for your call."
-                      : "Unresolved evidence is waiting for your call."
+                    ? "New evidence has been checked."
                     : calmState.title}
                 </p>
                 <p className="font-sans text-sm leading-relaxed text-foreground/80">
-                  {unreviewedEvents > 0 ? monitoringCopy.controlBody : calmState.body}
+                  {unreviewedEvents > 0
+                    ? "Only evidence that puts real pressure on your written case will ask for a decision."
+                    : calmState.body}
                 </p>
               </div>
             </div>
@@ -146,13 +144,13 @@ export function MonitoringTab({
             <div className="grid gap-3 sm:grid-cols-3 lg:grid-cols-1">
               <div className="product-panel p-4">
                 <p className="font-mono text-[10px] uppercase tracking-[0.18em] text-muted-foreground">
-                  Evidence
+                  New evidence
                 </p>
                 <p className="mt-2 font-display text-[1.55rem] italic leading-none text-foreground">
                   {unreviewedEvents}
                 </p>
                 <p className="mt-2 font-sans text-xs leading-relaxed text-muted-foreground">
-                  {unreviewedEvents === 1 ? "1 item since your last check-in" : `${unreviewedEvents} items since your last check-in`}
+                  {unreviewedEvents === 1 ? "1 item checked since your last decision" : `${unreviewedEvents} items checked since your last decision`}
                 </p>
               </div>
 
@@ -190,43 +188,11 @@ export function MonitoringTab({
           <section>
             {unreviewedEvents > 0 ? (
               <div className="space-y-5">
-                {isFirstLiveEvidenceMoment && firstPendingEvent && (
-                  <div className="border border-primary/20 bg-primary/5 px-5 py-4 space-y-3">
-                    <p className="font-mono text-[10px] uppercase tracking-[0.2em] text-primary">
-                      ● First live evidence
-                    </p>
-                    {firstPendingAssumptionLabel && (
-                      <div className="space-y-1">
-                        <p className="font-mono text-[10px] uppercase tracking-[0.18em] text-foreground/55">
-                          Assumption under test
-                        </p>
-                        <p className="font-sans text-sm text-foreground">
-                          {firstPendingAssumptionLabel}
-                        </p>
-                      </div>
-                    )}
-                    <div className="space-y-1.5">
-                      <p className="font-display italic text-[1.35rem] leading-tight text-foreground">
-                        {investorProfile === "hearsay_driven"
-                          ? "This is the first real test of the reason you wrote down."
-                          : "This is the first real test of the thesis you wrote down."}
-                      </p>
-                      <p className="font-sans text-sm text-foreground/80 leading-relaxed">
-                        {firstPendingEvent.ai_analysis ||
-                          firstPendingEvent.evidence_summary ||
-                          firstPendingEvent.summary ||
-                          (investorProfile === "hearsay_driven"
-                            ? "First alert that may matter for the story. Decide what it means."
-                            : "First alert that may matter for the thesis. Decide what it means.")}
-                      </p>
-                    </div>
-                  </div>
-                )}
-
                 {thesisId && (
                   <ThesisCheckIn
                     thesisId={thesisId}
-                    investorProfile={investorProfile ?? null}
+                    ticker={ticker}
+                    writtenCase={writtenCase}
                     onFlagEvent={onFlagEvent}
                     onAfterSubmit={onAfterCheckIn}
                   />

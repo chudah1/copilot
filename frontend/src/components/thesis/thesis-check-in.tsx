@@ -19,7 +19,8 @@ type ThesisAction = "keep_lowered" | "rewrite" | "invalidate";
 
 interface Props {
   thesisId: string;
-  investorProfile?: "thesis_driven" | "hearsay_driven" | null;
+  ticker: string;
+  writtenCase: string;
   onFlagEvent: (eventId: string) => Promise<void>;
   onAfterSubmit: (result: SubmitClaimReviewsResponse, thesisAction: ThesisAction | null) => Promise<void> | void;
 }
@@ -87,7 +88,7 @@ function EvidenceRow({
   );
 }
 
-export function ThesisCheckIn({ thesisId, investorProfile, onFlagEvent, onAfterSubmit }: Props) {
+export function ThesisCheckIn({ thesisId, ticker, writtenCase, onFlagEvent, onAfterSubmit }: Props) {
   const { data, mutate, isLoading } = useSWR<ThesisCheckInData>(`/api/theses/${thesisId}/check-in`, fetcher);
   const [decisions, setDecisions] = useState<Record<string, ClaimStatus>>({});
   const [notes, setNotes] = useState("");
@@ -95,14 +96,12 @@ export function ThesisCheckIn({ thesisId, investorProfile, onFlagEvent, onAfterS
   const [submitting, setSubmitting] = useState(false);
   const [flaggingId, setFlaggingId] = useState<string | null>(null);
 
-  const subject = investorProfile === "hearsay_driven" ? "reason" : "thesis";
-
   if (isLoading || !data) {
     return (
       <div className="product-panel p-5 sm:p-6">
         <div className="flex items-center gap-2 text-sm text-muted-foreground">
           <span className="inline-block h-2 w-2 animate-pulse rounded-full bg-amber-400" />
-          Loading the {subject} check-in…
+          Loading the evidence…
         </div>
       </div>
     );
@@ -116,7 +115,7 @@ export function ThesisCheckIn({ thesisId, investorProfile, onFlagEvent, onAfterS
       claim.needs_review ||
       claim.supports.length + claim.threatens.length + claim.neutral.length > 0,
   );
-  const hasUnsortedEvidence = claims.some(
+  const hasEvidence = claims.some(
     (claim) => claim.supports.length + claim.threatens.length + claim.neutral.length > 0,
   );
   const pendingClaims = claims.filter((claim) => claim.needs_review);
@@ -150,7 +149,7 @@ export function ThesisCheckIn({ thesisId, investorProfile, onFlagEvent, onAfterS
         thesis_action: anyBroken ? thesisAction : null,
         notes: notes.trim() ? notes.trim() : null,
       });
-      toast.success(`Check-in saved. The ${subject} is now ${result.thesis_status.replace("_", " ")}.`);
+      toast.success("Decision recorded.");
       setDecisions({});
       setNotes("");
       setThesisAction(null);
@@ -158,7 +157,7 @@ export function ThesisCheckIn({ thesisId, investorProfile, onFlagEvent, onAfterS
       await onAfterSubmit(result, anyBroken ? thesisAction : null);
     } catch (error) {
       console.error(error);
-      toast.error("Failed to save the check-in");
+      toast.error("Failed to record the decision");
     } finally {
       setSubmitting(false);
     }
@@ -166,20 +165,28 @@ export function ThesisCheckIn({ thesisId, investorProfile, onFlagEvent, onAfterS
 
   return (
     <div className="space-y-4">
-      <div className="flex items-baseline justify-between gap-4">
+      <div className="space-y-3">
         <div>
           <p className="mb-1 font-mono text-[10px] uppercase tracking-[0.2em] text-muted-foreground">
-            {subject} check-in
+            {pendingClaims.length > 0 ? "Decision needed" : "Evidence reviewed"}
           </p>
           <p className="font-display italic text-[1.6rem] leading-tight text-foreground">
-            {data.needs_review_count === 0
-              ? hasUnsortedEvidence
-                ? "Evidence is waiting to be sorted."
-                : `Nothing is testing the ${subject} right now.`
-              : data.needs_review_count === 1
-                ? "One part of the story needs your call."
-                : `${data.needs_review_count} parts of the story need your call.`}
+            {pendingClaims.length > 0
+              ? `Does this change your written case for ${ticker}?`
+              : hasEvidence
+                ? "No decision needed."
+                : "Nothing is testing your written case right now."}
           </p>
+          <p className="mt-2 max-w-2xl font-sans text-sm leading-relaxed text-foreground/75">
+            {pendingClaims.length > 0
+              ? "Read the evidence, then say whether the part of your case below still holds."
+              : "PenKeep checked the new evidence. It does not currently test your case strongly enough to require a decision."}
+          </p>
+        </div>
+
+        <div className="border-l-2 border-primary/25 bg-background/55 px-4 py-3">
+          <p className="font-mono text-[10px] uppercase tracking-[0.16em] text-muted-foreground">Your written case</p>
+          <p className="mt-2 font-sans text-sm leading-relaxed text-foreground/85">{writtenCase}</p>
         </div>
       </div>
 
@@ -194,8 +201,8 @@ export function ThesisCheckIn({ thesisId, investorProfile, onFlagEvent, onAfterS
               className={`product-panel p-4 sm:p-5 ${claim.needs_review ? "border-amber-500/30" : ""}`}
             >
               <div className="flex flex-wrap items-center gap-2">
-                <span className={`inline-flex items-center border px-2 py-0.5 font-mono text-[10px] uppercase tracking-[0.12em] ${claim.needs_review ? "border-amber-500/30 bg-amber-500/10 text-amber-700" : STATUS_CHIP[claim.status]}`}>
-                  {claim.needs_review ? "Needs review" : claim.status}
+                <span className={`inline-flex items-center border px-2 py-0.5 font-mono text-[10px] uppercase tracking-[0.12em] ${claim.needs_review ? "border-amber-500/30 bg-amber-500/10 text-amber-700" : "border-border/60 bg-background/70 text-muted-foreground"}`}>
+                  {claim.needs_review ? "Needs your decision" : "Background"}
                 </span>
                 {claim.last_reviewed_at && !claim.needs_review && (
                   <span className="font-mono text-[10px] text-muted-foreground/70">
@@ -204,7 +211,7 @@ export function ThesisCheckIn({ thesisId, investorProfile, onFlagEvent, onAfterS
                 )}
               </div>
               <p className="mt-2 font-sans text-sm leading-relaxed text-foreground">
-                {claim.claim_id ? `“${claim.label}”` : "Evidence not tied to a specific part of the story"}
+                {claim.claim_id ? `“${claim.label}”` : "Not tied to a specific part of your written case"}
               </p>
               {claim.needs_review_reason && (
                 <p className="mt-1 font-sans text-xs leading-relaxed text-amber-700/90">{claim.needs_review_reason}</p>
@@ -215,7 +222,7 @@ export function ThesisCheckIn({ thesisId, investorProfile, onFlagEvent, onAfterS
                   {claim.threatens.length > 0 && (
                     <div className="space-y-2">
                       <p className="font-mono text-[10px] uppercase tracking-[0.16em] text-muted-foreground/80">
-                        Against · {claim.threatens.length}
+                        {claim.needs_review ? "Against" : "Early pressure"} · {claim.threatens.length}
                       </p>
                       {claim.threatens.map((item) => (
                         <EvidenceRow key={item.id} item={item} onFlag={handleFlag} flagging={flaggingId === item.id} />
@@ -232,51 +239,74 @@ export function ThesisCheckIn({ thesisId, investorProfile, onFlagEvent, onAfterS
                       ))}
                     </div>
                   )}
+                  {claim.neutral.length > 0 && (
+                    <div className="space-y-2">
+                      <p className="font-mono text-[10px] uppercase tracking-[0.16em] text-muted-foreground/80">
+                        Background · {claim.neutral.length}
+                      </p>
+                      {claim.neutral.map((item) => (
+                        <EvidenceRow key={item.id} item={item} onFlag={handleFlag} flagging={flaggingId === item.id} />
+                      ))}
+                    </div>
+                  )}
                 </div>
               )}
 
-              <div className="mt-3 flex flex-wrap gap-2">
-                {(["holds", "weakened", "broken"] as const).map((status) => (
-                  <button
-                    key={status}
-                    type="button"
-                    onClick={() =>
-                      setDecisions((current) => {
-                        if (current[key] === status) {
-                          const next = { ...current };
-                          delete next[key];
-                          return next;
+              {claim.needs_review ? (
+                <div className="mt-4 space-y-2">
+                  <p className="font-sans text-xs font-medium text-foreground/80">Does this part of your case still hold?</p>
+                  <div className="grid gap-2 sm:grid-cols-3">
+                    {(
+                      [
+                        { status: "holds", label: "Yes, it still holds" },
+                        { status: "weakened", label: "It makes me less sure" },
+                        { status: "broken", label: "No, this breaks it" },
+                      ] as const
+                    ).map((option) => (
+                      <button
+                        key={option.status}
+                        type="button"
+                        onClick={() =>
+                          setDecisions((current) => {
+                            if (current[key] === option.status) {
+                              const next = { ...current };
+                              delete next[key];
+                              return next;
+                            }
+                            return { ...current, [key]: option.status };
+                          })
                         }
-                        return { ...current, [key]: status };
-                      })
-                    }
-                    className={`border px-3 py-1.5 font-mono text-[10px] uppercase tracking-[0.14em] transition-colors ${
-                      decision === status
-                        ? STATUS_CHIP[status]
-                        : "border-border/70 bg-background/70 text-muted-foreground hover:text-foreground"
-                    }`}
-                  >
-                    {status}
-                  </button>
-                ))}
-              </div>
+                        className={`border px-3 py-2.5 text-left font-sans text-sm transition-colors ${
+                          decision === option.status
+                            ? STATUS_CHIP[option.status]
+                            : "border-border/70 bg-background/70 text-foreground/80 hover:bg-background"
+                        }`}
+                      >
+                        {option.label}
+                      </button>
+                    ))}
+                  </div>
+                </div>
+              ) : evidenceCount > 0 ? (
+                <p className="mt-3 font-sans text-xs text-muted-foreground">No response needed. This stays in the evidence trail.</p>
+              ) : null}
             </div>
           );
         })}
       </div>
 
-      <div className="product-panel space-y-4 p-4 sm:p-5">
+      {pendingClaims.length > 0 && <div className="product-panel space-y-4 p-4 sm:p-5">
         {anyBroken && (
           <div className="space-y-2">
             <p className="font-mono text-[10px] uppercase tracking-[0.18em] text-red-700">
-              A core claim broke — what happens to the {subject}?
+              Part of your case broke — what happens now?
             </p>
             <div className="grid gap-2 sm:grid-cols-3">
               {(
                 [
                   { value: "keep_lowered", label: "Keep, less sure", detail: "Conviction steps down; monitoring continues." },
-                  { value: "rewrite", label: "Rewrite it", detail: `The ${subject} needs new words before it can be tested.` },
-                  { value: "invalidate", label: "It's broken", detail: `Mark the ${subject} invalidated and log the call.` },
+                  { value: "rewrite", label: "Rewrite the case", detail: "Update what must be true before monitoring continues." },
+                  { value: "invalidate", label: "Mark the case broken", detail: "Close this written case and record why." },
                 ] as const
               ).map((option) => (
                 <button
@@ -321,10 +351,10 @@ export function ThesisCheckIn({ thesisId, investorProfile, onFlagEvent, onAfterS
             disabled={!canSubmit}
             className="bg-primary px-5 py-2.5 font-mono text-[10px] uppercase tracking-[0.18em] text-primary-foreground transition-colors hover:bg-primary/90 disabled:opacity-40"
           >
-            {submitting ? "Saving…" : "Save check-in"}
+            {submitting ? "Recording…" : "Record decision"}
           </button>
         </div>
-      </div>
+      </div>}
     </div>
   );
 }

@@ -178,6 +178,7 @@ async def submit_claim_reviews(
 
     now = datetime.now(timezone.utc)
     session_id = uuid.uuid4()
+    check_in_states = {state.claim_id: state for state in await compute_check_in(db, thesis)}
     for decision in decisions:
         db.add(
             ClaimReview(
@@ -189,6 +190,29 @@ async def submit_claim_reviews(
                 created_at=now,
             )
         )
+
+        # A claim-level decision resolves the evidence the investor just read.
+        # Without these rows the check-in cutoff moved forward, but portfolio
+        # pulse still saw the same events as unresolved and kept the position in
+        # Changed after the decision was recorded.
+        state = check_in_states.get(decision.get("claim_id"))
+        if state is not None:
+            if decision["status"] == "holds":
+                action = "reaffirmed"
+            elif decision["status"] == "weakened" or thesis_action != "invalidate":
+                action = "lowered_confidence"
+            else:
+                action = "invalidated"
+            for event in state.supports_events + state.threatens_events + state.neutral_events:
+                db.add(
+                    ThesisReview(
+                        thesis_id=thesis.id,
+                        monitoring_event_id=event.id,
+                        action=action,
+                        notes=notes,
+                        created_at=now,
+                    )
+                )
 
     if any_broken:
         if thesis_action == "invalidate":

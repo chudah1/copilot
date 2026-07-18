@@ -63,7 +63,7 @@ async def test_check_in_returns_general_bucket_needing_review(client, db, test_u
 
 @pytest.mark.asyncio
 async def test_submit_claim_reviews_roundtrip(client, db, test_user, auth_headers):
-    _holding, thesis, _event = await _seed(db, test_user)
+    holding, thesis, _event = await _seed(db, test_user)
 
     response = await client.post(
         f"/api/theses/{thesis.id}/claim-reviews",
@@ -79,6 +79,17 @@ async def test_submit_claim_reviews_roundtrip(client, db, test_user, auth_header
     assert general["status"] == "holds"
     assert general["needs_review"] is False
     assert general["threatens"] == []
+
+    events = await client.get(
+        f"/api/monitoring/holdings/{holding.id}/events",
+        headers=auth_headers,
+    )
+    assert events.json()[0]["review_action"] == "reaffirmed"
+
+    pulse = await client.get("/api/portfolio/pulse", headers=auth_headers)
+    position = pulse.json()["pulses"][0]
+    assert position["pulse_status"] == "intact"
+    assert position["unresolved_event_count"] == 0
 
 
 @pytest.mark.asyncio

@@ -71,7 +71,6 @@ import {
   buildPostInvalidationNotice,
   buildCheckNowNotice,
   isRecentEvent,
-  getEventAssumptionLabel,
 } from "./position-helpers";
 
 function PositionDetailInner() {
@@ -704,8 +703,6 @@ function PositionDetailInner() {
   const lastReviewedEvent = events.filter((e) => e.review_action).sort((a, b) =>
     new Date(b.created_at).getTime() - new Date(a.created_at).getTime()
   )[0];
-  const firstPendingEvent = events.find((event) => !event.review_action) ?? null;
-  const isFirstLiveEvidenceMoment = unreviewedEvents > 0 && reviewedEventsCount === 0;
   const activeSignalCount =
     decompositionEnvelope?.decomposition?.claims.reduce(
       (sum, claim) =>
@@ -727,9 +724,6 @@ function PositionDetailInner() {
   });
   const invalidatedTheses = theses.filter((t) => t.status === "invalidated");
   const blindSpotArrivalCopy = getBlindSpotArrivalCopy(onboardingState?.investor_profile ?? null);
-  const firstPendingAssumptionLabel = firstPendingEvent
-    ? getEventAssumptionLabel(firstPendingEvent, onboardingState?.investor_profile ?? null)
-    : null;
   const editorSeedThesis = activeThesis ?? latestInvalidatedThesis ?? null;
   const stalePressure = getCaseReviewPressure(activeThesis);
   const editorMode: "write" | "first_write" | "tighten" | "rewrite" =
@@ -1390,14 +1384,13 @@ function PositionDetailInner() {
                 <MonitoringTab
                   hasThesis={Boolean(activeThesis)}
                   thesisId={activeThesis?.id ?? null}
+                  ticker={holding?.ticker ?? ticker}
+                  writtenCase={activeThesis?.why_own_it ?? ""}
                   investorProfile={onboardingState?.investor_profile ?? null}
                   events={events}
                   unreviewedEvents={unreviewedEvents}
                   activeSignalCount={activeSignalCount}
                   hasSignals={hasSignals}
-                  firstPendingEvent={firstPendingEvent}
-                  firstPendingAssumptionLabel={firstPendingAssumptionLabel}
-                  isFirstLiveEvidenceMoment={isFirstLiveEvidenceMoment}
                   calmState={monitoringCalmState}
                   decompositionLoading={decompositionLoading}
                   emptyCopy={{ title: copy.monitoringEmptyTitle, body: copy.monitoringEmptyBody, cta: copy.monitoringEmptyCta }}
