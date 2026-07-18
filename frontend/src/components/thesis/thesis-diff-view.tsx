@@ -141,7 +141,9 @@ function HealthSparkline({ snapshots }: { snapshots: ThesisHealthSnapshot[] }) {
 
 function SignalRow({ signalWithEvents }: { signalWithEvents: SignalWithEvents }) {
   const { signal, entityName, events } = signalWithEvents;
-  const latestEvent = events[0] ?? null;
+  const countedEvents = events.filter((event) => effectiveVerdict(event) !== "ignored");
+  const latestEvent = countedEvents[0] ?? events[0] ?? null;
+  const additionalCheckCount = Math.max(0, countedEvents.length - 1);
   const verdict = latestEvent ? effectiveVerdict(latestEvent) : "neutral";
   const label = signal.signal_label ?? signal.signal_type.replaceAll("_", " ");
 
@@ -191,9 +193,9 @@ function SignalRow({ signalWithEvents }: { signalWithEvents: SignalWithEvents })
         )}
       </div>
 
-      {events.length > 1 && (
+      {additionalCheckCount > 0 && (
         <span className="shrink-0 pt-1 font-mono text-[10px] text-muted-foreground/70">
-          +{events.length - 1}
+          {additionalCheckCount} more {additionalCheckCount === 1 ? "check" : "checks"}
         </span>
       )}
     </div>
