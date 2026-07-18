@@ -36,7 +36,13 @@ export function Navbar() {
   ) ?? [];
   const alertCount = evidencePulses.length;
   const decisionCount = evidencePulses.filter((item) => item.pulse_status === "review").length;
-  const alertsHref = alertCount > 0 ? "/dashboard#live-pressure" : "/dashboard#positions";
+  const primaryReviewPulse = evidencePulses.reduce<(typeof evidencePulses)[number] | null>(
+    (highest, item) => !highest || item.urgency_score > highest.urgency_score ? item : highest,
+    null,
+  );
+  const alertsHref = primaryReviewPulse
+    ? `/dashboard/positions/${primaryReviewPulse.ticker}`
+    : "/dashboard#positions";
   const reviewStatus = decisionCount > 0
     ? `${decisionCount} decision${decisionCount === 1 ? "" : "s"} waiting`
     : alertCount > 0
