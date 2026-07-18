@@ -3,6 +3,10 @@ import { Cormorant, Instrument_Sans, JetBrains_Mono, Geist, Geist_Mono } from "n
 import "./globals.css";
 import { AuthProvider } from "@/lib/auth";
 
+const siteTitle = "penKeep · Your investment decisions, remembered";
+const siteDescription =
+  "Record what you believed, watch the evidence, and revisit the decision when reality has tested it.";
+
 const cormorant = Cormorant({
   subsets: ["latin"],
   weight: ["300", "400", "500", "600", "700"],
@@ -39,8 +43,23 @@ const geistMono = Geist_Mono({
 });
 
 export const metadata: Metadata = {
-  title: "penKeep · Your investment decisions, remembered",
-  description: "Record what you believed, watch the evidence, and revisit the decision when reality has tested it.",
+  metadataBase: new URL("https://penkeep.io"),
+  title: siteTitle,
+  description: siteDescription,
+  applicationName: "penKeep",
+  openGraph: {
+    type: "website",
+    locale: "en_GB",
+    url: "/",
+    siteName: "penKeep",
+    title: siteTitle,
+    description: siteDescription,
+  },
+  twitter: {
+    card: "summary_large_image",
+    title: siteTitle,
+    description: siteDescription,
+  },
 };
 
 export default function RootLayout({ children }: { children: React.ReactNode }) {
