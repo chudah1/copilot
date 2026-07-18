@@ -219,6 +219,7 @@ export interface MonitoringGap {
 export interface HistoricalAuditResultItem {
   description: string;
   severity: "thesis_breaking" | "warning" | "info";
+  verdict: "supports" | "threatens" | "review" | "neutral" | null;
   event_type: string;
   event_date: string | null;
   signal_label: string | null;

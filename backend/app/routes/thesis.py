@@ -335,7 +335,7 @@ async def get_historical_audit(
     if thesis is None:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Thesis not found")
 
-    if thesis.historical_audit_status is None:
+    if thesis.historical_audit_status in (None, "pending"):
         background_tasks.add_task(run_historical_audit, thesis_id)
 
     return HistoricalAuditResponse(

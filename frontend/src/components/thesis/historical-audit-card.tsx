@@ -3,19 +3,28 @@
 import type { HistoricalAuditResultItem, HistoricalAuditResponse } from "@/types";
 import { formatDate } from "@/lib/utils";
 
-const SEVERITY_BADGE: Record<string, string> = {
+const BADGE_STYLE: Record<string, string> = {
+  supports: "bg-emerald-100 text-emerald-700 border border-emerald-200",
+  threatens: "bg-red-100 text-red-700 border border-red-200",
+  review: "bg-amber-100 text-amber-700 border border-amber-200",
+  neutral: "bg-muted text-muted-foreground border border-border",
   thesis_breaking: "bg-red-100 text-red-700 border border-red-200",
   warning: "bg-amber-100 text-amber-700 border border-amber-200",
   info: "bg-blue-100 text-blue-700 border border-blue-200",
 };
 
-const SEVERITY_LABEL: Record<string, string> = {
+const BADGE_LABEL: Record<string, string> = {
+  supports: "Held up",
+  threatens: "Against",
+  review: "Needs review",
+  neutral: "Background",
   thesis_breaking: "Thesis breaking",
   warning: "Warning",
   info: "Info",
 };
 
 function AuditResultItem({ item }: { item: HistoricalAuditResultItem }) {
+  const badgeKey = item.verdict ?? item.severity;
   const url =
     item.evidence &&
     typeof item.evidence === "object" &&
@@ -26,9 +35,9 @@ function AuditResultItem({ item }: { item: HistoricalAuditResultItem }) {
   return (
     <div className="flex items-start gap-3 py-3 border-b border-border/40 last:border-0">
       <span
-        className={`mt-0.5 shrink-0 rounded px-1.5 py-0.5 text-[10px] font-medium uppercase tracking-wide ${SEVERITY_BADGE[item.severity] ?? SEVERITY_BADGE.info}`}
+        className={`mt-0.5 shrink-0 rounded px-1.5 py-0.5 text-[10px] font-medium uppercase tracking-wide ${BADGE_STYLE[badgeKey] ?? BADGE_STYLE.info}`}
       >
-        {SEVERITY_LABEL[item.severity] ?? item.severity}
+        {BADGE_LABEL[badgeKey] ?? badgeKey}
       </span>
       <div className="flex-1 min-w-0">
         {item.signal_label && (
@@ -57,7 +66,7 @@ function AuditResultItem({ item }: { item: HistoricalAuditResultItem }) {
         )}
         {item.claim_text && (
           <p className="mt-2 text-xs italic text-muted-foreground">
-            Testing: {item.claim_text}
+            Part of your case: {item.claim_text}
           </p>
         )}
         {item.event_date && (
@@ -73,14 +82,22 @@ interface Props {
 }
 
 export function HistoricalAuditCard({ audit }: Props) {
-  if (audit?.status === "failed") return null;
+  if (audit?.status === "failed") {
+    return (
+      <div className="rounded-lg border border-border/60 bg-muted/30 p-4 mt-4">
+        <p className="text-sm text-muted-foreground">
+          We couldn&apos;t complete the 90-day evidence check.
+        </p>
+      </div>
+    );
+  }
 
   if (!audit || audit.status === "pending") {
     return (
       <div className="rounded-lg border border-border/60 bg-muted/30 p-4 mt-4">
         <div className="flex items-center gap-2 text-sm text-muted-foreground">
           <span className="h-3 w-3 rounded-full border-2 border-muted-foreground/40 border-t-foreground animate-spin" />
-          Running 90-day audit…
+          Checking evidence from the past 90 days…
         </div>
       </div>
     );
@@ -90,7 +107,7 @@ export function HistoricalAuditCard({ audit }: Props) {
     return (
       <div className="rounded-lg border border-border/60 bg-muted/30 p-4 mt-4">
         <p className="text-sm text-muted-foreground">
-          No active signal would have fired in the last 90 days.
+          We didn&apos;t find evidence that directly tested this case in the past 90 days.
         </p>
       </div>
     );
@@ -103,17 +120,17 @@ export function HistoricalAuditCard({ audit }: Props) {
   return (
     <div className="rounded-lg border border-border/60 bg-card p-4 mt-4">
       <p className="font-mono text-[10px] uppercase tracking-[0.2em] text-muted-foreground mb-3">
-        90-day lookback
+        Evidence from the past 90 days
       </p>
       <p className="text-sm font-medium text-foreground mb-3">
         {coverageOnly
-          ? "No active signal fired, but coverage is still thin for part of this thesis."
-          : "If you'd held this thesis for the last 90 days, these signals would have fired:"}
+          ? "The evidence check was incomplete, so do not treat a quiet result as proof that the case held up."
+          : "Here is how recent evidence relates to the case you just wrote."}
       </p>
       <div>
         {results.map((item) => (
           <AuditResultItem
-            key={`${item.event_type}-${item.event_date ?? "nodate"}-${item.severity}-${item.description.slice(0, 20)}`}
+            key={`${item.event_type}-${item.event_date ?? "nodate"}-${item.verdict ?? item.severity}-${item.description.slice(0, 20)}`}
             item={item}
           />
         ))}

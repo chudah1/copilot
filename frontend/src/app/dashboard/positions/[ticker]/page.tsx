@@ -112,9 +112,12 @@ function PositionDetailInner() {
   const [headerCollapsed, setHeaderCollapsed] = useState(false);
   const [allGaps, setAllGaps] = useState<MonitoringGap[]>([]);
   const [historicalAudit, setHistoricalAudit] = useState<HistoricalAuditResponse | null>(null);
+  const [historicalAuditThesisId, setHistoricalAuditThesisId] = useState<string | null>(null);
 
   const holding = holdings.find((h) => h.ticker === ticker);
   const activeThesis = selectActiveThesis(theses);
+  const currentHistoricalAudit =
+    historicalAuditThesisId === activeThesis?.id ? historicalAudit : null;
   const fromOnboarding = searchParams.get("source") === "onboarding";
   const fromBlindSpot = searchParams.get("source") === "dashboard_blind_spot";
   const latestInvalidatedThesis = selectLatestInvalidatedThesis(theses);
@@ -129,6 +132,8 @@ function PositionDetailInner() {
 
     async function load() {
       try {
+        setHistoricalAudit(null);
+        setHistoricalAuditThesisId(null);
         setDecompositionLoading(true);
         const workspace = await loadPositionWorkspace(api, ticker);
         if (cancelled) return;
@@ -247,26 +252,30 @@ function PositionDetailInner() {
 
   useEffect(() => {
     if (!activeThesis) return;
-    if (historicalAudit && historicalAudit.status !== "pending") return;
+    if (!decompositionEnvelope || !["confirmed", "partially_confirmed"].includes(decompositionEnvelope.status)) return;
+    if (currentHistoricalAudit && currentHistoricalAudit.status !== "pending") return;
 
+    const thesisId = activeThesis.id;
     let cancelled = false;
     let attempts = 0;
-    const MAX_ATTEMPTS = 20; // ~60s at 3s spacing
+    const FAST_ATTEMPTS = 20;
+    const MAX_ATTEMPTS = 40; // ~60s fast, then slow retries through the 10m stale-job window
 
     const poll = async () => {
       attempts += 1;
       try {
         const result = await api.get<HistoricalAuditResponse>(
-          `/api/theses/${activeThesis.id}/historical-audit`
+          `/api/theses/${thesisId}/historical-audit`
         );
         if (cancelled) return;
+        setHistoricalAuditThesisId(thesisId);
         setHistoricalAudit(result);
         if (result.status !== "pending") return;
       } catch {
         // silently ignore — audit card is non-critical
       }
       if (!cancelled && attempts < MAX_ATTEMPTS) {
-        timer = window.setTimeout(poll, 3000);
+        timer = window.setTimeout(poll, attempts < FAST_ATTEMPTS ? 3000 : 30000);
       }
     };
 
@@ -276,7 +285,7 @@ function PositionDetailInner() {
       cancelled = true;
       window.clearTimeout(timer);
     };
-  }, [activeThesis?.id, historicalAudit?.status]); // eslint-disable-line react-hooks/exhaustive-deps
+  }, [activeThesis?.id, currentHistoricalAudit?.status, decompositionEnvelope?.status, historicalAuditThesisId]); // eslint-disable-line react-hooks/exhaustive-deps
 
   const runHealthCheck = async (thesisId: string) => {
     try {
@@ -373,6 +382,8 @@ function PositionDetailInner() {
         }
       }
       setDecompositionEnvelope(null);
+      setHistoricalAudit(null);
+      setHistoricalAuditThesisId(null);
       setEditing(false);
       if (savedThesisId) {
         runHealthCheck(savedThesisId);
@@ -440,6 +451,7 @@ function PositionDetailInner() {
 
   const handleConfirmDecomposition = async (payload: ConfirmDecompositionRequest) => {
     if (!activeThesis) return;
+    setHistoricalAuditThesisId(activeThesis.id);
     setHistoricalAudit({ status: "pending", results: null });
     try {
       setDecompositionSaving(true);
@@ -1274,7 +1286,7 @@ function PositionDetailInner() {
 
                         {/* ── Historical audit card ──────────────────────── */}
                         {activeThesis && (decompositionEnvelope?.status === "confirmed" || decompositionEnvelope?.status === "partially_confirmed") && (
-                          <HistoricalAuditCard audit={historicalAudit} />
+                          <HistoricalAuditCard audit={currentHistoricalAudit} />
                         )}
                       </div>
                     )}

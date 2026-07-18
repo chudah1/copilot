@@ -68,6 +68,7 @@ from app.services.coverage import (
 from app.services.signal_matching import (
     adjudicate_signal_matches,
     build_evidence_summary,
+    determine_verdict,
     enrich_candidates_with_embedding_matches,
     load_active_decomposition,
     match_candidates_to_signals,
@@ -844,18 +845,20 @@ def _serialise_audit_results(
         event_date = str(raw_date)[:10] if raw_date else None
         claim_text = getattr(claim_obj, "claim_text", None)
         signal_label = getattr(signal_obj, "signal_label", None)
+        verdict = determine_verdict(severity, candidate)
         analysis = build_evidence_summary(
             candidate=candidate,
             claim_text=claim_text,
             signal_label=signal_label,
             why_own_it=thesis.why_own_it,
             severity=severity,
-            verdict=None,
+            verdict=verdict,
             investor_profile=investor_profile,
         )
         results.append({
             "description": candidate.get("description", ""),
             "severity": severity,
+            "verdict": verdict,
             "event_type": candidate.get("event_type", ""),
             "event_date": event_date,
             "signal_label": signal_label,
@@ -923,6 +926,25 @@ def _build_coverage_gap_items(
     - "No signal fired" from
     - "We do not yet have strong enough news/transcript coverage for this shape"
     """
+    # This helper is called only when no classified result survived. If source
+    # collection still produced candidates, saying "no signal fired" would be
+    # stronger than the evidence allows: matching or classification may simply
+    # have been inconclusive.
+    if candidates:
+        return [
+            {
+                "description": "The lookback found possible evidence, but none was clear enough to classify.",
+                "severity": "info",
+                "verdict": "neutral",
+                "event_type": "coverage_gap",
+                "event_date": None,
+                "signal_label": None,
+                "claim_text": None,
+                "analysis": "Treat this as incomplete coverage, not proof that every part of the case held up.",
+                "evidence": {"candidate_count": len(candidates)},
+            }
+        ]
+
     qualitative_types = {"news_topic", "transcript_topic", "news_watch"}
     active_qualitative = [
         sig
@@ -973,6 +995,7 @@ def _build_coverage_gap_items(
         {
             "description": "Coverage is still thin for some active qualitative signals.",
             "severity": "info",
+            "verdict": "neutral",
             "event_type": "coverage_gap",
             "event_date": None,
             "signal_label": None,
@@ -1023,7 +1046,7 @@ async def _run_historical_audit_with_session(
     try:
         company_data = await fetch_company_data(holding.ticker)
         if company_data is None:
-            await _persist_historical_audit_state(db, thesis_id=thesis_id, status="empty")
+            await _persist_historical_audit_state(db, thesis_id=thesis_id, status="failed")
             return
 
         previous_price = float(holding.current_price) if holding.current_price is not None else None
@@ -1184,11 +1207,11 @@ async def run_historical_audit(thesis_id: uuid.UUID) -> None:
     """
     # Reuses the first-pulse flag — both features share the same API-cost profile
     # (live market data + Gemini call per thesis). Disabling one disables both.
-    if not settings.enable_first_pulse:
-        return
-
     try:
         async with async_session() as db:
+            if not settings.enable_first_pulse:
+                await _persist_historical_audit_state(db, thesis_id=thesis_id, status="failed")
+                return
             await _run_historical_audit_with_session(db, thesis_id=thesis_id)
     except Exception:
         logger.exception("Historical audit failed for thesis %s", thesis_id)

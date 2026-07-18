@@ -323,6 +323,7 @@ class EarningsReviewResponse(BaseModel):
 class HistoricalAuditResultItem(BaseModel):
     description: str
     severity: Literal["thesis_breaking", "warning", "info"]
+    verdict: Literal["supports", "threatens", "review", "neutral"] | None = None
     event_type: str
     event_date: str | None = None
     signal_label: str | None = None

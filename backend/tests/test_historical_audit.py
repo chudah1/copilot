@@ -109,6 +109,34 @@ async def test_run_historical_audit_sets_failed_on_exception():
 
 
 @pytest.mark.asyncio
+async def test_run_historical_audit_marks_missing_company_data_failed_not_empty():
+    thesis_id = uuid.uuid4()
+    mock_thesis = MagicMock()
+    mock_thesis.id = thesis_id
+    mock_thesis.holding_id = uuid.uuid4()
+    mock_thesis.historical_audit_status = None
+    mock_holding = MagicMock()
+    mock_holding.ticker = "NOW"
+
+    def execute_side_effect(query):
+        result = MagicMock()
+        result.scalar_one_or_none.return_value = (
+            mock_thesis if "FROM theses" in str(query) else mock_holding
+        )
+        return result
+
+    mock_db = AsyncMock()
+    mock_db.execute = AsyncMock(side_effect=execute_side_effect)
+
+    with patch("app.services.check_now.fetch_company_data", return_value=None):
+        from app.services.check_now import _run_historical_audit_with_session
+
+        await _run_historical_audit_with_session(mock_db, thesis_id=thesis_id)
+
+    assert mock_thesis.historical_audit_status == "failed"
+
+
+@pytest.mark.asyncio
 async def test_historical_audit_endpoint_returns_pending_when_status_is_none():
     """Endpoint returns 'pending' when thesis has no audit result yet."""
     from httpx import AsyncClient, ASGITransport
@@ -142,6 +170,42 @@ async def test_historical_audit_endpoint_returns_pending_when_status_is_none():
     body = response.json()
     assert body["status"] == "pending"
     assert body["results"] is None
+
+
+@pytest.mark.asyncio
+async def test_historical_audit_endpoint_reschedules_pending_work_for_stale_guard():
+    """The worker decides whether pending work is fresh or stale; the endpoint
+    must schedule it so a process restart can actually reach that guard."""
+    from httpx import AsyncClient, ASGITransport
+    from app.main import app
+    from app.dependencies import get_current_user
+
+    thesis_id = uuid.uuid4()
+    mock_thesis = MagicMock()
+    mock_thesis.historical_audit_status = "pending"
+    mock_thesis.historical_audit_results = None
+    mock_user = MagicMock()
+    mock_user.id = uuid.uuid4()
+
+    async def override_get_current_user():
+        return mock_user
+
+    with (
+        patch("app.routes.thesis._load_user_thesis", return_value=mock_thesis),
+        patch("app.services.check_now.run_historical_audit", new_callable=AsyncMock) as mock_run,
+    ):
+        app.dependency_overrides[get_current_user] = override_get_current_user
+        try:
+            async with AsyncClient(transport=ASGITransport(app=app), base_url="http://test") as client:
+                response = await client.get(
+                    f"/api/theses/{thesis_id}/historical-audit",
+                    headers={"Authorization": "Bearer test"},
+                )
+        finally:
+            app.dependency_overrides.pop(get_current_user, None)
+
+    assert response.status_code == 200
+    mock_run.assert_awaited_once_with(thesis_id)
 
 
 @pytest.mark.asyncio
@@ -337,6 +401,35 @@ def test_serialise_audit_results_orders_by_severity_then_recency():
     assert results[2]["event_date"] == "2026-01-01"
 
 
+def test_serialise_audit_results_preserves_supportive_direction():
+    from app.services.check_now import _serialise_audit_results
+
+    thesis = MagicMock()
+    thesis.why_own_it = "Subscription growth reflects durable enterprise demand."
+    claim = MagicMock()
+    claim.claim_text = "Subscription revenue keeps growing above 20%."
+    candidate = {
+        "description": "Shares fell, but subscription growth remains solid.",
+        "event_type": "gemini_news",
+        "evidence": {
+            "date": "2026-07-14",
+            "claim_id": "claim-1",
+            "signal_direction": "supports",
+        },
+    }
+
+    results = _serialise_audit_results(
+        [(candidate, "warning", "The operating evidence supports the written case.")],
+        thesis=thesis,
+        investor_profile="thesis_driven",
+        claims_by_id={"claim-1": claim},
+        signals_by_id={},
+    )
+
+    assert results[0]["verdict"] == "supports"
+    assert "supports" in results[0]["analysis"].lower()
+
+
 def test_serialise_audit_results_drops_unlinked_info_noise():
     from app.services.check_now import _serialise_audit_results
 
@@ -446,7 +539,7 @@ def test_build_coverage_gap_items_reports_uncovered_qualitative_signals():
     assert "Blackwell" in gap_items[0]["analysis"]
 
 
-def test_build_coverage_gap_items_stays_quiet_when_qualitative_signal_is_linked():
+def test_build_coverage_gap_items_reports_inconclusive_candidates_when_nothing_classified():
     from app.services.check_now import _build_coverage_gap_items
 
     thesis = MagicMock()
@@ -470,7 +563,9 @@ def test_build_coverage_gap_items_stays_quiet_when_qualitative_signal_is_linked(
         signals_by_id={"sig-1": active_signal},
     )
 
-    assert gap_items == []
+    assert len(gap_items) == 1
+    assert gap_items[0]["event_type"] == "coverage_gap"
+    assert "none was clear enough" in gap_items[0]["description"]
 
 
 def test_build_coverage_gap_items_uses_provisional_watch_hints_when_no_active_decomposition():

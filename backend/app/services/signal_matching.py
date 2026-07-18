@@ -785,6 +785,10 @@ def _build_event_implication(
     verdict: str | None,
 ) -> str:
     watched_text = signal_label or claim_text
+    if verdict == "supports":
+        if watched_text:
+            return f"This supports the part of the thesis tied to {watched_text}."
+        return "This supports the original investment case."
     if severity == "thesis_breaking" or verdict == "threatens":
         if watched_text:
             return f"This directly threatens the part of the thesis tied to {watched_text}."
@@ -804,6 +808,8 @@ def _build_event_decision(
     verdict: str | None,
     investor_profile: str | None,
 ) -> str:
+    if verdict == "supports":
+        return "No decision needed. Keep watching for the next test of this part of the case."
     if severity == "thesis_breaking" or verdict == "threatens":
         if investor_profile == "thesis_driven":
             return "Re-read the thesis and decide whether to rewrite or exit before you add, trim, or wave it off."
