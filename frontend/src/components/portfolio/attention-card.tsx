@@ -107,7 +107,7 @@ export function AttentionCard({ holding, pulse, investorProfile, index }: Attent
           )}
           {pulse.unresolved_event_count > 0 && (
             <p className={`font-mono text-[10px] ${isReview ? "text-red-600/80" : "text-amber-700/80"}`}>
-              {pulse.unresolved_event_count} unresolved item{pulse.unresolved_event_count !== 1 ? "s" : ""}
+              {pulse.unresolved_event_count} decision{pulse.unresolved_event_count !== 1 ? "s" : ""} needed
             </p>
           )}
           {!pulse.unresolved_event_count && pulse.last_checked_at && (

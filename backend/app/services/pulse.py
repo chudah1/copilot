@@ -12,6 +12,7 @@ from app.models.holding import Holding
 from app.models.monitoring_event import MonitoringEvent
 from app.models.thesis import Thesis
 from app.models.thesis_signal import ThesisSignal
+from app.services.claim_review import ClaimCheckInState, compute_check_in
 from app.services.valuation import compute_pnl
 
 
@@ -222,6 +223,24 @@ def _requires_decision(event: MonitoringEvent) -> bool:
     return event.severity in {"warning", "thesis_breaking"}
 
 
+def _unique_events(events: list[MonitoringEvent]) -> list[MonitoringEvent]:
+    """Keep the database order while preventing duplicate claim-state events."""
+    return list({event.id: event for event in events}.values())
+
+
+def _events_from_states(
+    states: list[ClaimCheckInState],
+    *,
+    pending_only: bool = False,
+) -> list[MonitoringEvent]:
+    selected = [state for state in states if state.needs_review] if pending_only else states
+    return _unique_events([
+        event
+        for state in selected
+        for event in state.threatens_events
+    ])
+
+
 async def _latest_sources_by_thesis(
     db: AsyncSession, thesis_ids: list[uuid.UUID]
 ) -> dict[uuid.UUID, int]:
@@ -352,20 +371,21 @@ async def compute_portfolio_pulse(user_id: uuid.UUID, db: AsyncSession) -> tuple
         thesis_by_holding.setdefault(t.holding_id, t)
     active_thesis_ids = [thesis.id for thesis in thesis_by_holding.values()]
 
-    # Decision state follows unresolved evidence, regardless of age. Reviewed
-    # events stay in the decision log but must not keep a position on watch.
-    # Evidence from an invalidated written case belongs to that case's history,
-    # not to the decision state of its replacement.
-    events_result = await db.execute(
-        select(MonitoringEvent).where(
-            MonitoringEvent.thesis_id.in_(active_thesis_ids),
-            ~MonitoringEvent.reviews.any(),
-        ).order_by(MonitoringEvent.created_at.desc())
-    )
-    all_events = list(events_result.scalars().all())
-    events_by_holding: dict[uuid.UUID, list[MonitoringEvent]] = {}
-    for e in all_events:
-        events_by_holding.setdefault(e.holding_id, []).append(e)
+    # Portfolio and position review must share one definition of "unresolved."
+    # Claim check-in state applies per-claim review cutoffs and accumulation
+    # thresholds; reading MonitoringEvent rows directly caused the dashboard to
+    # resurface evidence after the investor had already ruled on it.
+    check_in_by_thesis: dict[uuid.UUID, list[ClaimCheckInState]] = {}
+    all_events: list[MonitoringEvent] = []
+    for thesis in thesis_by_holding.values():
+        states = await compute_check_in(db, thesis)
+        check_in_by_thesis[thesis.id] = states
+        all_events.extend(
+            event
+            for state in states
+            for event in state.supports_events + state.threatens_events + state.neutral_events
+        )
+    all_events = _unique_events(all_events)
 
     signal_ids = [event.signal_id for event in all_events if event.signal_id]
     signal_labels: dict[uuid.UUID, str] = {}
@@ -396,8 +416,15 @@ async def compute_portfolio_pulse(user_id: uuid.UUID, db: AsyncSession) -> tuple
 
     for holding in holdings:
         thesis = thesis_by_holding.get(holding.id)
-        events = events_by_holding.get(holding.id, [])
-        decision_events = [event for event in events if _requires_decision(event)]
+        states = check_in_by_thesis.get(thesis.id, []) if thesis else []
+        pending_states = [state for state in states if state.needs_review]
+        current_threats = _events_from_states(states)
+        pending_events = _events_from_states(states, pending_only=True)
+        pressure_events = [event for event in current_threats if _requires_decision(event)]
+        # Pending claim decisions may be triggered by four lower-severity
+        # threats, so use all of that claim's evidence once its threshold trips.
+        decision_events = pending_events if pending_states else pressure_events
+        pending_decision_count = len(pending_states)
         recent_event_count = sum(
             1
             for event in decision_events
@@ -428,7 +455,7 @@ async def compute_portfolio_pulse(user_id: uuid.UUID, db: AsyncSession) -> tuple
                 pnl_pct=pnl_pct,
                 last_checked_at=last_checked,
                 recent_event_count=recent_event_count,
-                unresolved_event_count=len(decision_events),
+                unresolved_event_count=0,
                 sources_count=None,
             ))
             continue
@@ -452,8 +479,8 @@ async def compute_portfolio_pulse(user_id: uuid.UUID, db: AsyncSession) -> tuple
         stale_status, stale_reason = _stale_pressure(thesis, days_since_update=days_since_update)
 
         # Determine pulse
-        severities = {e.severity for e in decision_events}
-        if thesis.status == "needs_review" or "thesis_breaking" in severities:
+        has_pending_evidence = bool(pending_states)
+        if has_pending_evidence or thesis.status == "needs_review":
             pulse_status = "review"
             pulses.append(HoldingPulse(
                 holding_id=holding.id,
@@ -480,11 +507,11 @@ async def compute_portfolio_pulse(user_id: uuid.UUID, db: AsyncSession) -> tuple
                 pnl_pct=pnl_pct,
                 last_checked_at=last_checked,
                 recent_event_count=recent_event_count,
-                unresolved_event_count=len(decision_events),
+                unresolved_event_count=pending_decision_count,
                 sources_count=sources_count_by_thesis.get(thesis.id),
             ))
-        elif "warning" in severities or stale_status in {"watch", "review"}:
-            has_changed_evidence = "warning" in severities
+        elif pressure_events or stale_status in {"watch", "review"}:
+            has_changed_evidence = bool(pressure_events)
             pulse_status = "watch" if has_changed_evidence else stale_status or "watch"
             reason = latest_summary if has_changed_evidence else stale_reason
             reason = reason or f"Thesis is {days_since_update} days old — consider reviewing."
@@ -509,7 +536,7 @@ async def compute_portfolio_pulse(user_id: uuid.UUID, db: AsyncSession) -> tuple
                 pnl_pct=pnl_pct,
                 last_checked_at=last_checked,
                 recent_event_count=recent_event_count,
-                unresolved_event_count=len(decision_events),
+                unresolved_event_count=0,
                 sources_count=sources_count_by_thesis.get(thesis.id),
             ))
         else:
@@ -535,7 +562,7 @@ async def compute_portfolio_pulse(user_id: uuid.UUID, db: AsyncSession) -> tuple
                 pnl_pct=pnl_pct,
                 last_checked_at=last_checked,
                 recent_event_count=recent_event_count,
-                unresolved_event_count=len(decision_events),
+                unresolved_event_count=0,
                 sources_count=sources_count_by_thesis.get(thesis.id),
             ))
 

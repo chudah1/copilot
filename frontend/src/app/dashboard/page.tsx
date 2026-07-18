@@ -117,7 +117,7 @@ function dashboardStateCopy(
           ? `${counts.watch} position${counts.watch > 1 ? "s need" : " needs"} a look.`
           : `${counts.watch} position${counts.watch > 1 ? "s need" : " needs"} a look.`,
       body: topAttention
-        ? `${cleanTicker(topAttention.ticker)} first. ${topAttentionLabel} is still unresolved.${recentReview ? ` ${cleanTicker(recentReview.ticker)} cleared.` : ""}`
+        ? `${cleanTicker(topAttention.ticker)} first. ${topAttentionLabel} is showing early pressure.${recentReview ? ` ${cleanTicker(recentReview.ticker)} cleared.` : ""}`
         : "Nothing looks broken. These names still need a look.",
     };
   }

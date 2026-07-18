@@ -5,6 +5,7 @@ import pytest
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.models.coverage_pass import CoveragePass
+from app.models.claim_review import ClaimReview
 from app.models.holding import Holding
 from app.models.monitoring_event import MonitoringEvent
 from app.models.thesis import Thesis
@@ -204,8 +205,96 @@ async def test_pulse_only_counts_evidence_that_needs_a_decision(
     resp = await client.get("/api/portfolio/pulse", headers=auth_headers)
     pulse = resp.json()["pulses"][0]
     assert pulse["pulse_status"] == "watch"
-    assert pulse["unresolved_event_count"] == 1
+    # One warning is early pressure, not yet a claim decision.
+    assert pulse["unresolved_event_count"] == 0
     assert pulse["latest_event_summary"] == "Subscription growth decelerated."
+
+
+@pytest.mark.asyncio
+async def test_pulse_does_not_resurface_events_cleared_by_claim_review(
+    client, auth_headers, test_user, db: AsyncSession
+):
+    holding = Holding(
+        id=uuid.uuid4(), ticker="NOW", name="ServiceNow",
+        quantity=2, average_cost_basis=600, currency="GBP",
+        user_id=test_user.id,
+    )
+    thesis = Thesis(
+        id=uuid.uuid4(), holding_id=holding.id, user_id=test_user.id,
+        status="active", why_own_it="Subscription growth", confidence="medium",
+    )
+    db.add_all([holding, thesis])
+    await db.commit()
+
+    now = datetime.now(timezone.utc)
+    db.add_all([
+        MonitoringEvent(
+            id=uuid.uuid4(), holding_id=holding.id, thesis_id=thesis.id,
+            event_type="news", severity="warning", verdict="threatens",
+            title="Growth slowed", summary="Subscription growth decelerated.",
+            created_at=now - timedelta(days=2),
+        ),
+        MonitoringEvent(
+            id=uuid.uuid4(), holding_id=holding.id, thesis_id=thesis.id,
+            event_type="news", severity="warning", verdict="threatens",
+            title="Backlog slowed", summary="Remaining obligations decelerated.",
+            created_at=now - timedelta(days=2),
+        ),
+        ClaimReview(
+            thesis_id=thesis.id,
+            claim_id=None,
+            session_id=uuid.uuid4(),
+            status="holds",
+            created_at=now - timedelta(days=1),
+        ),
+    ])
+    await db.commit()
+
+    resp = await client.get("/api/portfolio/pulse", headers=auth_headers)
+    pulse = resp.json()["pulses"][0]
+    assert pulse["pulse_status"] == "intact"
+    assert pulse["pulse_basis"] == "none"
+    assert pulse["unresolved_event_count"] == 0
+
+
+@pytest.mark.asyncio
+async def test_pulse_counts_pending_claims_not_individual_events(
+    client, auth_headers, test_user, db: AsyncSession
+):
+    holding = Holding(
+        id=uuid.uuid4(), ticker="NOW", name="ServiceNow",
+        quantity=2, average_cost_basis=600, currency="GBP",
+        user_id=test_user.id,
+    )
+    thesis = Thesis(
+        id=uuid.uuid4(), holding_id=holding.id, user_id=test_user.id,
+        status="active", why_own_it="Subscription growth", confidence="medium",
+    )
+    db.add_all([holding, thesis])
+    await db.commit()
+
+    now = datetime.now(timezone.utc)
+    db.add_all([
+        MonitoringEvent(
+            id=uuid.uuid4(), holding_id=holding.id, thesis_id=thesis.id,
+            event_type="news", severity="warning", verdict="threatens",
+            title="Growth slowed", summary="Subscription growth decelerated.",
+            created_at=now,
+        ),
+        MonitoringEvent(
+            id=uuid.uuid4(), holding_id=holding.id, thesis_id=thesis.id,
+            event_type="news", severity="warning", verdict="threatens",
+            title="Backlog slowed", summary="Remaining obligations decelerated.",
+            created_at=now - timedelta(minutes=1),
+        ),
+    ])
+    await db.commit()
+
+    resp = await client.get("/api/portfolio/pulse", headers=auth_headers)
+    pulse = resp.json()["pulses"][0]
+    assert pulse["pulse_status"] == "review"
+    assert pulse["pulse_basis"] == "evidence"
+    assert pulse["unresolved_event_count"] == 1
 
 
 @pytest.mark.asyncio
@@ -236,7 +325,7 @@ async def test_pulse_keeps_old_unresolved_evidence_in_the_decision_inbox(client,
     assert pulse["pulse_status"] == "watch"
     assert pulse["pulse_basis"] == "evidence"
     assert pulse["recent_event_count"] == 0
-    assert pulse["unresolved_event_count"] == 1
+    assert pulse["unresolved_event_count"] == 0
 
 
 @pytest.mark.asyncio

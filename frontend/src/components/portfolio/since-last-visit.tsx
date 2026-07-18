@@ -17,7 +17,7 @@ export function SinceLastVisit({ summary, trend }: SinceLastVisitProps) {
   const changes: string[] = [];
 
   if (trend.new_event_count > 0) {
-    changes.push(`${trend.new_event_count} new evidence item${trend.new_event_count !== 1 ? "s" : ""}`);
+    changes.push(`${trend.new_event_count} evidence item${trend.new_event_count !== 1 ? "s" : ""} checked`);
   }
 
   if (trend.holdings_count != null && summary.holdings_count !== trend.holdings_count) {

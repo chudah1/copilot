@@ -123,7 +123,15 @@ async def compute_check_in(db: AsyncSession, thesis: Thesis) -> list[ClaimCheckI
             if cutoff is None or (event.created_at and event.created_at > cutoff)
         ]
         supports = [e for e in bucket_events if e.verdict == "supports"]
-        threatens = [e for e in bucket_events if e.verdict in ("threatens", "review")]
+        threatens = [
+            e
+            for e in bucket_events
+            if e.verdict in ("threatens", "review")
+            # Older monitoring rows predate explicit verdicts. Preserve their
+            # warning semantics so the claim review and portfolio pulse agree
+            # about whether they put pressure on the written case.
+            or (e.verdict is None and e.severity in ("warning", "thesis_breaking"))
+        ]
         neutral = [e for e in bucket_events if e not in supports and e not in threatens]
         needs, reason = _needs_review(threatens)
         states.append(
