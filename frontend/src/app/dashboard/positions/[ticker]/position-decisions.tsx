@@ -30,9 +30,9 @@ function sentenceCase(value: string) {
 }
 
 function followUpLabel(value: string | null) {
-  if (!value) return "Review again later";
+  if (!value) return "Outcome check later";
   const date = new Date(value);
-  return `Review again ${date.toLocaleDateString("en-GB", { day: "numeric", month: "short", year: "numeric" })}`;
+  return `Outcome check ${date.toLocaleDateString("en-GB", { day: "numeric", month: "short", year: "numeric" })}`;
 }
 
 interface Props {
