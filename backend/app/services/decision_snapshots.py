@@ -156,7 +156,7 @@ async def capture_check_in_decision(
     *,
     thesis: Thesis,
     holding: Holding,
-    claim_verdict_summary: str,
+    bet_text: str,
     exited: bool,
     notes: str | None = None,
     now: datetime | None = None,
@@ -171,7 +171,7 @@ async def capture_check_in_decision(
             verdict="exited" if exited else "held",
             bucket="exited" if exited else "held",
             decision_source="thesis_check_in",
-            bet_text=claim_verdict_summary or thesis.why_own_it,
+            bet_text=bet_text or thesis.why_own_it,
             event=None, notes=notes, now=now,
         )
     except Exception:

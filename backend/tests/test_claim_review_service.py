@@ -299,6 +299,7 @@ async def test_submit_captures_decision_snapshot(db, test_user):
     assert len(snaps) == 1
     assert snaps[0].bucket == "held"
     assert snaps[0].decision_source == "thesis_check_in"
+    assert snaps[0].bet_text == "Subscription revenue keeps growing above 20%"
 
 
 @pytest.mark.asyncio

@@ -30,7 +30,7 @@ def _snap(user_id, h, t, **kw):
     return DecisionSnapshot(
         user_id=user_id, thesis_id=t.id, holding_id=h.id,
         verdict=kw.get("verdict", "reaffirmed"), bucket=kw.get("bucket", "held"),
-        decision_source="event_review", decided_at=kw.get("decided_at", _NOW - timedelta(days=40)),
+        decision_source=kw.get("decision_source", "event_review"), decided_at=kw.get("decided_at", _NOW - timedelta(days=40)),
         price_native=460, value_gbp=1800, currency="USD", benchmark_ticker="SPY",
         next_test_at=kw.get("next_test_at"), bet_text=kw.get("bet_text", "Azure decel"),
         resolved_at=kw.get("resolved_at"), resolution_json=kw.get("resolution_json"),
@@ -111,7 +111,53 @@ async def test_get_decisions_for_holding_newest_first_with_read_and_countdown(db
     rows = await get_decisions_for_holding(db, test_user.id, h.id, now=_NOW)
     assert len(rows) == 2
     assert rows[0]["resolved"] is False and rows[0]["next_test_days"] == 12  # newest first
+    assert rows[0]["follow_up_at"] == (_NOW + timedelta(days=12)).isoformat()
     assert rows[1]["resolved"] is True and "still hold" in rows[1]["read"]
+
+
+async def test_open_decision_without_earnings_uses_90_day_follow_up(db, test_user):
+    h, t = await _holding_thesis(db, test_user.id)
+    decided_at = _NOW - timedelta(days=10)
+    db.add(_snap(test_user.id, h, t, decided_at=decided_at, resolved_at=None, next_test_at=None))
+    await db.commit()
+
+    rows = await get_decisions_for_holding(db, test_user.id, h.id, now=_NOW)
+
+    assert rows[0]["follow_up_at"] == (decided_at + timedelta(days=90)).isoformat()
+
+
+async def test_decisions_collapse_accidental_duplicate_check_ins(db, test_user):
+    h, t = await _holding_thesis(db, test_user.id)
+    for seconds in (0, 2):
+        db.add(_snap(
+            test_user.id,
+            h,
+            t,
+            decision_source="thesis_check_in",
+            decided_at=_NOW + timedelta(seconds=seconds),
+            bet_text="Cloud stays durable.",
+        ))
+    await db.commit()
+
+    rows = await get_decisions_for_holding(db, test_user.id, h.id, now=_NOW)
+
+    assert len(rows) == 1
+
+
+async def test_legacy_check_in_summary_falls_back_to_written_case(db, test_user):
+    h, t = await _holding_thesis(db, test_user.id)
+    db.add(_snap(
+        test_user.id,
+        h,
+        t,
+        decision_source="thesis_check_in",
+        bet_text="Thesis check-in: 1 holds.",
+    ))
+    await db.commit()
+
+    rows = await get_decisions_for_holding(db, test_user.id, h.id, now=_NOW)
+
+    assert rows[0]["bet_text"] == "Cloud."
 
 
 async def test_decisions_endpoint_returns_calls(client, auth_headers, db, test_user):

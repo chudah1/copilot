@@ -1,6 +1,6 @@
 "use client";
 
-import { useState } from "react";
+import { useRef, useState } from "react";
 import useSWR from "swr";
 import { toast } from "sonner";
 
@@ -94,6 +94,7 @@ export function ThesisCheckIn({ thesisId, ticker, writtenCase, onFlagEvent, onAf
   const [notes, setNotes] = useState("");
   const [thesisAction, setThesisAction] = useState<ThesisAction | null>(null);
   const [submitting, setSubmitting] = useState(false);
+  const submittingRef = useRef(false);
   const [flaggingId, setFlaggingId] = useState<string | null>(null);
 
   if (isLoading || !data) {
@@ -107,11 +108,10 @@ export function ThesisCheckIn({ thesisId, ticker, writtenCase, onFlagEvent, onAf
     );
   }
 
-  // Hide the general bucket when it carries nothing — most theses keep all
-  // their evidence bound to claims and the empty bucket is just noise.
+  // What changed should only show parts of the case that have new evidence or
+  // need a decision. Empty claims belong on the Original case tab.
   const claims = data.claims.filter(
     (claim) =>
-      claim.claim_id !== null ||
       claim.needs_review ||
       claim.supports.length + claim.threatens.length + claim.neutral.length > 0,
   );
@@ -138,8 +138,9 @@ export function ThesisCheckIn({ thesisId, ticker, writtenCase, onFlagEvent, onAf
   };
 
   const handleSubmit = async () => {
-    if (!canSubmit) return;
+    if (!canSubmit || submittingRef.current) return;
     try {
+      submittingRef.current = true;
       setSubmitting(true);
       const result = await api.post<SubmitClaimReviewsResponse>(`/api/theses/${thesisId}/claim-reviews`, {
         decisions: Object.entries(decisions).map(([key, status]) => ({
@@ -159,6 +160,7 @@ export function ThesisCheckIn({ thesisId, ticker, writtenCase, onFlagEvent, onAf
       console.error(error);
       toast.error("Failed to record the decision");
     } finally {
+      submittingRef.current = false;
       setSubmitting(false);
     }
   };
@@ -202,11 +204,11 @@ export function ThesisCheckIn({ thesisId, ticker, writtenCase, onFlagEvent, onAf
             >
               <div className="flex flex-wrap items-center gap-2">
                 <span className={`inline-flex items-center border px-2 py-0.5 font-mono text-[10px] uppercase tracking-[0.12em] ${claim.needs_review ? "border-amber-500/30 bg-amber-500/10 text-amber-700" : "border-border/60 bg-background/70 text-muted-foreground"}`}>
-                  {claim.needs_review ? "Needs your decision" : "Background"}
+                  {claim.needs_review ? "Needs your decision" : "No decision needed"}
                 </span>
                 {claim.last_reviewed_at && !claim.needs_review && (
                   <span className="font-mono text-[10px] text-muted-foreground/70">
-                    since {formatDate(claim.last_reviewed_at)}
+                    Reviewed {formatDate(claim.last_reviewed_at)}
                   </span>
                 )}
               </div>

@@ -7,13 +7,14 @@ layer the digest / position page / quarterly review read from.
 from __future__ import annotations
 
 import uuid
-from datetime import datetime, timezone
+from datetime import datetime, timedelta, timezone
 
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.models.decision_snapshot import DecisionSnapshot
 from app.models.holding import Holding
+from app.models.thesis import Thesis
 
 
 def _norm(dt: datetime | None) -> datetime | None:
@@ -99,33 +100,54 @@ async def get_decisions_for_holding(
     the position page."""
     rows = (
         await db.execute(
-            select(DecisionSnapshot)
+            select(DecisionSnapshot, Thesis.why_own_it)
+            .join(Thesis, Thesis.id == DecisionSnapshot.thesis_id)
             .where(
                 DecisionSnapshot.user_id == user_id,
                 DecisionSnapshot.holding_id == holding_id,
             )
             .order_by(DecisionSnapshot.decided_at.desc())
-            .limit(limit)
+            .limit(limit * 2)
         )
-    ).scalars().all()
+    ).all()
 
     out = []
-    for snap in rows:
+    recent_check_ins: dict[tuple, datetime] = {}
+    for snap, written_case in rows:
         resolved = snap.resolved_at is not None
         nt = _norm(snap.next_test_at)
+        decided_at = _norm(snap.decided_at)
+        if snap.decision_source == "thesis_check_in" and decided_at:
+            fingerprint = (
+                snap.bucket,
+                snap.verdict,
+                snap.bet_text,
+                (snap.condition_snapshot or {}).get("verdict_note"),
+            )
+            newer_duplicate_at = recent_check_ins.get(fingerprint)
+            if newer_duplicate_at and (newer_duplicate_at - decided_at).total_seconds() <= 10:
+                continue
+            recent_check_ins[fingerprint] = decided_at
+        follow_up_at = nt or (decided_at + timedelta(days=90) if decided_at else None)
+        bet_text = snap.bet_text
+        if snap.decision_source == "thesis_check_in" and (bet_text or "").startswith("Thesis check-in:"):
+            bet_text = written_case
         out.append(
             {
                 "id": str(snap.id),
                 "bucket": snap.bucket,
                 "verdict": snap.verdict,
                 "decision_source": snap.decision_source,
-                "decided_at": _norm(snap.decided_at).isoformat() if snap.decided_at else None,
-                "bet_text": snap.bet_text,
+                "decided_at": decided_at.isoformat() if decided_at else None,
+                "bet_text": bet_text,
                 "resolved": resolved,
                 "read": (snap.resolution_json or {}).get("read") if resolved else None,
                 "next_test_days": (nt - now).days if (not resolved and nt) else None,
+                "follow_up_at": follow_up_at.isoformat() if (not resolved and follow_up_at) else None,
             }
         )
+        if len(out) >= limit:
+            break
     return out
 
 

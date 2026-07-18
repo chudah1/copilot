@@ -13,6 +13,7 @@ interface Decision {
   resolved: boolean;
   read: string | null;
   next_test_days: number | null;
+  follow_up_at: string | null;
 }
 
 const BUCKET_LABEL: Record<string, string> = { held: "Held", exited: "Exited", dismissed: "Dismissed" };
@@ -26,6 +27,12 @@ function sentenceCase(value: string) {
   const cleaned = value.replace(/_/g, " ").trim();
   if (!cleaned) return "Decision recorded";
   return cleaned.charAt(0).toUpperCase() + cleaned.slice(1);
+}
+
+function followUpLabel(value: string | null) {
+  if (!value) return "Awaiting outcome";
+  const date = new Date(value);
+  return `Outcome check ${date.toLocaleDateString("en-GB", { day: "numeric", month: "short", year: "numeric" })}`;
 }
 
 interface Props {
@@ -101,19 +108,21 @@ export function PositionDecisions({ holdingId, reloadKey }: Props) {
                 </div>
                 {!d.resolved && (
                   <span className="font-mono text-[10px] text-primary/70 text-right">
-                    {d.next_test_days != null ? `Open · revisit in ${d.next_test_days}d` : "Open"}
+                    {followUpLabel(d.follow_up_at)}
                   </span>
                 )}
                 {d.resolved && (
                   <span className="font-mono text-[10px] text-muted-foreground/70 text-right">
-                    Resolved
+                    Outcome recorded
                   </span>
                 )}
               </div>
 
-              <p className="font-display text-[1.2rem] italic leading-snug text-foreground">
-                {sentenceCase(d.verdict)}
-              </p>
+              {sentenceCase(d.verdict) !== (BUCKET_LABEL[d.bucket] ?? sentenceCase(d.bucket)) && (
+                <p className="font-display text-[1.2rem] italic leading-snug text-foreground">
+                  {sentenceCase(d.verdict)}
+                </p>
+              )}
 
               {d.bet_text && (
                 <div className="border-l-2 border-border/70 pl-3">

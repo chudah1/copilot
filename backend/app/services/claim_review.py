@@ -233,6 +233,12 @@ async def submit_claim_reviews(
 
     counts = {status: sum(1 for d in decisions if d["status"] == status) for status in CLAIM_REVIEW_STATUSES}
     summary_bits = [f"{count} {status}" for status, count in sorted(counts.items()) if count]
+    reviewed_parts = [
+        check_in_states[decision.get("claim_id")].label
+        for decision in decisions
+        if decision.get("claim_id") in check_in_states
+    ]
+    bet_text = "; ".join(reviewed_parts) or thesis.why_own_it
 
     # Decision-mirror capture: a check-in is one position-level conviction call
     # (keep vs exit); claim verdicts are the detail. Best-effort, never raises.
@@ -242,7 +248,7 @@ async def submit_claim_reviews(
         db,
         thesis=thesis,
         holding=holding,
-        claim_verdict_summary=f"Thesis check-in: {', '.join(summary_bits)}.",
+        bet_text=bet_text,
         exited=thesis.status == "invalidated",
         notes=notes,
         now=now,
@@ -254,7 +260,7 @@ async def submit_claim_reviews(
         holding_id=holding.id,
         user_id=user_id,
         entry_type=EVIDENCE_REVIEWED,
-        content=f"Thesis check-in: {', '.join(summary_bits)}.",
+        content=f"Reviewed {len(decisions)} part{'s' if len(decisions) != 1 else ''} of the written case: {', '.join(summary_bits)}.",
         metadata={
             "session_id": str(session_id),
             "decisions": [
