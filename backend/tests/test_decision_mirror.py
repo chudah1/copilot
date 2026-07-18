@@ -128,7 +128,7 @@ async def test_open_decision_without_earnings_uses_90_day_follow_up(db, test_use
 
 async def test_decisions_collapse_accidental_duplicate_check_ins(db, test_user):
     h, t = await _holding_thesis(db, test_user.id)
-    for seconds in (0, 2):
+    for seconds in (0, 60 * 60):
         db.add(_snap(
             test_user.id,
             h,
@@ -142,6 +142,31 @@ async def test_decisions_collapse_accidental_duplicate_check_ins(db, test_user):
     rows = await get_decisions_for_holding(db, test_user.id, h.id, now=_NOW)
 
     assert len(rows) == 1
+
+
+async def test_decisions_keep_different_check_ins_from_the_same_day(db, test_user):
+    h, t = await _holding_thesis(db, test_user.id)
+    db.add(_snap(
+        test_user.id,
+        h,
+        t,
+        decision_source="thesis_check_in",
+        decided_at=_NOW,
+        bet_text="Cloud stays durable.",
+    ))
+    db.add(_snap(
+        test_user.id,
+        h,
+        t,
+        decision_source="thesis_check_in",
+        decided_at=_NOW + timedelta(hours=1),
+        bet_text="AI revenue is becoming meaningful.",
+    ))
+    await db.commit()
+
+    rows = await get_decisions_for_holding(db, test_user.id, h.id, now=_NOW)
+
+    assert len(rows) == 2
 
 
 async def test_legacy_check_in_summary_falls_back_to_written_case(db, test_user):

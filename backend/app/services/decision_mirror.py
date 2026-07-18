@@ -125,7 +125,7 @@ async def get_decisions_for_holding(
                 (snap.condition_snapshot or {}).get("verdict_note"),
             )
             newer_duplicate_at = recent_check_ins.get(fingerprint)
-            if newer_duplicate_at and (newer_duplicate_at - decided_at).total_seconds() <= 10:
+            if newer_duplicate_at and newer_duplicate_at.date() == decided_at.date():
                 continue
             recent_check_ins[fingerprint] = decided_at
         follow_up_at = nt or (decided_at + timedelta(days=90) if decided_at else None)

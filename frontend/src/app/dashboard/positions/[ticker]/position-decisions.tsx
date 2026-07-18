@@ -30,9 +30,9 @@ function sentenceCase(value: string) {
 }
 
 function followUpLabel(value: string | null) {
-  if (!value) return "Awaiting outcome";
+  if (!value) return "Review again later";
   const date = new Date(value);
-  return `Outcome check ${date.toLocaleDateString("en-GB", { day: "numeric", month: "short", year: "numeric" })}`;
+  return `Review again ${date.toLocaleDateString("en-GB", { day: "numeric", month: "short", year: "numeric" })}`;
 }
 
 interface Props {
@@ -127,7 +127,7 @@ export function PositionDecisions({ holdingId, reloadKey }: Props) {
               {d.bet_text && (
                 <div className="border-l-2 border-border/70 pl-3">
                   <p className="font-mono text-[9px] uppercase tracking-[0.16em] text-muted-foreground">
-                    What you expected
+                    What you were relying on
                   </p>
                   <p className="mt-1 font-sans text-[13px] leading-relaxed text-foreground/80">
                     {d.bet_text}
