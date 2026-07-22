@@ -37,8 +37,8 @@ const TAB_DETAILS: Record<
     body: "Best when the export is already in hand.",
     note: "Accepted shape: Trading 212 export or columns for ticker, name, quantity, and average cost basis.",
     formTitle: "Upload a broker file",
-    formBody: "Import first. Write the first thesis on the holding that matters most.",
-    after: "Next: open the largest position and write the first thesis.",
+    formBody: "Import first. Then start with your largest position by value.",
+    after: "Next: write the first thesis for your largest position by value.",
   },
   manual: {
     eyebrow: "Best for first use",
@@ -218,7 +218,7 @@ export default function ConnectPage() {
                   <p className="max-w-xl font-sans text-sm leading-relaxed text-muted-foreground">
                     {addingMore
                       ? "Connect another broker, upload a CSV, or add a position by hand. New holdings are added to what you already have."
-                      : "Import what you own, then write the thesis on the position that matters most."}
+                      : "Import what you own, then write the thesis for your largest position by value."}
                   </p>
                 </div>
 

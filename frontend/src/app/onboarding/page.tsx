@@ -6,10 +6,16 @@ import { AuthGuard } from "@/components/layout/auth-guard";
 import { Button } from "@/components/ui/button";
 import { api } from "@/lib/api";
 import { getErrorMessage } from "@/lib/errors";
+import {
+  EMPTY_WIZARD_STATE,
+  resolveInitialWizardState,
+  selectLargestUncoveredHolding,
+  type InvestorProfile,
+  type WizardState,
+} from "@/lib/onboarding-wizard";
 import type { Holding, HoldingContext, Thesis } from "@/types";
 
 type Step = "QUESTION_1" | "QUESTION_2";
-type InvestorProfile = "thesis_driven" | "hearsay_driven";
 
 const PROFILE_CONTENT: Record<
   InvestorProfile,
@@ -41,22 +47,8 @@ const PROFILE_CONTENT: Record<
 const STORAGE_KEY = "copilot_onboarding_wizard";
 const STEPS: Step[] = ["QUESTION_1", "QUESTION_2"];
 
-interface WizardState {
-  holdingId: string | null;
-  investorProfile: InvestorProfile;
-  answer1: string;
-  answer2: string;
-}
-
-const emptyState: WizardState = {
-  holdingId: null,
-  investorProfile: "thesis_driven",
-  answer1: "",
-  answer2: "",
-};
-
 function loadState(): WizardState {
-  if (typeof window === "undefined") return emptyState;
+  if (typeof window === "undefined") return EMPTY_WIZARD_STATE;
   try {
     const parsed = JSON.parse(localStorage.getItem(STORAGE_KEY) ?? "{}") as Partial<WizardState>;
     return {
@@ -66,7 +58,7 @@ function loadState(): WizardState {
       answer2: typeof parsed.answer2 === "string" ? parsed.answer2 : "",
     };
   } catch {
-    return emptyState;
+    return EMPTY_WIZARD_STATE;
   }
 }
 
@@ -90,10 +82,11 @@ function WizardInner() {
   const router = useRouter();
   const searchParams = useSearchParams();
   const queryHoldingId = searchParams.get("holding_id");
-  const initialState = (() => {
-    const stored = loadState();
-    return queryHoldingId ? { ...stored, holdingId: queryHoldingId } : stored;
-  })();
+  const freshImport = searchParams.get("source") === "import";
+  const initialState = resolveInitialWizardState(loadState(), {
+    queryHoldingId,
+    freshImport,
+  });
 
   const [step, setStep] = useState<Step>(() => inferInitialStep(initialState));
   const [wizardState, setWizardState] = useState<WizardState>(initialState);
@@ -108,6 +101,14 @@ function WizardInner() {
   useEffect(() => {
     saveState(wizardState);
   }, [wizardState]);
+
+  useEffect(() => {
+    if (!freshImport) return;
+    const nextParams = new URLSearchParams(searchParams.toString());
+    nextParams.delete("source");
+    const query = nextParams.toString();
+    router.replace(`/onboarding${query ? `?${query}` : ""}`, { scroll: false });
+  }, [freshImport, router, searchParams]);
 
   useEffect(() => {
     api
@@ -127,10 +128,7 @@ function WizardInner() {
       api.get<Thesis[]>("/api/theses/current"),
     ])
       .then(([holdings, theses]) => {
-        const draftedHoldingIds = new Set(theses.map((thesis) => thesis.holding_id));
-        const nextHolding = holdings
-          .filter((item) => !draftedHoldingIds.has(item.id))
-          .sort((a, b) => (b.current_value ?? 0) - (a.current_value ?? 0))[0];
+        const nextHolding = selectLargestUncoveredHolding(holdings, theses);
 
         if (!nextHolding) {
           router.replace("/dashboard");
