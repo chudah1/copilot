@@ -4,6 +4,7 @@ import { EventTimeline } from "@/components/monitoring/event-timeline";
 import { HeldUpThisWeek } from "@/components/monitoring/held-up-this-week";
 import { ReviewedThisWeek } from "@/components/monitoring/reviewed-this-week";
 import { ThesisCheckIn } from "@/components/thesis/thesis-check-in";
+import { InfoTip } from "@/components/ui/info-tip";
 import type { MonitoringEvent, ReviewedItem, SubmitClaimReviewsResponse, SupportingItem } from "@/types";
 import type { getMonitoringCalmState } from "./position-helpers";
 
@@ -129,9 +130,14 @@ export function MonitoringTab({
           <section className="grid gap-4 lg:grid-cols-[minmax(0,1.2fr)_minmax(16rem,20rem)]">
             <div className="product-panel product-panel-muted self-start p-5 sm:p-6">
               <div className="space-y-2">
-                <p className="font-mono text-[10px] uppercase tracking-[0.2em] text-primary">
-                  {monitoringCopy.controlTitle}
-                </p>
+                <div className="flex items-center gap-1.5">
+                  <p className="font-mono text-[10px] uppercase tracking-[0.2em] text-primary">
+                    {monitoringCopy.controlTitle}
+                  </p>
+                  <InfoTip label="Monitoring">
+                    PenKeep checks new evidence against why you own the position, what must remain true, and what would break the case.
+                  </InfoTip>
+                </div>
                 <p className="font-display italic text-[1.55rem] leading-tight text-foreground sm:text-[1.75rem]">
                   {unreviewedEvents > 0
                     ? "New evidence has been checked."
@@ -147,9 +153,14 @@ export function MonitoringTab({
 
             <div className="grid gap-3 sm:grid-cols-3 lg:grid-cols-1">
               <div className="product-panel p-4">
-                <p className="font-mono text-[10px] uppercase tracking-[0.18em] text-muted-foreground">
-                  New evidence
-                </p>
+                <div className="flex items-center gap-1.5">
+                  <p className="font-mono text-[10px] uppercase tracking-[0.18em] text-muted-foreground">
+                    New evidence
+                  </p>
+                  <InfoTip label="New evidence">
+                    Items checked since your last recorded decision. This count can be higher than the number of decisions needed.
+                  </InfoTip>
+                </div>
                 <p className="mt-2 font-display text-[1.55rem] italic leading-none text-foreground">
                   {unreviewedEvents}
                 </p>
@@ -159,9 +170,14 @@ export function MonitoringTab({
               </div>
 
               <div className="product-panel p-4">
-                <p className="font-mono text-[10px] uppercase tracking-[0.18em] text-muted-foreground">
-                  Reviewed
-                </p>
+                <div className="flex items-center gap-1.5">
+                  <p className="font-mono text-[10px] uppercase tracking-[0.18em] text-muted-foreground">
+                    Reviewed
+                  </p>
+                  <InfoTip label="Reviewed">
+                    Evidence you have already ruled on. The verdict and your response remain in the position history.
+                  </InfoTip>
+                </div>
                 <p className="mt-2 font-display text-[1.55rem] italic leading-none text-foreground">
                   {reviewedEventsCount}
                 </p>
@@ -171,9 +187,14 @@ export function MonitoringTab({
               </div>
 
               <div className="product-panel p-4">
-                <p className="font-mono text-[10px] uppercase tracking-[0.18em] text-muted-foreground">
-                  Signal map
-                </p>
+                <div className="flex items-center gap-1.5">
+                  <p className="font-mono text-[10px] uppercase tracking-[0.18em] text-muted-foreground">
+                    Signal map
+                  </p>
+                  <InfoTip label="Signal map">
+                    The measurable checks tied to your written case, such as revenue growth, guidance, customer demand, or a price move. A signal is not a recommendation.
+                  </InfoTip>
+                </div>
                 <p className="mt-2 font-display text-[1.55rem] italic leading-none text-foreground">
                   {decompositionLoading ? "..." : hasSignals ? activeSignalCount : "0"}
                 </p>
@@ -264,9 +285,14 @@ export function MonitoringTab({
                       </p>
                     </div>
                     <div className="border-l-2 border-primary/20 pl-3">
-                      <p className="font-mono text-[10px] uppercase tracking-[0.16em] text-muted-foreground">
-                        Signals live
-                      </p>
+                      <div className="flex items-center gap-1.5">
+                        <p className="font-mono text-[10px] uppercase tracking-[0.16em] text-muted-foreground">
+                          Signals live
+                        </p>
+                        <InfoTip label="Signals live">
+                          Active checks currently being monitored against this position&apos;s written case.
+                        </InfoTip>
+                      </div>
                       <p className="mt-1 font-sans text-sm leading-relaxed text-foreground/80">
                         {decompositionLoading
                           ? "Still building the map."

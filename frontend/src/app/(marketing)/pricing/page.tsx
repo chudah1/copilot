@@ -3,65 +3,23 @@ import { FoundingForm } from "../../_mkt/founding-form";
 import { mk } from "../../_mkt/tokens";
 
 const FREE_FEATURES = [
-  {
-    label: "Up to 5 active theses",
-    info: "Keep five positions under active review at once. A thesis records why you own a position, what must remain true, and what would break the case.",
-  },
-  {
-    label: "A structured record of your reasoning and decisions",
-    info: "The original case, the evidence that later tested it, and the decision you made are kept together instead of scattered across notes and alerts.",
-  },
-  {
-    label: "Core evidence: earnings, filings, news, insider transactions",
-    info: "penKeep checks these public sources against the conditions in your written case. Evidence that does not touch your case stays out of the decision inbox.",
-  },
-  {
-    label: "Thesis health score (Healthy / At Risk / Broken)",
-    info: "A summary of how the evidence is affecting your written case. It is a prompt to review your reasoning, not a buy or sell signal.",
-  },
-  {
-    label: "Weekly digest email",
-    info: "A Sunday email summarises the new evidence checked that week and points out anything that needs your attention.",
-  },
-  {
-    label: "12 months of decision history",
-    info: "Look back over a year of written cases, evidence, decisions, and follow-up reviews.",
-  },
+  "Up to 5 active theses",
+  "A structured record of your reasoning and decisions",
+  "Core evidence: earnings, filings, news, insider transactions",
+  "Thesis health score (Healthy / At Risk / Broken)",
+  "Weekly digest email",
+  "12 months of decision history",
 ];
 
 const PREMIUM_FEATURES = [
-  {
-    label: "Unlimited theses",
-    info: "Keep every position under active review without the five-thesis limit.",
-  },
-  {
-    label: "Broker connection (Trading 212 + more)",
-    info: "Import positions through a read-only connection where supported. penKeep cannot place or change trades.",
-  },
-  {
-    label: "Counter-thesis assistant",
-    info: "Pressure-test the positive case by surfacing credible risks, missing assumptions, and measurable conditions worth watching.",
-  },
-  {
-    label: "Full decision history, unlimited",
-    info: "Keep the complete record of each written case, evidence review, decision, and outcome for as long as the account remains active.",
-  },
-  {
-    label: "Decision follow-through: what happened after your call",
-    info: "Return to an earlier hold, reduce, add, or exit decision and record whether the outcome matched the reasoning behind it.",
-  },
-  {
-    label: "Pre-earnings nudges and post-earnings review",
-    info: "Re-read the case before results, then compare the reported evidence with what you expected after the release.",
-  },
-  {
-    label: "Quarterly decision-pattern review",
-    info: "A periodic review of repeated habits across your decisions, such as moving a break condition or dismissing the same kind of warning.",
-  },
-  {
-    label: "Everything in Free",
-    info: "Includes the free record, monitoring, weekly digest, and twelve-month history, with the premium limits and tools added.",
-  },
+  "Unlimited theses",
+  "Broker connection (Trading 212 + more)",
+  "Counter-thesis assistant",
+  "Full decision history, unlimited",
+  "Decision follow-through: what happened after your call",
+  "Pre-earnings nudges and post-earnings review",
+  "Quarterly decision-pattern review",
+  "Everything in Free",
 ];
 
 const SHARED_PROMISES = [
@@ -104,60 +62,10 @@ function Check({ premium }: { premium?: boolean }) {
   );
 }
 
-function FeatureInfo({ label, text, premium }: { label: string; text: string; premium?: boolean }) {
-  return (
-    <details className="pk-feature-info" style={{ position: "relative", flex: "0 0 auto" }}>
-      <summary
-        aria-label={`Explain ${label}`}
-        style={{
-          width: 20,
-          height: 20,
-          borderRadius: 999,
-          border: `1px solid ${premium ? "rgba(255,255,255,0.28)" : mk.pencilLight}`,
-          color: premium ? "#bdb5ad" : mk.pencil,
-          display: "inline-flex",
-          alignItems: "center",
-          justifyContent: "center",
-          fontFamily: mk.sans,
-          fontSize: 12,
-          fontWeight: 600,
-          lineHeight: 1,
-          cursor: "pointer",
-          listStyle: "none",
-        }}
-      >
-        <span aria-hidden="true">i</span>
-      </summary>
-      <div
-        role="note"
-        style={{
-          position: "absolute",
-          zIndex: 20,
-          right: 0,
-          top: 28,
-          width: "min(290px, calc(100vw - 64px))",
-          padding: "12px 14px",
-          borderRadius: 10,
-          border: `1px solid ${premium ? "rgba(255,255,255,0.16)" : mk.pencilLight}`,
-          background: premium ? "#292621" : mk.paperHi,
-          color: premium ? "#e0dad3" : mk.inkSoft,
-          boxShadow: "0 14px 34px rgba(36, 29, 22, 0.16)",
-          fontFamily: mk.sans,
-          fontSize: 13,
-          lineHeight: 1.5,
-        }}
-      >
-        {text}
-      </div>
-    </details>
-  );
-}
-
 export default function PricingPage() {
   const pad = "clamp(22px, 4.5vw, 56px)";
   return (
     <>
-      <style>{`.pk-feature-info > summary::-webkit-details-marker { display: none; }`}</style>
       {/* Header */}
       <section style={{ padding: `clamp(50px,8vw,110px) ${pad} clamp(32px,4vw,60px)` }}>
         <div style={{ fontFamily: mk.mono, fontSize: 11, letterSpacing: "0.14em", textTransform: "uppercase", color: mk.pencil, marginBottom: 14 }}>
@@ -266,13 +174,10 @@ export default function PricingPage() {
             <div style={{ height: 1, background: mk.pencilLight }} />
 
             <ul style={{ listStyle: "none", padding: 0, margin: 0, display: "flex", flexDirection: "column", gap: 12 }}>
-              {FREE_FEATURES.map((feature) => (
-                <li key={feature.label} style={{ display: "flex", alignItems: "flex-start", gap: 10 }}>
+              {FREE_FEATURES.map((f) => (
+                <li key={f} style={{ display: "flex", alignItems: "flex-start", gap: 10 }}>
                   <Check />
-                  <span style={{ flex: 1, fontFamily: mk.sans, fontSize: 15, color: mk.inkSoft, lineHeight: 1.45 }}>
-                    {feature.label}
-                  </span>
-                  <FeatureInfo label={feature.label} text={feature.info} />
+                  <span style={{ fontFamily: mk.sans, fontSize: 15, color: mk.inkSoft, lineHeight: 1.45 }}>{f}</span>
                 </li>
               ))}
             </ul>
@@ -373,13 +278,10 @@ export default function PricingPage() {
             <div style={{ height: 1, background: "rgba(255,255,255,0.12)" }} />
 
             <ul style={{ listStyle: "none", padding: 0, margin: 0, display: "flex", flexDirection: "column", gap: 12 }}>
-              {PREMIUM_FEATURES.map((feature) => (
-                <li key={feature.label} style={{ display: "flex", alignItems: "flex-start", gap: 10 }}>
+              {PREMIUM_FEATURES.map((f) => (
+                <li key={f} style={{ display: "flex", alignItems: "flex-start", gap: 10 }}>
                   <Check premium />
-                  <span style={{ flex: 1, fontFamily: mk.sans, fontSize: 15, color: "#ccc", lineHeight: 1.45 }}>
-                    {feature.label}
-                  </span>
-                  <FeatureInfo label={feature.label} text={feature.info} premium />
+                  <span style={{ fontFamily: mk.sans, fontSize: 15, color: "#ccc", lineHeight: 1.45 }}>{f}</span>
                 </li>
               ))}
             </ul>

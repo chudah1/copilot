@@ -5,6 +5,7 @@ import { formatDate } from "@/lib/utils";
 import { classifyCaseQuality } from "@/lib/decision-state";
 import { describeWatchHint } from "@/lib/watch-hints";
 import { aiAssistWeakMessaging } from "@/lib/ai-assisted-thesis";
+import { InfoTip } from "@/components/ui/info-tip";
 import type { Thesis, ThesisDecomposition, MonitoringGap } from "@/types";
 
 interface Props {
@@ -330,9 +331,14 @@ export function ThesisCard({ thesis, decomposition, investorProfile, monitoringG
       <div className="grid gap-0 border-t border-border/40 lg:grid-cols-[minmax(0,1.15fr)_minmax(16rem,20rem)]">
         <div className="px-5 py-5">
           <div className="space-y-2">
-            <p className="font-mono text-[10px] uppercase tracking-[0.2em] text-muted-foreground">
-              {copy.qualityRead}
-            </p>
+            <div className="flex items-center gap-1.5">
+              <p className="font-mono text-[10px] uppercase tracking-[0.2em] text-muted-foreground">
+                {copy.qualityRead}
+              </p>
+              <InfoTip label="Case read">
+                A check of how specific, current, and testable your written case is. It rates the quality of the record, not the investment.
+              </InfoTip>
+            </div>
             <div className="space-y-1">
               <p className={`font-display italic text-[1.35rem] leading-tight ${QUALITY_TONE[qualityState]}`}>
                 {qualityHeadline}
@@ -344,25 +350,40 @@ export function ThesisCard({ thesis, decomposition, investorProfile, monitoringG
           </div>
           <div className="mt-4 grid gap-3 sm:grid-cols-3">
             <div className="border border-border/60 bg-background/70 p-3">
-              <p className="font-mono text-[10px] uppercase tracking-[0.16em] text-muted-foreground">
-                Monitorability
-              </p>
+              <div className="flex items-center gap-1.5">
+                <p className="font-mono text-[10px] uppercase tracking-[0.16em] text-muted-foreground">
+                  Monitorability
+                </p>
+                <InfoTip label="Monitorability">
+                  How easily the written case can be checked against public evidence. Specific conditions are easier to monitor than broad opinions.
+                </InfoTip>
+              </div>
               <p className={`mt-2 font-display text-[1.2rem] italic ${MONITORABILITY_TEXT[quality.monitorability ?? "medium"] ?? "text-muted-foreground"}`}>
                 {quality.monitorability ?? "medium"}
               </p>
             </div>
             <div className="border border-border/60 bg-background/70 p-3">
-              <p className="font-mono text-[10px] uppercase tracking-[0.16em] text-muted-foreground">
-                Review cadence
-              </p>
+              <div className="flex items-center gap-1.5">
+                <p className="font-mono text-[10px] uppercase tracking-[0.16em] text-muted-foreground">
+                  Review cadence
+                </p>
+                <InfoTip label="Review cadence">
+                  The routine interval for revisiting this case even when no alert fires. It is separate from the weekly digest and evidence alerts.
+                </InfoTip>
+              </div>
               <p className="mt-2 font-display text-[1.2rem] italic text-foreground">
                 {quality.cadenceDays}d
               </p>
             </div>
             <div className="border border-border/60 bg-background/70 p-3">
-              <p className="font-mono text-[10px] uppercase tracking-[0.16em] text-muted-foreground">
-                Signals armed
-              </p>
+              <div className="flex items-center gap-1.5">
+                <p className="font-mono text-[10px] uppercase tracking-[0.16em] text-muted-foreground">
+                  Signals armed
+                </p>
+                <InfoTip label="Signals armed">
+                  The number of active checks tied to this case. A signal tells PenKeep what to watch; it is not a buy or sell instruction.
+                </InfoTip>
+              </div>
               <p className="mt-2 font-display text-[1.2rem] italic text-foreground">
                 {activeSignals.length}
               </p>
@@ -424,9 +445,14 @@ export function ThesisCard({ thesis, decomposition, investorProfile, monitoringG
       {/* ── Active signals or watch hints ── */}
       {(activeSignals.length > 0 || watchDescriptions.length > 0) && (
         <div className="px-5 py-4 space-y-3">
-          <p className="font-mono text-[10px] uppercase tracking-[0.2em] text-muted-foreground">
-            {activeSignals.length > 0 ? copy.activeSignals : copy.watching}
-          </p>
+          <div className="flex items-center gap-1.5">
+            <p className="font-mono text-[10px] uppercase tracking-[0.2em] text-muted-foreground">
+              {activeSignals.length > 0 ? copy.activeSignals : copy.watching}
+            </p>
+            <InfoTip label={activeSignals.length > 0 ? "Active signals" : "Watching for"}>
+              Each row is a measurable check connected to something in your written case. The line underneath explains when it will be flagged.
+            </InfoTip>
+          </div>
 
           <div className="space-y-0">
             {activeSignals.length > 0

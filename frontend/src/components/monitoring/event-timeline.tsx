@@ -4,6 +4,7 @@ import { useState } from "react";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Textarea } from "@/components/ui/textarea";
+import { InfoTip } from "@/components/ui/info-tip";
 import { formatDate } from "@/lib/utils";
 import type { MonitoringEvent } from "@/types";
 
@@ -311,9 +312,14 @@ export function EventTimeline({ events, onReview, onEditReason, reviewingEventId
                   )}
 
                   <div className="space-y-2">
-                    <p className="font-mono text-[10px] uppercase tracking-[0.16em] text-muted-foreground">
-                      Evidence read
-                    </p>
+                    <div className="flex items-center gap-1.5">
+                      <p className="font-mono text-[10px] uppercase tracking-[0.16em] text-muted-foreground">
+                        Evidence read
+                      </p>
+                      <InfoTip label="Evidence read">
+                        A summary of the public information PenKeep checked against the relevant part of your written case.
+                      </InfoTip>
+                    </div>
                     {e.evidence_summary ? (
                       <EvidenceNarrative text={e.evidence_summary} />
                     ) : (
@@ -339,9 +345,16 @@ export function EventTimeline({ events, onReview, onEditReason, reviewingEventId
 
                 <aside className="space-y-3 border-t border-border/50 pt-4 lg:border-l lg:border-t-0 lg:pl-4 lg:pt-0">
                   <div className="space-y-1">
-                    <p className="font-mono text-[10px] uppercase tracking-[0.16em] text-muted-foreground">
-                      {reviewDecision ? "Your ruling" : "Verdict"}
-                    </p>
+                    <div className="flex items-center gap-1.5">
+                      <p className="font-mono text-[10px] uppercase tracking-[0.16em] text-muted-foreground">
+                        {reviewDecision ? "Your ruling" : "Verdict"}
+                      </p>
+                      <InfoTip label={reviewDecision ? "Your ruling" : "Verdict"}>
+                        {reviewDecision
+                          ? "The decision you recorded after reading the evidence. Your ruling remains separate from the model read."
+                          : "PenKeep's read of how the evidence relates to your case. You still decide whether the case holds."}
+                      </InfoTip>
+                    </div>
                     {reviewDecision ? (
                       <p className={`inline-block rounded-md px-2 py-1 text-sm font-medium ${reviewDecision.className}`}>
                         {reviewDecision.sentence}
@@ -357,9 +370,14 @@ export function EventTimeline({ events, onReview, onEditReason, reviewingEventId
 
                   {reviewDecision && verdict && (
                     <div className="space-y-1">
-                      <p className="font-mono text-[10px] uppercase tracking-[0.16em] text-muted-foreground">
-                        Model read
-                      </p>
+                      <div className="flex items-center gap-1.5">
+                        <p className="font-mono text-[10px] uppercase tracking-[0.16em] text-muted-foreground">
+                          Model read
+                        </p>
+                        <InfoTip label="Model read">
+                          PenKeep&apos;s classification before your ruling. It is kept so you can compare the system&apos;s read with the decision you made.
+                        </InfoTip>
+                      </div>
                       <p className="text-sm text-muted-foreground">
                         {verdict.sentence}
                       </p>

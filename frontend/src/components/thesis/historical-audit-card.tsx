@@ -2,6 +2,7 @@
 
 import type { HistoricalAuditResultItem, HistoricalAuditResponse } from "@/types";
 import { formatDate } from "@/lib/utils";
+import { InfoTip } from "@/components/ui/info-tip";
 
 const BADGE_STYLE: Record<string, string> = {
   supports: "bg-emerald-100 text-emerald-700 border border-emerald-200",
@@ -119,9 +120,14 @@ export function HistoricalAuditCard({ audit }: Props) {
 
   return (
     <div className="rounded-lg border border-border/60 bg-card p-4 mt-4">
-      <p className="font-mono text-[10px] uppercase tracking-[0.2em] text-muted-foreground mb-3">
-        Evidence from the past 90 days
-      </p>
+      <div className="mb-3 flex items-center gap-1.5">
+        <p className="font-mono text-[10px] uppercase tracking-[0.2em] text-muted-foreground">
+          Evidence from the past 90 days
+        </p>
+        <InfoTip label="90-day evidence check" align="end">
+          A one-off look back when the case is created. Held up supports it, Against weakens it, Background is context, and Needs review calls for a closer look.
+        </InfoTip>
+      </div>
       <p className="text-sm font-medium text-foreground mb-3">
         {coverageOnly
           ? "The evidence check was incomplete, so do not treat a quiet result as proof that the case held up."

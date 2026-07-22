@@ -2,6 +2,7 @@
 
 import { useState } from "react";
 import { motion, AnimatePresence } from "framer-motion";
+import { InfoTip } from "@/components/ui/info-tip";
 import { formatDate } from "@/lib/utils";
 import type {
   ConfirmDecompositionRequest,
@@ -214,9 +215,14 @@ export function ThesisDecompositionReview({ envelope, loading, saving, onGenerat
       <div className="product-panel p-5 sm:p-6">
         <div className="flex items-start justify-between gap-4">
           <div className="space-y-1">
-            <p className="font-mono text-[10px] uppercase tracking-[0.18em] text-muted-foreground">
-              Signal setup
-            </p>
+            <div className="flex items-center gap-1.5">
+              <p className="font-mono text-[10px] uppercase tracking-[0.18em] text-muted-foreground">
+                Signal setup
+              </p>
+              <InfoTip label="Signal setup">
+                PenKeep turns the written case into measurable checks. Keep only the signals that genuinely represent what you meant.
+              </InfoTip>
+            </div>
             <p className="font-sans text-sm leading-relaxed text-foreground/80">
               Keep what matches the case.
             </p>
@@ -232,18 +238,28 @@ export function ThesisDecompositionReview({ envelope, loading, saving, onGenerat
 
         <div className="mt-4 grid gap-3 sm:grid-cols-3">
           <div className="border border-border/60 bg-background/70 p-3">
-            <p className="font-mono text-[10px] uppercase tracking-[0.16em] text-muted-foreground">
-              Live
-            </p>
+            <div className="flex items-center gap-1.5">
+              <p className="font-mono text-[10px] uppercase tracking-[0.16em] text-muted-foreground">
+                Live
+              </p>
+              <InfoTip label="Live signals">
+                The checks currently selected for monitoring out of all the signals PenKeep suggested.
+              </InfoTip>
+            </div>
             <p className="mt-2 font-display text-[1.15rem] italic leading-none text-foreground">
               {activeCount}/{totalSignals}
             </p>
           </div>
           {mon && (
             <div className="border border-border/60 bg-background/70 p-3">
-              <p className="font-mono text-[10px] uppercase tracking-[0.16em] text-muted-foreground">
-                Watchability
-              </p>
+              <div className="flex items-center gap-1.5">
+                <p className="font-mono text-[10px] uppercase tracking-[0.16em] text-muted-foreground">
+                  Watchability
+                </p>
+                <InfoTip label="Watchability">
+                  How readily the case can be tested with public data. A low read usually means the conditions need to be more specific.
+                </InfoTip>
+              </div>
               <div className="mt-2 flex items-center gap-2">
                 <span className={`h-1.5 w-1.5 rounded-full ${MONITORABILITY_DOT[mon] ?? "bg-border"}`} />
                 <p className={`font-display text-[1.15rem] italic leading-none ${MONITORABILITY_TEXT[mon] ?? "text-muted-foreground"}`}>
@@ -254,9 +270,14 @@ export function ThesisDecompositionReview({ envelope, loading, saving, onGenerat
           )}
           {confPct != null && (
             <div className="border border-border/60 bg-background/70 p-3">
-              <p className="font-mono text-[10px] uppercase tracking-[0.16em] text-muted-foreground">
-                Confidence
-              </p>
+              <div className="flex items-center gap-1.5">
+                <p className="font-mono text-[10px] uppercase tracking-[0.16em] text-muted-foreground">
+                  Confidence
+                </p>
+                <InfoTip label="Signal setup confidence">
+                  How confident PenKeep is that it understood and translated the written case correctly. It is not confidence in the stock.
+                </InfoTip>
+              </div>
               <p className="mt-2 font-display text-[1.15rem] italic leading-none text-foreground">
                 {confPct}%
               </p>

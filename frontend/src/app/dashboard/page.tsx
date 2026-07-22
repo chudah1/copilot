@@ -25,6 +25,7 @@ import { PositionCard, cleanTicker } from "@/components/portfolio/position-card"
 import { AttentionCard } from "@/components/portfolio/attention-card";
 import { DashboardSkeleton } from "@/components/portfolio/dashboard-skeleton";
 import { ErrorBoundary } from "@/components/ui/error-boundary";
+import { InfoTip } from "@/components/ui/info-tip";
 import { toast } from "sonner";
 import type {
   DraftStatus,
@@ -577,9 +578,14 @@ function DashboardInner() {
             <div className="grid gap-5 lg:grid-cols-[minmax(0,1.55fr)_minmax(17rem,23rem)]">
               <div className="space-y-4">
                 <div>
-                  <p className="font-mono text-[10px] uppercase tracking-[0.22em] text-muted-foreground">
-                    Decision inbox
-                  </p>
+                  <div className="flex items-center gap-1.5">
+                    <p className="font-mono text-[10px] uppercase tracking-[0.22em] text-muted-foreground">
+                      Decision inbox
+                    </p>
+                    <InfoTip label="Decision inbox" align="center">
+                      Positions are ordered by what needs you first: decisions, changed cases, missing written cases, then scheduled reviews.
+                    </InfoTip>
+                  </div>
                   <h1 className="mt-2 font-display text-[2rem] italic leading-tight text-foreground sm:text-[2.5rem]">
                     What needs your attention.
                   </h1>
@@ -822,9 +828,14 @@ function DashboardInner() {
             <div className="product-panel p-4 sm:p-5">
               <div className="mb-4 flex items-center justify-between gap-3">
                 <div>
-                  <p className="font-mono text-[10px] uppercase tracking-[0.18em] text-muted-foreground">
-                    What changed
-                  </p>
+                  <div className="flex items-center gap-1.5">
+                    <p className="font-mono text-[10px] uppercase tracking-[0.18em] text-muted-foreground">
+                      What changed
+                    </p>
+                    <InfoTip label="What changed" align="center">
+                      Evidence appears here only when it connects to something in a written case. Open a position to see the assumption and the model read.
+                    </InfoTip>
+                  </div>
                   <p className="mt-1 font-sans text-sm text-foreground/80">
                     Evidence connected to something you wrote.
                   </p>

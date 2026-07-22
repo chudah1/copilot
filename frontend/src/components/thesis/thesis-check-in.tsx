@@ -6,6 +6,7 @@ import { toast } from "sonner";
 
 import { api, fetcher } from "@/lib/api";
 import { Textarea } from "@/components/ui/textarea";
+import { InfoTip } from "@/components/ui/info-tip";
 import { formatDate } from "@/lib/utils";
 import type {
   ClaimCheckInState,
@@ -255,9 +256,14 @@ export function ThesisCheckIn({ thesisId, ticker, writtenCase, onFlagEvent, onAf
                 <div className="mt-3 space-y-2">
                   {claim.threatens.length > 0 && (
                     <div className="space-y-2">
-                      <p className="font-mono text-[10px] uppercase tracking-[0.16em] text-muted-foreground/80">
-                        {claim.needs_review ? "Against" : "Early pressure"} · {claim.threatens.length}
-                      </p>
+                      <div className="flex items-center gap-1.5">
+                        <p className="font-mono text-[10px] uppercase tracking-[0.16em] text-muted-foreground/80">
+                          {claim.needs_review ? "Against" : "Early pressure"} · {claim.threatens.length}
+                        </p>
+                        <InfoTip label={claim.needs_review ? "Against" : "Early pressure"}>
+                          Evidence that weakens this part of your written case. It only asks for a decision when the pressure is strong enough.
+                        </InfoTip>
+                      </div>
                       {claim.threatens.map((item) => (
                         <EvidenceRow key={item.id} item={item} onFlag={handleFlag} flagging={flaggingId === item.id} />
                       ))}
@@ -265,9 +271,14 @@ export function ThesisCheckIn({ thesisId, ticker, writtenCase, onFlagEvent, onAf
                   )}
                   {claim.supports.length > 0 && (
                     <div className="space-y-2">
-                      <p className="font-mono text-[10px] uppercase tracking-[0.16em] text-emerald-700/80">
-                        Held up · {claim.supports.length}
-                      </p>
+                      <div className="flex items-center gap-1.5">
+                        <p className="font-mono text-[10px] uppercase tracking-[0.16em] text-emerald-700/80">
+                          Held up · {claim.supports.length}
+                        </p>
+                        <InfoTip label="Held up">
+                          Evidence that supports this part of your written case. It stays in the record but does not require a response.
+                        </InfoTip>
+                      </div>
                       {claim.supports.map((item) => (
                         <EvidenceRow key={item.id} item={item} onFlag={handleFlag} flagging={flaggingId === item.id} />
                       ))}
@@ -275,9 +286,14 @@ export function ThesisCheckIn({ thesisId, ticker, writtenCase, onFlagEvent, onAf
                   )}
                   {claim.neutral.length > 0 && (
                     <div className="space-y-2">
-                      <p className="font-mono text-[10px] uppercase tracking-[0.16em] text-muted-foreground/80">
-                        Background · {claim.neutral.length}
-                      </p>
+                      <div className="flex items-center gap-1.5">
+                        <p className="font-mono text-[10px] uppercase tracking-[0.16em] text-muted-foreground/80">
+                          Background · {claim.neutral.length}
+                        </p>
+                        <InfoTip label="Background">
+                          Related evidence that neither supports nor weakens this part of your case. It is kept for context and needs no response.
+                        </InfoTip>
+                      </div>
                       {claim.neutral.map((item) => (
                         <EvidenceRow key={item.id} item={item} onFlag={handleFlag} flagging={flaggingId === item.id} />
                       ))}
