@@ -26,7 +26,7 @@ const FAQS = [
       ["What kinds of signals do you watch?",
         "Earnings & guidance, news & press releases, SEC filings (10-Q, 8-K), earnings call transcripts, insider transactions, and price moves relative to your thesis."],
       ["How often will I hear from you?",
-        "Almost never. The product is silent by default. It reaches out when evidence tests a condition you recorded, when earnings create a natural decision point, or when an earlier call is ready to be reviewed."],
+        "At least once a week. Every Sunday, penKeep sends a digest covering the new evidence it checked and anything that needs your attention. Outside the digest, it only reaches out when evidence tests a condition you recorded, earnings create a natural decision point, or an earlier call is ready to be reviewed."],
       ["What if a signal is wrong?",
         "Every signal has sources you can click. If we flagged something that doesn't actually touch your reason, hit dismiss and we'll learn from it."],
       ["Do you predict prices?",
@@ -168,7 +168,7 @@ export default function FAQPage() {
           {[
             ["Your decisions", "The product keeps the notes. You make the call."],
             ["Long memory", "Beliefs, evidence, calls and outcomes stay connected."],
-            ["Quiet by default", "If nothing relevant changed, it says nothing."],
+            ["One weekly digest", "A Sunday summary, with extra alerts only when something needs your attention."],
           ].map(([label, value]) => (
             <div
               key={label}
