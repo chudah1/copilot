@@ -78,6 +78,11 @@ def test_valid_time_normalised():
     assert prefs.digest_time == "09:05"
 
 
+def test_portfolio_currency_is_normalized_and_invalid_values_fall_back():
+    assert UserPreferences(portfolio_currency="usd").portfolio_currency == "USD"
+    assert UserPreferences(portfolio_currency="not-a-currency").portfolio_currency == "GBP"
+
+
 def test_get_user_prefs_applies_defaults():
     class FakeUser:
         preferences = {}
@@ -85,6 +90,7 @@ def test_get_user_prefs_applies_defaults():
     assert prefs.email_enabled is True
     assert prefs.earnings_alerts is True
     assert prefs.quarterly_review_reminders is True
+    assert prefs.portfolio_currency == "GBP"
 
 
 def test_get_user_prefs_reads_stored_values():

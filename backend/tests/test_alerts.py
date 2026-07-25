@@ -2,7 +2,11 @@
 from types import SimpleNamespace
 from unittest.mock import AsyncMock, patch
 
-from app.services.alerts import maybe_send_thesis_break_alert
+from app.services.alerts import (
+    maybe_send_thesis_break_alert,
+    prepare_monitoring_alert,
+    send_monitoring_alert,
+)
 
 _EMAIL = "app.services.email.send_thesis_break_email"
 
@@ -44,3 +48,83 @@ async def test_never_raises_on_send_failure():
     with patch(_EMAIL, new_callable=AsyncMock, side_effect=RuntimeError("boom")):
         ok = await maybe_send_thesis_break_alert(user=_user(), ticker="X", summary="s")
     assert ok is False
+
+
+def _event(*, severity="warning", verdict="threatens"):
+    return SimpleNamespace(
+        severity=severity,
+        verdict=verdict,
+        ai_analysis="Revenue growth weakened.",
+        evidence_summary=None,
+        summary="Revenue update.",
+    )
+
+
+def test_prepares_warning_when_user_wants_warning_alerts():
+    alert = prepare_monitoring_alert(
+        email="u@example.com",
+        preferences={"email_enabled": True, "notification_sensitivity": "all"},
+        ticker="NOW_US_EQ",
+        status_before="active",
+        persisted_events=[_event()],
+    )
+
+    assert alert is not None
+    assert alert.severity == "warning"
+    assert alert.ticker == "NOW"
+
+
+def test_skips_warning_for_thesis_breaking_only_sensitivity():
+    alert = prepare_monitoring_alert(
+        email="u@example.com",
+        preferences={
+            "email_enabled": True,
+            "notification_sensitivity": "thesis_breaking_only",
+        },
+        ticker="NOW",
+        status_before="active",
+        persisted_events=[_event()],
+    )
+
+    assert alert is None
+
+
+def test_skips_supporting_warning_and_position_already_in_review():
+    assert prepare_monitoring_alert(
+        email="u@example.com",
+        preferences={"email_enabled": True, "notification_sensitivity": "all"},
+        ticker="NOW",
+        status_before="active",
+        persisted_events=[_event(verdict="supports")],
+    ) is None
+    assert prepare_monitoring_alert(
+        email="u@example.com",
+        preferences={"email_enabled": True, "notification_sensitivity": "all"},
+        ticker="NOW",
+        status_before="needs_review",
+        persisted_events=[_event(severity="thesis_breaking")],
+    ) is None
+
+
+async def test_dispatches_warning_template():
+    alert = prepare_monitoring_alert(
+        email="u@example.com",
+        preferences={"email_enabled": True, "notification_sensitivity": "all"},
+        ticker="NOW",
+        status_before="active",
+        persisted_events=[_event()],
+    )
+    assert alert is not None
+
+    with patch(
+        "app.services.email.send_thesis_warning_email",
+        new_callable=AsyncMock,
+        return_value=True,
+    ) as send_warning:
+        assert await send_monitoring_alert(alert) is True
+
+    send_warning.assert_awaited_once_with(
+        "u@example.com",
+        "NOW",
+        "Revenue growth weakened.",
+    )

@@ -14,6 +14,9 @@ class HoldingResponse(BaseModel):
     currency: str
     current_price: float | None
     current_value: float | None
+    portfolio_currency: str = "GBP"
+    preferred_currency: str = "GBP"
+    fx_unavailable: bool = False
     sector: str | None
     geography: str | None
     asset_class: str | None
@@ -79,6 +82,9 @@ class PortfolioSummary(BaseModel):
     total_cost: float
     total_pnl: float
     total_pnl_pct: float
+    portfolio_currency: str = "GBP"
+    preferred_currency: str = "GBP"
+    fx_unavailable: bool = False
     holdings_count: int
     theses_active: int
     theses_need_review: int
@@ -154,6 +160,10 @@ class SimulateTradeResponse(BaseModel):
     simulated_quantity: float
     simulated_price: float
     simulated_value: float
+    simulated_currency: str = "GBP"
+    portfolio_currency: str = "GBP"
+    preferred_currency: str = "GBP"
+    fx_unavailable: bool = False
     before: PortfolioSnapshotResponse
     after: PortfolioSnapshotResponse
     warnings: list[SimulationWarningResponse]

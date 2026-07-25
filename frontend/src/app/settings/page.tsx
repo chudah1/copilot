@@ -9,6 +9,43 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import type { PortfolioSummary, UserPreferences } from "@/types";
 
 const DAYS = ["monday", "tuesday", "wednesday", "thursday", "friday", "saturday", "sunday"];
+const PORTFOLIO_CURRENCIES = [
+  ["GBP", "British pound"],
+  ["USD", "US dollar"],
+  ["EUR", "Euro"],
+  ["CAD", "Canadian dollar"],
+  ["AUD", "Australian dollar"],
+  ["NZD", "New Zealand dollar"],
+  ["CHF", "Swiss franc"],
+  ["JPY", "Japanese yen"],
+  ["SGD", "Singapore dollar"],
+  ["HKD", "Hong Kong dollar"],
+  ["INR", "Indian rupee"],
+  ["NGN", "Nigerian naira"],
+  ["GHS", "Ghanaian cedi"],
+  ["ZAR", "South African rand"],
+  ["AED", "UAE dirham"],
+  ["SAR", "Saudi riyal"],
+  ["KES", "Kenyan shilling"],
+  ["CNY", "Chinese yuan"],
+  ["KRW", "South Korean won"],
+  ["IDR", "Indonesian rupiah"],
+  ["MYR", "Malaysian ringgit"],
+  ["PHP", "Philippine peso"],
+  ["THB", "Thai baht"],
+  ["SEK", "Swedish krona"],
+  ["NOK", "Norwegian krone"],
+  ["DKK", "Danish krone"],
+  ["PLN", "Polish złoty"],
+  ["CZK", "Czech koruna"],
+  ["HUF", "Hungarian forint"],
+  ["RON", "Romanian leu"],
+  ["ISK", "Icelandic króna"],
+  ["TRY", "Turkish lira"],
+  ["ILS", "Israeli new shekel"],
+  ["BRL", "Brazilian real"],
+  ["MXN", "Mexican peso"],
+] as const;
 
 function Toggle({
   checked,
@@ -66,6 +103,7 @@ export default function SettingsPage() {
     quarterly_review_reminders: true,
     email_enabled: true,
     notification_sensitivity: "all",
+    portfolio_currency: "GBP",
   });
   const [summary, setSummary] = useState<PortfolioSummary | null>(null);
   const [saving, setSaving] = useState(false);
@@ -155,6 +193,29 @@ export default function SettingsPage() {
                 Add holdings
               </Button>
             </Link>
+          </div>
+        </Section>
+
+        <Section label="Display currency">
+          <div className="space-y-3">
+            <Select
+              value={prefs.portfolio_currency}
+              onValueChange={(v) => v && set("portfolio_currency", v)}
+            >
+              <SelectTrigger className="w-full sm:w-72">
+                <SelectValue />
+              </SelectTrigger>
+              <SelectContent>
+                {PORTFOLIO_CURRENCIES.map(([code, name]) => (
+                  <SelectItem key={code} value={code}>
+                    {code} · {name}
+                  </SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
+            <p className="max-w-xl font-sans text-xs leading-relaxed text-muted-foreground">
+              Portfolio totals, position values, and gains will use this currency. Share prices stay in each holding&apos;s trading currency.
+            </p>
           </div>
         </Section>
 
@@ -252,7 +313,7 @@ export default function SettingsPage() {
                 <SelectValue />
               </SelectTrigger>
               <SelectContent>
-                <SelectItem value="all">All events</SelectItem>
+                <SelectItem value="all">Warnings and thesis breaks</SelectItem>
                 <SelectItem value="thesis_breaking_only">Thesis-breaking only</SelectItem>
               </SelectContent>
             </Select>

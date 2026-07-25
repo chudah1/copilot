@@ -675,6 +675,7 @@ async def persist_classified_candidates(
     signals_by_id: dict[str, Any],
     now,
     investor_profile: str | None = None,
+    persisted_events_out: list[MonitoringEvent] | None = None,
 ) -> list[uuid.UUID]:
     # Write-time anchor guard. The read-at-start noise filter can't see events
     # committed by a concurrently running pass (check-now, edgar_watch and
@@ -794,6 +795,8 @@ async def persist_classified_candidates(
 
     if events:
         await db.flush()
+        if persisted_events_out is not None:
+            persisted_events_out.extend(events)
         from app.services.relevance import log_event_fired
 
         for event in events:

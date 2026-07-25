@@ -625,7 +625,7 @@ function DashboardInner() {
                     </p>
                     <div className="mt-3 flex flex-wrap items-baseline gap-2">
                       <span className="font-display text-[1.9rem] italic leading-none tracking-tight text-foreground">
-                        {formatCurrency(displayTotalValue)}
+                        {formatCurrency(displayTotalValue, summary?.portfolio_currency ?? "GBP")}
                       </span>
                       {(livePnlPct != null ? livePnlPct : summary?.total_pnl_pct) != null && (
                         <span className={`font-mono text-[10px] tabular-nums ${
@@ -639,6 +639,11 @@ function DashboardInner() {
                       {holdings.length} position{holdings.length === 1 ? "" : "s"}
                       {hasLivePrices ? " · prices checked recently" : ""}
                     </p>
+                    {summary?.fx_unavailable && (
+                      <p className="mt-2 font-sans text-xs leading-relaxed text-amber-700">
+                        {summary.preferred_currency} conversion is temporarily unavailable. Values are shown in GBP.
+                      </p>
+                    )}
                   </div>
                 </div>
 

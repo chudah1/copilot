@@ -634,6 +634,167 @@ async def test_run_monitoring_persists_coverage_pass_for_eventful_run(db, job_se
     assert rows[0].triggered_by == "monitoring_run"
 
 
+def _band_drop_setup():
+    company_data = CompanyData(
+        ticker="AAPL",
+        name="Apple",
+        sector="Technology",
+        industry="Consumer Electronics",
+        current_price=120.0,
+        market_cap=None,
+        pe_ratio=None,
+        revenue_growth_yoy=None,
+        earnings_growth_yoy=None,
+        dividend_yield=None,
+        description="",
+        recent_news=[],
+        upcoming_earnings_date=None,
+        recent_earnings_surprise_pct=None,
+        news_items=[],
+        provider_payload={},
+    )
+    classified = [
+        (
+            {
+                "event_type": "price_move",
+                "description": "Price moved materially.",
+                "evidence": {
+                    "current_price": 120.0,
+                    "previous_price": 100.0,
+                    "pct_change": 20.0,
+                },
+            },
+            "warning",
+            "Price move matters.",
+        )
+    ]
+    return company_data, classified
+
+
+async def test_run_monitoring_suppresses_band_drop_email_after_warning_alert_sent(db, job_session_factory):
+    """A warning event that already emailed the user should not also trigger
+    a separate band-drop email in the same pass — one email per run, not two
+    for the same underlying deterioration."""
+    user = User(
+        email="doublealert@example.com",
+        password_hash=hash_password("testpass123"),
+        preferences={"email_enabled": True, "notification_sensitivity": "all"},
+    )
+    db.add(user)
+    await db.flush()
+
+    holding = Holding(
+        user_id=user.id,
+        ticker="AAPL",
+        name="Apple",
+        quantity=5,
+        average_cost_basis=100,
+        current_price=100,
+        current_value=500,
+    )
+    db.add(holding)
+    await db.flush()
+
+    thesis = Thesis(
+        user_id=user.id,
+        holding_id=holding.id,
+        status="active",
+        thesis_kind="company",
+        why_own_it="The business stays resilient.",
+        confidence="medium",
+        review_cadence_days=7,
+        interpretation={"watch_hints": [{"kind": "price_move_pct", "threshold": 10.0}]},
+        source="user",
+    )
+    db.add(thesis)
+    await db.commit()
+
+    company_data, classified = _band_drop_setup()
+
+    with patch("app.jobs.monitoring_run.settings") as mock_settings:
+        mock_settings.alpha_vantage_api_key = "test-key"
+        mock_settings.market_data_provider = "alpha_vantage"
+        with patch("app.jobs.monitoring_run.async_session", job_session_factory), \
+             patch("app.jobs.monitoring_run.fetch_company_data", new_callable=AsyncMock, return_value=company_data), \
+             patch("app.jobs.monitoring_run.get_recent_8k_filings", new_callable=AsyncMock, return_value=[]), \
+             patch("app.jobs.monitoring_run.get_recent_form4_transactions", new_callable=AsyncMock, return_value=[]), \
+             patch("app.jobs.monitoring_run.collect_news_evidence", new_callable=AsyncMock, return_value=[]), \
+             patch("app.jobs.monitoring_run.classify_candidates_for_thesis", new_callable=AsyncMock, return_value=classified), \
+             patch("app.jobs.monitoring_run.refresh_thesis_health", new_callable=AsyncMock, return_value=(45, "At Risk", "Healthy")), \
+             patch("app.services.email.send_thesis_warning_email", new_callable=AsyncMock, return_value=True) as send_warning, \
+             patch("app.services.email.send_health_band_drop_email", new_callable=AsyncMock, return_value=True) as send_band_drop:
+            await run_monitoring()
+
+    send_warning.assert_awaited_once()
+    send_band_drop.assert_not_awaited()
+
+
+async def test_run_monitoring_sends_band_drop_email_when_no_warning_alert_sent(db, job_session_factory):
+    """Sanity check for the other side of the gate: with sensitivity held at
+    "all" (so the sensitivity check alone can't explain a suppressed email),
+    an info-severity event doesn't qualify for prepare_monitoring_alert, so
+    alert_sent stays False and the band-drop notification still fires. This
+    isolates the `not alert_sent` condition specifically — it only suppresses
+    a *redundant* second email for the same run, it doesn't blanket-suppress
+    band-drop notifications."""
+    user = User(
+        email="singlealert@example.com",
+        password_hash=hash_password("testpass123"),
+        preferences={"email_enabled": True, "notification_sensitivity": "all"},
+    )
+    db.add(user)
+    await db.flush()
+
+    holding = Holding(
+        user_id=user.id,
+        ticker="AAPL",
+        name="Apple",
+        quantity=5,
+        average_cost_basis=100,
+        current_price=100,
+        current_value=500,
+    )
+    db.add(holding)
+    await db.flush()
+
+    thesis = Thesis(
+        user_id=user.id,
+        holding_id=holding.id,
+        status="active",
+        thesis_kind="company",
+        why_own_it="The business stays resilient.",
+        confidence="medium",
+        review_cadence_days=7,
+        interpretation={"watch_hints": [{"kind": "price_move_pct", "threshold": 10.0}]},
+        source="user",
+    )
+    db.add(thesis)
+    await db.commit()
+
+    company_data, classified = _band_drop_setup()
+    classified = [
+        (candidate, "info", analysis)
+        for candidate, _severity, analysis in classified
+    ]
+
+    with patch("app.jobs.monitoring_run.settings") as mock_settings:
+        mock_settings.alpha_vantage_api_key = "test-key"
+        mock_settings.market_data_provider = "alpha_vantage"
+        with patch("app.jobs.monitoring_run.async_session", job_session_factory), \
+             patch("app.jobs.monitoring_run.fetch_company_data", new_callable=AsyncMock, return_value=company_data), \
+             patch("app.jobs.monitoring_run.get_recent_8k_filings", new_callable=AsyncMock, return_value=[]), \
+             patch("app.jobs.monitoring_run.get_recent_form4_transactions", new_callable=AsyncMock, return_value=[]), \
+             patch("app.jobs.monitoring_run.collect_news_evidence", new_callable=AsyncMock, return_value=[]), \
+             patch("app.jobs.monitoring_run.classify_candidates_for_thesis", new_callable=AsyncMock, return_value=classified), \
+             patch("app.jobs.monitoring_run.refresh_thesis_health", new_callable=AsyncMock, return_value=(45, "At Risk", "Healthy")), \
+             patch("app.services.email.send_thesis_warning_email", new_callable=AsyncMock, return_value=True) as send_warning, \
+             patch("app.services.email.send_health_band_drop_email", new_callable=AsyncMock, return_value=True) as send_band_drop:
+            await run_monitoring()
+
+    send_warning.assert_not_awaited()
+    send_band_drop.assert_awaited_once()
+
+
 async def test_run_monitoring_uses_broader_current_transcript_window(db, job_session_factory):
     user = User(email="transcript-window@example.com", password_hash=hash_password("testpass123"))
     db.add(user)

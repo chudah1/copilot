@@ -495,7 +495,7 @@ async def _process_monitoring_thesis(
         coverage.record_stage(STAGE_AFTER_SAME_EVENT_MERGE, 0)
 
     # Phase 4: write session (persist events + apply_market_price + refresh_health + commit)
-    breaking_summary: str | None = None
+    pending_alert = None
     score: int | None = None
     new_label: str | None = None
     prev_label: str | None = None
@@ -533,6 +533,7 @@ async def _process_monitoring_thesis(
 
         status_before = live_thesis.status
         created_event_ids: list = []
+        persisted_events: list[MonitoringEvent] = []
         if classified:
             created_event_ids = await persist_classified_candidates(
                 write_db,
@@ -543,6 +544,7 @@ async def _process_monitoring_thesis(
                 signals_by_id=signals_by_id,
                 now=now,
                 investor_profile=investor_profile,
+                persisted_events_out=persisted_events,
             )
         coverage.record_stage(STAGE_EVENTS_PERSISTED, len(created_event_ids))
         coverage.record_events_persisted(len(created_event_ids))
@@ -558,27 +560,36 @@ async def _process_monitoring_thesis(
             write_db, live_thesis, claims, decomposition, now=now
         )
 
-        # Capture break-alert candidate before commit — we email outside the
-        # session so a long SMTP hop can't drag the connection into a stale state.
-        if live_thesis.status == "needs_review" and status_before in ("active", "draft"):
-            breaking = next(((c, a) for c, s, a in classified if s == "thesis_breaking"), None)
-            if breaking is not None:
-                candidate, analysis = breaking
-                breaking_summary = analysis or candidate.get("description")
+        # Select from rows that were actually persisted, then email only after
+        # commit so a network hop cannot hold the transaction open.
+        from app.services.alerts import prepare_monitoring_alert
+
+        pending_alert = prepare_monitoring_alert(
+            email=ctx.user.email,
+            preferences=ctx.user.preferences,
+            ticker=ctx.holding.ticker,
+            status_before=status_before,
+            persisted_events=persisted_events,
+        )
 
         await write_db.commit()
 
     # Phase 5: post-commit emails (no session held)
-    if breaking_summary:
-        from app.services.alerts import maybe_send_thesis_break_alert
+    alert_sent = False
+    if pending_alert:
+        from app.services.alerts import send_monitoring_alert
 
-        await maybe_send_thesis_break_alert(
-            user=ctx.user,
-            ticker=ctx.holding.ticker,
-            summary=breaking_summary,
-        )
+        alert_sent = await send_monitoring_alert(pending_alert)
 
-    if ctx.user.email and score is not None and new_label is not None:
+    preferences = ctx.user.preferences or {}
+    if (
+        not alert_sent
+        and ctx.user.email
+        and preferences.get("email_enabled", True) is not False
+        and preferences.get("notification_sensitivity", "all") == "all"
+        and score is not None
+        and new_label is not None
+    ):
         await maybe_notify_band_drop(
             user_email=ctx.user.email,
             ticker=ctx.holding.ticker,

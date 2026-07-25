@@ -19,6 +19,7 @@ from app.database import async_session
 from app.models.holding import Holding
 from app.models.monitoring_event import MonitoringEvent
 from app.models.thesis import Thesis
+from app.models.user import User
 from app.services.market_data import (
     MAX_CURRENT_TRANSCRIPT_AGE_DAYS,
     fetch_company_data,
@@ -315,6 +316,11 @@ async def run_check_now(
         decomposition = await load_active_decomposition(prep_db, thesis_snapshot.id)
         claims = decomposition.claims if decomposition else None
         investor_profile = await load_investor_profile(prep_db, thesis_snapshot.user_id)
+        alert_user = (
+            await prep_db.execute(select(User).where(User.id == thesis_snapshot.user_id))
+        ).scalar_one_or_none()
+        alert_email = alert_user.email if alert_user else None
+        alert_preferences = dict(alert_user.preferences or {}) if alert_user else {}
 
     # Fetch market data
     company_data = None
@@ -567,6 +573,8 @@ async def run_check_now(
             # lets the dashboard say "checked just now, all calm" truthfully.
             live_holding.last_monitored_at = now
 
+            status_before = live_thesis.status
+            persisted_events: list[MonitoringEvent] = []
             created_event_ids = await persist_classified_candidates(
                 write_db,
                 thesis=live_thesis,
@@ -576,6 +584,7 @@ async def run_check_now(
                 signals_by_id=signals_by_id,
                 now=now,
                 investor_profile=investor_profile,
+                persisted_events_out=persisted_events,
             )
             coverage.record_stage(STAGE_EVENTS_PERSISTED, len(created_event_ids))
             coverage.record_events_persisted(len(created_event_ids))
@@ -587,8 +596,23 @@ async def run_check_now(
                     holding_snapshot.ticker,
                 )
 
+            from app.services.alerts import prepare_monitoring_alert
+
+            pending_alert = prepare_monitoring_alert(
+                email=alert_email,
+                preferences=alert_preferences,
+                ticker=holding_snapshot.ticker,
+                status_before=status_before,
+                persisted_events=persisted_events,
+            )
+
             await write_db.commit()
         coverage_committed = True
+
+        if pending_alert:
+            from app.services.alerts import send_monitoring_alert
+
+            await send_monitoring_alert(pending_alert)
 
         return CheckNowResult(
             status="completed",

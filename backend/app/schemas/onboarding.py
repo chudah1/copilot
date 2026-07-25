@@ -124,5 +124,8 @@ class HoldingContextResponse(BaseModel):
     current_value: float | None
     quantity: float
     average_cost_basis: float
+    portfolio_currency: str = "GBP"
+    preferred_currency: str = "GBP"
+    fx_unavailable: bool = False
 
     model_config = {"from_attributes": True}

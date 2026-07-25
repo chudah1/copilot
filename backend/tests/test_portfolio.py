@@ -4,7 +4,9 @@ from sqlalchemy import select
 from unittest.mock import AsyncMock, patch
 
 from app.models.conviction_log_entry import ConvictionLogEntry
+from app.models.holding import Holding
 from app.models.thesis import Thesis
+from app.services.display_currency import FXQuote
 from app.services.market_data import CompanyData
 
 
@@ -63,6 +65,60 @@ async def test_list_holdings(client, auth_headers):
 async def test_list_holdings_requires_auth(client):
     response = await client.get("/api/portfolio/holdings")
     assert response.status_code == 403
+
+
+@pytest.mark.asyncio
+async def test_portfolio_currency_converts_responses_without_rewriting_holdings(
+    client,
+    auth_headers,
+    db,
+    test_user,
+):
+    test_user.preferences = {"portfolio_currency": "EUR"}
+    holding = Holding(
+        user_id=test_user.id,
+        ticker="AAPL",
+        name="Apple",
+        quantity=10,
+        average_cost_basis=100,
+        average_cost_native=125,
+        currency="USD",
+        current_price=150,
+        current_value=1200,
+    )
+    db.add(holding)
+    await db.commit()
+
+    quote = FXQuote(
+        rate=1.25,
+        source="ecb",
+        as_of=datetime.now(timezone.utc),
+    )
+    with patch(
+        "app.services.display_currency.get_fx_quote",
+        new_callable=AsyncMock,
+        return_value=quote,
+    ):
+        holdings_response = await client.get("/api/portfolio/holdings", headers=auth_headers)
+        summary_response = await client.get("/api/portfolio/summary", headers=auth_headers)
+
+    assert holdings_response.status_code == 200
+    converted = holdings_response.json()[0]
+    assert converted["average_cost_basis"] == 125
+    assert converted["current_value"] == 1500
+    assert converted["current_price"] == 150
+    assert converted["currency"] == "USD"
+    assert converted["portfolio_currency"] == "EUR"
+
+    assert summary_response.status_code == 200
+    summary = summary_response.json()
+    assert summary["total_value"] == 1500
+    assert summary["total_cost"] == 1250
+    assert summary["portfolio_currency"] == "EUR"
+
+    await db.refresh(holding)
+    assert float(holding.average_cost_basis) == 100
+    assert float(holding.current_value) == 1200
 
 
 @pytest.mark.asyncio

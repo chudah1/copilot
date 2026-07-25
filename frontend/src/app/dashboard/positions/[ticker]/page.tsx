@@ -1238,15 +1238,15 @@ function PositionDetailInner() {
                             <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} className="grid grid-cols-2 md:grid-cols-5 gap-3 mt-4">
                               {[
                                 // Price & avg cost in the instrument's native currency (USD for a US
-                                // stock); value, P&L and the portfolio total stay in the account
-                                // currency (GBP) — the standard multi-currency broker split.
+                                // stock); value, P&L and the portfolio total use the selected
+                                // portfolio currency — the standard multi-currency broker split.
                                 { label: "Shares", value: String(holding.quantity) },
                                 { label: "Price", value: holding.current_price != null ? formatCurrency(holding.current_price, holding.currency || "GBP") : "—" },
                                 { label: "Avg cost", value: holding.average_cost_native != null
                                     ? formatCurrency(holding.average_cost_native, holding.currency || "GBP")
-                                    : formatCurrency(holding.average_cost_basis) },
-                                { label: "Current value", value: formatCurrency(value) },
-                                { label: "P&L", value: `${pnl >= 0 ? "+" : ""}${formatCurrency(pnl)}`, colored: true },
+                                    : formatCurrency(holding.average_cost_basis, holding.portfolio_currency ?? "GBP") },
+                                { label: "Current value", value: formatCurrency(value, holding.portfolio_currency ?? "GBP") },
+                                { label: "P&L", value: `${pnl >= 0 ? "+" : ""}${formatCurrency(pnl, holding.portfolio_currency ?? "GBP")}`, colored: true },
                               ].map(({ label, value: v, colored }) => (
                                 <div key={label} className="border border-border/60 bg-card px-4 py-3">
                                   <p className="font-mono text-[10px] uppercase tracking-[0.15em] text-muted-foreground">{label}</p>

@@ -91,10 +91,10 @@ export function HoldingCard({ holding, thesis, pulse, earnings, onGenerateDraft,
         {/* Right: numbers + status */}
         <div className="text-right shrink-0 space-y-1 pl-4">
           <p className="font-mono text-[0.9375rem] tabular-nums text-foreground font-medium">
-            {formatCurrency(value)}
+            {formatCurrency(value, holding.portfolio_currency ?? "GBP")}
           </p>
           <p className={`font-mono text-xs tabular-nums ${pnl >= 0 ? "text-emerald-700" : "text-red-600"}`}>
-            {pnl >= 0 ? "+" : ""}{formatCurrency(pnl)}{" "}
+            {pnl >= 0 ? "+" : ""}{formatCurrency(pnl, holding.portfolio_currency ?? "GBP")}{" "}
             <span className="opacity-60">({formatPercent(pnlPct)})</span>
           </p>
           <p className={`font-mono text-[10px] uppercase tracking-[0.1em] ${labelColor}`}>

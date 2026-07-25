@@ -5,6 +5,10 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from app.database import get_db
 from app.dependencies import get_current_user
 from app.models.user import User
+from app.services.display_currency import (
+    DEFAULT_PORTFOLIO_CURRENCY,
+    normalize_portfolio_currency,
+)
 
 router = APIRouter(prefix="/api/settings", tags=["settings"])
 
@@ -37,6 +41,7 @@ class UserPreferences(BaseModel):
     quarterly_review_reminders: bool = True
     email_enabled: bool = True
     notification_sensitivity: str = "all"
+    portfolio_currency: str = DEFAULT_PORTFOLIO_CURRENCY
 
     @field_validator("digest_frequency")
     @classmethod
@@ -63,6 +68,11 @@ class UserPreferences(BaseModel):
     def validate_sensitivity(cls, v: str) -> str:
         return v if v in VALID_SENSITIVITIES else "all"
 
+    @field_validator("portfolio_currency", mode="before")
+    @classmethod
+    def validate_portfolio_currency(cls, v: object) -> str:
+        return normalize_portfolio_currency(v)
+
 
 def get_user_prefs(user: User) -> UserPreferences:
     """Return normalized preferences for a user, applying defaults for missing keys."""
@@ -75,6 +85,7 @@ def get_user_prefs(user: User) -> UserPreferences:
         quarterly_review_reminders=_normalize_bool(raw.get("quarterly_review_reminders"), default=True),
         email_enabled=_normalize_bool(raw.get("email_enabled"), default=True),
         notification_sensitivity=raw.get("notification_sensitivity", "all"),
+        portfolio_currency=raw.get("portfolio_currency", DEFAULT_PORTFOLIO_CURRENCY),
     )
 
 
@@ -91,7 +102,9 @@ async def update_settings(
 ):
     # Merge into existing preferences to preserve any keys not in the schema
     existing = dict(user.preferences or {})
-    existing.update(body.model_dump())
+    # Preserve newer preferences when an older client submits only the fields it
+    # knows about (for example, it must not silently reset portfolio currency).
+    existing.update(body.model_dump(exclude_unset=True))
     user.preferences = existing
     await db.commit()
     return get_user_prefs(user)

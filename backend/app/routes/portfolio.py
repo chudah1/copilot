@@ -33,7 +33,13 @@ from app.schemas.holding import (
 from app.services.encryption import encrypt, decrypt
 from app.services.trading212 import Trading212Client, build_auth_header, detect_trading212_base_url, normalise_t212_ticker
 from app.services.csv_parser import parse_csv_detailed
-from app.services.market_data import detect_native_currency, fetch_company_data, fetch_company_overview, fetch_live_price, get_fx_rate
+from app.services.market_data import detect_native_currency, fetch_company_overview, fetch_live_price
+from app.services.display_currency import (
+    get_display_currency_context,
+    get_fx_quote,
+    serialize_holding,
+    serialize_holdings,
+)
 from app.services.valuation import apply_broker_position, refresh_holding_price, to_account_value
 
 router = APIRouter(prefix="/api/portfolio", tags=["portfolio"])
@@ -317,7 +323,8 @@ async def sync_broker(
     # No auto-drafting a thesis on import. The product leads with the user's own
     # words (onboarding asks them first); AI drafting is now an explicit opt-in,
     # so we never pre-write a reason before they've had their turn.
-    return synced_holdings
+    display = await get_display_currency_context(current_user)
+    return serialize_holdings(synced_holdings, display)
 
 
 @router.get("/holdings", response_model=list[HoldingResponse])
@@ -331,7 +338,8 @@ async def list_holdings(
         .order_by(Holding.current_value.desc().nulls_last())
     )
     holdings = result.scalars().all()
-    return holdings
+    display = await get_display_currency_context(current_user)
+    return serialize_holdings(list(holdings), display)
 
 
 @router.get("/holdings/unthesised", response_model=list[HoldingResponse])
@@ -361,7 +369,8 @@ async def list_unthesised_holdings(
 
     unthesised = [h for h in holdings if h.id not in holdings_with_thesis]
     unthesised.sort(key=_holding_value, reverse=True)
-    return unthesised
+    display = await get_display_currency_context(current_user)
+    return serialize_holdings(unthesised, display)
 
 
 @router.post("/holdings", response_model=HoldingResponse, status_code=status.HTTP_201_CREATED)
@@ -427,7 +436,8 @@ async def add_manual_holding(
     await db.refresh(holding)
 
     # No auto-draft on import — the user writes their own reason; AI help is opt-in.
-    return holding
+    display = await get_display_currency_context(current_user)
+    return serialize_holding(holding, display)
 
 
 @router.post("/holdings/enrich", response_model=list[HoldingResponse])
@@ -490,7 +500,8 @@ async def enrich_holdings(
     await db.commit()
     for h in updated:
         await db.refresh(h)
-    return updated
+    display = await get_display_currency_context(current_user)
+    return serialize_holdings(updated, display)
 
 
 @router.post("/upload-csv", response_model=list[HoldingResponse], status_code=status.HTTP_201_CREATED)
@@ -587,7 +598,8 @@ async def upload_csv(
         await db.refresh(h)
 
     # No auto-draft on import — the user writes their own reason; AI help is opt-in.
-    return created
+    display = await get_display_currency_context(current_user)
+    return serialize_holdings(created, display)
 
 
 @router.get("/live-prices")
@@ -597,28 +609,41 @@ async def live_prices(
 ):
     """Return fresh market prices for all holdings, bypassing the DB snapshot.
 
-    Prices are fetched via yfinance fast_info (60s cache) and converted to GBP.
-    The frontend overlays these on top of the stored values so the display stays
-    current without a full T212 sync.
+    Prices remain in each instrument's native currency. Market values are first
+    normalised to the GBP account currency, then converted to the user's selected
+    portfolio currency for display.
     """
     result = await db.execute(
         select(Holding).where(Holding.user_id == current_user.id)
     )
     holdings = result.scalars().all()
+    display = await get_display_currency_context(current_user)
 
     import asyncio as _asyncio
 
     async def _price_for(holding: Holding) -> dict:
         price = await fetch_live_price(holding.ticker)
         if price is None or price <= 0:
-            return {"ticker": holding.ticker, "current_price": None, "current_value": None}
+            return {
+                "ticker": holding.ticker,
+                "current_price": None,
+                "current_value": None,
+                "currency": holding.currency,
+                "portfolio_currency": display.portfolio_currency,
+                "preferred_currency": display.requested_currency,
+                "fx_unavailable": display.fx_unavailable,
+            }
         current_value_gbp = await to_account_value(
             holding.quantity, price, native_currency=holding.currency, ticker=holding.ticker
         )
         return {
             "ticker": holding.ticker,
             "current_price": price,
-            "current_value": current_value_gbp,
+            "current_value": display.convert_from_gbp(current_value_gbp),
+            "currency": holding.currency,
+            "portfolio_currency": display.portfolio_currency,
+            "preferred_currency": display.requested_currency,
+            "fx_unavailable": display.fx_unavailable,
         }
 
     prices = await _asyncio.gather(*[_price_for(h) for h in holdings])
@@ -871,6 +896,7 @@ async def portfolio_summary(
 
     thesis_cov = round((thesis_coverage_value / total_value * 100), 2) if total_value > 0 else 0.0
     monitorable_cov = round((monitorable_coverage_value / total_value * 100), 2) if total_value > 0 else 0.0
+    display = await get_display_currency_context(current_user)
 
     # Lazy snapshot: create one per user per day
     from app.models.portfolio_snapshot import PortfolioSnapshot
@@ -900,10 +926,13 @@ async def portfolio_summary(
             await db.rollback()
 
     return PortfolioSummary(
-        total_value=total_value,
-        total_cost=total_cost,
-        total_pnl=total_pnl,
+        total_value=display.convert_from_gbp(total_value) or 0.0,
+        total_cost=display.convert_from_gbp(total_cost) or 0.0,
+        total_pnl=display.convert_from_gbp(total_pnl) or 0.0,
         total_pnl_pct=total_pnl_pct,
+        portfolio_currency=display.portfolio_currency,
+        preferred_currency=display.requested_currency,
+        fx_unavailable=display.fx_unavailable,
         holdings_count=len(holdings),
         theses_active=theses_active,
         theses_need_review=theses_need_review,
@@ -970,29 +999,58 @@ async def simulate_trade(
 ):
     from app.services.simulation import simulate_trade as run_simulation
 
+    existing_holding = await db.scalar(
+        select(Holding).where(
+            Holding.user_id == current_user.id,
+            func.upper(Holding.ticker) == body.ticker.upper(),
+        )
+    )
+    native_currency = existing_holding.currency if existing_holding else None
+    if not native_currency:
+        try:
+            overview = await fetch_company_overview(body.ticker)
+            native_currency = overview.get("currency") if overview else None
+        except Exception:
+            native_currency = None
+    native_currency = native_currency or detect_native_currency(body.ticker)
+
+    # The user enters the share price quoted by the market. Convert that native
+    # price to the stable GBP calculation currency before running the simulator.
+    native_quote = await get_fx_quote(native_currency, "GBP")
+    if native_quote is None:
+        raise HTTPException(
+            status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
+            detail=f"Could not convert {native_currency} to GBP right now. Try again shortly.",
+        )
+    price_in_gbp = body.price_per_share * native_quote.rate
     result = await run_simulation(
         user_id=current_user.id,
         ticker=body.ticker,
         quantity=body.quantity,
-        price_per_share=body.price_per_share,
+        price_per_share=price_in_gbp,
         db=db,
     )
+    display = await get_display_currency_context(current_user)
     return SimulateTradeResponse(
         ticker=result.ticker,
         name=result.name,
         simulated_quantity=result.simulated_quantity,
-        simulated_price=result.simulated_price,
-        simulated_value=result.simulated_value,
+        simulated_price=body.price_per_share,
+        simulated_value=display.convert_from_gbp(result.simulated_value) or 0.0,
+        simulated_currency=native_currency,
+        portfolio_currency=display.portfolio_currency,
+        preferred_currency=display.requested_currency,
+        fx_unavailable=display.fx_unavailable,
         before={
-            "total_value": result.before.total_value,
-            "total_cost": result.before.total_cost,
+            "total_value": display.convert_from_gbp(result.before.total_value) or 0.0,
+            "total_cost": display.convert_from_gbp(result.before.total_cost) or 0.0,
             "holdings_count": result.before.holdings_count,
             "top_3_concentration_pct": result.before.top_3_concentration_pct,
             "sector_breakdown": result.before.sector_breakdown,
         },
         after={
-            "total_value": result.after.total_value,
-            "total_cost": result.after.total_cost,
+            "total_value": display.convert_from_gbp(result.after.total_value) or 0.0,
+            "total_cost": display.convert_from_gbp(result.after.total_cost) or 0.0,
             "holdings_count": result.after.holdings_count,
             "top_3_concentration_pct": result.after.top_3_concentration_pct,
             "sector_breakdown": result.after.sector_breakdown,

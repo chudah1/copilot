@@ -88,6 +88,7 @@ export function PositionHeader({
                 holdingId={holding.id}
                 ticker={holding.ticker}
                 currency={holding.currency}
+                portfolioCurrency={holding.portfolio_currency ?? "GBP"}
                 investorProfile={investorProfile ?? null}
                 onComplete={onCheckNowComplete}
               />
@@ -110,10 +111,10 @@ export function PositionHeader({
               {hasPrice ? (
                 <>
                   <p className="font-mono text-[1.6rem] tabular-nums text-foreground leading-tight">
-                    {formatCurrency(value)}
+                    {formatCurrency(value, holding.portfolio_currency ?? "GBP")}
                   </p>
                   <p className={`font-mono text-[13px] tabular-nums mt-0.5 ${pnl >= 0 ? "text-emerald-700" : "text-red-600"}`}>
-                    {pnl >= 0 ? "+" : ""}{formatCurrency(pnl)}
+                    {pnl >= 0 ? "+" : ""}{formatCurrency(pnl, holding.portfolio_currency ?? "GBP")}
                     <span className="opacity-60 ml-1.5">({pnl >= 0 ? "+" : ""}{pnlPct}%)</span>
                   </p>
                 </>

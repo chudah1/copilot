@@ -230,10 +230,10 @@ export function PositionCard({
           {/* Value + P&L */}
           <div>
             <p className="font-mono text-[1.05rem] tabular-nums text-foreground font-medium leading-tight">
-              {formatCurrency(value)}
+              {formatCurrency(value, holding.portfolio_currency ?? "GBP")}
             </p>
             <p className={`font-mono text-[11px] tabular-nums mt-0.5 ${pnl >= 0 ? "text-emerald-700" : "text-red-600"}`}>
-              {pnl >= 0 ? "+" : ""}{formatCurrency(pnl)}{" "}
+              {pnl >= 0 ? "+" : ""}{formatCurrency(pnl, holding.portfolio_currency ?? "GBP")}{" "}
               <span className="opacity-70">({formatPercent(pnlPct)})</span>
             </p>
           </div>

@@ -211,7 +211,7 @@ function buildNarrative(result: SimulateTradeResponse): string[] {
   const concDelta = result.after.top_3_concentration_pct - result.before.top_3_concentration_pct;
   const isNew = result.after.holdings_count > result.before.holdings_count;
 
-  lines.push(`${formatCurrency(result.simulated_value)} into ${result.name}, bringing your portfolio to ${formatCurrency(result.after.total_value)}.`);
+  lines.push(`${formatCurrency(result.simulated_value, result.portfolio_currency)} into ${result.name}, bringing your portfolio to ${formatCurrency(result.after.total_value, result.portfolio_currency)}.`);
   if (isNew) lines.push(`This adds a new position — you'd go from ${result.before.holdings_count} to ${result.after.holdings_count} holdings.`);
   if (Math.abs(concDelta) >= 0.5) {
     lines.push(concDelta > 0
@@ -280,6 +280,7 @@ export default function SimulatePage() {
         name: result.name,
         quantity: result.simulated_quantity,
         average_cost_basis: result.simulated_price,
+        currency: result.simulated_currency,
       });
       router.push(navigateTo === "thesis" ? `/dashboard/positions/${result.ticker}` : "/dashboard");
     } catch {
@@ -318,7 +319,7 @@ export default function SimulatePage() {
           {summary && (
             <div className="border border-border/60 bg-background/70 p-4">
               <p className="font-display text-[1.35rem] italic leading-tight text-foreground">
-                {formatCurrency(summary.total_value)}
+                {formatCurrency(summary.total_value, summary.portfolio_currency)}
               </p>
               <p className="mt-1 font-sans text-sm leading-relaxed text-muted-foreground">
                 {summary.holdings_count} holdings · top 3 at {pct(summary.top_3_concentration_pct)}
@@ -331,7 +332,8 @@ export default function SimulatePage() {
       <div className="product-panel p-5 sm:p-6 space-y-5">
         <div className="space-y-3">
           <div className="grid gap-3 sm:grid-cols-3">
-            <label>
+            <label className="space-y-1.5">
+              <span className="font-mono text-[9px] uppercase tracking-[0.16em] text-muted-foreground">Quantity</span>
               <input
                 type="number"
                 inputMode="decimal"
@@ -341,7 +343,8 @@ export default function SimulatePage() {
                 className="flex h-11 w-full border border-input bg-background px-3 py-2 text-sm text-foreground outline-none transition-colors focus-visible:ring-2 focus-visible:ring-ring"
               />
             </label>
-            <label>
+            <label className="space-y-1.5">
+              <span className="font-mono text-[9px] uppercase tracking-[0.16em] text-muted-foreground">Holding</span>
               <TickerSearch
                 value={ticker}
                 onChange={setTicker}
@@ -349,7 +352,8 @@ export default function SimulatePage() {
                 placeholder="NVDA or Nvidia"
               />
             </label>
-            <label>
+            <label className="space-y-1.5">
+              <span className="font-mono text-[9px] uppercase tracking-[0.16em] text-muted-foreground">Share price · trading currency</span>
               <input
                 type="number"
                 inputMode="decimal"
@@ -396,7 +400,7 @@ export default function SimulatePage() {
                 </div>
                 <div className="grid grid-cols-3 divide-x divide-border/40">
                   {[
-                    { label: "Total value", value: formatCurrency(summary.total_value), accent: false },
+                    { label: "Total value", value: formatCurrency(summary.total_value, summary.portfolio_currency), accent: false },
                     { label: "Holdings", value: String(summary.holdings_count), accent: false },
                     { label: "Top 3 conc.", value: pct(summary.top_3_concentration_pct), accent: summary.top_3_concentration_pct >= 50 },
                   ].map(({ label, value, accent }) => (
@@ -514,9 +518,9 @@ export default function SimulatePage() {
                 {[
                   {
                     label: "Portfolio",
-                    before: formatCurrency(result.before.total_value),
-                    after: formatCurrency(result.after.total_value),
-                    delta: `+${formatCurrency(result.after.total_value - result.before.total_value)}`,
+                    before: formatCurrency(result.before.total_value, result.portfolio_currency),
+                    after: formatCurrency(result.after.total_value, result.portfolio_currency),
+                    delta: `+${formatCurrency(result.after.total_value - result.before.total_value, result.portfolio_currency)}`,
                     positive: true,
                   },
                   {

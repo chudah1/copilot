@@ -7,6 +7,7 @@ from sqlalchemy.orm import selectinload
 
 from app.database import async_session
 from app.models.holding import Holding
+from app.models.monitoring_event import MonitoringEvent
 from app.models.thesis import Thesis
 from app.services.edgar import build_edgar_candidates, get_recent_8k_filings
 from app.services.evidence_chunking import best_effort_persist_candidate_evidence_chunks
@@ -187,6 +188,8 @@ async def run_edgar_watch():
             classified = [(c, s, a) for c, s, a in classified if id(c) in surviving_set]
 
             created_event_ids: list[uuid.UUID] = []
+            persisted_events: list[MonitoringEvent] = []
+            status_before = thesis.status
             if classified:
                 now = datetime.now(timezone.utc)
                 created_event_ids = await persist_classified_candidates(
@@ -198,11 +201,25 @@ async def run_edgar_watch():
                     signals_by_id=signals_by_id,
                     now=now,
                     investor_profile=investor_profile,
+                    persisted_events_out=persisted_events,
                 )
             coverage.record_stage(STAGE_EVENTS_PERSISTED, len(created_event_ids))
             coverage.record_events_persisted(len(created_event_ids))
             await coverage.persist(db)
+            from app.services.alerts import prepare_monitoring_alert
+
+            pending_alert = prepare_monitoring_alert(
+                email=thesis.user.email if thesis.user else None,
+                preferences=thesis.user.preferences if thesis.user else None,
+                ticker=holding.ticker,
+                status_before=status_before,
+                persisted_events=persisted_events,
+            )
             await db.commit()
+            if pending_alert:
+                from app.services.alerts import send_monitoring_alert
+
+                await send_monitoring_alert(pending_alert)
             if classified:
                 logger.info(
                     "edgar_watch: persisted %d events for thesis %s", len(created_event_ids), thesis.id

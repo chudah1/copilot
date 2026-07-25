@@ -269,6 +269,34 @@ async def get_fx_rate(from_ccy: str, to_ccy: str) -> float:
     if cached is not None:
         return cached
 
+    rate = await get_fx_rate_optional(from_ccy, to_ccy)
+
+    if rate is None or rate <= 0:
+        logger.warning("FX rate unavailable for %s→%s, using 1.0 fallback", from_ccy, to_ccy)
+        rate = 1.0
+
+    _cache.set(cache_key, rate, _CACHE_TTL_SHORT)
+    return rate
+
+
+async def get_fx_rate_optional(from_ccy: str, to_ccy: str) -> float | None:
+    """Return a yfinance FX rate without inventing a 1:1 fallback.
+
+    The legacy valuation path deliberately remains tolerant via ``get_fx_rate``.
+    Customer-selected display currency uses this stricter function so a provider
+    outage can be surfaced honestly instead of showing incorrectly converted
+    money.
+    """
+    from_ccy = from_ccy.strip().upper()
+    to_ccy = to_ccy.strip().upper()
+    if from_ccy == to_ccy:
+        return 1.0
+
+    cache_key = f"fx_optional_{from_ccy}_{to_ccy}"
+    cached = _cache.get(cache_key)
+    if cached is not None:
+        return cached
+
     rate = await _fetch_fx_rate_direct(from_ccy, to_ccy)
     if rate is None or rate <= 0:
         # Try inverse and reciprocate
@@ -277,8 +305,7 @@ async def get_fx_rate(from_ccy: str, to_ccy: str) -> float:
             rate = 1.0 / inverse
 
     if rate is None or rate <= 0:
-        logger.warning("FX rate unavailable for %s→%s, using 1.0 fallback", from_ccy, to_ccy)
-        rate = 1.0
+        return None
 
     _cache.set(cache_key, rate, _CACHE_TTL_SHORT)
     return rate

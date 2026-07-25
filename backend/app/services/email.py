@@ -135,6 +135,25 @@ async def send_thesis_break_email(to_email: str, ticker: str, summary: str) -> b
     )
 
 
+async def send_thesis_warning_email(to_email: str, ticker: str, summary: str) -> bool:
+    review_url = f"{settings.frontend_url}/dashboard/positions/{ticker}"
+    body = (
+        f'<p style="margin:0 0 10px;font-family:{_MONO};font-size:10px;letter-spacing:0.20em;text-transform:uppercase;color:{_F};">{escape(ticker)}</p>'
+        f'<h1 style="margin:0 0 20px;font-size:24px;font-weight:normal;color:{_I};line-height:1.25;">One of your reasons is under pressure</h1>'
+        f'<p style="margin:0 0 20px;font-size:14px;line-height:1.75;color:{_T};">New evidence is pushing against something you wrote about <strong>{escape(ticker)}</strong>:</p>'
+        f'<table role="presentation" width="100%" cellpadding="0" cellspacing="0" border="0" style="margin:0 0 28px;">'
+        f'<tr><td style="border-left:2px solid #B07D3A;padding:14px 18px;background:#EDE5DB;">'
+        f'<p style="margin:0;font-size:14px;line-height:1.7;color:{_T};font-style:italic;">{escape(summary)}</p>'
+        f'</td></tr></table>'
+        f'<p style="margin:0 0 32px;font-size:14px;line-height:1.75;color:{_T};">Read the evidence and decide whether it changes your view. If it does not, say so and keep the ruling on record.</p>'
+        + _btn(review_url, "Review the evidence")
+    )
+    html = _email_shell("Evidence alert", "#B07D3A", "#B07D3A", body)
+    return _send_email_via_resend(
+        "penKeep <alerts@penkeep.io>", to_email, f"{ticker}: a reason is under pressure", html
+    )
+
+
 async def send_password_reset_email(to_email: str, reset_token: str) -> bool:
     reset_url = f"{settings.frontend_url}/reset-password?token={reset_token}"
     body = (

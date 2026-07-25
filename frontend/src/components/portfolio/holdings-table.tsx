@@ -105,9 +105,9 @@ export function HoldingsTable({ holdings, currentThesesByHolding, pulseByHolding
                   </div>
                 </TableCell>
                 <TableCell className="text-right">{h.quantity}</TableCell>
-                <TableCell className="text-right">{formatCurrency(h.average_cost_basis)}</TableCell>
+                <TableCell className="text-right">{formatCurrency(h.average_cost_basis, h.portfolio_currency ?? "GBP")}</TableCell>
                 <TableCell className="text-right">{h.current_price ? formatCurrency(h.current_price, h.currency) : "—"}</TableCell>
-                <TableCell className="text-right">{formatCurrency(value)}</TableCell>
+                <TableCell className="text-right">{formatCurrency(value, h.portfolio_currency ?? "GBP")}</TableCell>
                 <TableCell className={`text-right ${pnl >= 0 ? "text-emerald-700" : "text-red-600"}`}>
                   {formatPercent(pnlPct)}
                 </TableCell>

@@ -256,6 +256,74 @@ async def test_run_check_now_returns_created_event_ids(db, test_user):
     assert all(event_id is not None for event_id in result.created_event_ids)
 
 
+async def test_run_check_now_emails_new_thesis_break_after_commit(db, test_user):
+    test_user.preferences = {
+        **(test_user.preferences or {}),
+        "email_enabled": True,
+        "notification_sensitivity": "all",
+    }
+    holding = Holding(
+        user_id=test_user.id,
+        ticker="AAPL",
+        name="Apple",
+        quantity=10,
+        average_cost_basis=100,
+        current_price=100,
+        current_value=1000,
+    )
+    db.add(holding)
+    await db.flush()
+
+    thesis = Thesis(
+        user_id=test_user.id,
+        holding_id=holding.id,
+        status="active",
+        thesis_kind="company",
+        why_own_it="Strong ecosystem.",
+        must_remain_true="Revenue keeps growing.",
+        what_would_change_my_mind="A major revenue miss.",
+        confidence="high",
+        review_cadence_days=7,
+        interpretation={
+            "watch_hints": [
+                {"kind": "price_move_pct", "threshold": 10.0, "rationale": "Large moves."}
+            ]
+        },
+        source="ai_assisted",
+    )
+    db.add(thesis)
+    await db.commit()
+
+    classification = type(
+        "Classification",
+        (),
+        {
+            "severity": "thesis_breaking",
+            "analysis": "Revenue missed the floor.",
+            "direction": "threatens",
+        },
+    )()
+
+    with patch(
+        "app.services.check_now.fetch_company_data",
+        new_callable=AsyncMock,
+        return_value=_make_company_data(current_price=120.0),
+    ), patch(
+        "app.services.monitoring_pipeline.classify_event",
+        new_callable=AsyncMock,
+        return_value=classification,
+    ), patch(
+        "app.services.email.send_thesis_break_email",
+        new_callable=AsyncMock,
+        return_value=True,
+    ) as send_email:
+        result = await run_check_now(holding, thesis, db)
+
+    assert result.status == "completed"
+    send_email.assert_awaited_once()
+    assert send_email.await_args.args[0] == test_user.email
+
+
 async def test_run_check_now_uses_broader_current_transcript_window(db, test_user):
     holding = Holding(
         user_id=test_user.id,

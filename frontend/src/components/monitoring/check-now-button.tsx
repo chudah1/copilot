@@ -9,6 +9,7 @@ interface CheckNowButtonProps {
   holdingId: string;
   ticker: string;
   currency?: string;
+  portfolioCurrency?: string;
   investorProfile?: "thesis_driven" | "hearsay_driven" | null;
   onComplete: (result: CheckNowResponse) => void;
 }
@@ -24,7 +25,19 @@ function formatLargeNumber(n: number): string {
   return `$${n.toLocaleString()}`;
 }
 
-function SnapshotCard({ snapshot, ticker, currency, eventsCreated }: { snapshot: MarketSnapshot; ticker: string; currency: string; eventsCreated: number }) {
+function SnapshotCard({
+  snapshot,
+  ticker,
+  currency,
+  portfolioCurrency,
+  eventsCreated,
+}: {
+  snapshot: MarketSnapshot;
+  ticker: string;
+  currency: string;
+  portfolioCurrency: string;
+  eventsCreated: number;
+}) {
   const pnlPositive = (snapshot.pnl ?? 0) >= 0;
   const priceUp = (snapshot.price_change_pct ?? 0) >= 0;
   const hintsOk = snapshot.watch_hints_ok === snapshot.watch_hints_total && snapshot.watch_hints_total > 0;
@@ -63,7 +76,7 @@ function SnapshotCard({ snapshot, ticker, currency, eventsCreated }: { snapshot:
           <div className="px-4 py-3">
             <p className="font-mono text-[10px] uppercase tracking-[0.15em] text-muted-foreground mb-1">P&L</p>
             <p className={`font-mono text-sm font-medium tabular-nums ${pnlPositive ? "text-emerald-600" : "text-red-600"}`}>
-              {formatCurrency(snapshot.pnl)}
+              {formatCurrency(snapshot.pnl, portfolioCurrency)}
             </p>
             {snapshot.pnl_pct != null && (
               <p className={`font-mono text-[10px] tabular-nums ${pnlPositive ? "text-emerald-600" : "text-red-600"}`}>
@@ -124,7 +137,14 @@ function SnapshotCard({ snapshot, ticker, currency, eventsCreated }: { snapshot:
 const POLL_INTERVAL_MS = 3000;
 const POLL_MAX_MS = 5 * 60 * 1000;
 
-export function CheckNowButton({ holdingId, ticker, currency = "GBP", investorProfile, onComplete }: CheckNowButtonProps) {
+export function CheckNowButton({
+  holdingId,
+  ticker,
+  currency = "GBP",
+  portfolioCurrency = "GBP",
+  investorProfile,
+  onComplete,
+}: CheckNowButtonProps) {
   const [loading, setLoading] = useState(false);
   const [polling, setPolling] = useState(false);
   const [result, setResult] = useState<CheckNowResponse | null>(null);
@@ -248,7 +268,13 @@ export function CheckNowButton({ holdingId, ticker, currency = "GBP", investorPr
       </div>
 
       {result?.status === "completed" && result.snapshot && (
-        <SnapshotCard snapshot={result.snapshot} ticker={ticker} currency={currency} eventsCreated={result.events_created ?? 0} />
+        <SnapshotCard
+          snapshot={result.snapshot}
+          ticker={ticker}
+          currency={currency}
+          portfolioCurrency={portfolioCurrency}
+          eventsCreated={result.events_created ?? 0}
+        />
       )}
     </div>
   );

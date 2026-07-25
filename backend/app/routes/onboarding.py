@@ -592,13 +592,21 @@ async def holding_context(
     if holding is None:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Holding not found")
 
+    from app.services.display_currency import get_display_currency_context
+
+    display = await get_display_currency_context(current_user)
     return HoldingContextResponse(
         holding_id=holding.id,
         ticker=holding.ticker,
         name=holding.name,
         sector=holding.sector,
         current_price=float(holding.current_price) if holding.current_price is not None else None,
-        current_value=float(holding.current_value) if holding.current_value is not None else None,
+        current_value=display.convert_from_gbp(
+            float(holding.current_value) if holding.current_value is not None else None
+        ),
         quantity=float(holding.quantity),
-        average_cost_basis=float(holding.average_cost_basis),
+        average_cost_basis=display.convert_from_gbp(float(holding.average_cost_basis)) or 0.0,
+        portfolio_currency=display.portfolio_currency,
+        preferred_currency=display.requested_currency,
+        fx_unavailable=display.fx_unavailable,
     )

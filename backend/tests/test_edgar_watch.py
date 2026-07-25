@@ -142,3 +142,84 @@ async def test_edgar_watch_persists_coverage_pass_on_quiet_path():
 
     mock_persist.assert_awaited_once()
     mock_db.commit.assert_awaited()
+
+
+@pytest.mark.asyncio
+async def test_edgar_watch_emails_new_thesis_break_after_commit():
+    from app.jobs.edgar_watch import run_edgar_watch
+
+    mock_user = SimpleNamespace(
+        email="u@example.com",
+        preferences={"email_enabled": True, "notification_sensitivity": "all"},
+    )
+    mock_thesis = MagicMock()
+    mock_thesis.id = uuid.uuid4()
+    mock_thesis.user_id = uuid.uuid4()
+    mock_thesis.user = mock_user
+    mock_thesis.status = "active"
+    mock_thesis.created_at = datetime.now(timezone.utc)
+    mock_thesis.why_own_it = "Revenue must keep growing."
+
+    mock_holding = MagicMock()
+    mock_holding.id = uuid.uuid4()
+    mock_holding.ticker = "AAPL"
+    mock_holding.name = "Apple"
+    mock_holding.sector = "Technology"
+
+    fake_claim = SimpleNamespace(id=uuid.uuid4(), claim_text="Revenue grows", entities=[])
+    fake_decomposition = SimpleNamespace(claims=[fake_claim])
+    candidate = {
+        "event_type": "edgar_8k",
+        "description": "Revenue missed the stated floor.",
+        "evidence": {"headline": "Revenue miss"},
+    }
+    filing = MagicMock(items=["2.02"])
+
+    async def persist_break(*args, **kwargs):
+        kwargs["thesis"].status = "needs_review"
+        kwargs["persisted_events_out"].append(
+            SimpleNamespace(
+                severity="thesis_breaking",
+                verdict="threatens",
+                ai_analysis="Revenue missed the floor.",
+                evidence_summary=None,
+                summary="Revenue missed the stated floor.",
+            )
+        )
+        return [uuid.uuid4()]
+
+    with patch("app.jobs.edgar_watch.async_session") as mock_session_ctx, \
+         patch("app.jobs.edgar_watch.get_recent_8k_filings", new_callable=AsyncMock, return_value=[filing]), \
+         patch("app.jobs.edgar_watch.build_edgar_candidates", return_value=[candidate]), \
+         patch("app.jobs.edgar_watch.load_active_decomposition", new_callable=AsyncMock, return_value=fake_decomposition), \
+         patch("app.jobs.edgar_watch.match_candidates_to_signals", side_effect=lambda candidates, claims: candidates), \
+         patch("app.jobs.edgar_watch.enrich_candidates_with_embedding_matches", new_callable=AsyncMock, side_effect=lambda candidates, claims: candidates), \
+         patch("app.jobs.edgar_watch.adjudicate_signal_matches", new_callable=AsyncMock, side_effect=lambda candidates, claims: candidates), \
+         patch("app.jobs.edgar_watch.filter_candidates_by_thesis_relevance", new_callable=AsyncMock, side_effect=lambda candidates, **kwargs: candidates), \
+         patch("app.jobs.edgar_watch.match_thesis_news_watches", new_callable=AsyncMock, return_value={}), \
+         patch("app.jobs.edgar_watch.expand_transcript_candidates_for_signals", new_callable=AsyncMock, side_effect=lambda candidates, claims: candidates), \
+         patch("app.jobs.edgar_watch.best_effort_persist_candidate_evidence_chunks", new_callable=AsyncMock), \
+         patch("app.jobs.edgar_watch.apply_thesis_floor", side_effect=lambda candidates, *args, **kwargs: candidates), \
+         patch("app.jobs.edgar_watch.filter_candidates", new_callable=AsyncMock, side_effect=lambda candidates, *args, **kwargs: candidates), \
+         patch("app.jobs.edgar_watch.classify_candidates_for_thesis", new_callable=AsyncMock, return_value=[(candidate, "thesis_breaking", "Revenue missed the floor.")]), \
+         patch("app.jobs.edgar_watch.apply_priority_suppression", new_callable=AsyncMock) as suppress, \
+         patch("app.jobs.edgar_watch.persist_classified_candidates", new_callable=AsyncMock, side_effect=persist_break), \
+         patch("app.jobs.edgar_watch.CoveragePassBuilder.persist", new_callable=AsyncMock), \
+         patch("app.services.email.send_thesis_break_email", new_callable=AsyncMock, return_value=True) as send_email:
+        suppress.return_value = SimpleNamespace(
+            classified=[(candidate, "thesis_breaking")],
+            after_same_event_merge_count=1,
+        )
+        mock_db = AsyncMock()
+        mock_db.__aenter__ = AsyncMock(return_value=mock_db)
+        mock_db.__aexit__ = AsyncMock(return_value=None)
+        mock_db.add = MagicMock()
+        mock_result = MagicMock()
+        mock_result.all.return_value = [(mock_thesis, mock_holding)]
+        mock_db.execute = AsyncMock(return_value=mock_result)
+        mock_session_ctx.return_value = mock_db
+
+        await run_edgar_watch()
+
+    send_email.assert_awaited_once()
+    assert send_email.await_args.args[0] == mock_user.email

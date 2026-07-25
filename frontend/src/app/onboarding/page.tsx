@@ -6,6 +6,7 @@ import { AuthGuard } from "@/components/layout/auth-guard";
 import { Button } from "@/components/ui/button";
 import { api } from "@/lib/api";
 import { getErrorMessage } from "@/lib/errors";
+import { formatCurrency } from "@/lib/utils";
 import {
   EMPTY_WIZARD_STATE,
   resolveInitialWizardState,
@@ -295,7 +296,7 @@ function WizardInner() {
   );
 
   const holdingValueLabel = holding?.current_value
-    ? `£${holding.current_value.toLocaleString("en-GB", { maximumFractionDigits: 0 })}`
+    ? formatCurrency(holding.current_value, holding.portfolio_currency ?? "GBP")
     : "Value unavailable";
   const sidebarCards = step === "QUESTION_1"
     ? [

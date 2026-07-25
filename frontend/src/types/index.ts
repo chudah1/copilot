@@ -10,11 +10,14 @@ export interface Holding {
   name: string;
   exchange: string | null;
   quantity: number;
-  average_cost_basis: number;        // per-share cost in account currency (GBP)
+  average_cost_basis: number;        // per-share cost in the selected portfolio currency
   average_cost_native: number | null; // per-share cost in the instrument's native currency
   currency: string;                   // instrument's native currency (e.g. USD)
   current_price: number | null;       // latest price per share, native currency
-  current_value: number | null;       // market value in account currency (GBP)
+  current_value: number | null;       // market value in the selected portfolio currency
+  portfolio_currency?: string;         // currency actually used for portfolio values
+  preferred_currency?: string;         // user's requested currency
+  fx_unavailable?: boolean;
   sector: string | null;
   geography: string | null;
   asset_class: string | null;
@@ -309,6 +312,9 @@ export interface PortfolioSummary {
   total_cost: number;
   total_pnl: number;
   total_pnl_pct: number;
+  portfolio_currency: string;
+  preferred_currency: string;
+  fx_unavailable: boolean;
   holdings_count: number;
   theses_active: number;
   theses_need_review: number;
@@ -403,6 +409,7 @@ export interface UserPreferences {
   quarterly_review_reminders: boolean;
   email_enabled: boolean;
   notification_sensitivity: string;
+  portfolio_currency: string;
 }
 
 
@@ -505,6 +512,10 @@ export interface SimulateTradeResponse {
   simulated_quantity: number;
   simulated_price: number;
   simulated_value: number;
+  simulated_currency: string;
+  portfolio_currency: string;
+  preferred_currency: string;
+  fx_unavailable: boolean;
   before: PortfolioSnapshot;
   after: PortfolioSnapshot;
   warnings: SimulationWarning[];
@@ -565,8 +576,12 @@ export interface DraftStatus {
 
 export interface LivePrice {
   ticker: string;
-  current_price: number;
-  current_value: number;
+  current_price: number | null;
+  current_value: number | null;
+  currency: string;
+  portfolio_currency: string;
+  preferred_currency: string;
+  fx_unavailable: boolean;
 }
 
 export interface HoldingContext {
@@ -578,6 +593,9 @@ export interface HoldingContext {
   current_value: number | null;
   quantity: number;
   average_cost_basis: number;
+  portfolio_currency?: string;
+  preferred_currency?: string;
+  fx_unavailable?: boolean;
 }
 
 export interface SynthesisRequest {
