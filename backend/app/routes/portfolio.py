@@ -1106,7 +1106,12 @@ async def get_conviction_log(
     from app.models.conviction_log_entry import ConvictionLogEntry
     from app.models.decision_snapshot import DecisionSnapshot
     from app.models.monitoring_event import MonitoringEvent
-    from app.services.conviction_log import EVIDENCE_REVIEWED, POST_EARNINGS_REVIEW, QUARTERLY_REVIEW
+    from app.services.conviction_log import (
+        EVIDENCE_RECEIVED,
+        EVIDENCE_REVIEWED,
+        POST_EARNINGS_REVIEW,
+        QUARTERLY_REVIEW,
+    )
 
     # Verify holding belongs to user
     holding_result = await db.execute(
@@ -1124,18 +1129,20 @@ async def get_conviction_log(
     )
     entries = entries_result.scalars().all()
 
-    # Collect event IDs and thesis IDs from evidence_reviewed entries only
+    # Collect event IDs from evidence entries (received and reviewed) and
+    # thesis IDs from reviewed entries. Received entries only started carrying
+    # event_id recently, so older ones simply never merge.
     parsed_event_ids: dict[str, uuid.UUID] = {}
     evidence_thesis_ids: set[uuid.UUID] = set()
     for e in entries:
-        if e.entry_type == EVIDENCE_REVIEWED and e.metadata_json:
+        if e.entry_type in (EVIDENCE_RECEIVED, EVIDENCE_REVIEWED) and e.metadata_json:
             eid = e.metadata_json.get("event_id")
             if eid and eid not in parsed_event_ids:
                 try:
                     parsed_event_ids[eid] = uuid.UUID(eid)
                 except ValueError:
                     pass
-            if e.thesis_id:
+            if e.entry_type == EVIDENCE_REVIEWED and e.thesis_id:
                 evidence_thesis_ids.add(e.thesis_id)
 
     # Load monitoring events in bulk
@@ -1154,18 +1161,25 @@ async def get_conviction_log(
         )
         theses_by_id = {t.id: t for t in theses_result.scalars().all()}
 
-    # Load resolved DecisionSnapshots for this holding to surface read-back text
+    # Load DecisionSnapshots for these events — resolved ones for read-back
+    # text, unresolved ones for the open bet (bucket / bet_text / follow-up).
     resolved_reads: dict[uuid.UUID, str] = {}  # monitoring_event_id -> resolution read
+    snapshots_by_event: dict[uuid.UUID, DecisionSnapshot] = {}
     if parsed_event_ids:
         snaps_result = await db.execute(
-            select(DecisionSnapshot).where(
+            select(DecisionSnapshot)
+            .where(
                 DecisionSnapshot.holding_id == holding_id,
                 DecisionSnapshot.monitoring_event_id.in_(parsed_event_ids.values()),
-                DecisionSnapshot.resolved_at.is_not(None),
             )
+            .order_by(DecisionSnapshot.decided_at.asc())
         )
         for snap in snaps_result.scalars().all():
-            if snap.monitoring_event_id and snap.resolution_json:
+            if not snap.monitoring_event_id:
+                continue
+            # ascending order means the latest snapshot per event wins
+            snapshots_by_event[snap.monitoring_event_id] = snap
+            if snap.resolved_at is not None and snap.resolution_json:
                 read = snap.resolution_json.get("read")
                 if read:
                     resolved_reads[snap.monitoring_event_id] = read
@@ -1190,20 +1204,62 @@ async def get_conviction_log(
     review_types = {EVIDENCE_REVIEWED, POST_EARNINGS_REVIEW, QUARTERLY_REVIEW}
     review_count = sum(1 for e in entries if e.entry_type in review_types)
 
+    # One evidence item = one card. When an event has both a received entry and
+    # a reviewed entry, fold the arrival into the (newest) reviewed entry —
+    # evidence description + decision + outcome — and drop the standalone
+    # received row. The log table itself stays append-only.
+    def _entry_event_uuid(e: ConvictionLogEntry) -> uuid.UUID | None:
+        eid = e.metadata_json.get("event_id") if e.metadata_json else None
+        return parsed_event_ids.get(eid) if eid else None
+
+    received_by_event: dict[uuid.UUID, ConvictionLogEntry] = {}
+    for e in reversed(entries):  # oldest first, so the original arrival wins
+        if e.entry_type == EVIDENCE_RECEIVED:
+            ev_id = _entry_event_uuid(e)
+            if ev_id and ev_id not in received_by_event:
+                received_by_event[ev_id] = e
+
+    merge_source: dict[uuid.UUID, ConvictionLogEntry] = {}  # reviewed entry id -> received entry
+    merged_received_ids: set[uuid.UUID] = set()
+    events_merged: set[uuid.UUID] = set()
+    for e in entries:  # newest first: the latest review absorbs the arrival
+        if e.entry_type != EVIDENCE_REVIEWED:
+            continue
+        ev_id = _entry_event_uuid(e)
+        if ev_id and ev_id in received_by_event and ev_id not in events_merged:
+            received = received_by_event[ev_id]
+            merge_source[e.id] = received
+            merged_received_ids.add(received.id)
+            events_merged.add(ev_id)
+
     # Build enriched entry responses
     enriched: list[ConvictionLogEntryResponse] = []
     for e in entries:
+        if e.id in merged_received_ids:
+            continue
         extra: dict = {}
-        if e.entry_type == EVIDENCE_REVIEWED and e.metadata_json:
-            eid_str = e.metadata_json.get("event_id")
-            if eid_str:
-                event_uuid = parsed_event_ids.get(eid_str)
-                event = events_by_id.get(event_uuid) if event_uuid else None
-                if event:
-                    extra["event_title"] = event.title
-                    extra["event_severity"] = event.severity
-                if event_uuid and event_uuid in resolved_reads:
-                    extra["resolution_read"] = resolved_reads[event_uuid]
+        ev_id = (
+            _entry_event_uuid(e)
+            if e.entry_type in (EVIDENCE_RECEIVED, EVIDENCE_REVIEWED)
+            else None
+        )
+        event = events_by_id.get(ev_id) if ev_id else None
+        if event:
+            extra["event_title"] = event.title
+            extra["event_severity"] = event.severity
+        if e.entry_type == EVIDENCE_REVIEWED:
+            if ev_id and ev_id in resolved_reads:
+                extra["resolution_read"] = resolved_reads[ev_id]
+            snap = snapshots_by_event.get(ev_id) if ev_id else None
+            if snap:
+                extra["bucket"] = snap.bucket
+                extra["bet_text"] = snap.bet_text
+                extra["follow_up_at"] = snap.next_test_at
+            received = merge_source.get(e.id)
+            if received is not None:
+                # the evidence description reads better than "action: summary"
+                extra["content"] = received.content
+                extra["received_at"] = received.created_at
             thesis = theses_by_id.get(e.thesis_id) if e.thesis_id else None
             if thesis:
                 extra["what_would_change_my_mind"] = thesis.what_would_change_my_mind

@@ -192,6 +192,9 @@ function DecisionEntry({ entry }: { entry: ConvictionLogEntry }) {
   const meta = entry.metadata_json ?? {};
   const action = typeof meta.action === "string" ? meta.action : null;
   const notes = typeof meta.notes === "string" && meta.notes ? meta.notes : null;
+  // received_at is only set when the arrival was folded into this card, so the
+  // content is the evidence description rather than a duplicate of the title.
+  const isMergedEvidence = Boolean(entry.received_at);
 
   const outcomeLabel =
     entry.outcome === "broke"
@@ -212,7 +215,7 @@ function DecisionEntry({ entry }: { entry: ConvictionLogEntry }) {
       <div className="flex items-start justify-between gap-3 mb-3">
         <div className="flex items-center gap-2 flex-wrap">
           <span className="font-mono text-[10px] uppercase tracking-[0.15em] text-muted-foreground">
-            Decision
+            {isMergedEvidence ? "Evidence & decision" : "Decision"}
           </span>
           <span className="font-mono text-[10px] text-muted-foreground/40">
             {formatDate(entry.created_at)}
@@ -235,19 +238,38 @@ function DecisionEntry({ entry }: { entry: ConvictionLogEntry }) {
         </span>
       </div>
 
-      <div className="grid md:grid-cols-2 gap-3">
-        {entry.event_title && (
+      {entry.event_title && (
+        <div className="mb-3">
+          <p className="font-sans text-sm text-foreground leading-snug">
+            {entry.event_title}
+          </p>
+          <p className="font-mono text-[10px] text-muted-foreground/60 mt-1">
+            {entry.event_severity && (
+              <span className={`uppercase tracking-[0.12em] ${SEVERITY_COLOR[entry.event_severity] ?? "text-muted-foreground"}`}>
+                {entry.event_severity}
+              </span>
+            )}
+            {entry.received_at && (
+              <span className="ml-2">arrived {formatDate(entry.received_at)}</span>
+            )}
+          </p>
+        </div>
+      )}
+
+      {isMergedEvidence && entry.content && (
+        <p className="font-sans text-[13px] text-foreground/80 leading-relaxed mb-3">
+          {entry.content}
+        </p>
+      )}
+
+      <div className="grid md:grid-cols-2 gap-3 empty:hidden">
+        {entry.bet_text && (
           <div className="border border-border/40 bg-muted/20 px-3 py-2.5">
             <p className="font-mono text-[9px] uppercase tracking-[0.15em] text-muted-foreground mb-1">
-              Event
-              {entry.event_severity && (
-                <span className={`ml-2 ${SEVERITY_COLOR[entry.event_severity] ?? "text-muted-foreground"}`}>
-                  {entry.event_severity}
-                </span>
-              )}
+              What you were relying on
             </p>
             <p className="font-sans text-[13px] text-foreground/80 leading-snug">
-              {entry.event_title}
+              {entry.bet_text}
             </p>
           </div>
         )}
@@ -270,19 +292,25 @@ function DecisionEntry({ entry }: { entry: ConvictionLogEntry }) {
         </p>
       )}
 
-      {entry.resolution_read && (
+      {entry.resolution_read ? (
         <div className="mt-3 border border-border/40 bg-muted/15 px-3 py-2.5">
           <p className="font-mono text-[9px] uppercase tracking-[0.15em] text-muted-foreground mb-1">
-            Read back
+            What happened next
           </p>
           <p className="font-sans text-[13px] text-foreground/85 leading-relaxed">
             {entry.resolution_read}
           </p>
         </div>
-      )}
+      ) : entry.follow_up_at ? (
+        <p className="mt-3 font-mono text-[10px] text-primary/70">
+          Outcome check {formatDate(entry.follow_up_at)}
+        </p>
+      ) : null}
     </div>
   );
 }
+
+type LogFilter = "all" | "decisions" | "notes";
 
 export function ConvictionLog({
   data,
@@ -290,6 +318,7 @@ export function ConvictionLog({
   investorProfile,
 }: ConvictionLogProps) {
   const [showAll, setShowAll] = useState(false);
+  const [filter, setFilter] = useState<LogFilter>("all");
 
   const copy =
     investorProfile === "thesis_driven"
@@ -313,7 +342,24 @@ export function ConvictionLog({
           };
 
   const entries = data?.entries ?? [];
-  const visibleEntries = showAll ? entries : entries.slice(0, 2);
+  // Only reviewed evidence is a decision — received entries also carry an
+  // event_title now, but they are still waiting for a call.
+  const isDecision = (e: ConvictionLogEntry) =>
+    e.entry_type === "evidence_reviewed" && e.event_title != null;
+  const decisionCount = entries.filter(isDecision).length;
+  const noteCount = entries.filter((e) => e.entry_type === "manual_note").length;
+  const filteredEntries =
+    filter === "decisions"
+      ? entries.filter(isDecision)
+      : filter === "notes"
+        ? entries.filter((e) => e.entry_type === "manual_note")
+        : entries;
+  const visibleEntries = showAll ? filteredEntries : filteredEntries.slice(0, 2);
+  const filterChips: { id: LogFilter; label: string; count: number }[] = [
+    { id: "all", label: "All", count: entries.length },
+    { id: "decisions", label: "Decisions", count: decisionCount },
+    { id: "notes", label: "Notes", count: noteCount },
+  ];
 
   return (
     <div className="space-y-5">
@@ -368,20 +414,57 @@ export function ConvictionLog({
         </div>
       ) : data && data.entries.length > 0 ? (
         <div className="space-y-3">
-          {visibleEntries.map((entry) =>
-            entry.event_title != null ? (
-              <DecisionEntry key={entry.id} entry={entry} />
-            ) : (
-              <SimpleEntry key={entry.id} entry={entry} />
-            ),
+          <div className="flex flex-wrap items-center gap-2">
+            {filterChips.map((chip) => (
+              <button
+                key={chip.id}
+                onClick={() => {
+                  setFilter(chip.id);
+                  setShowAll(false);
+                }}
+                className={`border px-3 py-1.5 font-mono text-[10px] uppercase tracking-[0.14em] transition-colors ${
+                  filter === chip.id
+                    ? "border-primary/40 bg-primary/5 text-primary"
+                    : "border-border/60 text-muted-foreground hover:text-foreground"
+                }`}
+              >
+                {chip.label}
+                <span className="ml-1.5 tabular-nums opacity-60">{chip.count}</span>
+              </button>
+            ))}
+          </div>
+          {filter === "decisions" && (
+            <p className="font-sans text-xs leading-relaxed text-muted-foreground">
+              What you decided, and what happened next. A good decision can still lose
+              money; a bad one can still get lucky.
+            </p>
           )}
-          {entries.length > 2 && (
-            <button
-              onClick={() => setShowAll((current) => !current)}
-              className="w-full border border-border/60 bg-background/60 px-4 py-3 font-mono text-[10px] uppercase tracking-[0.16em] text-primary transition-colors hover:border-primary/35"
-            >
-              {showAll ? "Show less" : `See all ${entries.length} history items`}
-            </button>
+          {filteredEntries.length === 0 ? (
+            <div className="product-panel p-5 sm:p-6">
+              <p className="font-sans text-sm text-muted-foreground">
+                {filter === "decisions"
+                  ? "No decisions recorded yet. Your first call will appear here after you review a change."
+                  : "No notes yet. Use + Note to record what you're thinking."}
+              </p>
+            </div>
+          ) : (
+            <>
+              {visibleEntries.map((entry) =>
+                isDecision(entry) ? (
+                  <DecisionEntry key={entry.id} entry={entry} />
+                ) : (
+                  <SimpleEntry key={entry.id} entry={entry} />
+                ),
+              )}
+              {filteredEntries.length > 2 && (
+                <button
+                  onClick={() => setShowAll((current) => !current)}
+                  className="w-full border border-border/60 bg-background/60 px-4 py-3 font-mono text-[10px] uppercase tracking-[0.16em] text-primary transition-colors hover:border-primary/35"
+                >
+                  {showAll ? "Show less" : `See all ${filteredEntries.length} history items`}
+                </button>
+              )}
+            </>
           )}
         </div>
       ) : (

@@ -739,6 +739,9 @@ async def persist_classified_candidates(
         stored_summary = candidate_summary_for_storage(candidate)
 
         event = MonitoringEvent(
+            # Explicit id so the conviction-log entry below can reference the
+            # event before the flush assigns defaults.
+            id=uuid.uuid4(),
             holding_id=holding.id,
             thesis_id=thesis.id,
             event_type=candidate["event_type"],
@@ -785,7 +788,11 @@ async def persist_classified_candidates(
             user_id=thesis.user_id,
             entry_type=EVIDENCE_RECEIVED,
             content=evidence_summary or stored_summary[:300],
-            metadata={"event_type": candidate["event_type"], "severity": severity},
+            metadata={
+                "event_type": candidate["event_type"],
+                "severity": severity,
+                "event_id": str(event.id),
+            },
             claim_id=uuid.UUID(evidence_claim_id) if evidence_claim_id else None,
             signal_id=uuid.UUID(evidence_signal_id) if evidence_signal_id else None,
         )

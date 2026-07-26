@@ -263,6 +263,10 @@ export interface ConvictionLogEntry {
   what_would_change_my_mind: string | null;
   outcome: "broke" | "held" | null;
   resolution_read: string | null;
+  received_at: string | null;
+  bucket: string | null; // held | exited | dismissed (decision mirror grouping)
+  bet_text: string | null;
+  follow_up_at: string | null;
 }
 
 export interface ConvictionLogResponse {

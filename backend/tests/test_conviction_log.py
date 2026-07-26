@@ -324,6 +324,130 @@ async def test_get_conviction_log(client, db, test_user, auth_headers):
     assert MANUAL_NOTE in entry_types
 
 
+async def _create_event(db, holding, thesis, title="AAPL: Services margin under pressure"):
+    event = MonitoringEvent(
+        id=uuid.uuid4(),
+        holding_id=holding.id,
+        thesis_id=thesis.id,
+        event_type="news_keyword_match",
+        severity="warning",
+        title=title,
+        summary="Report says Services margin fell for a second quarter.",
+    )
+    db.add(event)
+    await db.flush()
+    return event
+
+
+@pytest.mark.asyncio
+async def test_get_conviction_log_merges_received_and_reviewed(client, db, test_user, auth_headers):
+    from app.models.decision_snapshot import DecisionSnapshot
+    from app.services.conviction_log import EVIDENCE_RECEIVED
+
+    holding = await _create_holding(db, test_user)
+    thesis = await _create_thesis(db, test_user, holding)
+    event = await _create_event(db, holding, thesis)
+
+    append_log_entry(
+        db,
+        thesis_id=thesis.id,
+        holding_id=holding.id,
+        user_id=test_user.id,
+        entry_type=EVIDENCE_RECEIVED,
+        content="Services margin fell — this tests your margin assumption.",
+        metadata={"event_type": "news_keyword_match", "severity": "warning", "event_id": str(event.id)},
+    )
+    append_log_entry(
+        db,
+        thesis_id=thesis.id,
+        holding_id=holding.id,
+        user_id=test_user.id,
+        entry_type=EVIDENCE_REVIEWED,
+        content="reaffirmed: Services margin fell",
+        metadata={"action": "reaffirmed", "notes": "One quarter is noise.", "event_id": str(event.id)},
+    )
+    snapshot = DecisionSnapshot(
+        user_id=test_user.id,
+        thesis_id=thesis.id,
+        holding_id=holding.id,
+        monitoring_event_id=event.id,
+        verdict="reaffirmed",
+        bucket="held",
+        bet_text="Services margin recovers next quarter.",
+    )
+    db.add(snapshot)
+    await db.commit()
+
+    response = await client.get(
+        f"/api/portfolio/holdings/{holding.id}/conviction-log",
+        headers=auth_headers,
+    )
+    assert response.status_code == 200
+    data = response.json()
+
+    evidence_entries = [
+        e for e in data["entries"] if e["entry_type"] in (EVIDENCE_RECEIVED, EVIDENCE_REVIEWED)
+    ]
+    # received + reviewed collapse into one card for the same event
+    assert len(evidence_entries) == 1
+    merged = evidence_entries[0]
+    assert merged["entry_type"] == EVIDENCE_REVIEWED
+    assert merged["event_title"] == event.title
+    assert merged["event_severity"] == "warning"
+    # the card body is the evidence description, not "action: summary"
+    assert merged["content"] == "Services margin fell — this tests your margin assumption."
+    assert merged["received_at"] is not None
+    assert merged["metadata_json"]["action"] == "reaffirmed"
+    assert merged["bucket"] == "held"
+    assert merged["bet_text"] == "Services margin recovers next quarter."
+    # review_count still counts the review itself
+    assert data["review_count"] == 1
+
+
+@pytest.mark.asyncio
+async def test_get_conviction_log_keeps_unreviewed_and_legacy_evidence(client, db, test_user, auth_headers):
+    from app.services.conviction_log import EVIDENCE_RECEIVED
+
+    holding = await _create_holding(db, test_user)
+    thesis = await _create_thesis(db, test_user, holding)
+    event = await _create_event(db, holding, thesis, title="AAPL: iPhone demand datapoint")
+
+    # Unreviewed evidence with an event link — stays, enriched with the title.
+    append_log_entry(
+        db,
+        thesis_id=thesis.id,
+        holding_id=holding.id,
+        user_id=test_user.id,
+        entry_type=EVIDENCE_RECEIVED,
+        content="Channel checks point to stable iPhone demand.",
+        metadata={"event_type": "news_keyword_match", "severity": "info", "event_id": str(event.id)},
+    )
+    # Legacy evidence without an event id — passes through untouched.
+    append_log_entry(
+        db,
+        thesis_id=thesis.id,
+        holding_id=holding.id,
+        user_id=test_user.id,
+        entry_type=EVIDENCE_RECEIVED,
+        content="Old-style evidence entry.",
+        metadata={"event_type": "price_move", "severity": "info"},
+    )
+    await db.commit()
+
+    response = await client.get(
+        f"/api/portfolio/holdings/{holding.id}/conviction-log",
+        headers=auth_headers,
+    )
+    assert response.status_code == 200
+    data = response.json()
+
+    received = [e for e in data["entries"] if e["entry_type"] == EVIDENCE_RECEIVED]
+    assert len(received) == 2
+    by_content = {e["content"]: e for e in received}
+    assert by_content["Channel checks point to stable iPhone demand."]["event_title"] == event.title
+    assert by_content["Old-style evidence entry."]["event_title"] is None
+
+
 @pytest.mark.asyncio
 async def test_get_conviction_log_not_found_for_other_user(client, db, test_user, auth_headers):
     other_user = await _create_user(db, email="other@example.com")

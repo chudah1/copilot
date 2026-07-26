@@ -20,7 +20,6 @@ import { HistoricalAuditCard } from "@/components/thesis/historical-audit-card";
 import { ThesisEditor } from "@/components/thesis/thesis-editor";
 import { InvalidateDialog } from "./invalidate-dialog";
 import { MonitoringTab } from "./monitoring-tab";
-import { PositionDecisions } from "./position-decisions";
 import { PositionHeader } from "./position-header";
 import { PositionNoteDialog } from "./position-note-dialog";
 import { ThesisHealthCheck } from "@/components/thesis/thesis-health-check";
@@ -79,12 +78,19 @@ function PositionDetailInner() {
   const router = useRouter();
   const requestedTab = searchParams.get("tab");
   const [activeTab, setActiveTab] = useState<TabId>(
-    requestedTab === "monitoring" || requestedTab === "decisions" ? requestedTab : "thesis",
+    requestedTab === "monitoring" ? "monitoring" : "thesis",
+  );
+  const [thesisSubTab, setThesisSubTab] = useState<ThesisSubTab>(
+    requestedTab === "decisions" ? "log" : "thesis",
   );
   useEffect(() => {
-    if (requestedTab === "monitoring" || requestedTab === "decisions") {
+    if (requestedTab === "monitoring") {
       // eslint-disable-next-line react-hooks/set-state-in-effect -- navigation can change the requested tab without remounting this route
       setActiveTab(requestedTab);
+    } else if (requestedTab === "decisions") {
+      // The standalone Decisions tab folded into History — honour old links.
+      setActiveTab("thesis");
+      setThesisSubTab("log");
     }
   }, [requestedTab]);
   const [holdings, setHoldings] = useState<Holding[]>([]);
@@ -116,7 +122,6 @@ function PositionDetailInner() {
   const [hasPromptedBlindSpotEditor, setHasPromptedBlindSpotEditor] = useState(false);
   const [deleteConfirming, setDeleteConfirming] = useState(false);
   const [deleteLoading, setDeleteLoading] = useState(false);
-  const [thesisSubTab, setThesisSubTab] = useState<ThesisSubTab>("thesis");
   const [headerCollapsed, setHeaderCollapsed] = useState(false);
   const [allGaps, setAllGaps] = useState<MonitoringGap[]>([]);
   const [historicalAudit, setHistoricalAudit] = useState<HistoricalAuditResponse | null>(null);
@@ -719,7 +724,6 @@ function PositionDetailInner() {
   const monitoringPreviewItems = getMonitoringPreviewItems(decompositionEnvelope, watchHints);
   const earningsWatchList = watchHints.map((h) => describeWatchHint(h)).filter((h): h is string => Boolean(h)).slice(0, 3);
   const unreviewedEvents = events.filter((e) => !e.review_action).length;
-  const reviewedEventsCount = events.filter((e) => Boolean(e.review_action)).length;
   const decisionPrompt = getDecisionPrompt(
     activeThesis,
     events,
@@ -745,7 +749,6 @@ function PositionDetailInner() {
   const tabs: { id: TabId; label: string; badge?: number | string }[] = [
     { id: "thesis", label: "Original case" },
     { id: "monitoring", label: "What changed", badge: unreviewedEvents > 0 ? unreviewedEvents : undefined },
-    { id: "decisions", label: "Decisions" },
   ];
 
   const lastReviewedEvent = events.filter((e) => e.review_action).sort((a, b) =>
@@ -1425,11 +1428,6 @@ function PositionDetailInner() {
                   onWriteThesis={() => { setEditing(true); setActiveTab("thesis"); }}
                 />
               </div>
-            )}
-
-            {/* ─── DECISIONS TAB ───────────────────────────────────────── */}
-            {activeTab === "decisions" && holding && (
-              <PositionDecisions holdingId={holding.id} reloadKey={reviewedEventsCount} />
             )}
 
           </motion.div>

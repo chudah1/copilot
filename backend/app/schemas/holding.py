@@ -185,6 +185,11 @@ class ConvictionLogEntryResponse(BaseModel):
     what_would_change_my_mind: str | None = None
     outcome: str | None = None  # "broke" | "held" | None (open)
     resolution_read: str | None = None  # prose from resolved DecisionSnapshot
+    # merged evidence entries: one card per event (arrived -> decided -> read)
+    received_at: datetime | None = None  # when the evidence arrived, if merged
+    bucket: str | None = None  # held | exited | dismissed (decision mirror)
+    bet_text: str | None = None  # what the user was relying on at decision time
+    follow_up_at: datetime | None = None  # when the outcome gets read back
     model_config = {"from_attributes": True}
 
 
