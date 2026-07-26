@@ -30,7 +30,7 @@ export function StressTestSearch() {
           color: mk.accent,
         }}
       >
-        Check a stock before you buy
+        Free stress test — before you buy
       </p>
       <p
         style={{

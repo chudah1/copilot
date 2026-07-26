@@ -251,7 +251,7 @@ export default function LandingPage() {
                   color: mk.ink,
                 }}
               >
-                Your broker records the trade. penKeep remembers the decision.
+                Be sure of what you&apos;re buying. Stay sure while you hold it.
               </h1>
 
               <p
@@ -265,8 +265,8 @@ export default function LandingPage() {
                   margin: "0 0 clamp(28px, 4vw, 40px)",
                 }}
               >
-                Write down why you bought. If something important changes, penKeep brings those
-                notes back so you can decide what to do.
+                Stress test a stock before you buy. Write down why you bought. penKeep keeps
+                checking that your reason still holds — and tells you when it&apos;s tested.
               </p>
 
               <p
@@ -278,8 +278,8 @@ export default function LandingPage() {
                   margin: "0 0 clamp(28px, 4vw, 40px)",
                 }}
               >
-                Your original notes, the relevant filings and news, and the decisions you made
-                afterward, kept together in one place.
+                Your broker records the trade. penKeep remembers the decision — your notes, the
+                relevant filings and news, and what you did next, kept together in one place.
               </p>
 
               <div style={{ display: "flex", alignItems: "center", gap: 14, flexWrap: "wrap" }}>
@@ -358,6 +358,116 @@ export default function LandingPage() {
                 <NVDACard />
               </div>
             </div>
+          </div>
+        </div>
+      </section>
+
+      {/* ─── TWO PROMISES ────────────────────────────────────────── */}
+      <section
+        style={{
+          background: mk.paperHi,
+          padding: `clamp(40px, 5vw, 64px) ${hPad}`,
+          borderTop: `1px solid ${mk.rule}`,
+        }}
+      >
+        <div
+          style={{ maxWidth: 1180, margin: "0 auto", gap: "clamp(20px, 3vw, 36px)" }}
+          className="grid grid-cols-1 md:grid-cols-2"
+        >
+          <div
+            style={{
+              border: `1px solid ${mk.rule}`,
+              background: mk.paper,
+              padding: "clamp(24px, 3vw, 34px)",
+            }}
+          >
+            <Kicker>Before you buy</Kicker>
+            <h2
+              style={{
+                fontFamily: mk.display,
+                fontWeight: 500,
+                fontSize: "clamp(24px, 2.6vw, 32px)",
+                lineHeight: 1.15,
+                letterSpacing: "-0.015em",
+                margin: "0 0 14px",
+                color: mk.ink,
+              }}
+            >
+              Be sure of what you&apos;re buying.
+            </h2>
+            <p
+              style={{
+                fontFamily: mk.sans,
+                fontSize: 15,
+                lineHeight: 1.6,
+                color: mk.inkSoft,
+                margin: "0 0 18px",
+              }}
+            >
+              Run one free stress test. See the strongest case against owning the stock, the
+              numbers behind it, and what would have to stay true for the purchase to make sense.
+            </p>
+            <Link
+              href="/research"
+              style={{
+                fontFamily: mk.mono,
+                fontSize: 11,
+                letterSpacing: "0.14em",
+                textTransform: "uppercase",
+                color: mk.accent,
+                textDecoration: "none",
+              }}
+            >
+              Run a free stress test →
+            </Link>
+          </div>
+
+          <div
+            style={{
+              border: `1px solid ${mk.rule}`,
+              background: mk.paper,
+              padding: "clamp(24px, 3vw, 34px)",
+            }}
+          >
+            <Kicker>While you hold</Kicker>
+            <h2
+              style={{
+                fontFamily: mk.display,
+                fontWeight: 500,
+                fontSize: "clamp(24px, 2.6vw, 32px)",
+                lineHeight: 1.15,
+                letterSpacing: "-0.015em",
+                margin: "0 0 14px",
+                color: mk.ink,
+              }}
+            >
+              Know your reason still holds.
+            </h2>
+            <p
+              style={{
+                fontFamily: mk.sans,
+                fontSize: 15,
+                lineHeight: 1.6,
+                color: mk.inkSoft,
+                margin: "0 0 18px",
+              }}
+            >
+              Write down why you bought. penKeep checks filings, news, and earnings against your
+              reason, and asks you to look only when something actually tests it.
+            </p>
+            <Link
+              href="/register"
+              style={{
+                fontFamily: mk.mono,
+                fontSize: 11,
+                letterSpacing: "0.14em",
+                textTransform: "uppercase",
+                color: mk.accent,
+                textDecoration: "none",
+              }}
+            >
+              Start your record →
+            </Link>
           </div>
         </div>
       </section>
