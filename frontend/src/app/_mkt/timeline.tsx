@@ -4,20 +4,20 @@ import { useState, useEffect } from "react";
 import { mk } from "./tokens";
 
 const STEPS = [
-  { date: "Mar 12", label: "Bought TSLA",     kind: "thesis", text: "EV growth + robotaxi optionality nobody is pricing." },
-  { date: "Apr 22", label: "Q1 deliveries",   kind: "up",     text: "Q1 deliveries beat consensus by 3%." },
-  { date: "May 14", label: "Cybertruck ramp", kind: "flat",   text: "Cybertruck production hits modest scale." },
-  { date: "Jul 02", label: "Q2 deliveries",   kind: "down",   text: "Q2 deliveries -4.8% YoY — a small wobble." },
-  { date: "Aug 10", label: "Margin guide",    kind: "down",   text: "Auto gross margin compresses to 14.6%." },
-  { date: "Oct 10", label: "Robotaxi event",  kind: "alert",  text: '"Underwhelming" — 7 of 9 analysts.' },
-  { date: "Oct 18", label: "Q3 deliveries",   kind: "alert",  text: "Q3 deliveries -8.4% YoY." },
-  { date: "Oct 23", label: "penKeep alert",   kind: "mail",   text: "Your reason for owning TSLA may have moved." },
+  { date: "Mar 12", label: "Bought TSLA",     kind: "thesis", text: "I expect vehicle sales to grow and robotaxis to become a meaningful source of revenue." },
+  { date: "Apr 22", label: "Q1 deliveries",   kind: "up",     text: "Tesla delivered 3% more vehicles than analysts expected." },
+  { date: "May 14", label: "Cybertruck production", kind: "flat", text: "Cybertruck production reached a modest level." },
+  { date: "Jul 02", label: "Q2 deliveries",   kind: "down",   text: "Tesla delivered 4.8% fewer vehicles than a year earlier." },
+  { date: "Aug 10", label: "Vehicle margin",  kind: "down",   text: "Profit margin on vehicle sales fell to 14.6%." },
+  { date: "Oct 10", label: "Robotaxi event",  kind: "alert",  text: "Seven of nine analysts called the robotaxi event underwhelming." },
+  { date: "Oct 18", label: "Q3 deliveries",   kind: "alert",  text: "Tesla delivered 8.4% fewer vehicles than a year earlier." },
+  { date: "Oct 23", label: "penKeep alert",   kind: "mail",   text: "Vehicle demand is weakening. Review this position." },
 ] as const;
 
 function statusForStep(s: number) {
-  if (s < 3) return { label: "✓ on thesis",      bg: mk.greenSoft,  fg: mk.green  };
-  if (s < 5) return { label: "· watching",        bg: mk.cardSoft,   fg: mk.pencil };
-  return         { label: "! reason changed",  bg: mk.accentSoft, fg: mk.accent };
+  if (s < 3) return { label: "✓ reason holds", bg: mk.greenSoft, fg: mk.green };
+  if (s < 5) return { label: "· keep watching", bg: mk.cardSoft, fg: mk.pencil };
+  return { label: "! review needed", bg: mk.accentSoft, fg: mk.accent };
 }
 
 export function WatchThesisChange() {
@@ -119,7 +119,7 @@ export function WatchThesisChange() {
           What you wrote · Mar 12
         </div>
         <div style={{ fontFamily: mk.sans, fontSize: 17, lineHeight: 1.4, color: mk.ink, fontStyle: "italic" }}>
-          &ldquo;EV growth + robotaxi optionality nobody is pricing.&rdquo;
+          &ldquo;I expect vehicle sales to grow and robotaxis to become a meaningful source of revenue.&rdquo;
         </div>
       </div>
 
@@ -268,11 +268,12 @@ export function WatchThesisChange() {
             <span>Oct 23, 14:02</span>
           </div>
           <div style={{ fontFamily: mk.sans, fontSize: "clamp(17px,2vw,21px)", fontWeight: 600, lineHeight: 1.2, letterSpacing: "-0.015em" }}>
-            Your reason for owning <span style={{ color: mk.accent }}>Tesla</span> may have moved.
+            Vehicle demand is weakening. Review <span style={{ color: mk.accent }}>Tesla</span>.
           </div>
           <div style={{ fontSize: 13, color: "#bbb", lineHeight: 1.5 }}>
-            You said you bought for <em>&ldquo;EV growth + robotaxi optionality.&rdquo;</em> Both got dinged this week:
-            Q3 deliveries -8.4%, and the robotaxi event was called &ldquo;underwhelming&rdquo; by most of the analysts you follow.
+            You said vehicle sales needed to grow and robotaxis needed to become a meaningful
+            source of revenue. Deliveries fell 8.4% from a year earlier, and seven of nine analysts
+            called the robotaxi event underwhelming.
           </div>
           <div style={{ display: "flex", gap: 8, marginTop: 4 }}>
             <button
@@ -288,7 +289,7 @@ export function WatchThesisChange() {
                 cursor: "pointer",
               }}
             >
-              Open thesis →
+              Review position →
             </button>
             <button
               style={{
@@ -302,7 +303,7 @@ export function WatchThesisChange() {
                 cursor: "pointer",
               }}
             >
-              I still believe
+              Reason still holds
             </button>
           </div>
         </div>

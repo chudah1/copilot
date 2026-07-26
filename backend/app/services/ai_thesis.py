@@ -269,6 +269,8 @@ THESIS_ASSIST_FROM_BLANK_PROMPT = """Today's date: {iso_date}. Do not reference 
 
 Draft a first-pass reason for holding a specific stock, in the investor's own first-person voice.
 The investor hasn't written anything yet — generate a starting point they can edit and make their own.
+Lead with the conclusion in each field. Name the exact company, metric, customer, competitor, or event.
+Name the exact business condition instead of writing "this suggests", "supports the thesis", "weakens the case", "the story", or "a pillar".
 
 Position:
 - Ticker: {ticker}
@@ -304,7 +306,7 @@ Output valid JSON with this exact structure:
                 "threshold": 10.0,
                 "metric": "optional_metric_name",
                 "operator": "optional_operator",
-                "rationale": "Why this would matter to the thesis"
+                "rationale": "The exact business consequence if this limit is crossed"
             }}
         ],
         "proxy_signals": [],
@@ -323,6 +325,8 @@ Output valid JSON with this exact structure:
 THESIS_PROMPT = """Today's date: {iso_date}. Do not reference any specific government administration; use neutral wording like "U.S. federal policy".
 
 You help a retail investor tighten why they own a position — same meaning, clearer words.
+Lead with the conclusion in each field. Name the exact company, metric, customer, competitor, or event.
+Name the exact business condition instead of writing "this suggests", "supports the thesis", "weakens the case", "the story", or "a pillar".
 
 Given the position, the user's current thesis draft, and any available market data, produce:
 - refined thesis text that preserves the investor's meaning while making it clearer and more monitorable
@@ -357,13 +361,13 @@ Output valid JSON with this exact structure:
                 "threshold": 10.0,
                 "metric": "optional_metric_name",
                 "operator": "optional_operator",
-                "rationale": "Why this would matter to the thesis"
+                "rationale": "The exact business consequence if this limit is crossed"
             }}
         ],
         "proxy_signals": [
             {{
                 "ticker": "RELATED_TICKER",
-                "rationale": "Why this company sits in the causal chain for the thesis",
+                "rationale": "The exact business link between this company and the holding",
                 "signal_hint": "What specifically to look for in this proxy's earnings/news",
                 "allowed_metrics": ["optional_metric_name"]
             }}
@@ -1582,6 +1586,9 @@ Requirements:
 - blind_spots: 2-3 things the thesis doesn't address but should
 - suggested_additions: 2-3 specific "what would change my mind" criteria the investor should add
 - Be specific and blunt where the thesis is thin — the goal is a harder, more falsifiable case
+- Lead with the conclusion. Name the exact company, metric, customer, competitor, or event in every point.
+- Name the exact business condition instead of writing "this suggests", "supports the thesis", "weakens the case", "the story", or "a pillar".
+- Use short sentences and familiar words. If a fact is uncertain, name the source of the uncertainty.
 - Output ONLY valid JSON, no markdown fences"""
 
 
@@ -1599,14 +1606,17 @@ def _fallback_counter_thesis(
         if any(_contains_keyword(lowered, kw) for kw in keywords)
     ] or ["general"]
 
+    expected_driver = (
+        ", ".join(labels) if labels != ["general"] else "future growth"
+    )
     bear_case = (
-        f"You may be paying up for {ticker} on {', '.join(labels)} — "
-        f"check whether that story is already in the price or running into real headwinds."
+        f"{ticker}'s valuation may already assume strong {expected_driver} results. "
+        "Slower demand or weaker execution would leave little room for error."
     )
 
     key_risks = [
         f"A competitor could take share or pricing power from {ticker}",
-        "A downturn could hit demand harder than the bull case assumes",
+        "A downturn could reduce customer demand",
         "The multiple may already bake in the good outcome",
     ]
     if "growth" in labels:
@@ -1621,7 +1631,7 @@ def _fallback_counter_thesis(
 
     suggested_additions = [
         "Name a valuation level where you would no longer own it",
-        "Name a date or milestone by which the thesis must show up in results",
+        "Name a date or milestone by which the expected growth must appear in results",
     ]
     if not what_would_change_my_mind or len(what_would_change_my_mind.strip()) < 10:
         suggested_additions.append(
@@ -1684,6 +1694,8 @@ async def generate_counter_thesis(
 DRAFT_THESIS_PROMPT = """Today's date: {iso_date}. Do not reference any specific government administration; use neutral wording like "U.S. federal policy".
 
 Draft a first-pass reason for holding a specific stock, written in the investor's own voice.
+Lead with the conclusion in each field. Name the exact company, metric, customer, competitor, or event.
+Name the exact business condition instead of writing "this suggests", "supports the thesis", "weakens the case", "the story", or "a pillar".
 
 Rules:
 - Write in first person: "I own this because...", "I need to see...", "I'd sell if..."
@@ -1750,6 +1762,8 @@ SYNTHESIS_PROMPT = """Today's date: {iso_date}. Do not reference any specific go
 Turn two short answers into a structured reason for holding a stock.
 
 Keep the investor's wording where you can; clean up vagueness, don't corporate-wash it.
+Lead with the conclusion in each field. Name the exact company, metric, customer, competitor, or event.
+Name the exact business condition instead of writing "this suggests", "supports the thesis", "weakens the case", "the story", or "a pillar".
 
 Investor profile:
 - {investor_profile_label}
@@ -1781,7 +1795,7 @@ Output valid JSON with this exact structure:
             {{
                 "kind": "price_move_pct",
                 "threshold": 10.0,
-                "rationale": "Why this would matter to the thesis"
+                "rationale": "The exact business consequence if this limit is crossed"
             }}
         ],
         "proxy_signals": [],
@@ -2083,8 +2097,8 @@ Output valid JSON with this exact structure:
     "blind_spots": ["blind_spot1", "blind_spot2"],
     "what_to_watch": ["signal1", "signal2", "signal3"],
     "candidate_signals": [
-        {{"signal_type": "revenue_growth", "operator": ">=", "threshold_pct": 8, "label": "Revenue growth stays above 8%", "rationale": "The bull case needs sustained top-line growth."}},
-        {{"signal_type": "news_watch", "watch_for": "A credible competitor lands a major design win or a customer announces an in-house alternative", "direction": "threatens", "label": "Competitor or customer defection", "rationale": "The thesis rests on a lead that competition could erode."}}
+        {{"signal_type": "revenue_growth", "operator": ">=", "threshold_pct": 8, "label": "Revenue growth stays above 8%", "rationale": "Revenue must keep growing for the expected return."}},
+        {{"signal_type": "news_watch", "watch_for": "A credible competitor lands a major design win or a customer announces an in-house alternative", "direction": "threatens", "label": "Competitor or customer defection", "rationale": "A major customer loss would reduce revenue and pricing power."}}
     ]
 }}
 
@@ -2093,7 +2107,7 @@ Requirements:
 - key_risks: 3-5 concrete, falsifiable risks — reference actual metrics from the context where possible
 - risk_groups: group the risks into 2-4 clear buckets such as Business risk, Competitive risk, Financial risk, Macro risk, or Management risk
 - blind_spots: 2-3 assumptions the thesis makes or ignores (omit if no thesis provided)
-- what_to_watch: 2-4 prose signals — each must name the metric, the threshold that signals a problem, and when to check it (use actual dates where available). Example: "If revenue growth falls below 8% at next earnings (~2025-07-24), thesis is at risk."
+- what_to_watch: 2-4 prose signals — each must name the metric, the threshold that signals a problem, and when to check it (use actual dates where available). Example: "Review the position if revenue growth falls below 8% at the next earnings report (~2025-07-24)."
 - candidate_signals: 2-4 STRUCTURED, monitorable versions of what_to_watch. signal_type MUST be one of: "price_move", "revenue_growth", "earnings_growth" (NUMERIC), or "news_watch" (QUALITATIVE).
     - Return ALL candidate_signals keys every time: signal_type, operator, threshold_pct, label, rationale, watch_for, direction.
     - Use null for fields that do not apply.
@@ -2101,6 +2115,9 @@ Requirements:
     - For "price_move", set operator to null, threshold_pct to the percent move that warrants a review, and watch_for/direction to null.
     - QUALITATIVE ("news_watch"): for risks no number captures — competitor moves, regulation, management changes, customer loss, legal/safety events. Provide "watch_for" (a specific, recognisable event to look for in news) and "direction" ("threatens" or "supports"). Set operator and threshold_pct to null.
 - Prefer a MIX: at least one numeric watch tied to the financials AND one news_watch for the biggest qualitative risk in the bear case.
+- Lead with the conclusion. Name the exact company, metric, customer, competitor, or event in every point.
+- Name the exact business condition instead of writing "this suggests", "supports the thesis", "weakens the case", "the story", or "a pillar".
+- Use short sentences and familiar words. If a fact is uncertain, name the source of the uncertainty.
 - Output ONLY valid JSON, no markdown fences"""
 
 
@@ -2277,21 +2294,21 @@ def _fallback_stress_test(ticker: str, draft_thesis: str | None) -> "StressTestO
 
     return StressTestOutput(
         bear_case=(
-            f"{ticker} may already have the bull case priced in. "
-            "Verify the valuation against peers before committing capital."
+            f"{ticker}'s valuation may already assume strong growth. "
+            "Compare its valuation with peers before buying."
         ),
         key_risks=[
             "Valuation may leave little margin of safety",
             "Macro headwinds could hit the sector",
-            "Execution risk if growth thesis is unproven",
+            "Management may fail to deliver the expected growth",
         ],
         risk_groups=[
             StressTestRiskGroup(category="Financial risk", items=["Valuation may leave little margin of safety"]),
             StressTestRiskGroup(category="Macro risk", items=["Macro headwinds could hit the sector"]),
-            StressTestRiskGroup(category="Business risk", items=["Execution risk if growth thesis is unproven"]),
+            StressTestRiskGroup(category="Business risk", items=["Management may fail to deliver the expected growth"]),
         ],
         blind_spots=(
-            ["The thesis doesn't specify what would make you sell"]
+            ["You have not specified what would make you sell"]
             if draft_thesis
             else []
         ),
@@ -2304,14 +2321,14 @@ def _fallback_stress_test(ticker: str, draft_thesis: str | None) -> "StressTestO
                 signal_type="revenue_growth",
                 label="Revenue growth stays positive",
                 threshold_pct=0.0,
-                rationale="If revenue growth turns negative, the growth case is breaking.",
+                rationale="Negative revenue growth would remove the expected growth driver.",
                 operator=">=",
             ),
             CandidateSignal(
                 signal_type="price_move",
                 label="Sharp price move (15%+)",
                 threshold_pct=15.0,
-                rationale="A large move warrants re-checking the thesis.",
+                rationale="A 15% move warrants reviewing the position.",
                 operator=None,
             ),
             CandidateSignal(

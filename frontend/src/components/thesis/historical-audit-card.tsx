@@ -1,5 +1,6 @@
 "use client";
 
+import { useState } from "react";
 import type { HistoricalAuditResultItem, HistoricalAuditResponse } from "@/types";
 import { formatDate } from "@/lib/utils";
 import { InfoTip } from "@/components/ui/info-tip";
@@ -83,6 +84,7 @@ interface Props {
 }
 
 export function HistoricalAuditCard({ audit }: Props) {
+  const [showAll, setShowAll] = useState(false);
   if (audit?.status === "failed") {
     return (
       <div className="rounded-lg border border-border/60 bg-muted/30 p-4 mt-4">
@@ -117,6 +119,7 @@ export function HistoricalAuditCard({ audit }: Props) {
   const results = audit.results ?? [];
   const coverageOnly =
     results.length > 0 && results.every((item) => item.event_type === "coverage_gap");
+  const visibleResults = showAll ? results : results.slice(0, 3);
 
   return (
     <div className="rounded-lg border border-border/60 bg-card p-4 mt-4">
@@ -134,13 +137,21 @@ export function HistoricalAuditCard({ audit }: Props) {
           : "Here is how recent evidence relates to the case you just wrote."}
       </p>
       <div>
-        {results.map((item) => (
+        {visibleResults.map((item) => (
           <AuditResultItem
             key={`${item.event_type}-${item.event_date ?? "nodate"}-${item.verdict ?? item.severity}-${item.description.slice(0, 20)}`}
             item={item}
           />
         ))}
       </div>
+      {results.length > 3 && (
+        <button
+          onClick={() => setShowAll((current) => !current)}
+          className="mt-3 font-mono text-[10px] uppercase tracking-[0.15em] text-primary hover:text-primary/75"
+        >
+          {showAll ? "Show less" : `See all ${results.length} evidence items`}
+        </button>
+      )}
     </div>
   );
 }

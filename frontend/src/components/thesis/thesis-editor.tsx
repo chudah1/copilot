@@ -2,6 +2,7 @@
 
 import { useState } from "react";
 import { Button } from "@/components/ui/button";
+import { InfoTip } from "@/components/ui/info-tip";
 import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
@@ -285,7 +286,12 @@ export function ThesisEditor({ thesis, investorProfile, mode = "write", onSave, 
 
           <div className="space-y-5">
             <div className="space-y-2">
-              <Label>{copy.why}</Label>
+              <div className="flex items-center gap-1">
+                <Label>{copy.why}</Label>
+                <InfoTip label={copy.why}>
+                  State the business result or advantage you expect to continue. This becomes the main reason PenKeep checks.
+                </InfoTip>
+              </div>
               <Textarea
                 value={whyOwnIt}
                 onChange={(e) => setWhyOwnIt(e.target.value)}
@@ -297,7 +303,12 @@ export function ThesisEditor({ thesis, investorProfile, mode = "write", onSave, 
 
             <div className="grid gap-5 lg:grid-cols-2">
               <div className="space-y-2">
-                <Label>{copy.must}</Label>
+                <div className="flex items-center gap-1">
+                  <Label>{copy.must}</Label>
+                  <InfoTip label={copy.must}>
+                    Name a condition that must keep happening, such as revenue growth, customer demand, margins or management execution.
+                  </InfoTip>
+                </div>
                 <Textarea
                   value={mustRemainTrue}
                   onChange={(e) => setMustRemainTrue(e.target.value)}
@@ -308,7 +319,12 @@ export function ThesisEditor({ thesis, investorProfile, mode = "write", onSave, 
               </div>
 
               <div className="space-y-2">
-                <Label>{copy.breaks}</Label>
+                <div className="flex items-center gap-1">
+                  <Label>{copy.breaks}</Label>
+                  <InfoTip label={copy.breaks}>
+                    Name a specific result or event that would force you to review the position. PenKeep will not sell automatically.
+                  </InfoTip>
+                </div>
                 <Textarea
                   value={changeMind}
                   onChange={(e) => { setChangeMind(e.target.value); if (e.target.value.trim()) setChangeMindError(""); }}
@@ -324,7 +340,12 @@ export function ThesisEditor({ thesis, investorProfile, mode = "write", onSave, 
 
             <div className="grid gap-5 lg:grid-cols-[minmax(0,12rem)_minmax(0,1fr)]">
               <div className="space-y-2">
-                <Label>Confidence</Label>
+                <div className="flex items-center gap-1">
+                  <Label>Confidence</Label>
+                  <InfoTip label="Confidence">
+                    Your own confidence in the reason you wrote. This is separate from PenKeep&apos;s health score and model confidence.
+                  </InfoTip>
+                </div>
                 <Select value={confidence} onValueChange={(v) => v && setConfidence(v as "high" | "medium" | "low")}>
                   <SelectTrigger className="w-full bg-background/85">
                     <SelectValue />
@@ -338,13 +359,18 @@ export function ThesisEditor({ thesis, investorProfile, mode = "write", onSave, 
               </div>
 
               <div className="space-y-2">
-                <Label>AI Assist</Label>
+                <div className="flex items-center gap-1">
+                  <Label>Writing help</Label>
+                  <InfoTip label="Writing help">
+                    PenKeep can make the wording more specific and suggest checks. Nothing changes until you review the text and save it.
+                  </InfoTip>
+                </div>
                 <div className="flex flex-wrap items-center gap-3">
                   <Button type="button" variant="outline" onClick={handleAssist} disabled={assisting}>
                     {assisting ? "Thinking..." : whyOwnIt.trim().length === 0 ? "Draft with AI" : "Sharpen with AI"}
                   </Button>
                   <p className="font-sans text-xs leading-relaxed text-muted-foreground">
-                    Tighten wording and suggest monitorable cues.
+                    Tighten the wording and suggest checks based on public data.
                   </p>
                 </div>
                 {assistError && <p className="text-sm text-red-500">{assistError}</p>}
@@ -414,9 +440,14 @@ export function ThesisEditor({ thesis, investorProfile, mode = "write", onSave, 
             {aiSummary ? (
               <div className="space-y-4 border-t border-border/50 pt-5">
                 <div className="space-y-2">
-                  <p className="font-mono text-[10px] uppercase tracking-[0.2em] text-muted-foreground">
-                    System read
-                  </p>
+                  <div className="flex items-center gap-1">
+                    <p className="font-mono text-[10px] uppercase tracking-[0.2em] text-muted-foreground">
+                      PenKeep&apos;s summary
+                    </p>
+                    <InfoTip label="PenKeep's summary">
+                      A plain summary generated from the three fields you wrote. Check it before saving because this is what monitoring will use.
+                    </InfoTip>
+                  </div>
                   <p className="font-sans text-sm leading-relaxed text-foreground/80">
                     {aiSummary}
                   </p>
@@ -425,8 +456,13 @@ export function ThesisEditor({ thesis, investorProfile, mode = "write", onSave, 
                 {(monitorability || labels.length > 0) && (
                   <div className="flex flex-wrap gap-2">
                     {monitorability && (
-                      <span className={`font-mono text-[10px] uppercase tracking-[0.12em] ${monitorabilityTone}`}>
-                        {monitorability} monitorability
+                      <span className="inline-flex items-center gap-1">
+                        <span className={`font-mono text-[10px] uppercase tracking-[0.12em] ${monitorabilityTone}`}>
+                          {monitorability} monitorability
+                        </span>
+                        <InfoTip label="Monitorability">
+                          How easily PenKeep can check this reason using public evidence. Specific metrics and events are easier to monitor than broad opinions.
+                        </InfoTip>
                       </span>
                     )}
                     {labels.map((label) => (
@@ -455,7 +491,7 @@ export function ThesisEditor({ thesis, investorProfile, mode = "write", onSave, 
                 {ambiguityNote && (
                   <div className="border border-amber-500/20 bg-amber-500/5 px-3 py-3">
                     <p className="font-mono text-[10px] uppercase tracking-[0.18em] text-amber-700">
-                      Ambiguity to clean up
+                      Needs clearer wording
                     </p>
                     <p className="mt-2 font-sans text-sm leading-relaxed text-foreground/80">
                       {ambiguityNote}

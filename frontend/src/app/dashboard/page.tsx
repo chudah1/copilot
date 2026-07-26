@@ -423,24 +423,24 @@ function DashboardInner() {
           ? `${caseQualityStats.missing} ${caseQualityStats.missing === 1 ? "position has" : "positions have"} no reason yet.`
           : `${caseQualityStats.missing} ${caseQualityStats.missing === 1 ? "position has" : "positions have"} no thesis yet.`
       : caseQualityStats.weak > 0
-        ? `${caseQualityStats.weak} ${caseQualityStats.weak === 1 ? "thesis is" : "theses are"} still too fuzzy.`
+        ? `${caseQualityStats.weak} ${caseQualityStats.weak === 1 ? "position needs" : "positions need"} a clearer written reason.`
         : caseQualityStats.review_overdue > 0
-          ? `${caseQualityStats.review_overdue} ${caseQualityStats.review_overdue === 1 ? "thesis is" : "theses are"} overdue for a fresh read.`
+          ? `${caseQualityStats.review_overdue} ${caseQualityStats.review_overdue === 1 ? "written reason is" : "written reasons are"} due for review.`
           : caseQualityStats.workable > 0
-            ? `${caseQualityStats.workable} ${caseQualityStats.workable === 1 ? "thesis is" : "theses are"} usable but not sharp yet.`
-            : "Your written thinking looks sharp across the portfolio.";
+            ? `${caseQualityStats.workable} ${caseQualityStats.workable === 1 ? "position has" : "positions have"} a reason that could be more specific.`
+            : "Every position has a clear, current written reason.";
   const caseQualityDetail =
     caseQualityStats.missing > 0
       ? investorProfile === "hearsay_driven"
         ? "Write the reason, then monitoring can judge it."
         : "Write the thesis, then monitoring can judge it."
       : caseQualityStats.weak > 0
-        ? "These theses are still too fuzzy to trust under pressure."
+        ? "Add the business condition or result that would make you reconsider."
       : caseQualityStats.review_overdue > 0
-        ? "Nothing changed, but old reasoning is harder to rely on when the next decision arrives."
+        ? "Nothing has necessarily changed. Confirm that the original reason still applies."
         : caseQualityStats.workable > 0
-          ? "Usable, but still not crisp enough to trust fully under pressure."
-          : "Most positions now have explicit, current thinking behind them."
+          ? "The reason can be monitored, but one or more conditions are still broad."
+          : "The reasons and conditions are ready to be checked against new evidence."
   const caseQualityCta = weakestHolding
     ? {
         href: `/dashboard/positions/${weakestHolding.ticker}`,
@@ -567,7 +567,7 @@ function DashboardInner() {
         initial={{ opacity: 0 }}
         animate={{ opacity: 1 }}
         transition={{ duration: 0.35 }}
-        className="relative border-b border-border/80 px-4 py-5 sm:px-8 sm:py-7"
+        className="relative order-2 border-b border-border/80 px-4 py-5 sm:px-8 sm:py-7"
       >
         <div
           aria-hidden
@@ -575,7 +575,7 @@ function DashboardInner() {
         />
         <div className="relative">
           <section id="dashboard-overview" className="product-panel product-panel-muted overflow-hidden p-5 sm:p-6 scroll-mt-24">
-            <div className="grid gap-5 lg:grid-cols-[minmax(0,1.55fr)_minmax(17rem,23rem)]">
+            <div className="space-y-5">
               <div className="space-y-4">
                 <div>
                   <div className="flex items-center gap-1.5">
@@ -617,7 +617,7 @@ function DashboardInner() {
                 )}
               </div>
 
-              <aside className="border border-border/80 bg-background/70 p-4 sm:p-5">
+              <aside className="hidden">
                 <div className="flex items-start justify-between gap-3">
                   <div>
                     <p className="font-mono text-[10px] uppercase tracking-[0.16em] text-muted-foreground">
@@ -703,7 +703,7 @@ function DashboardInner() {
       </motion.div>
 
       {/* ── Banners ─────────────────────────────────────────────────── */}
-      <div className="px-4 pt-3 sm:px-8 space-y-2 empty:hidden">
+      <div className="order-3 px-4 pt-3 sm:px-8 space-y-2 empty:hidden">
         {/* Only one contextual banner at a time — recent review takes priority over activation */}
         {showActivationBanner && !showRecentReviewBanner && (
           <div className="flex items-center justify-between gap-4 border border-emerald-500/20 bg-emerald-500/8 px-5 py-3">
@@ -828,7 +828,7 @@ function DashboardInner() {
             initial={{ opacity: 0, y: -4 }}
             animate={{ opacity: 1, y: 0 }}
             transition={{ duration: 0.3, delay: 0.1 }}
-            className="px-4 sm:px-8 pt-5 scroll-mt-24"
+            className="order-4 px-4 sm:px-8 pt-5 scroll-mt-24"
           >
             <div className="product-panel p-4 sm:p-5">
               <div className="mb-4 flex items-center justify-between gap-3">
@@ -872,7 +872,8 @@ function DashboardInner() {
       </AnimatePresence>
 
       {/* ── Positions grid ───────────────────────────────────────────── */}
-      <div id="positions" className="px-4 sm:px-8 pt-6 pb-8 flex-1 scroll-mt-24">
+      <div id="positions" className="order-1 px-4 sm:px-8 pt-6 pb-8 flex-1 scroll-mt-24">
+        <div className="grid gap-5 lg:grid-cols-[minmax(0,1fr)_20rem]">
         <div className="product-panel p-4 sm:p-5">
           <div className="mb-4 flex items-center justify-between gap-4">
             <div>
@@ -911,7 +912,7 @@ function DashboardInner() {
             )}
           </AnimatePresence>
 
-          <div className="grid grid-cols-1 gap-3 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 2xl:grid-cols-5">
+          <div className="grid grid-cols-1 gap-3 sm:grid-cols-2 xl:grid-cols-3">
             {sortedHoldings.map((h, i) => (
               <PositionCard
                 key={h.id}
@@ -928,12 +929,90 @@ function DashboardInner() {
             ))}
           </div>
         </div>
+
+        <aside className="product-panel self-start p-4 sm:p-5 lg:sticky lg:top-20">
+          <p className="font-mono text-[10px] uppercase tracking-[0.16em] text-muted-foreground">
+            Portfolio snapshot
+          </p>
+          <div className="mt-3 flex flex-wrap items-baseline gap-2">
+            <span className="font-display text-[1.9rem] italic leading-none tracking-tight text-foreground">
+              {formatCurrency(displayTotalValue, summary?.portfolio_currency ?? "GBP")}
+            </span>
+            {(livePnlPct != null ? livePnlPct : summary?.total_pnl_pct) != null && (
+              <span className={`font-mono text-[10px] tabular-nums ${
+                (livePnl ?? summary?.total_pnl ?? 0) >= 0 ? "text-emerald-700" : "text-red-600"
+              }`}>
+                {formatPercent(livePnlPct ?? summary?.total_pnl_pct ?? 0)}
+              </span>
+            )}
+          </div>
+          <p className="mt-2 font-sans text-xs text-muted-foreground">
+            {holdings.length} position{holdings.length === 1 ? "" : "s"}
+            {hasLivePrices ? " · prices checked recently" : ""}
+          </p>
+          {summary?.fx_unavailable && (
+            <p className="mt-2 font-sans text-xs leading-relaxed text-amber-700">
+              {summary.preferred_currency} conversion is temporarily unavailable. Values are shown in GBP.
+            </p>
+          )}
+
+          <div className="mt-5 space-y-3 border-t border-border/60 pt-4">
+            <div className="flex items-start gap-3">
+              <CircleAlert className="mt-0.5 h-4 w-4 shrink-0 text-primary" />
+              <div className="space-y-1">
+                <p className="font-sans text-sm leading-relaxed text-foreground/85">
+                  {caseQualityHeadline}
+                </p>
+                <p className="font-sans text-xs leading-relaxed text-muted-foreground">
+                  {caseQualityDetail}
+                </p>
+                {caseQualityCta && (
+                  <Link href={caseQualityCta.href} className="inline-flex items-center gap-1.5 font-mono text-[10px] uppercase tracking-[0.14em] text-primary hover:text-primary/75">
+                    {caseQualityCta.label.replace(" →", "")}
+                    <ArrowRight className="h-3 w-3" />
+                  </Link>
+                )}
+              </div>
+            </div>
+
+            <div className="flex items-start gap-3 border-t border-border/60 pt-3">
+              <CalendarClock className="mt-0.5 h-4 w-4 shrink-0 text-primary" />
+              <p className="font-sans text-sm leading-relaxed text-foreground/85">
+                {nearTermEarnings
+                  ? `${cleanTicker(nearTermEarnings.ticker)} reports ${daysUntilLabel(nearTermEarnings.days_until)}.`
+                  : "No earnings calls in the next three weeks."}
+              </p>
+            </div>
+
+            {pulse?.next_digest_at && (
+              <div className="flex items-start gap-3 border-t border-border/60 pt-3">
+                <BellRing className="mt-0.5 h-4 w-4 shrink-0 text-primary" />
+                <div className="space-y-1">
+                  <p className="font-mono text-[10px] uppercase tracking-[0.14em] text-muted-foreground">
+                    Next digest
+                  </p>
+                  <DigestCountdown nextDigestAt={pulse.next_digest_at} />
+                </div>
+              </div>
+            )}
+          </div>
+
+          <div className="mt-5 flex flex-wrap gap-2 border-t border-border/60 pt-4">
+            <Link href="/dashboard/simulate" className="border border-border/80 px-3 py-2 font-mono text-[10px] uppercase tracking-[0.14em] text-muted-foreground hover:text-foreground">
+              Simulate trade
+            </Link>
+            <Link href="/connect?return=dashboard" className="border border-border/80 px-3 py-2 font-mono text-[10px] uppercase tracking-[0.14em] text-muted-foreground hover:text-foreground">
+              Import data
+            </Link>
+          </div>
+        </aside>
+        </div>
       </div>
 
       {/* ── Footer strip ─────────────────────────────────────────────── */}
       {(visibleEarnings.length > 0) && (
         <ErrorBoundary>
-          <div className="px-4 sm:px-8">
+          <div className="order-5 px-4 sm:px-8">
             <div className="product-panel mb-2 px-4 py-3 sm:px-5">
               <div className="flex items-center gap-6 overflow-x-auto">
                 <p className="shrink-0 font-mono text-[10px] uppercase tracking-[0.18em] text-muted-foreground">

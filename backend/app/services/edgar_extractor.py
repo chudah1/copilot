@@ -58,6 +58,9 @@ def _extract_relevant_sections(text: str) -> str:
 _EXTRACTION_PROMPT = """\
 Extract key financial metrics from this earnings press release and assess whether \
 the results confirm or threaten the investment thesis.
+Lead with the conclusion. Name the exact company, metric, customer, competitor, or event.
+Name the exact business change instead of writing "this suggests", "supports the thesis", "weakens the case", "the story", or "a pillar".
+Use short sentences and familiar words. If a fact is uncertain, name the source of the uncertainty.
 
 Investment thesis:
 - Why owned: {why_own_it}
@@ -75,7 +78,7 @@ Return ONLY valid JSON — no markdown, no prose:
   "segment_revenue": "key segment revenue if mentioned (e.g. Data Center $X)",
   "guidance": "next quarter revenue / margin guidance",
   "thesis_verdict": "confirms" or "threatens" or "neutral",
-  "verdict_rationale": "1-2 sentences connecting these numbers to the thesis conditions above",
+  "verdict_rationale": "1-2 sentences naming the exact metric that held, weakened, or failed",
   "key_quote": "most relevant verbatim quote from the press release (max 160 chars)"
 }}
 """

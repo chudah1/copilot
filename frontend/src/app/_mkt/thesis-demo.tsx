@@ -1,6 +1,7 @@
 "use client";
 
 import { useState, useEffect, useRef } from "react";
+import { InfoTip } from "@/components/ui/info-tip";
 import { mk } from "./tokens";
 import { Sparkline } from "./sparkline";
 
@@ -8,49 +9,49 @@ const STARTERS = [
   {
     id: "NVDA",
     name: "NVIDIA",
-    text: "AI infra is the next decade. NVDA is picks-and-shovels — Jensen is generational.",
-    tags: ["AI infra", "Founder bet"],
+    text: "I own NVIDIA because large cloud companies are still increasing spending on AI chips, and its software keeps customers from switching.",
+    tags: ["AI chip demand", "Customer retention"],
     health: { label: "Healthy", score: 84 } as const,
     signals: [
-      { i: "↑", t: "Hyperscaler capex guides ↑", trend: "up" },
-      { i: "·", t: "NVDA data-center revenue", trend: "up" },
-      { i: "·", t: "Jensen earnings-call tone", trend: "flat" },
+      { i: "↑", t: "Large cloud companies' AI spending", trend: "up" },
+      { i: "·", t: "NVIDIA data-centre revenue growth", trend: "up" },
+      { i: "·", t: "Management comments on customer demand", trend: "flat" },
     ],
   },
   {
     id: "TSLA",
     name: "Tesla",
-    text: "Tesla is an EV story plus robotaxi optionality nobody is pricing.",
-    tags: ["EV cycle", "Founder bet"],
+    text: "I own Tesla because vehicle demand can recover and a working robotaxi service could add a new source of revenue.",
+    tags: ["Vehicle demand", "Robotaxi revenue"],
     health: { label: "At Risk", score: 54 } as const,
     signals: [
-      { i: "·", t: "Quarterly EV deliveries", trend: "bumpy" },
-      { i: "·", t: "Robotaxi / FSD milestones", trend: "flat" },
-      { i: "·", t: "Auto gross margin", trend: "down" },
+      { i: "·", t: "Vehicles delivered each quarter", trend: "bumpy" },
+      { i: "·", t: "Robotaxi and self-driving milestones", trend: "flat" },
+      { i: "·", t: "Profit margin on vehicle sales", trend: "down" },
     ],
   },
   {
     id: "RR.L",
     name: "Rolls-Royce",
-    text: "Civil aero turnaround + defence backlog. 18-month horizon.",
-    tags: ["Turnaround", "Defence + aero"],
+    text: "I own Rolls-Royce because higher civil aerospace margins and a growing defence order book should increase cash flow over the next 18 months.",
+    tags: ["Aerospace margins", "Defence orders"],
     health: { label: "Healthy", score: 78 } as const,
     signals: [
-      { i: "·", t: "Civil-aero margin trajectory", trend: "up" },
+      { i: "·", t: "Civil aerospace profit margin", trend: "up" },
       { i: "·", t: "Defence order book", trend: "up" },
-      { i: "·", t: "CFO commentary", trend: "flat" },
+      { i: "·", t: "Finance chief's cash-flow guidance", trend: "flat" },
     ],
   },
   {
     id: "AAPL",
     name: "Apple",
-    text: "Apple is a cash machine compounding through Services. A low-vol hold.",
-    tags: ["Services flywheel"],
+    text: "I own Apple because its installed customer base should keep services revenue and cash flow growing.",
+    tags: ["Services revenue", "Customer retention"],
     health: { label: "Healthy", score: 76 } as const,
     signals: [
       { i: "↑", t: "Services revenue growth", trend: "up" },
-      { i: "·", t: "Installed base / churn", trend: "flat" },
-      { i: "·", t: "iPhone unit trajectory", trend: "flat" },
+      { i: "·", t: "Active devices and customer cancellations", trend: "flat" },
+      { i: "·", t: "iPhones sold", trend: "flat" },
     ],
   },
 ] as const;
@@ -250,23 +251,28 @@ export function ThesisDemo() {
                 color: mk.pencil,
               }}
             >
-              We extracted →
+              penKeep would track
             </div>
-            <span
-              key={pickedId + "-health"}
-              style={{
-                padding: "4px 10px",
-                borderRadius: 999,
-                background: picked.health.label === "Healthy" ? mk.greenSoft : picked.health.label === "At Risk" ? mk.accentSoft : "#fce4d6",
-                color: picked.health.label === "Healthy" ? mk.green : mk.accent,
-                fontFamily: mk.mono,
-                fontSize: 10,
-                fontWeight: 600,
-                letterSpacing: "0.06em",
-                animation: "mkFadeIn 360ms ease-out",
-              }}
-            >
-              {picked.health.label} · {picked.health.score}
+            <span style={{ display: "inline-flex", alignItems: "center", gap: 2 }}>
+              <span
+                key={pickedId + "-health"}
+                style={{
+                  padding: "4px 10px",
+                  borderRadius: 999,
+                  background: picked.health.label === "Healthy" ? mk.greenSoft : picked.health.label === "At Risk" ? mk.accentSoft : "#fce4d6",
+                  color: picked.health.label === "Healthy" ? mk.green : mk.accent,
+                  fontFamily: mk.mono,
+                  fontSize: 10,
+                  fontWeight: 600,
+                  letterSpacing: "0.06em",
+                  animation: "mkFadeIn 360ms ease-out",
+                }}
+              >
+                {picked.health.label} · {picked.health.score}/100
+              </span>
+              <InfoTip label="Health score" align="end">
+                A summary of how recent evidence compares with the reason you wrote. It is not a prediction or recommendation.
+              </InfoTip>
             </span>
           </div>
           <div style={{ display: "flex", flexWrap: "wrap", gap: 6, minHeight: 28 }}>
@@ -298,7 +304,7 @@ export function ThesisDemo() {
               marginTop: 4,
             }}
           >
-            Put it on record →
+            Checks created from your reason
           </div>
           <div style={{ display: "flex", flexDirection: "column", gap: 8 }}>
             {picked.signals.map((s, i) => (

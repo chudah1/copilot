@@ -104,9 +104,9 @@ function cardStatusCopy(args: {
       eyebrow: "Calm",
       headline:
         investorProfile === "hearsay_driven"
-          ? "The reason works, but it is not sharp yet."
-          : "The thesis works, but it is not sharp yet.",
-      detail: "Usable now. Still needs tightening.",
+          ? "The reason needs one clearer condition."
+          : "The written case needs one clearer condition.",
+      detail: "Monitoring is active, but one part is still broad.",
       tone: "text-emerald-700",
     };
   }
@@ -166,13 +166,13 @@ export function PositionCard({
   const ringClass = DECISION_RING[decisionState.kind] ?? "";
   const qualityChipLabel =
     quality.kind === "sharp"
-      ? "Sharp"
+      ? "Ready to monitor"
       : quality.kind === "review_overdue"
         ? "Review overdue"
         : quality.kind === "workable"
-          ? "Workable"
+          ? "Needs detail"
           : quality.kind === "weak"
-            ? "Weak"
+            ? "Needs clearer reason"
             : "Missing";
   const statusCopy = cardStatusCopy({
     hasThesis,
@@ -189,9 +189,7 @@ export function PositionCard({
   return (
     <motion.div
       className="h-full"
-      initial={{ opacity: 0, y: 6 }}
-      animate={{ opacity: 1, y: 0 }}
-      transition={{ duration: 0.3, delay: index * 0.04, ease: "easeOut" }}
+      initial={false}
     >
       <Link href={`/dashboard/positions/${holding.ticker}`} className="block h-full">
         <div

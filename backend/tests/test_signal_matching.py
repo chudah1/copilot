@@ -739,8 +739,8 @@ def test_build_evidence_summary_for_thesis_driven_profile():
     assert 'Your thesis: "Revenue growth must stay strong to support the thesis."' in summary
     assert "We were watching: Revenue Growth" in summary
     assert "Revenue growth slowed materially this quarter." in summary
-    assert "directly threatens" in summary.lower()
-    assert "Re-read the thesis" in summary
+    assert "Revenue Growth has failed." in summary
+    assert "A decision is needed now." in summary
 
 
 def test_build_evidence_summary_for_hearsay_driven_profile():
@@ -755,7 +755,8 @@ def test_build_evidence_summary_for_hearsay_driven_profile():
     )
     assert 'Your reason: "AI demand should keep the story alive."' in summary
     assert "Management cut guidance after weaker orders." in summary
-    assert "story" in summary.lower()
+    assert "Guidance Change needs a closer look." in summary
+    assert "Review this position." in summary
 
 
 def test_build_evidence_summary_no_context():

@@ -6,10 +6,10 @@ import { motion } from "framer-motion";
 import { TickerSearch } from "@/components/portfolio/ticker-search";
 
 const BULLETS = [
-  "Bear case — what can hurt you",
-  "Key risks — what breaks the trade",
-  "Blind spots — what your thesis may miss",
-  "What to watch — signals, thresholds, dates",
+  "The strongest case against buying",
+  "The business risks that matter",
+  "What your reasoning may have missed",
+  "The facts to check next",
 ];
 
 export default function ResearchLandingPage() {
@@ -32,10 +32,10 @@ export default function ResearchLandingPage() {
                   Stress Test
                 </p>
                 <h1 className="font-display italic text-[2.5rem] leading-tight text-foreground sm:text-[3rem]">
-                  Stress-test a ticker
+                  Check the case before you buy
                 </h1>
                 <p className="max-w-xl font-sans text-sm leading-relaxed text-muted-foreground">
-                  Bear case before you buy.
+                  Search a company. PenKeep will explain what could go wrong, the evidence behind it, and what to check next.
                 </p>
               </div>
 
@@ -54,7 +54,7 @@ export default function ResearchLandingPage() {
                   You get
                 </p>
                 <p className="mt-2 font-display text-[1.4rem] italic leading-tight text-foreground">
-                  A decision memo.
+                  A plain-English risk check.
                 </p>
               </div>
               <div className="border border-border/60 bg-background/70 p-4">
@@ -62,7 +62,7 @@ export default function ResearchLandingPage() {
                   Use for
                 </p>
                 <p className="mt-2 font-sans text-sm leading-relaxed text-foreground/80">
-                  Buying and sizing.
+                  Before buying or adding more.
                 </p>
               </div>
             </aside>

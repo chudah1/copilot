@@ -11,10 +11,9 @@ import {
   selectActiveThesis,
   selectLatestInvalidatedThesis,
 } from "@/lib/position-workspace";
-import { formatCurrency, formatDate } from "@/lib/utils";
+import { formatDate } from "@/lib/utils";
 import { toast } from "sonner";
 import { ThesisCard } from "@/components/thesis/thesis-card";
-import { ThesisDiffView } from "@/components/thesis/thesis-diff-view";
 import { ConvictionLog } from "@/components/thesis/conviction-log";
 import { ThesisDecompositionReview } from "@/components/thesis/thesis-decomposition-review";
 import { HistoricalAuditCard } from "@/components/thesis/historical-audit-card";
@@ -23,8 +22,10 @@ import { InvalidateDialog } from "./invalidate-dialog";
 import { MonitoringTab } from "./monitoring-tab";
 import { PositionDecisions } from "./position-decisions";
 import { PositionHeader } from "./position-header";
+import { PositionNoteDialog } from "./position-note-dialog";
 import { ThesisHealthCheck } from "@/components/thesis/thesis-health-check";
 import { CounterThesisCard } from "@/components/thesis/counter-thesis-card";
+import { InfoTip } from "@/components/ui/info-tip";
 import { EarningsReviewModal } from "@/components/thesis/earnings-review-modal";
 import type {
   CheckNowResponse,
@@ -44,7 +45,6 @@ import type {
   Thesis,
   ThesisAssistResponse,
   ThesisDecompositionEnvelope,
-  ThesisHealthSnapshot,
   UpcomingEarnings,
 } from "@/types";
 
@@ -100,6 +100,7 @@ function PositionDetailInner() {
   const [convictionLog, setConvictionLog] = useState<ConvictionLogResponse | null>(null);
   const [convictionLogLoading, setConvictionLogLoading] = useState(false);
   const [noteSaving, setNoteSaving] = useState(false);
+  const [noteOpen, setNoteOpen] = useState(false);
   const [upcomingEarnings, setUpcomingEarnings] = useState<UpcomingEarnings | null>(null);
   const [pulse, setPulse] = useState<HoldingPulse | null>(null);
   const [reviewedItems, setReviewedItems] = useState<ReviewedItem[]>([]);
@@ -107,10 +108,8 @@ function PositionDetailInner() {
   const [loading, setLoading] = useState(true);
   const [healthCheck, setHealthCheck] = useState<HealthCheckResult | null>(null);
   const [healthCheckLoading, setHealthCheckLoading] = useState(false);
-  const [healthSnapshots, setHealthSnapshots] = useState<ThesisHealthSnapshot[]>([]);
   const [showCounterThesis, setShowCounterThesis] = useState(false);
   const [showAnalysis, setShowAnalysis] = useState(false);
-  const [showPositionDetails, setShowPositionDetails] = useState(false);
   const [showEarningsReview, setShowEarningsReview] = useState(false);
   const [onboardingState, setOnboardingState] = useState<OnboardingState | null>(null);
   const [nextStepNotice, setNextStepNotice] = useState<NextStepNotice | null>(null);
@@ -184,9 +183,6 @@ function PositionDetailInner() {
             // Background health check — detects recent earnings without requiring a monitoring event
             void api.post<HealthCheckResult>(`/api/theses/${latestThesis.id}/health-check`)
               .then(setHealthCheck)
-              .catch(() => null);
-            void api.get<ThesisHealthSnapshot[]>(`/api/theses/${latestThesis.id}/health-history`)
-              .then(setHealthSnapshots)
               .catch(() => null);
         }
         // Auto-switch to monitoring if there are unreviewed events
@@ -581,8 +577,11 @@ function PositionDetailInner() {
       setNoteSaving(true);
       await api.post(`/api/portfolio/holdings/${holding.id}/conviction-log`, { content });
       await refreshConvictionLog();
+      toast.success("Note saved");
     } catch (error) {
       console.error(error);
+      toast.error("Could not save the note");
+      throw error;
     } finally {
       setNoteSaving(false);
     }
@@ -878,6 +877,14 @@ function PositionDetailInner() {
         onSetDeleteConfirming={setDeleteConfirming}
         onCheckNowComplete={handleCheckNowComplete}
         onSelectTab={(id) => { setActiveTab(id); if (id === "thesis") setThesisSubTab("thesis"); }}
+        onOpenNote={() => setNoteOpen(true)}
+      />
+
+      <PositionNoteDialog
+        open={noteOpen}
+        onOpenChange={setNoteOpen}
+        saving={noteSaving}
+        onSave={handleAddManualNote}
       />
 
       {/* ── Contextual banners ───────────────────────────────────────────── */}
@@ -1211,13 +1218,16 @@ function PositionDetailInner() {
                         {(healthCheck || healthCheckLoading || showCounterThesis) && (
                           <div className="product-panel p-5 sm:p-6">
                             <div className="flex items-center justify-between gap-4">
-                              <div className="space-y-1">
+                              <div className="flex items-center gap-1">
                                 <p className="font-mono text-[10px] uppercase tracking-[0.18em] text-muted-foreground">
-                                  Review tools
+                                  Optional case checks
                                 </p>
+                                <InfoTip label="Optional case checks">
+                                  Open a valuation check or the strongest argument against owning this position. These checks do not change your written case unless you edit it.
+                                </InfoTip>
                               </div>
                               <button onClick={() => setShowAnalysis((s) => !s)} className="font-mono text-[10px] uppercase tracking-[0.2em] text-muted-foreground hover:text-foreground transition-colors shrink-0">
-                                {showAnalysis ? "Hide" : "Show"}
+                                {showAnalysis ? "Hide checks" : "Show checks"}
                               </button>
                             </div>
                             {showAnalysis && (
@@ -1230,45 +1240,13 @@ function PositionDetailInner() {
                             )}
                           </div>
                         )}
-                        <div className="border-t border-border/40 pt-5">
-                          <button onClick={() => setShowPositionDetails((s) => !s)} className="font-mono text-[10px] uppercase tracking-[0.2em] text-muted-foreground hover:text-foreground transition-colors">
-                            {showPositionDetails ? "▲" : "▼"} Details
-                          </button>
-                          {showPositionDetails && (
-                            <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} className="grid grid-cols-2 md:grid-cols-5 gap-3 mt-4">
-                              {[
-                                // Price & avg cost in the instrument's native currency (USD for a US
-                                // stock); value, P&L and the portfolio total use the selected
-                                // portfolio currency — the standard multi-currency broker split.
-                                { label: "Shares", value: String(holding.quantity) },
-                                { label: "Price", value: holding.current_price != null ? formatCurrency(holding.current_price, holding.currency || "GBP") : "—" },
-                                { label: "Avg cost", value: holding.average_cost_native != null
-                                    ? formatCurrency(holding.average_cost_native, holding.currency || "GBP")
-                                    : formatCurrency(holding.average_cost_basis, holding.portfolio_currency ?? "GBP") },
-                                { label: "Current value", value: formatCurrency(value, holding.portfolio_currency ?? "GBP") },
-                                { label: "P&L", value: `${pnl >= 0 ? "+" : ""}${formatCurrency(pnl, holding.portfolio_currency ?? "GBP")}`, colored: true },
-                              ].map(({ label, value: v, colored }) => (
-                                <div key={label} className="border border-border/60 bg-card px-4 py-3">
-                                  <p className="font-mono text-[10px] uppercase tracking-[0.15em] text-muted-foreground">{label}</p>
-                                  <p className={`font-mono text-lg tabular-nums mt-1.5 ${colored ? (pnl >= 0 ? "text-emerald-700" : "text-red-600") : "text-foreground"}`}>{v}</p>
-                                </div>
-                              ))}
-                            </motion.div>
-                          )}
-                        </div>
                       </div>
                     )}
 
                     {/* ── Signals sub-tab ─────────────────────────────────── */}
                     {thesisSubTab === "signals" && (
                       <div className="space-y-8">
-                        {decompositionEnvelope?.decomposition ? (
-                          <ThesisDiffView
-                            decomposition={decompositionEnvelope.decomposition}
-                            monitoringEvents={events}
-                            healthSnapshots={healthSnapshots}
-                          />
-                        ) : (
+                        {!decompositionEnvelope?.decomposition && (
                           !decompositionLoading && (
                             <div className="space-y-6">
                               {monitoringPreviewItems.length > 0 && (
@@ -1278,7 +1256,7 @@ function PositionDetailInner() {
                                       Current watch rules
                                     </p>
                                     <p className="font-sans text-sm text-foreground/80 leading-relaxed">
-                                      These rules are already attached to the thesis. Generate the full signal map to connect them to claims, entities, and evidence.
+                                      These rules are already saved. Build monitoring checks to connect each rule to public evidence.
                                     </p>
                                   </div>
                                   <div className="grid gap-3">
@@ -1293,21 +1271,21 @@ function PositionDetailInner() {
                               )}
                               <div className="py-6 text-center space-y-3">
                                 <p className="font-display italic text-xl text-foreground/50">
-                                  {monitoringPreviewItems.length > 0 ? "No structured signal map yet." : "No signals defined yet."}
+                                  {monitoringPreviewItems.length > 0 ? "Monitoring checks are not built yet." : "No monitoring checks yet."}
                                 </p>
                                 <p className="font-sans text-sm text-muted-foreground max-w-md mx-auto leading-relaxed">
                                   {monitoringPreviewItems.length > 0
-                                    ? "Generate signals to turn these watch rules into the full claim, entity, and signal map."
-                                    : "Generate signals from the thesis."}
+                                    ? "Build checks from the rules you already saved."
+                                    : "Build checks from the written thesis."}
                                 </p>
                                 <button onClick={handleGenerateDecomposition} className="font-mono text-[10px] uppercase tracking-[0.15em] border border-primary/40 text-primary px-5 py-2.5 hover:border-primary transition-colors">
-                                  Generate signals
+                                  Build monitoring checks
                                 </button>
                               </div>
                             </div>
                           )
                         )}
-                        <div className={decompositionEnvelope?.decomposition ? "border-t border-border/40 pt-6 space-y-3" : ""}>
+                        <div className={decompositionEnvelope?.decomposition ? "space-y-3" : ""}>
                           {decompositionEnvelope?.decomposition && (
                             <p className="font-mono text-[10px] uppercase tracking-[0.2em] text-muted-foreground">Signal setup</p>
                           )}
@@ -1334,8 +1312,6 @@ function PositionDetailInner() {
                         <ConvictionLog
                           data={convictionLog}
                           loading={convictionLogLoading}
-                          saving={noteSaving}
-                          onAddNote={activeThesis ? handleAddManualNote : undefined}
                           investorProfile={onboardingState?.investor_profile ?? null}
                         />
                         {invalidatedTheses.length > 0 && (

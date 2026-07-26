@@ -53,12 +53,12 @@ function getTradeIntervention(
       eyebrow: "Before you add more",
       title:
         investorProfile === "hearsay_driven"
-          ? "This story already has unresolved evidence against it."
+          ? "This position already has evidence waiting for your decision."
           : "This thesis already needs review.",
       body:
         investorProfile === "hearsay_driven"
-          ? "Adding here means increasing a position before you decide whether the original story is still real."
-          : "Adding here means increasing a position before you resolve evidence that may weaken or break a thesis pillar.",
+          ? "Adding here increases your stake before you decide whether the reason you wrote still holds."
+          : "Adding here increases your stake before you review evidence that conflicts with your written thesis.",
       ctaLabel: "Review this position first →",
       ctaHref: `/dashboard/positions/${result.ticker}`,
       softenSecondary: true,
@@ -93,8 +93,8 @@ function getTradeIntervention(
           : "The written thesis is stale.",
       body:
         investorProfile === "hearsay_driven"
-          ? "Refresh the current reason before you add more size, so you know the original story still earns fresh capital."
-          : "Refresh the current thesis before you add more size, so you know the original case still earns fresh capital.",
+          ? "Review the reason and recent evidence before increasing the position."
+          : "Review the thesis and recent evidence before increasing the position.",
       ctaLabel: `Refresh ${cleanTicker(result.ticker)} first →`,
       ctaHref: `/dashboard/positions/${result.ticker}`,
       softenSecondary: true,
@@ -107,13 +107,13 @@ function getTradeIntervention(
       eyebrow: "Before you size up",
       title:
         investorProfile === "hearsay_driven"
-          ? "The current reason is still too story-like."
+          ? "The current reason is too vague to monitor."
           : "The current thesis is still too vague.",
       body:
         ambiguityNote ||
         (investorProfile === "hearsay_driven"
-          ? "Tighten what has to show up in the business results before you commit more capital."
-          : "Tighten the assumption set before you commit more capital to this name."),
+          ? "Name the business result that must continue before you increase the position."
+          : "Name the business conditions that must continue before you increase the position."),
       ctaLabel: "Tighten it on the position page →",
       ctaHref: `/dashboard/positions/${result.ticker}`,
       softenSecondary: false,

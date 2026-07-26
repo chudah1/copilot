@@ -1,3 +1,6 @@
+"use client";
+
+import { useState } from "react";
 import type { ReviewedItem } from "@/types";
 
 interface Props {
@@ -24,22 +27,24 @@ function timeAgo(iso: string | null | undefined): string {
  * visible, so this block sits under the events list on the position tab.
  */
 export function ReviewedThisWeek({ items, className = "" }: Props) {
+  const [showAll, setShowAll] = useState(false);
   if (!items || items.length === 0) return null;
+  const visibleItems = showAll ? items : items.slice(0, 3);
 
   return (
     <section className={`border border-border/50 bg-card/50 px-4 py-3.5 space-y-3 ${className}`}>
       <div className="space-y-1">
         <p className="font-mono text-[10px] uppercase tracking-[0.18em] text-muted-foreground">
-          Reviewed this week
+          Checked, no decision needed
         </p>
         <p className="font-sans text-xs text-muted-foreground/80 leading-relaxed">
-          Items we looked at against your thesis. None rose to an alert, but
-          you should know we saw them.
+          PenKeep checked these items against your written case. None directly
+          tested it.
         </p>
       </div>
 
       <ul className="space-y-4">
-        {items.map((item, i) => {
+        {visibleItems.map((item, i) => {
           const when = timeAgo(item.published_at);
           const meta = [item.source_label, when].filter(Boolean).join(" · ");
           const content = (
@@ -52,8 +57,8 @@ export function ReviewedThisWeek({ items, className = "" }: Props) {
                   {meta}
                 </p>
               )}
-              <p className="font-sans text-xs italic text-muted-foreground/90 mt-1.5 leading-relaxed">
-                &ldquo;{item.reason}&rdquo;
+              <p className="font-sans text-xs text-muted-foreground/90 mt-1.5 leading-relaxed">
+                {item.reason.length > 160 ? `${item.reason.slice(0, 160)}…` : item.reason}
               </p>
             </>
           );
@@ -75,6 +80,14 @@ export function ReviewedThisWeek({ items, className = "" }: Props) {
           );
         })}
       </ul>
+      {items.length > 3 && (
+        <button
+          onClick={() => setShowAll((current) => !current)}
+          className="font-mono text-[10px] uppercase tracking-[0.15em] text-primary hover:text-primary/75"
+        >
+          {showAll ? "Show less" : `See all ${items.length}`}
+        </button>
+      )}
     </section>
   );
 }

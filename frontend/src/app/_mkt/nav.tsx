@@ -13,9 +13,10 @@ interface MarketingNavProps {
 }
 
 export function MarketingNav({ active }: MarketingNavProps) {
-  const { isAuthenticated } = useAuth();
+  const { isAuthenticated, isLoading } = useAuth();
   const pathname = usePathname();
   const [mobileOpen, setMobileOpen] = useState(false);
+  const showAuthenticatedNav = !isLoading && isAuthenticated;
 
   const derivedActive =
     pathname.startsWith("/blog") ? "blog" :
@@ -121,7 +122,7 @@ export function MarketingNav({ active }: MarketingNavProps) {
             {mobileOpen ? <X size={18} /> : <Menu size={18} />}
           </button>
 
-          {isAuthenticated ? (
+          {showAuthenticatedNav ? (
             <Link
               href="/dashboard"
               style={{

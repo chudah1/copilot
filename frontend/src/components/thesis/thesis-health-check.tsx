@@ -1,6 +1,7 @@
 "use client";
 
 import { Badge } from "@/components/ui/badge";
+import { InfoTip } from "@/components/ui/info-tip";
 import { formatCurrency } from "@/lib/utils";
 import type { HealthCheckResult } from "@/types";
 
@@ -116,7 +117,12 @@ export function ThesisHealthCheck({
           )}
           {result.pe_ratio != null && (
             <div className="min-w-0 border border-border/60 bg-background/70 p-3">
-              <p className="truncate font-mono text-[10px] uppercase tracking-[0.16em] text-muted-foreground">P/E</p>
+              <div className="flex items-center gap-1">
+                <p className="truncate font-mono text-[10px] uppercase tracking-[0.16em] text-muted-foreground">P/E ratio</p>
+                <InfoTip label="P/E ratio" align="center">
+                  Share price divided by annual earnings per share. A higher number means investors are paying more for each unit of current earnings.
+                </InfoTip>
+              </div>
               <p className="mt-2 truncate font-display text-[1.15rem] italic leading-none text-foreground">
                 {result.pe_ratio.toFixed(1)}
               </p>

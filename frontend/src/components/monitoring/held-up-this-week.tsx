@@ -1,3 +1,6 @@
+"use client";
+
+import { useState } from "react";
 import type { SupportingItem } from "@/types";
 
 interface Props {
@@ -27,7 +30,9 @@ function timeAgo(iso: string): string {
  * balance if it turns into a green highlight reel.
  */
 export function HeldUpThisWeek({ items, className = "" }: Props) {
+  const [showAll, setShowAll] = useState(false);
   if (!items || items.length === 0) return null;
+  const visibleItems = showAll ? items : items.slice(0, 3);
 
   return (
     <section
@@ -35,30 +40,23 @@ export function HeldUpThisWeek({ items, className = "" }: Props) {
     >
       <div className="space-y-1">
         <p className="font-mono text-[10px] uppercase tracking-[0.18em] text-emerald-700">
-          Held up this week
+          Evidence supporting your reason
         </p>
         <p className="font-sans text-xs text-foreground/80 leading-relaxed">
-          Signals we saw that reinforced your thesis rather than challenged it.
+          Recent evidence that supports something in your written case.
         </p>
       </div>
 
       <ul className="space-y-3">
-        {items.map((item) => {
+        {visibleItems.map((item) => {
           const meta = [item.assumption_label, timeAgo(item.created_at)]
             .filter(Boolean)
             .join(" · ");
-          const takeaway =
-            item.evidence_summary || item.ai_analysis || item.summary || "";
           return (
             <li key={item.event_id} className="space-y-1">
               <p className="font-sans text-sm text-foreground leading-snug">
                 {item.title}
               </p>
-              {takeaway && (
-                <p className="font-sans text-xs text-muted-foreground leading-relaxed">
-                  {takeaway.length > 240 ? `${takeaway.slice(0, 240)}…` : takeaway}
-                </p>
-              )}
               {meta && (
                 <p className="font-mono text-[10px] uppercase tracking-[0.14em] text-muted-foreground/70">
                   {meta}
@@ -68,6 +66,14 @@ export function HeldUpThisWeek({ items, className = "" }: Props) {
           );
         })}
       </ul>
+      {items.length > 3 && (
+        <button
+          onClick={() => setShowAll((current) => !current)}
+          className="font-mono text-[10px] uppercase tracking-[0.15em] text-primary hover:text-primary/75"
+        >
+          {showAll ? "Show less" : `See all ${items.length}`}
+        </button>
+      )}
     </section>
   );
 }

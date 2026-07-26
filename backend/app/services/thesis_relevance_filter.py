@@ -111,6 +111,8 @@ _RELEVANCE_FILTER_EVENT_TYPES = {
 _RELEVANCE_MODEL = "gpt-4o-mini"
 
 _RELEVANCE_PROMPT = """You are filtering news for a stock investor.
+Lead with the conclusion. Name the exact company, metric, customer, competitor, or event.
+Name the exact difference instead of writing "this suggests", "supports the thesis", "weakens the case", "the story", or "a pillar".
 
 The investor wrote this thesis for owning {ticker}:
 - Why they own it: {why_own_it}
@@ -125,7 +127,7 @@ Decide: does this news touch any of the stated watch signals, even peripherally?
 - YES if the news is about the holding company AND mentions something that touches a signal — a product, segment, regulator, competitor, metric, or theme the signals reference.
 - NO if the news is about institutional fund holdings (13F filings, fund rebalancing, ETF flow updates), generic market commentary, or unrelated corporate activity that doesn't touch any signal.
 
-When relevant is false, also return `reason`: one plain sentence, addressed to the investor, that names what the article is about AND what thesis dimension it doesn't touch. Example: "The downgrade is about near-term China revenue exposure, which doesn't touch your CUDA software moat pillar." Do not mention filter mechanics, models, or scores. Keep it under 30 words.
+When relevant is false, also return `reason`: one plain sentence that names what the article is about AND the exact monitored condition it does not address. Example: "The downgrade concerns near-term China revenue, not CUDA adoption or software revenue." Do not mention filter mechanics, models, or scores. Keep it under 30 words.
 
 Return a single JSON object: {{"relevant": true|false, "matched_signals": ["label1", "label2"], "reason": "<sentence when relevant is false, empty string otherwise>"}}.
 Empty array if not relevant. No prose, no markdown."""

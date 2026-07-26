@@ -21,13 +21,14 @@ const PUBLIC_NAV_LINKS = [
 ];
 
 export function Navbar() {
-  const { logout, isAuthenticated } = useAuth();
+  const { logout, isAuthenticated, isLoading } = useAuth();
   const pathname = usePathname();
   const [open, setOpen] = useState(false);
-  const visibleLinks = isAuthenticated ? NAV_LINKS : PUBLIC_NAV_LINKS;
+  const showAuthenticatedNav = !isLoading && isAuthenticated;
+  const visibleLinks = showAuthenticatedNav ? NAV_LINKS : PUBLIC_NAV_LINKS;
 
   const { data: pulse } = useSWR<PortfolioPulse>(
-    isAuthenticated ? "/api/portfolio/pulse" : null,
+    showAuthenticatedNav ? "/api/portfolio/pulse" : null,
     fetcher,
     { refreshInterval: 60 * 1000 }
   );
@@ -54,14 +55,14 @@ export function Navbar() {
       <div className="px-4 py-3 sm:px-8">
         <div className="product-panel product-panel-muted flex items-center justify-between gap-4 px-4 py-3 sm:px-5">
           <div className="flex items-center gap-3">
-            <Link href={isAuthenticated ? "/dashboard" : "/"} className="group">
+            <Link href={showAuthenticatedNav ? "/dashboard" : "/"} className="group">
               <div className="flex flex-col">
                 <span className="font-display text-[1.3rem] font-semibold italic leading-none tracking-tight text-primary transition-colors group-hover:text-primary/80">
                   penKeep
                 </span>
               </div>
             </Link>
-            {isAuthenticated && (
+            {showAuthenticatedNav && (
               <div className={`hidden lg:flex items-center gap-2 border px-2.5 py-1 ${
                 alertCount > 0
                   ? "border-amber-500/25 bg-amber-500/8"
@@ -96,7 +97,7 @@ export function Navbar() {
             );
           })}
             </div>
-            {isAuthenticated ? (
+            {showAuthenticatedNav ? (
               <>
                 <Link
                   href={alertsHref}
@@ -169,7 +170,7 @@ export function Navbar() {
               );
             })}
             <div className="mx-4 my-2 h-px bg-border" />
-            {isAuthenticated ? (
+            {showAuthenticatedNav ? (
               <>
                 <Link
                   href={alertsHref}

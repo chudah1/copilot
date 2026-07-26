@@ -427,7 +427,8 @@ def test_serialise_audit_results_preserves_supportive_direction():
     )
 
     assert results[0]["verdict"] == "supports"
-    assert "supports" in results[0]["analysis"].lower()
+    assert "This condition is holding up: Subscription revenue keeps growing above 20%." in results[0]["analysis"]
+    assert "No action needed." in results[0]["analysis"]
 
 
 def test_serialise_audit_results_drops_unlinked_info_noise():

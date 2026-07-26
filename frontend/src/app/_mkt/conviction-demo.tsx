@@ -7,37 +7,37 @@ const SCENARIOS = [
   {
     stock: "TSLA",
     company: "Tesla",
-    event: "Q3 deliveries -8.4% YoY. Robotaxi event called 'underwhelming' by 7 of 9 analysts.",
+    event: "Tesla delivered 8.4% fewer vehicles than a year earlier. Seven of nine analysts called the robotaxi event underwhelming.",
     severity: "high",
-    exitCondition: "If EV demand growth reverses or robotaxi misses a credible timeline.",
+    exitCondition: "I will reconsider if vehicle demand falls or Tesla cannot give a credible date for a working robotaxi service.",
     decision: "invalidated" as const,
-    decisionLabel: "Thesis invalidated",
+    decisionLabel: "Reason no longer holds",
     decisionColor: "text-red",
-    note: "Story changed. Moving on.",
+    note: "Vehicle demand weakened and the robotaxi date is still unclear.",
     outcome: "broke" as const,
   },
   {
     stock: "NVDA",
     company: "NVIDIA",
-    event: "Hyperscaler capex guidance revised upward. H100 allocations still 6-month backlog.",
+    event: "Large cloud companies raised their AI spending plans. H100 orders still take about six months to fill.",
     severity: "medium",
-    exitCondition: "If hyperscaler AI capex plateaus or a credible alternative to CUDA emerges.",
+    exitCondition: "I will reconsider if large cloud companies stop increasing AI spending or customers begin replacing NVIDIA's software.",
     decision: "reaffirmed" as const,
-    decisionLabel: "Thesis reaffirmed",
+    decisionLabel: "Reason still holds",
     decisionColor: "text-green",
-    note: "Picks-and-shovels story is intact.",
+    note: "AI spending is still growing and customers are still waiting for NVIDIA chips.",
     outcome: "held" as const,
   },
   {
     stock: "RR.L",
     company: "Rolls-Royce",
-    event: "Civil aero gross margin expands 2.4pp. Defence order book hits £8.7B.",
+    event: "Civil aerospace profit margin rose 2.4 percentage points. The defence order book reached £8.7 billion.",
     severity: "low",
-    exitCondition: "If turnaround margins stall or the CFO revises the target for a second time.",
+    exitCondition: "I will reconsider if margins stop improving or the finance chief cuts the target again.",
     decision: "reaffirmed" as const,
-    decisionLabel: "Thesis reaffirmed",
+    decisionLabel: "Reason still holds",
     decisionColor: "text-green",
-    note: "Turnaround is on track.",
+    note: "Margins improved and the defence order book grew.",
     outcome: "held" as const,
   },
 ];
@@ -84,7 +84,7 @@ export function ConvictionDemo() {
           const past =
             ["event", "exit", "decide", "recorded"].indexOf(phase) >
             ["event", "exit", "decide", "recorded"].indexOf(p);
-          const labels = ["Evidence fires", "Your condition", "You decide", "Logged forever"];
+          const labels = ["New evidence", "Your condition", "You decide", "Decision saved"];
           return (
             <div
               key={p}
@@ -205,7 +205,11 @@ export function ConvictionDemo() {
                   marginBottom: 8,
                 }}
               >
-                {s.severity} signal · penKeep detected
+                {s.severity === "high"
+                  ? "Review now"
+                  : s.severity === "medium"
+                    ? "Worth reviewing"
+                    : "No action needed"}
               </div>
               <p
                 style={{
@@ -234,7 +238,7 @@ export function ConvictionDemo() {
                   marginBottom: 8,
                 }}
               >
-                Your exit condition · written when you bought
+                What would change your mind · written when you bought
               </div>
               <blockquote
                 style={{
@@ -282,7 +286,7 @@ export function ConvictionDemo() {
                     transition: "all 200ms",
                   }}
                 >
-                  Still believe →
+                  Reason still holds →
                 </button>
                 <button
                   style={{
@@ -298,11 +302,11 @@ export function ConvictionDemo() {
                     transition: "all 200ms",
                   }}
                 >
-                  Story changed →
+                  Reason no longer holds →
                 </button>
               </div>
               <p style={{ fontFamily: mk.sans, fontSize: 12, color: "#555", margin: 0, lineHeight: 1.4 }}>
-                Either answer is correct. One thing is not: not deciding.
+                You make the decision. penKeep keeps the evidence and your answer together.
               </p>
             </div>
           )}
@@ -372,11 +376,11 @@ export function ConvictionDemo() {
                     whiteSpace: "nowrap",
                   }}
                 >
-                  {s.outcome === "broke" ? "Thesis broke" : "Holding"}
+                  {s.outcome === "broke" ? "Reason failed" : "Reason held"}
                 </span>
               </div>
               <p style={{ fontFamily: mk.sans, fontSize: 12, color: "#555", margin: 0, lineHeight: 1.4 }}>
-                Six months from now, you&apos;ll know whether you were right. penKeep will remember.
+                penKeep will return to this decision later so you can compare it with what happened next.
               </p>
             </div>
           )}

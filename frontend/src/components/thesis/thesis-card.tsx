@@ -82,7 +82,7 @@ function describeSignalCheckLogic(signalType: string, config: Record<string, unk
     if (effectiveThreshold == null || (effectiveThreshold === 0 && operator === ">=")) {
       return proxyFor
         ? `Tracks ${label} as a proxy for ${proxyFor}.`
-        : `Flags when ${label} turns negative YoY.`;
+        : `Flags when ${label} falls below the previous year.`;
     }
     const fmt = formatSignalThresholdValue(
       signalType === "revenue_growth" ? "revenue_growth_yoy" : "earnings_growth_yoy",
@@ -90,13 +90,13 @@ function describeSignalCheckLogic(signalType: string, config: Record<string, unk
     );
     if (operator === ">=" || operator === ">") {
       return proxyFor
-        ? `Flags when ${label} falls below ${fmt} YoY, using it as a proxy for ${proxyFor}.`
-        : `Flags when ${label} falls below ${fmt} YoY.`;
+        ? `Flags when ${label} falls below ${fmt} compared with a year earlier, using it as a proxy for ${proxyFor}.`
+        : `Flags when ${label} falls below ${fmt} compared with a year earlier.`;
     }
     if (operator === "<=" || operator === "<") {
       return proxyFor
-        ? `Flags when ${label} rises above ${fmt} YoY, using it as a proxy for ${proxyFor}.`
-        : `Flags when ${label} rises above ${fmt} YoY.`;
+        ? `Flags when ${label} rises above ${fmt} compared with a year earlier, using it as a proxy for ${proxyFor}.`
+        : `Flags when ${label} rises above ${fmt} compared with a year earlier.`;
     }
   }
   if (signalType === "guidance_change") return "Watches guidance for meaningful deterioration.";
@@ -155,30 +155,33 @@ export function ThesisCard({ thesis, decomposition, investorProfile, monitoringG
         : "weak";
   const qualityHeadline =
     quality.kind === "sharp"
-      ? "Sharp"
+      ? "Ready to monitor"
       : quality.kind === "workable"
-        ? "Workable"
+        ? "Needs one clearer condition"
         : quality.kind === "review_overdue"
-          ? "Review overdue"
-          : "Weak";
+          ? "Review is due"
+          : "Needs clearer conditions";
   const qualityChecks = [
     {
-      label: "Must remain true",
-      detail: quality.missingMustRemainTrue ? "Missing" : "Defined",
+      label: "What must stay true",
+      detail: quality.missingMustRemainTrue ? "Not written yet" : "Written",
       tone: quality.missingMustRemainTrue ? "text-red-600" : "text-emerald-700",
+      help: "The business condition that must continue for your reason to keep working.",
     },
     {
-      label: "Break condition",
-      detail: quality.missingBreakCondition ? "Too vague" : "Defined",
+      label: "What changes your mind",
+      detail: quality.missingBreakCondition ? "Not clear enough" : "Written",
       tone: quality.missingBreakCondition ? "text-red-600" : "text-emerald-700",
+      help: "The result or event that should make you reconsider the position. It does not place a trade.",
     },
     {
-      label: "Freshness",
+      label: "Last reviewed",
       detail:
         quality.kind === "review_overdue"
-          ? `${quality.daysOld}d old vs ${quality.cadenceDays}d cadence`
-          : `${quality.daysOld}d old`,
+          ? `${quality.daysOld} days ago · review due every ${quality.cadenceDays} days`
+          : `${quality.daysOld} day${quality.daysOld === 1 ? "" : "s"} ago`,
       tone: quality.kind === "review_overdue" ? "text-amber-700" : "text-foreground",
+      help: "How long it has been since this written reason was updated or confirmed.",
     },
   ];
   const copy = investorProfile === "thesis_driven"
@@ -189,17 +192,17 @@ export function ThesisCard({ thesis, decomposition, investorProfile, monitoringG
         breaks: "Breaks if",
         activeSignals: "Active signals",
         watching: "Watching for",
-        qualityRead: "Read",
+        qualityRead: "Written case",
         qualitySummary:
           quality.kind === "sharp"
-            ? "Specific enough to rely on."
+            ? "The reason and its conditions are specific enough to check against new evidence."
             : quality.kind === "review_overdue"
-              ? "Overdue for refresh."
+              ? "Confirm that the original reason and conditions still apply."
               : qualityState === "workable"
-                ? "Usable, but still worth sharpening."
+                ? "The reason can be monitored, but one condition is still broad."
                 : thesis.source === "ai_assisted"
                   ? aiAssistCopy.qualitySummary
-                : "Too fuzzy to trust without tightening.",
+                : "Add the business condition or result that would make you reconsider.",
       }
     : investorProfile === "hearsay_driven"
       ? {
@@ -209,17 +212,17 @@ export function ThesisCard({ thesis, decomposition, investorProfile, monitoringG
           breaks: "Breaks if",
           activeSignals: "Active signals",
           watching: "Watching for",
-          qualityRead: "Read",
+          qualityRead: "Written case",
           qualitySummary:
             quality.kind === "sharp"
-              ? "Specific enough to rely on."
-              : quality.kind === "review_overdue"
-                ? "Overdue for refresh."
+            ? "The reason and its conditions are specific enough to check against new evidence."
+            : quality.kind === "review_overdue"
+                ? "Confirm that the original reason and conditions still apply."
               : qualityState === "workable"
-                  ? "Usable, but the story still needs sharpening."
+                  ? "The reason can be monitored, but one condition is still broad."
                   : thesis.source === "ai_assisted"
                     ? aiAssistCopy.qualitySummary
-                  : "Still too story-like to rely on without tightening.",
+                  : "Add the business condition or result that would make you reconsider.",
         }
       : {
           edit: "Edit",
@@ -228,17 +231,17 @@ export function ThesisCard({ thesis, decomposition, investorProfile, monitoringG
           breaks: "Breaks if",
           activeSignals: "Active signals",
           watching: "Watching for",
-          qualityRead: "Read",
+          qualityRead: "Written case",
           qualitySummary:
             quality.kind === "sharp"
-              ? "Specific enough to rely on."
-              : quality.kind === "review_overdue"
-                ? "Overdue for refresh."
+            ? "The reason and its conditions are specific enough to check against new evidence."
+            : quality.kind === "review_overdue"
+                ? "Confirm that the original reason and conditions still apply."
               : qualityState === "workable"
-                  ? "Usable, but still worth sharpening."
+                  ? "The reason can be monitored, but one condition is still broad."
                   : thesis.source === "ai_assisted"
                     ? aiAssistCopy.qualitySummary
-                  : "Too fuzzy to trust without tightening.",
+                  : "Add the business condition or result that would make you reconsider.",
         };
 
   const recentGaps = monitoringGaps.filter((g) => {
@@ -308,7 +311,7 @@ export function ThesisCard({ thesis, decomposition, investorProfile, monitoringG
       {/* ── Bull case — hero ── */}
       <div className="px-5 py-6 space-y-4">
         <blockquote className="border-l-2 border-primary/25 pl-4">
-          <p className="font-display italic text-[1.15rem] leading-relaxed text-foreground/90 max-w-prose">
+          <p className="font-display italic text-[1.15rem] leading-relaxed text-foreground/90">
             {thesis.why_own_it}
           </p>
         </blockquote>
@@ -368,20 +371,20 @@ export function ThesisCard({ thesis, decomposition, investorProfile, monitoringG
                   Review cadence
                 </p>
                 <InfoTip label="Review cadence">
-                  The routine interval for revisiting this case even when no alert fires. It is separate from the weekly digest and evidence alerts.
+                  How often PenKeep asks you to revisit this written reason even when no evidence triggers an alert.
                 </InfoTip>
               </div>
               <p className="mt-2 font-display text-[1.2rem] italic text-foreground">
-                {quality.cadenceDays}d
+                {quality.cadenceDays} days
               </p>
             </div>
             <div className="border border-border/60 bg-background/70 p-3">
               <div className="flex items-center gap-1.5">
                 <p className="font-mono text-[10px] uppercase tracking-[0.16em] text-muted-foreground">
-                  Signals armed
+                  Monitoring checks
                 </p>
-                <InfoTip label="Signals armed">
-                  The number of active checks tied to this case. A signal tells PenKeep what to watch; it is not a buy or sell instruction.
+                <InfoTip label="Monitoring checks">
+                  The number of active evidence checks tied to this written reason. A check is not a buy or sell instruction.
                 </InfoTip>
               </div>
               <p className="mt-2 font-display text-[1.2rem] italic text-foreground">
@@ -395,9 +398,12 @@ export function ThesisCard({ thesis, decomposition, investorProfile, monitoringG
           <div className="grid gap-3">
             {qualityChecks.map((item) => (
               <div key={item.label} className="border border-border/60 bg-background/70 px-3 py-3">
-                <p className="font-mono text-[10px] uppercase tracking-[0.16em] text-muted-foreground">
-                  {item.label}
-                </p>
+                <div className="flex items-center gap-1">
+                  <p className="font-mono text-[10px] uppercase tracking-[0.16em] text-muted-foreground">
+                    {item.label}
+                  </p>
+                  <InfoTip label={item.label}>{item.help}</InfoTip>
+                </div>
                 <p className={`mt-2 font-sans text-sm leading-relaxed ${item.tone}`}>
                   {item.detail}
                 </p>
@@ -411,9 +417,14 @@ export function ThesisCard({ thesis, decomposition, investorProfile, monitoringG
       <div className="grid md:grid-cols-2 divide-y md:divide-y-0 md:divide-x divide-border/40">
         {/* Must remain true */}
         <div className={`relative px-5 py-5 border-l-2 ${thesis.must_remain_true ? "border-l-emerald-500/35" : "border-l-amber-400/35"}`}>
-          <p className="font-mono text-[10px] uppercase tracking-[0.18em] text-muted-foreground mb-2">
-            {copy.stillTrue}
-          </p>
+          <div className="mb-2 flex items-center gap-1">
+            <p className="font-mono text-[10px] uppercase tracking-[0.18em] text-muted-foreground">
+              {copy.stillTrue}
+            </p>
+            <InfoTip label={copy.stillTrue}>
+              The business condition that must continue for your reason to keep working.
+            </InfoTip>
+          </div>
           {thesis.must_remain_true ? (
             <p className="font-sans text-sm leading-relaxed text-foreground/80">
               {thesis.must_remain_true}
@@ -427,9 +438,14 @@ export function ThesisCard({ thesis, decomposition, investorProfile, monitoringG
 
         {/* Exit trigger */}
         <div className={`relative px-5 py-5 border-l-2 md:border-l-0 ${thesis.what_would_change_my_mind ? "border-l-red-500/30" : "border-l-border/30"}`}>
-          <p className="font-mono text-[10px] uppercase tracking-[0.18em] text-muted-foreground mb-2">
-            {copy.breaks}
-          </p>
+          <div className="mb-2 flex items-center gap-1">
+            <p className="font-mono text-[10px] uppercase tracking-[0.18em] text-muted-foreground">
+              {copy.breaks}
+            </p>
+            <InfoTip label={copy.breaks} align="end">
+              The result or event that should force you to review the position. It does not trigger an automatic trade.
+            </InfoTip>
+          </div>
           {thesis.what_would_change_my_mind ? (
             <p className="font-sans text-sm leading-relaxed text-foreground/80">
               {thesis.what_would_change_my_mind}
@@ -447,9 +463,9 @@ export function ThesisCard({ thesis, decomposition, investorProfile, monitoringG
         <div className="px-5 py-4 space-y-3">
           <div className="flex items-center gap-1.5">
             <p className="font-mono text-[10px] uppercase tracking-[0.2em] text-muted-foreground">
-              {activeSignals.length > 0 ? copy.activeSignals : copy.watching}
+              {activeSignals.length > 0 ? "Monitoring checks" : copy.watching}
             </p>
-            <InfoTip label={activeSignals.length > 0 ? "Active signals" : "Watching for"}>
+            <InfoTip label={activeSignals.length > 0 ? "Monitoring checks" : "Watching for"}>
               Each row is a measurable check connected to something in your written case. The line underneath explains when it will be flagged.
             </InfoTip>
           </div>

@@ -784,22 +784,34 @@ def _build_event_implication(
     severity: str | None,
     verdict: str | None,
 ) -> str:
-    watched_text = signal_label or claim_text
+    signal_text = (signal_label or "").strip().rstrip(".!?")
+    claim_text_clean = (claim_text or "").strip().rstrip(".!?")
     if verdict == "supports":
-        if watched_text:
-            return f"This supports the part of the thesis tied to {watched_text}."
-        return "This supports the original investment case."
+        if signal_text:
+            return f"{signal_text} is holding up."
+        if claim_text_clean:
+            return f"This condition is holding up: {claim_text_clean}."
+        return "The reported result is favorable."
     if severity == "thesis_breaking" or verdict == "threatens":
-        if watched_text:
-            return f"This directly threatens the part of the thesis tied to {watched_text}."
-        return "This directly threatens a core part of the original investment case."
+        if signal_text:
+            if severity == "thesis_breaking":
+                return f"{signal_text} has failed."
+            return f"{signal_text} is weakening."
+        if claim_text_clean:
+            status = "has failed" if severity == "thesis_breaking" else "is weakening"
+            return f"This condition {status}: {claim_text_clean}."
+        return "A condition set for this position has failed."
     if severity == "warning" or verdict == "review":
-        if watched_text:
-            return f"This is relevant because it tests whether {watched_text} is still holding up."
-        return "This is relevant because it tests whether the original reason still holds up."
-    if watched_text:
-        return f"This is useful evidence for the part of the thesis tied to {watched_text}, but it is not a clear break yet."
-    return "This is useful evidence, but it is not a clear break yet."
+        if signal_text:
+            return f"{signal_text} needs a closer look."
+        if claim_text_clean:
+            return f"Review this condition: {claim_text_clean}."
+        return "The position needs a closer look."
+    if signal_text:
+        return f"{signal_text} has new information, but no limit has been crossed."
+    if claim_text_clean:
+        return f"No limit has been crossed for this condition: {claim_text_clean}."
+    return "No limit set for this position has been crossed."
 
 
 def _build_event_decision(
@@ -809,24 +821,12 @@ def _build_event_decision(
     investor_profile: str | None,
 ) -> str:
     if verdict == "supports":
-        return "No decision needed. Keep watching for the next test of this part of the case."
+        return "No action needed."
     if severity == "thesis_breaking" or verdict == "threatens":
-        if investor_profile == "thesis_driven":
-            return "Re-read the thesis and decide whether to rewrite or exit before you add, trim, or wave it off."
-        if investor_profile == "hearsay_driven":
-            return "Pressure-test whether the original story still deserves a place in the portfolio."
-        return "Review the position now and decide whether the original case is still intact."
+        return "A decision is needed now."
     if severity == "warning" or verdict == "review":
-        if investor_profile == "thesis_driven":
-            return "Review this thesis pillar before averaging up, averaging down, or dismissing the change."
-        if investor_profile == "hearsay_driven":
-            return "Check whether the story is becoming more real or starting to break down."
-        return "Review whether this changes your confidence or next action on the position."
-    if investor_profile == "thesis_driven":
-        return "Keep watching, but this does not yet require rewriting the thesis."
-    if investor_profile == "hearsay_driven":
-        return "Keep watching, but this alone does not mean the original story is broken."
-    return "Keep watching, but this does not yet require a decision change."
+        return "Review this position."
+    return "No action needed."
 
 
 def determine_verdict(severity: str, candidate: dict | None = None) -> str:

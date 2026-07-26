@@ -1,5 +1,6 @@
 "use client";
 
+import { InfoTip } from "@/components/ui/info-tip";
 import { formatDate } from "@/lib/utils";
 import type {
   MonitoringEvent,
@@ -20,10 +21,10 @@ interface SignalWithEvents {
 type ClaimHealth = "Supporting" | "Mixed" | "Threatened" | "Watching";
 
 const CLAIM_TYPE_LABELS: Record<string, string> = {
-  must_remain_true: "Must hold",
-  what_would_change_my_mind: "Exit trigger",
-  why_own_it: "Bull case",
-  thesis: "Core belief",
+  must_remain_true: "What must stay true",
+  what_would_change_my_mind: "What changes your mind",
+  why_own_it: "Why you own it",
+  thesis: "Written reason",
 };
 
 const VERDICT_DOT_CLASS: Record<EffectiveVerdict, string> = {
@@ -105,9 +106,14 @@ function HealthSparkline({ snapshots }: { snapshots: ThesisHealthSnapshot[] }) {
     <div className="product-panel p-5 sm:p-6">
       <div className="grid gap-4 lg:grid-cols-[minmax(0,12rem)_minmax(0,1fr)_auto] lg:items-center">
         <div>
-          <p className="font-mono text-[10px] uppercase tracking-[0.18em] text-muted-foreground">
-            Thesis health
-          </p>
+          <div className="flex items-center gap-1">
+            <p className="font-mono text-[10px] uppercase tracking-[0.18em] text-muted-foreground">
+              Health score
+            </p>
+            <InfoTip label="Health score">
+              A 0–100 summary of how recent evidence compares with your written reason. It is not a prediction or recommendation.
+            </InfoTip>
+          </div>
           <div className="mt-2 flex items-baseline gap-2">
             <span className={`font-display text-[2rem] italic leading-none ${toneClass}`}>
               {latest.score}

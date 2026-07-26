@@ -215,6 +215,8 @@ async def build_embedding_similarity(texts: list[str]) -> Callable[[str, str], f
 
 
 _JUDGE_SYSTEM = """You decide whether a news item satisfies a specific condition an investor is watching for.
+Lead with the conclusion. Name the exact company, metric, customer, competitor, or event.
+Name the exact difference instead of writing "this suggests", "supports the thesis", "weakens the case", "the story", or "a pillar".
 
 The investor is watching for a discrete, recognisable event. Be strict: only say it matches if the news clearly reports that the specific event has actually occurred (or is officially confirmed) — not merely that it is related, rumoured, or could happen.
 
@@ -224,7 +226,7 @@ Important disqualifiers:
 - Related context is not enough. The article must report the watched event itself, not just discuss the same topic.
 
 Output valid JSON: {"matches": true|false, "severity": "info|warning|thesis_breaking", "reason": "one short sentence"}
-- matches=false → severity "info", reason explains why it doesn't satisfy the condition.
+- matches=false → severity "info", reason states what the article reports and the exact missing fact. Example: "The companies are in talks; no customer contract has been signed."
 - matches=true → severity is "thesis_breaking" if the event clearly and fully occurred, "warning" if it is occurring/partial/early. Never "info" when matches=true.
 Output ONLY valid JSON."""
 

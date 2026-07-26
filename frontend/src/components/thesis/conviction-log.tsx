@@ -2,14 +2,12 @@
 
 import { useState } from "react";
 import { formatDate } from "@/lib/utils";
-import { Button } from "@/components/ui/button";
+import { InfoTip } from "@/components/ui/info-tip";
 import type { ConvictionLogEntry, ConvictionLogResponse } from "@/types";
 
 interface ConvictionLogProps {
   data: ConvictionLogResponse | null;
   loading?: boolean;
-  saving?: boolean;
-  onAddNote?: (content: string) => Promise<void>;
   investorProfile?: "thesis_driven" | "hearsay_driven" | null;
 }
 
@@ -289,44 +287,33 @@ function DecisionEntry({ entry }: { entry: ConvictionLogEntry }) {
 export function ConvictionLog({
   data,
   loading = false,
-  saving = false,
-  onAddNote,
   investorProfile,
 }: ConvictionLogProps) {
-  const [note, setNote] = useState("");
+  const [showAll, setShowAll] = useState(false);
 
   const copy =
     investorProfile === "thesis_driven"
       ? {
           title: "History",
           age: "Thesis age",
-          placeholder:
-            "Write a short note about what changed, which assumption moved, or how your view is evolving.",
           empty:
             "No history yet. Once you write a thesis, review evidence, or add notes, it will appear here.",
         }
       : investorProfile === "hearsay_driven"
         ? {
-            title: "History",
-            age: "Reason age",
-            placeholder:
-              "Write a short note about what changed or how your view of the story is evolving.",
-            empty:
+          title: "History",
+          age: "Reason age",
+          empty:
               "No history yet. Once you write a reason, review evidence, or add notes, it will appear here.",
           }
         : {
             title: "History",
             age: "Reason age",
-            placeholder: "Write a short note about what changed or how your view is evolving.",
             empty: "Nothing logged yet. Reviews, notes, and reason changes show up here.",
           };
 
-  const handleSubmit = async () => {
-    const trimmed = note.trim();
-    if (!trimmed || !onAddNote) return;
-    await onAddNote(trimmed);
-    setNote("");
-  };
+  const entries = data?.entries ?? [];
+  const visibleEntries = showAll ? entries : entries.slice(0, 2);
 
   return (
     <div className="space-y-5">
@@ -343,53 +330,35 @@ export function ConvictionLog({
         </div>
         <div className="mt-4 grid gap-3 sm:grid-cols-2">
           <div className="border border-border/60 bg-background/70 p-3">
-            <p className="font-mono text-[10px] uppercase tracking-[0.16em] text-muted-foreground">
-              {copy.age}
-            </p>
+            <div className="flex items-center gap-1">
+              <p className="font-mono text-[10px] uppercase tracking-[0.16em] text-muted-foreground">
+                {copy.age}
+              </p>
+              <InfoTip label={copy.age}>
+                The number of days since this written reason was first recorded.
+              </InfoTip>
+            </div>
             <p className="mt-2 font-display text-[1.15rem] italic leading-none text-foreground">
-              {data?.reason_age_days != null ? `${data.reason_age_days}d` : "—"}
+              {data?.reason_age_days != null
+                ? `${data.reason_age_days} day${data.reason_age_days === 1 ? "" : "s"}`
+                : "—"}
             </p>
           </div>
           <div className="border border-border/60 bg-background/70 p-3">
-            <p className="font-mono text-[10px] uppercase tracking-[0.16em] text-muted-foreground">
-              Reviews
-            </p>
+            <div className="flex items-center gap-1">
+              <p className="font-mono text-[10px] uppercase tracking-[0.16em] text-muted-foreground">
+                Reviews recorded
+              </p>
+              <InfoTip label="Reviews recorded">
+                The number of times you responded to evidence or formally revisited this written reason.
+              </InfoTip>
+            </div>
             <p className="mt-2 font-display text-[1.15rem] italic leading-none text-foreground">
               {data?.review_count ?? 0}
             </p>
           </div>
         </div>
       </div>
-
-      {onAddNote && (
-        <div className="product-panel p-5 sm:p-6 space-y-3">
-          <div className="space-y-1">
-            <p className="font-mono text-[10px] uppercase tracking-[0.15em] text-muted-foreground">
-              Add note
-            </p>
-            <p className="font-sans text-sm leading-relaxed text-foreground/80">
-              Capture a change in view before it gets lost.
-            </p>
-          </div>
-          <textarea
-            value={note}
-            onChange={(e) => setNote(e.target.value)}
-            placeholder={copy.placeholder}
-            rows={3}
-            className="w-full bg-transparent font-sans text-sm text-foreground placeholder:text-muted-foreground/40 focus:outline-none resize-none"
-          />
-          <div className="flex justify-end">
-            <Button
-              onClick={() => void handleSubmit()}
-              disabled={saving || note.trim().length === 0}
-            >
-              <span className="font-mono text-[11px] uppercase tracking-[0.15em]">
-                {saving ? "Saving…" : "Save note"}
-              </span>
-            </Button>
-          </div>
-        </div>
-      )}
 
       {loading ? (
         <div className="product-panel p-5 sm:p-6">
@@ -399,12 +368,20 @@ export function ConvictionLog({
         </div>
       ) : data && data.entries.length > 0 ? (
         <div className="space-y-3">
-          {data.entries.map((entry) =>
+          {visibleEntries.map((entry) =>
             entry.event_title != null ? (
               <DecisionEntry key={entry.id} entry={entry} />
             ) : (
               <SimpleEntry key={entry.id} entry={entry} />
             ),
+          )}
+          {entries.length > 2 && (
+            <button
+              onClick={() => setShowAll((current) => !current)}
+              className="w-full border border-border/60 bg-background/60 px-4 py-3 font-mono text-[10px] uppercase tracking-[0.16em] text-primary transition-colors hover:border-primary/35"
+            >
+              {showAll ? "Show less" : `See all ${entries.length} history items`}
+            </button>
           )}
         </div>
       ) : (

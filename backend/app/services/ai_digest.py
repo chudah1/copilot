@@ -13,6 +13,9 @@ ALLOWED_INSIGHT_TYPES = {"event", "warning", "stable"}
 
 DIGEST_PROMPT = """Write a weekly portfolio digest for a retail investor who tracks why they own each stock.
 Use short bullet-style insights, not essay paragraphs.
+Lead with the conclusion. Name the exact company, metric, customer, competitor, or event.
+Name the exact change instead of writing "this suggests", "supports the thesis", "weakens the case", "the story", or "a pillar".
+Use short sentences and familiar words. If a fact is uncertain, name the source of the uncertainty.
 
 Portfolio holdings and their theses:
 {holdings_section}
@@ -186,7 +189,7 @@ def _fallback_digest(
                     "ticker": stable["ticker"],
                     "type": "stable",
                     "headline": "Nothing meaningful this week",
-                    "rationale": "Everything is quiet and your thesis remains intact.",
+                    "rationale": "No material company news or monitored changes were found.",
                 }
             )
 

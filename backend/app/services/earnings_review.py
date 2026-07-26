@@ -35,6 +35,9 @@ class EarningsReviewResult:
 
 _EARNINGS_REVIEW_PROMPT = """\
 You help a retail investor compare their stated reason for holding a stock to the latest earnings.
+Lead with the conclusion. Name the exact company, metric, customer, competitor, or event.
+Name the exact change instead of writing "this suggests", "supports the thesis", "weakens the case", "the story", or "a pillar".
+Use short sentences and familiar words. If a fact is uncertain, name the source of the uncertainty.
 
 The investor owns {ticker} ({name}). Here is their investment thesis:
 
@@ -69,7 +72,7 @@ Return valid JSON with this exact structure:
       "claim_id": "the claim id from the list above",
       "claim_text": "the exact claim text",
       "verdict": "holds" | "watch" | "broken" | "unclear",
-      "explanation": "Start with 'You said [direct quote of their claim]. [Evidence from earnings]. This [holds/is worth watching/no longer holds] because [specific reason].'",
+      "explanation": "Start with 'You said [direct quote of their claim].' Then give the exact earnings number and state directly whether the condition held, weakened, or failed.",
       "evidence": "Specific number or fact from the earnings data, or null if not applicable"
     }}
   ],
@@ -81,6 +84,7 @@ Return valid JSON with this exact structure:
 Rules:
 - explanation must start with "You said" and quote from their actual thesis
 - Be direct about broken conditions — do not soften bad news
+- Do not refer to "this evidence", "the thesis", "the case", "the story", "a pillar", or "an assumption" in the explanation. State the metric or business condition directly.
 - Only mark "broken" if earnings data directly contradicts a specific claim with a clear, unambiguous breach. A metric missing its stated threshold by a small margin (under 5 percentage points) is "watch", not "broken".
 - Use "watch" when a threshold is being approached or missed by a small margin, or when a trend is consistently moving in the wrong direction.
 - Use "unclear" when there is not enough data to evaluate

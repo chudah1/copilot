@@ -50,7 +50,7 @@ export default function ResearchPage() {
   const [draftThesis, setDraftThesis] = useState("");
   const [result, setResult] = useState<StressTestResult | null>(null);
   const [loading, setLoading] = useState(false);
-  const hasDraftContext = draftThesis.trim().length > 0;
+  const [showAllSources, setShowAllSources] = useState(false);
   const riskGroups = result?.risk_groups ?? [];
   const sourceNotes = result?.source_notes ?? [];
   const blindSpots = result?.blind_spots ?? [];
@@ -108,7 +108,7 @@ export default function ResearchPage() {
                   {ticker}
                 </h1>
                 <p className="font-sans text-sm text-muted-foreground">
-                  Bear case before you buy.
+                  See what could go wrong before you buy.
                 </p>
               </div>
 
@@ -118,7 +118,7 @@ export default function ResearchPage() {
                     You get
                   </p>
                   <p className="mt-2 font-sans text-sm leading-relaxed text-foreground/80">
-                    Bear case, key risks, blind spots, and what to watch.
+                    A direct risk summary, the evidence behind it, and what to check next.
                   </p>
                 </div>
                 <div className="border border-border/60 bg-background/70 p-4">
@@ -126,7 +126,7 @@ export default function ResearchPage() {
                     Use before
                   </p>
                   <p className="mt-2 font-sans text-sm leading-relaxed text-foreground/80">
-                    Buying or sizing up.
+                    Buying or adding more.
                   </p>
                 </div>
               </div>
@@ -149,7 +149,7 @@ export default function ResearchPage() {
               <div className="space-y-4">
                 <div>
                   <label className="font-mono text-[10px] uppercase tracking-[0.18em] text-muted-foreground block mb-2">
-                    Your case{" "}
+                    Why you are considering it{" "}
                     <span className="normal-case tracking-normal opacity-60">(optional)</span>
                   </label>
                   <textarea
@@ -165,7 +165,7 @@ export default function ResearchPage() {
                     <span className="font-mono text-[11px] uppercase tracking-[0.15em]">Run Stress Test</span>
                   </Button>
                   <p className="font-sans text-xs leading-relaxed text-muted-foreground">
-                    Leave blank for the bear case only.
+                    Leave this blank for a general risk check.
                   </p>
                 </div>
 
@@ -190,8 +190,8 @@ export default function ResearchPage() {
                   </p>
                   <ul className="mt-3 space-y-2">
                     {[
-                      "What has to go right",
-                      "Where you think the market is wrong",
+                      "Why the business should improve",
+                      "What other investors may be missing",
                       "What would change your mind",
                     ].map((item, i) => (
                       <li key={item} className="flex gap-2 font-sans text-sm leading-relaxed text-foreground/80">
@@ -209,7 +209,7 @@ export default function ResearchPage() {
                     Result
                   </p>
                   <p className="mt-2 font-sans text-sm leading-relaxed text-foreground/80">
-                    A fast bear-case memo.
+                    A plain-English case against buying.
                   </p>
                 </div>
               </aside>
@@ -261,41 +261,12 @@ export default function ResearchPage() {
               </p>
             )}
 
-            <motion.div initial={{ opacity: 0, y: 6 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: 0.02 }}>
-              <div className="grid gap-3 sm:grid-cols-3">
-                <div className="product-panel p-4">
-                  <p className="font-mono text-[9px] uppercase tracking-[0.18em] text-muted-foreground/60">
-                    Risk groups
-                  </p>
-                  <p className="mt-2 font-display text-[1.5rem] italic leading-none text-foreground">
-                    {riskGroups.length}
-                  </p>
-                </div>
-                <div className="product-panel p-4">
-                  <p className="font-mono text-[9px] uppercase tracking-[0.18em] text-muted-foreground/60">
-                    Source notes
-                  </p>
-                  <p className="mt-2 font-display text-[1.5rem] italic leading-none text-foreground">
-                    {sourceNotes.length}
-                  </p>
-                </div>
-                <div className="product-panel p-4">
-                  <p className="font-mono text-[9px] uppercase tracking-[0.18em] text-muted-foreground/60">
-                    Read
-                  </p>
-                  <p className="mt-2 font-sans text-sm leading-relaxed text-foreground/80">
-                    {hasDraftContext ? "Counter-case against your draft." : "Fast bear-case memo."}
-                  </p>
-                </div>
-              </div>
-            </motion.div>
-
             {/* Bear case — lead section, visually prominent */}
             <motion.div initial={{ opacity: 0, y: 6 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: 0.05 }}>
               <div className="product-panel p-5">
                 <p className="font-mono text-[9px] uppercase tracking-[0.25em] text-muted-foreground/60 mb-3 flex items-center gap-2">
                   <TrendingDown className="w-3 h-3" />
-                  Bear Case
+                  Read this first
                 </p>
                 <p className="font-display italic text-[1.35rem] leading-snug text-foreground">
                   {result.bear_case}
@@ -308,7 +279,7 @@ export default function ResearchPage() {
               <div className="product-panel p-5">
                 <p className="font-mono text-[9px] uppercase tracking-[0.25em] text-muted-foreground/60 mb-3 flex items-center gap-2">
                   <AlertTriangle className="w-3 h-3" />
-                  Risk Map
+                  What could go wrong
                 </p>
                 {riskGroups.length > 0 ? (
                   <div className="grid gap-3 md:grid-cols-2">
@@ -332,7 +303,7 @@ export default function ResearchPage() {
                   </div>
                 ) : (
                   <p className="font-sans text-sm text-foreground/80 leading-relaxed">
-                    No grouped risk map on this result. The bear case still applies.
+                    No additional risk groups were returned. Start with the summary above.
                   </p>
                 )}
               </div>
@@ -343,7 +314,7 @@ export default function ResearchPage() {
               <div className="product-panel p-5 border-amber-500/25 bg-amber-500/5">
                 <p className="font-mono text-[9px] uppercase tracking-[0.25em] text-amber-700/70 mb-3 flex items-center gap-2">
                   <Eye className="w-3 h-3" />
-                  Blind Spots
+                  What you may be missing
                 </p>
                 {blindSpots.length > 0 ? (
                   <ul className="space-y-3">
@@ -356,7 +327,7 @@ export default function ResearchPage() {
                   </ul>
                 ) : (
                   <p className="font-sans text-sm text-foreground/80 leading-relaxed">
-                    No clear blind spot flagged. Add your own case next time for a sharper read.
+                    Nothing specific was flagged. Add your own reason next time for a more targeted check.
                   </p>
                 )}
               </div>
@@ -366,11 +337,11 @@ export default function ResearchPage() {
             <motion.div initial={{ opacity: 0, y: 6 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: 0.23 }}>
               <div className="product-panel p-5">
                 <p className="font-mono text-[9px] uppercase tracking-[0.25em] text-muted-foreground/60 mb-3">
-                  Source Notes
+                  Evidence used
                 </p>
                 {sourceNotes.length > 0 ? (
                   <div className="space-y-3">
-                    {sourceNotes.map((note, i) => (
+                    {(showAllSources ? sourceNotes : sourceNotes.slice(0, 3)).map((note, i) => (
                       <div key={`${note.label}:${i}`} className="border border-border/60 bg-background/70 p-3">
                         <div className="flex flex-wrap items-center gap-2">
                           <p className="font-mono text-[10px] uppercase tracking-[0.16em] text-foreground/75">
@@ -395,10 +366,18 @@ export default function ResearchPage() {
                         )}
                       </div>
                     ))}
+                    {sourceNotes.length > 3 && (
+                      <button
+                        onClick={() => setShowAllSources((current) => !current)}
+                        className="font-mono text-[10px] uppercase tracking-[0.14em] text-primary hover:text-primary/75"
+                      >
+                        {showAllSources ? "Show less" : `See all ${sourceNotes.length} sources`}
+                      </button>
+                    )}
                   </div>
                 ) : (
                   <p className="font-sans text-sm text-foreground/80 leading-relaxed">
-                    No source notes were attached to this result.
+                    No source links were attached to this result.
                   </p>
                 )}
               </div>
@@ -409,7 +388,7 @@ export default function ResearchPage() {
               <div className="product-panel p-5">
                 <p className="font-mono text-[9px] uppercase tracking-[0.25em] text-muted-foreground/60 mb-3 flex items-center gap-2">
                   <Shield className="w-3 h-3" />
-                  What to Watch
+                  What to check next
                 </p>
                 {watchItems.length > 0 ? (
                   <ul className="space-y-3">
@@ -422,7 +401,7 @@ export default function ResearchPage() {
                   </ul>
                 ) : (
                   <p className="font-sans text-sm text-foreground/80 leading-relaxed">
-                    No explicit watch list was attached to this result.
+                    No additional checks were returned.
                   </p>
                 )}
               </div>
@@ -440,15 +419,13 @@ export default function ResearchPage() {
                   Next step
                 </p>
                 <p className="font-display italic text-[1.3rem] text-foreground leading-snug">
-                  {isAuthenticated
-                    ? `You've seen the bear case. If you buy ${ticker}, we watch these signals for you.`
-                    : `You've seen the bear case. If you buy ${ticker}, we watch these signals for you.`}
+                  If you buy {ticker}, save the reason and keep checking whether it remains true.
                 </p>
               </div>
               <p className="font-sans text-sm text-muted-foreground leading-relaxed">
                 {isAuthenticated
-                  ? "Turn the idea into a position, write the thesis, and the monitoring loop takes over."
-                  : "penKeep is strongest after the buy: thesis written, signals armed, alerts only when the case actually moves."}
+                  ? "Add the position, write why you own it, and PenKeep will check new evidence against that reason."
+                  : "Create an account to save the decision. PenKeep will alert you only when new evidence directly tests something you wrote."}
               </p>
               {candidateSignals.length > 0 && (
                 <div className="grid gap-2 sm:grid-cols-2">
@@ -456,7 +433,7 @@ export default function ResearchPage() {
                     <div key={`${signal.label}:${i}`} className="border border-primary/20 bg-background/75 px-3 py-2.5">
                       <p className="font-sans text-sm text-foreground">{signal.label}</p>
                       <p className="mt-1 font-sans text-xs leading-relaxed text-muted-foreground">
-                        {signal.rationale || (signal.signal_type === "news_watch" ? "Qualitative watch." : "Numeric watch.")}
+                        {signal.rationale || (signal.signal_type === "news_watch" ? "News and filing check." : "Number-based check.")}
                       </p>
                     </div>
                   ))}

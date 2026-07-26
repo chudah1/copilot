@@ -83,6 +83,13 @@ def test_classify_system_forbids_positive_thesis_breaking():
     assert 'Positive or thesis-confirming events are never "thesis_breaking"' in _CLASSIFY_SYSTEM
 
 
+def test_classify_system_requires_direct_user_facing_language():
+    assert "Lead with the conclusion" in _CLASSIFY_SYSTEM
+    assert '"This evidence"' in _CLASSIFY_SYSTEM
+    assert '"supports the thesis"' in _CLASSIFY_SYSTEM
+    assert "Do not write the action" in _CLASSIFY_SYSTEM
+
+
 async def test_classify_event_stays_quiet_when_no_classifier_is_available():
     with patch("app.services.ai_monitor.settings") as mock_settings:
         mock_settings.anthropic_api_key = None
@@ -126,25 +133,75 @@ def test_normalize_classification_result_leaves_threatening_breakages_alone():
     assert normalized.direction == "threatens"
 
 
-def test_normalize_analysis_text_adds_decision_ready_structure():
+def test_normalize_analysis_text_removes_meta_language_and_repeated_action():
     result = _normalize_analysis_text(
-        event_description="Management cut demand guidance.",
-        analysis="This weakens the demand case. Orders may not be as durable as expected.",
+        event_description=(
+            "ServiceNow is projected to grow subscription revenue 21% to 21.5%, "
+            "supported by improving demand."
+        ),
+        analysis=(
+            "That range, if it prints, would support the demand story the thesis "
+            "requires and suggests AI-driven upsell is not yet stalling. "
+            "No rush, keep watching for now."
+        ),
+        severity="info",
+        investor_profile="thesis_driven",
+    )
+    assert result == (
+        "ServiceNow is projected to grow subscription revenue 21% to 21.5%, "
+        "supported by improving demand. No action needed."
+    )
+    assert "thesis" not in result.lower()
+    assert "story" not in result.lower()
+    assert "suggests" not in result.lower()
+    assert "no rush" not in result.lower()
+
+
+def test_normalize_analysis_text_keeps_concrete_read_and_uses_direct_action():
+    result = _normalize_analysis_text(
+        event_description=(
+            "ServiceNow shares fell 36%, while subscription growth remained solid."
+        ),
+        analysis=(
+            "This evidence threatens your reason. The market is worried about AI "
+            "competition, although reported subscription growth remains solid."
+        ),
         severity="warning",
         investor_profile="thesis_driven",
     )
-    assert result.startswith("Management cut demand guidance.")
-    assert "assumption" in result.lower() or "demand" in result.lower()
-    assert "review" in result.lower()
-
-
-def test_normalize_analysis_text_uses_hearsay_specific_decision_pressure():
-    result = _normalize_analysis_text(
-        event_description="Channel checks point to weaker orders.",
-        analysis="",
-        severity="warning",
-        investor_profile="hearsay_driven",
+    assert result == (
+        "The market is worried about AI competition, although reported subscription "
+        "growth remains solid. Review this position."
     )
-    assert "Channel checks point to weaker orders." in result
-    assert "story" in result.lower()
-    assert "review" in result.lower()
+    assert "this evidence" not in result.lower()
+    assert "pillar" not in result.lower()
+    assert "background noise" not in result.lower()
+
+
+def test_normalize_analysis_text_preserves_two_direct_sentences():
+    result = _normalize_analysis_text(
+        event_description="ServiceNow reported quarterly results.",
+        analysis=(
+            "ServiceNow's customer demand is holding up. "
+            "Subscription revenue grew 22%."
+        ),
+        severity="info",
+        investor_profile="thesis_driven",
+    )
+    assert result == (
+        "ServiceNow's customer demand is holding up. "
+        "Subscription revenue grew 22%. No action needed."
+    )
+
+
+def test_normalize_analysis_text_uses_direct_breaking_action():
+    result = _normalize_analysis_text(
+        event_description="ServiceNow reported quarterly results.",
+        analysis=(
+            "Subscription growth has stayed below 15% for two quarters. "
+            "The investor's minimum was 20%."
+        ),
+        severity="thesis_breaking",
+        investor_profile="thesis_driven",
+    )
+    assert result.endswith("A decision is needed now.")

@@ -6,6 +6,8 @@ import { ThesisDemo } from "./_mkt/thesis-demo";
 import { WatchThesisChange } from "./_mkt/timeline";
 import { ConvictionDemo } from "./_mkt/conviction-demo";
 import { mk } from "./_mkt/tokens";
+import { InfoTip } from "@/components/ui/info-tip";
+import { StressTestSearch } from "./_mkt/stress-test-search";
 
 const hPad = "clamp(24px, 4vw, 48px)";
 const vPad = "clamp(80px, 9vw, 110px)";
@@ -75,20 +77,29 @@ function NVDACard() {
           </span>
           <span style={{ fontFamily: mk.sans, fontSize: 14, color: mk.creamDim }}>NVIDIA</span>
         </div>
-        <span
-          style={{
-            fontFamily: mk.mono,
-            fontSize: 9,
-            letterSpacing: "0.16em",
-            textTransform: "uppercase",
-            padding: "3px 9px",
-            background: `${mk.accent}22`,
-            border: `1px solid ${mk.accent}55`,
-            color: mk.accent,
-            borderRadius: 4,
-          }}
-        >
-          HIGH SIGNAL
+        <span style={{ display: "inline-flex", alignItems: "center", gap: 3 }}>
+          <span
+            style={{
+              fontFamily: mk.mono,
+              fontSize: 9,
+              letterSpacing: "0.16em",
+              textTransform: "uppercase",
+              padding: "3px 9px",
+              background: `${mk.accent}22`,
+              border: `1px solid ${mk.accent}55`,
+              color: mk.accent,
+              borderRadius: 4,
+            }}
+          >
+            NEEDS REVIEW
+          </span>
+          <InfoTip
+            label="Needs review"
+            align="end"
+            iconClassName="text-[#b9afa2] hover:text-white"
+          >
+            This evidence directly relates to a condition the investor wrote. It is not a buy or sell signal.
+          </InfoTip>
         </span>
       </div>
 
@@ -113,17 +124,24 @@ function NVDACard() {
 
       <div style={{ height: 1, background: mk.nightLine, margin: "26px 0" }} />
 
-      <div
-        style={{
-          fontFamily: mk.mono,
-          fontSize: 9.5,
-          letterSpacing: "0.16em",
-          textTransform: "uppercase",
-          color: mk.accent,
-          marginBottom: 12,
-        }}
-      >
-        YOUR EXIT CONDITION · WRITTEN JAN 9
+      <div style={{ display: "flex", alignItems: "center", gap: 3, marginBottom: 12 }}>
+        <div
+          style={{
+            fontFamily: mk.mono,
+            fontSize: 9.5,
+            letterSpacing: "0.16em",
+            textTransform: "uppercase",
+            color: mk.accent,
+          }}
+        >
+          WHAT WOULD CHANGE YOUR MIND · WRITTEN JAN 9
+        </div>
+        <InfoTip
+          label="What would change your mind"
+          iconClassName="text-[#b9afa2] hover:text-white"
+        >
+          The specific result or event that would make the investor reconsider owning the position.
+        </InfoTip>
       </div>
       <div
         style={{
@@ -152,7 +170,7 @@ function NVDACard() {
             cursor: "pointer",
           }}
         >
-          Still believe →
+          Reason still holds →
         </span>
         <span
           style={{
@@ -168,7 +186,7 @@ function NVDACard() {
             cursor: "pointer",
           }}
         >
-          Story changed →
+          Reason no longer holds →
         </span>
       </div>
     </div>
@@ -316,27 +334,7 @@ export default function LandingPage() {
                 </a>
               </div>
 
-              <p
-                style={{
-                  fontFamily: mk.sans,
-                  fontSize: 14.5,
-                  color: mk.inkSoft,
-                  marginTop: 18,
-                }}
-              >
-                Not ready to write one? {" "}
-                <Link
-                  href="/research"
-                  style={{
-                    color: mk.accent,
-                    fontWeight: 500,
-                    textDecoration: "none",
-                    borderBottom: `1px solid ${mk.accent}`,
-                  }}
-                >
-                  Stress-test any stock first, free →
-                </Link>
-              </p>
+              <StressTestSearch />
             </div>
 
             {/* Right — product card */}
@@ -436,9 +434,9 @@ export default function LandingPage() {
               maxWidth: 800,
             }}
           >
-            Put one belief on record.
+            Write one reason you own a stock.
             <br />
-            <span style={{ color: mk.accent }}>See what is worth watching.</span>
+            <span style={{ color: mk.accent }}>See the facts penKeep would check.</span>
           </h2>
           <ThesisDemo />
         </div>
@@ -755,7 +753,11 @@ export default function LandingPage() {
               margin: 0,
             }}
           >
-            A decision record, not{" "}
+            A decision record{" "}
+            <InfoTip label="Decision record" align="center">
+              Your original reason, relevant evidence, and the decision you made afterward, kept together with dates.
+            </InfoTip>
+            , not{" "}
             <span style={{ fontStyle: "italic", color: mk.accent }}>another investing feed</span>.
           </h2>
 
@@ -776,7 +778,7 @@ export default function LandingPage() {
                 ],
                 [
                   "Not daily engagement",
-                  "Most days the record stays quiet. It returns only when evidence touches a condition you wrote or a decision is ready to be reviewed.",
+                  "Most days the record stays quiet. It returns only when evidence matches a condition you wrote or an earlier decision is ready for review.",
                 ],
               ] as const
             ).map(([label, answer]) => (
@@ -847,10 +849,9 @@ export default function LandingPage() {
               marginTop: 28,
             }}
           >
-            You note what you believe, and we keep an eye on it. We also read for the rest.
-            A big customer quietly building their own version. A rule change three countries
-            away. A shift everyone calls obvious in hindsight. When one turns up, you hear
-            about it early, while there&apos;s still something you can do.
+            penKeep also checks for major customer, competitor, regulatory and management changes
+            that could affect your reason, even when you did not name them. If one matters, it shows
+            you the source and the part of your reason that may need another look.
           </div>
         </div>
       </section>
@@ -884,9 +885,12 @@ export default function LandingPage() {
               marginTop: 28,
             }}
           >
-            Run a ticker through the counter-thesis before you buy. penKeep surfaces the bear case,
-            blind spots and measurable conditions worth watching, so the eventual decision begins
-            with a testable record instead of a story reconstructed afterward.
+            Before you buy, run the ticker through the counter-thesis{" "}
+            <InfoTip label="Counter-thesis" align="center">
+              The strongest argument against owning the stock, plus risks and specific conditions you can check later.
+            </InfoTip>
+            . penKeep gives you the strongest argument against it, risks you may have missed, and
+            specific conditions to watch.
           </div>
         </div>
       </section>
@@ -953,10 +957,9 @@ export default function LandingPage() {
               marginTop: 22,
             }}
           >
-            Every call you make gets read back when the bet is actually tested. Reaffirm, trim or
-            walk away, and a quarter or two later we tell you how it played out: held, exited,
-            dismissed. The patterns surface on their own. Where your conviction tends to hold, and
-            where you wave off the warnings that turn out to matter.
+            After each hold, trim or exit decision, penKeep records what happened next. Quarterly
+            reviews show which warnings you acted on, which you dismissed, and whether those calls
+            held up.
           </div>
         </div>
       </section>

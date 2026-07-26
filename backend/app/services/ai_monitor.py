@@ -58,13 +58,21 @@ Judge direction from the article's substance about the stated pillars, never fro
 A single event can be severity="info" AND direction="supports" — that combination is the whole point of separating them. So is severity="warning" AND direction="supports": a large sell-off attributed to doubts about a stated pillar deserves the investor's attention (warning), while the fundamentals the article actually reports still back the reason (supports).
 
 Output valid JSON:
-{"severity": "skip|info|warning|thesis_breaking", "direction": "supports|threatens|neutral", "analysis": "2-3 sentences, or empty string if skip."}
+{"severity": "skip|info|warning|thesis_breaking", "direction": "supports|threatens|neutral", "analysis": "Exactly 2 short sentences, or empty string if skip."}
 
-Requirements for analysis (exactly 3 short sentences, plain English, no labels like "What changed:"):
-- Sentence 1: what happened
-- Sentence 2: why it matters to their stated reason or assumption
-- Sentence 3: what to do next (keep watching / review soon / thesis may be broken)
+Requirements for analysis:
+- Lead with the conclusion. Sentence 1 must name the company, metric, customer group, competitor, or regulator and state plainly what is holding up, weakening, or has happened.
+- Sentence 2 must give the strongest concrete fact or number behind that conclusion.
+- Do not write the action. The app adds "No action needed", "Review this position", or "A decision is needed now".
+- Do not write "This evidence", "This news", "This event", "supports the thesis", "supports the case", "supports the story", "threatens your reason", "hits a pillar", or "tests an assumption". Name the exact business condition instead.
+- Do not write "suggests" when you can state the result directly. When the source is uncertain or forward-looking, name it: "Analysts forecast..." or "Management has not yet reported...".
+- Use familiar words, active voice, and no labels such as "What changed:".
 - Avoid em dashes. Use commas or periods instead.
+
+Bad: "This evidence suggests the demand story remains intact."
+Good: "ServiceNow's customer demand is holding up."
+Bad: "That range, if it prints, would support the thesis."
+Good: "Analysts forecast 21% to 21.5% subscription growth. ServiceNow has not reported the quarter yet."
 
 Do not use filler ("worth noting", "decision pressure", "it's important to", "landscape", "robust"). Write like a sharp friend who owns stocks, not a chatbot.
 
@@ -89,12 +97,12 @@ def _classification_profile_context(investor_profile: str | None) -> tuple[str, 
     if investor_profile == "thesis_driven":
         return (
             "thesis_driven",
-            "The user writes in assumptions. Say whether the news weakens, supports, or breaks one of them, plainly.",
+            "Name the exact condition that changed and state the change plainly.",
         )
     if investor_profile == "hearsay_driven":
         return (
             "hearsay_driven",
-            "The user may have started from a tip or theme. Say whether the news makes that story more real, shakier, or dead.",
+            "The user may have started from a tip or theme. Name the business fact that now makes the position stronger or weaker.",
         )
     return (
         "general",
@@ -104,33 +112,70 @@ def _classification_profile_context(investor_profile: str | None) -> tuple[str, 
 
 def _next_step_sentence(severity: str, investor_profile: str | None) -> str:
     if severity == "thesis_breaking":
-        return (
-            "You may need to rewrite the story or exit. Do not just leave it on watch."
-            if investor_profile == "hearsay_driven"
-            else "You may need to rewrite the thesis or exit. Do not just leave it on watch."
-        )
+        return "A decision is needed now."
     if severity == "warning":
-        return (
-            "Review soon; the story may be weakening and this isn't background noise."
-            if investor_profile == "hearsay_driven"
-            else "Review soon; a pillar may be weakening and this isn't background noise."
-        )
-    return "No rush — keep watching for now."
+        return "Review this position."
+    return "No action needed."
 
 
-def _why_it_matters_sentence(analysis: str, investor_profile: str | None) -> str:
-    cleaned = analysis.strip()
-    if cleaned:
-        sentences = [segment.strip() for segment in re.split(r"(?<=[.!?])\s+", cleaned) if segment.strip()]
-        if len(sentences) >= 2:
-            return sentences[1]
-        if len(sentences) == 1:
-            return sentences[0]
-    return (
-        "The story needs to show up in real operating results, not just headlines."
-        if investor_profile == "hearsay_driven"
-        else "This hits one of the assumptions you wrote down."
-    )
+_ACTION_LANGUAGE = re.compile(
+    r"\b(?:"
+    r"no action|no rush|keep watching|review (?:soon|this|the)|"
+    r"a decision is needed|rewrite (?:the|your)|leave it on watch|"
+    r"thesis may be broken|may need to exit"
+    r")\b",
+    re.IGNORECASE,
+)
+
+_INDIRECT_LANGUAGE = re.compile(
+    r"(?:"
+    r"^\s*(?:this evidence|this news|this event|this development|that range)\b|"
+    r"\b(?:supports?|threatens?|weakens?|validates?|confirms?|tests?|hits?)\s+"
+    r"(?:your\s+|the\s+|a\s+|an\s+)?"
+    r"(?:reason|thesis|case|story|pillar|assumption)\b|"
+    r"\b(?:reason|thesis|case|story|pillar|assumption)\s+"
+    r"(?:remains?|stays?|is|looks?|appears?)\b"
+    r")",
+    re.IGNORECASE,
+)
+
+_COPY_LABEL = re.compile(
+    r"^\s*(?:what happened|why it matters(?: now)?|next step|model read)\s*:\s*",
+    re.IGNORECASE,
+)
+
+
+def _sentences(text: str) -> list[str]:
+    return [
+        segment.strip()
+        for segment in re.split(r"(?<=[.!?])\s+", text.strip())
+        if segment.strip()
+    ]
+
+
+def _finish_sentence(sentence: str) -> str:
+    cleaned = _COPY_LABEL.sub("", sentence.strip())
+    if not cleaned:
+        return ""
+    cleaned = f"{cleaned[0].upper()}{cleaned[1:]}"
+    if not cleaned.endswith((".", "!", "?")):
+        cleaned = f"{cleaned}."
+    return cleaned
+
+
+def _direct_analysis_sentences(analysis: str) -> list[str]:
+    direct: list[str] = []
+    for sentence in _sentences(analysis):
+        cleaned = _finish_sentence(sentence)
+        if not cleaned:
+            continue
+        if _ACTION_LANGUAGE.search(cleaned) or _INDIRECT_LANGUAGE.search(cleaned):
+            continue
+        if cleaned.casefold() not in {existing.casefold() for existing in direct}:
+            direct.append(cleaned)
+        if len(direct) == 2:
+            break
+    return direct
 
 
 def _normalize_analysis_text(
@@ -140,21 +185,18 @@ def _normalize_analysis_text(
     severity: str,
     investor_profile: str | None,
 ) -> str:
-    first_sentence = event_description.strip().rstrip(".")
-    if first_sentence:
-        first_sentence = f"{first_sentence[0].upper()}{first_sentence[1:]}."
-    else:
-        first_sentence = "New evidence showed up."
+    content = _direct_analysis_sentences(analysis)
+    if not content:
+        content = [
+            finished
+            for sentence in _sentences(event_description)
+            if (finished := _finish_sentence(sentence))
+        ][:2]
+    if not content:
+        content = ["New evidence was found."]
 
-    second_sentence = _why_it_matters_sentence(analysis, investor_profile).strip()
-    if not second_sentence.endswith((".", "!", "?")):
-        second_sentence = f"{second_sentence}."
-
-    third_sentence = _next_step_sentence(severity, investor_profile)
-    if not third_sentence.endswith((".", "!", "?")):
-        third_sentence = f"{third_sentence}."
-
-    return " ".join([first_sentence, second_sentence, third_sentence]).strip()
+    action = _next_step_sentence(severity, investor_profile)
+    return " ".join([*content, action]).strip()
 
 
 def _build_classification_prompt(

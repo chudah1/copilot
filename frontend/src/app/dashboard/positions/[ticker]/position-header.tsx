@@ -31,12 +31,14 @@ interface PositionHeaderProps {
   onSetDeleteConfirming: (v: boolean) => void;
   onCheckNowComplete: (result: CheckNowResponse) => Promise<void> | void;
   onSelectTab: (id: TabId) => void;
+  onOpenNote: () => void;
 }
 
 export function PositionHeader({
   holding, activeThesis, pulse, investorProfile, headerCollapsed, hasPrice, value, pnl, pnlPct,
   stalePressure, tabs, activeTab, unreviewedEvents, deleteConfirming,
   deleteLoading, onDelete, onSetDeleteConfirming, onCheckNowComplete, onSelectTab,
+  onOpenNote,
 }: PositionHeaderProps) {
   const decisionState = getDecisionState({ thesis: activeThesis, pulse });
   const decisionStatusDot = {
@@ -84,6 +86,12 @@ export function PositionHeader({
                   Remove position
                 </button>
               )}
+              <button
+                onClick={onOpenNote}
+                className="border border-border px-3 py-2 font-mono text-[10px] uppercase tracking-[0.15em] text-primary transition-colors hover:border-primary/40"
+              >
+                + Note
+              </button>
               <CheckNowButton
                 holdingId={holding.id}
                 ticker={holding.ticker}
@@ -131,6 +139,40 @@ export function PositionHeader({
                 hasThesis={Boolean(activeThesis)}
                 className="mt-1"
               />
+            </div>
+          </div>
+
+          <div className={`grid grid-cols-3 gap-px overflow-hidden border border-border/60 bg-border/60 transition-all duration-200 ${headerCollapsed ? "max-h-0 border-0 opacity-0 sm:max-h-24 sm:border sm:opacity-100" : "max-h-24"} mb-3`}>
+            <div className="bg-background/90 px-3 py-2">
+              <p className="font-mono text-[9px] uppercase tracking-[0.15em] text-muted-foreground">
+                Shares
+              </p>
+              <p className="mt-1 font-mono text-sm tabular-nums text-foreground">
+                {holding.quantity.toLocaleString()}
+              </p>
+            </div>
+            <div className="bg-background/90 px-3 py-2">
+              <p className="font-mono text-[9px] uppercase tracking-[0.15em] text-muted-foreground">
+                Current price
+              </p>
+              <p className="mt-1 font-mono text-sm tabular-nums text-foreground">
+                {holding.current_price != null
+                  ? formatCurrency(holding.current_price, holding.currency || "GBP")
+                  : "—"}
+              </p>
+            </div>
+            <div className="bg-background/90 px-3 py-2">
+              <p className="font-mono text-[9px] uppercase tracking-[0.15em] text-muted-foreground">
+                Average cost
+              </p>
+              <p className="mt-1 font-mono text-sm tabular-nums text-foreground">
+                {holding.average_cost_native != null
+                  ? formatCurrency(holding.average_cost_native, holding.currency || "GBP")
+                  : formatCurrency(
+                      holding.average_cost_basis,
+                      holding.portfolio_currency ?? "GBP",
+                    )}
+              </p>
             </div>
           </div>
 

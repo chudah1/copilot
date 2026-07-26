@@ -172,6 +172,8 @@ DECOMPOSITION_SYSTEM_PROMPT = """You decompose an investor's reason for owning a
 Return only schema-conforming JSON (no extra keys, no prose). Be concise: rationale fields under 20 words, signal_label 4-8 words.
 
 Rules:
+- Lead with the conclusion in every claim and rationale. Name the exact company, metric, customer, competitor, or event.
+- Name the exact causal link instead of writing "this suggests", "supports the thesis", "weakens the case", "the story", "a pillar", or "thesis risk".
 - Extract at least one claim whenever any investment rationale is present (even one sentence). Zero claims only if the text is purely descriptive with zero investment intent.
 - When must_remain_true or what_would_change_my_mind are non-empty, extract at least one claim from each. Skip only fields that say "None provided".
 - Set source_field to the part of the user's case that directly produced the claim. Do not label a break condition as why_own_it merely because the topics overlap.
@@ -207,7 +209,7 @@ Example output:
           "signals": [
             {"signal_type": "revenue_growth", "signal_label": "NVDA data center revenue growth",
              "signal_config_json": {"metric": "data_center_revenue", "operator": ">=", "threshold_pct": 20},
-             "rationale": "Core thesis validator", "confidence": 0.95, "confirmation_required": false},
+             "rationale": "Data center growth shows AI GPU demand", "confidence": 0.95, "confirmation_required": false},
             {"signal_type": "earnings_surprise", "signal_label": "NVDA quarterly earnings beat",
              "signal_config_json": {}, "rationale": "Beats confirm AI demand continues",
              "confidence": 0.8, "confirmation_required": false}
@@ -222,12 +224,12 @@ Example output:
       "entities": [
         {
           "entity_name": "NVIDIA", "entity_ticker": "NVDA", "entity_type": "held_company",
-          "relation_type": "validated_by", "rationale": "Margin erosion breaks thesis",
+          "relation_type": "validated_by", "rationale": "Lower margins would reduce earnings power",
           "confidence": 0.85, "confirmation_required": false,
           "signals": [
             {"signal_type": "earnings_growth", "signal_label": "NVDA gross margin trend",
              "signal_config_json": {"metric": "gross_margin", "operator": ">=", "threshold_pct": 70},
-             "rationale": "70% floor implied by thesis condition", "confidence": 0.85, "confirmation_required": false}
+             "rationale": "Gross margin must stay above the user's 70% floor", "confidence": 0.85, "confirmation_required": false}
           ]
         }
       ]
@@ -244,7 +246,7 @@ Example output:
           "signals": [
             {"signal_type": "news_topic", "signal_label": "AMD AI GPU market share gains",
              "signal_config_json": {"topic": "AMD AI GPU competition NVDA"},
-             "rationale": "AMD customer wins signal thesis risk", "confidence": 0.7, "confirmation_required": true}
+             "rationale": "AMD customer wins would reduce NVDA market share", "confidence": 0.7, "confirmation_required": true}
           ]
         }
       ]

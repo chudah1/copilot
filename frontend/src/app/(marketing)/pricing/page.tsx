@@ -1,25 +1,41 @@
 import Link from "next/link";
+import { InfoTip } from "@/components/ui/info-tip";
 import { FoundingForm } from "../../_mkt/founding-form";
 import { mk } from "../../_mkt/tokens";
 
 const FREE_FEATURES = [
-  "Up to 5 active theses",
-  "A structured record of your reasoning and decisions",
-  "Core evidence: earnings, filings, news, insider transactions",
-  "Thesis health score (Healthy / At Risk / Broken)",
-  "Weekly digest email",
-  "12 months of decision history",
+  { label: "Write and monitor up to 5 positions" },
+  { label: "Original reasons, evidence and decisions kept together" },
+  { label: "Earnings, filings, news and insider trades checked" },
+  {
+    label: "Health score for each written reason",
+    info: "A 0–100 summary of how recent evidence compares with the reason you wrote. It is not a prediction or recommendation.",
+  },
+  { label: "Sunday digest email" },
+  { label: "12 months of decision history" },
 ];
 
 const PREMIUM_FEATURES = [
-  "Unlimited theses",
-  "Broker connection (Trading 212 + more)",
-  "Counter-thesis assistant",
-  "Full decision history, unlimited",
-  "Decision follow-through: what happened after your call",
-  "Pre-earnings nudges and post-earnings review",
-  "Quarterly decision-pattern review",
-  "Everything in Free",
+  { label: "Unlimited monitored positions" },
+  {
+    label: "Read-only broker connection",
+    info: "Imports your current positions so you do not have to enter them by hand. penKeep cannot place trades or move money.",
+  },
+  {
+    label: "Counter-thesis assistant",
+    info: "Builds the strongest argument against owning a stock, then turns the main risks into conditions you can check later.",
+  },
+  { label: "Full decision history with no time limit" },
+  {
+    label: "Outcome follow-ups after your decisions",
+    info: "Returns to an earlier hold, trim or exit decision and records what happened afterward.",
+  },
+  { label: "Reminder before earnings and review afterward" },
+  {
+    label: "Quarterly review of your decision patterns",
+    info: "Shows which warnings you acted on, which you dismissed, and how those decisions later worked out.",
+  },
+  { label: "Everything in Free" },
 ];
 
 const SHARED_PROMISES = [
@@ -98,7 +114,7 @@ export default function PricingPage() {
           className="grid grid-cols-1 md:grid-cols-3"
         >
           {[
-            ["Start", "Record up to 5 active theses free"],
+            ["Start", "Record up to 5 positions free"],
             ["Build", "Evidence and decisions stay connected"],
             ["Review", "Look back at what you wrote and decided"],
           ].map(([label, value]) => (
@@ -174,10 +190,17 @@ export default function PricingPage() {
             <div style={{ height: 1, background: mk.pencilLight }} />
 
             <ul style={{ listStyle: "none", padding: 0, margin: 0, display: "flex", flexDirection: "column", gap: 12 }}>
-              {FREE_FEATURES.map((f) => (
-                <li key={f} style={{ display: "flex", alignItems: "flex-start", gap: 10 }}>
+              {FREE_FEATURES.map((feature) => (
+                <li key={feature.label} style={{ display: "flex", alignItems: "flex-start", gap: 10 }}>
                   <Check />
-                  <span style={{ fontFamily: mk.sans, fontSize: 15, color: mk.inkSoft, lineHeight: 1.45 }}>{f}</span>
+                  <span style={{ display: "inline-flex", alignItems: "center", gap: 3, fontFamily: mk.sans, fontSize: 15, color: mk.inkSoft, lineHeight: 1.45 }}>
+                    {feature.label}
+                    {"info" in feature && feature.info && (
+                      <InfoTip label={feature.label} align="center">
+                        {feature.info}
+                      </InfoTip>
+                    )}
+                  </span>
                 </li>
               ))}
             </ul>
@@ -212,7 +235,7 @@ export default function PricingPage() {
                     textAlign: "center",
                   }}
                 >
-                  No card · up to 5 active theses
+                  No card · up to 5 positions
                 </div>
               </div>
             </div>
@@ -278,10 +301,21 @@ export default function PricingPage() {
             <div style={{ height: 1, background: "rgba(255,255,255,0.12)" }} />
 
             <ul style={{ listStyle: "none", padding: 0, margin: 0, display: "flex", flexDirection: "column", gap: 12 }}>
-              {PREMIUM_FEATURES.map((f) => (
-                <li key={f} style={{ display: "flex", alignItems: "flex-start", gap: 10 }}>
+              {PREMIUM_FEATURES.map((feature) => (
+                <li key={feature.label} style={{ display: "flex", alignItems: "flex-start", gap: 10 }}>
                   <Check premium />
-                  <span style={{ fontFamily: mk.sans, fontSize: 15, color: "#ccc", lineHeight: 1.45 }}>{f}</span>
+                  <span style={{ display: "inline-flex", alignItems: "center", gap: 3, fontFamily: mk.sans, fontSize: 15, color: "#ccc", lineHeight: 1.45 }}>
+                    {feature.label}
+                    {"info" in feature && feature.info && (
+                      <InfoTip
+                        label={feature.label}
+                        align="center"
+                        iconClassName="text-[#999] hover:text-white"
+                      >
+                        {feature.info}
+                      </InfoTip>
+                    )}
+                  </span>
                 </li>
               ))}
             </ul>
@@ -372,7 +406,8 @@ export default function PricingPage() {
         <p style={{ fontFamily: mk.sans, fontSize: "clamp(16px,1.8vw,19px)", lineHeight: 1.6, color: mk.inkSoft, maxWidth: 720, margin: 0 }}>
           penKeep is a research and journaling tool, not an investment advisor or broker-dealer.
           No tier, free or premium, gives you buy or sell recommendations.
-          Thesis health scores are a prompt to re-read what you wrote, not an instruction to act.
+          Health scores summarise how recent evidence compares with your written reason. They are
+          not predictions or instructions to act.
         </p>
       </section>
 
