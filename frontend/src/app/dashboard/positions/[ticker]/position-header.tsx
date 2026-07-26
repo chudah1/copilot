@@ -41,6 +41,13 @@ export function PositionHeader({
   onOpenNote,
 }: PositionHeaderProps) {
   const decisionState = getDecisionState({ thesis: activeThesis, pulse });
+  // Native price vs native average cost — same currency, so FX noise drops out.
+  const priceVsAvgCostPct =
+    holding.current_price != null &&
+    holding.average_cost_native != null &&
+    holding.average_cost_native > 0
+      ? ((holding.current_price - holding.average_cost_native) / holding.average_cost_native) * 100
+      : null;
   const decisionStatusDot = {
     needs_written_case: "bg-border",
     needs_decision: "bg-red-500",
@@ -173,6 +180,11 @@ export function PositionHeader({
                       holding.portfolio_currency ?? "GBP",
                     )}
               </p>
+              {priceVsAvgCostPct != null && (
+                <p className={`mt-0.5 font-sans text-[10px] leading-tight ${priceVsAvgCostPct >= 0 ? "text-emerald-700" : "text-red-600"}`}>
+                  Price is {Math.abs(priceVsAvgCostPct).toFixed(1)}% {priceVsAvgCostPct >= 0 ? "above" : "below"} this
+                </p>
+              )}
             </div>
           </div>
 

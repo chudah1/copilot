@@ -617,86 +617,6 @@ function DashboardInner() {
                 )}
               </div>
 
-              <aside className="hidden">
-                <div className="flex items-start justify-between gap-3">
-                  <div>
-                    <p className="font-mono text-[10px] uppercase tracking-[0.16em] text-muted-foreground">
-                      Portfolio snapshot
-                    </p>
-                    <div className="mt-3 flex flex-wrap items-baseline gap-2">
-                      <span className="font-display text-[1.9rem] italic leading-none tracking-tight text-foreground">
-                        {formatCurrency(displayTotalValue, summary?.portfolio_currency ?? "GBP")}
-                      </span>
-                      {(livePnlPct != null ? livePnlPct : summary?.total_pnl_pct) != null && (
-                        <span className={`font-mono text-[10px] tabular-nums ${
-                          (livePnl ?? summary?.total_pnl ?? 0) >= 0 ? "text-emerald-700" : "text-red-600"
-                        }`}>
-                          {formatPercent(livePnlPct ?? summary?.total_pnl_pct ?? 0)}
-                        </span>
-                      )}
-                    </div>
-                    <p className="mt-2 font-sans text-xs text-muted-foreground">
-                      {holdings.length} position{holdings.length === 1 ? "" : "s"}
-                      {hasLivePrices ? " · prices checked recently" : ""}
-                    </p>
-                    {summary?.fx_unavailable && (
-                      <p className="mt-2 font-sans text-xs leading-relaxed text-amber-700">
-                        {summary.preferred_currency} conversion is temporarily unavailable. Values are shown in GBP.
-                      </p>
-                    )}
-                  </div>
-                </div>
-
-                <div className="mt-5 space-y-3 border-t border-border/60 pt-4">
-                  <div className="flex items-start gap-3">
-                    <CircleAlert className="mt-0.5 h-4 w-4 shrink-0 text-primary" />
-                    <div className="space-y-1">
-                      <p className="font-sans text-sm leading-relaxed text-foreground/85">
-                        {caseQualityHeadline}
-                      </p>
-                      <p className="font-sans text-xs leading-relaxed text-muted-foreground">
-                        {caseQualityDetail}
-                      </p>
-                      {caseQualityCta && (
-                        <Link href={caseQualityCta.href} className="inline-flex items-center gap-1.5 font-mono text-[10px] uppercase tracking-[0.14em] text-primary hover:text-primary/75">
-                          {caseQualityCta.label.replace(" →", "")}
-                          <ArrowRight className="h-3 w-3" />
-                        </Link>
-                      )}
-                    </div>
-                  </div>
-
-                  <div className="flex items-start gap-3 border-t border-border/60 pt-3">
-                    <CalendarClock className="mt-0.5 h-4 w-4 shrink-0 text-primary" />
-                    <p className="font-sans text-sm leading-relaxed text-foreground/85">
-                      {nearTermEarnings
-                        ? `${cleanTicker(nearTermEarnings.ticker)} reports ${daysUntilLabel(nearTermEarnings.days_until)}.`
-                        : "No earnings need preparation in the next three weeks."}
-                    </p>
-                  </div>
-
-                  {pulse?.next_digest_at && (
-                    <div className="flex items-start gap-3 border-t border-border/60 pt-3">
-                      <BellRing className="mt-0.5 h-4 w-4 shrink-0 text-primary" />
-                      <div className="space-y-1">
-                        <p className="font-mono text-[10px] uppercase tracking-[0.14em] text-muted-foreground">
-                          Next written digest
-                        </p>
-                        <DigestCountdown nextDigestAt={pulse.next_digest_at} />
-                      </div>
-                    </div>
-                  )}
-                </div>
-
-                <div className="mt-5 flex flex-wrap gap-2 border-t border-border/60 pt-4">
-                  <Link href="/dashboard/simulate" className="border border-border/80 px-3 py-2 font-mono text-[10px] uppercase tracking-[0.14em] text-muted-foreground hover:text-foreground">
-                    Simulate trade
-                  </Link>
-                  <Link href="/connect?return=dashboard" className="border border-border/80 px-3 py-2 font-mono text-[10px] uppercase tracking-[0.14em] text-muted-foreground hover:text-foreground">
-                    Import data
-                  </Link>
-                </div>
-              </aside>
             </div>
           </section>
         </div>
@@ -874,7 +794,9 @@ function DashboardInner() {
       {/* ── Positions grid ───────────────────────────────────────────── */}
       <div id="positions" className="order-1 px-4 sm:px-8 pt-6 pb-8 flex-1 scroll-mt-24">
         <div className="grid gap-5 lg:grid-cols-[minmax(0,1fr)_20rem]">
-        <div className="product-panel p-4 sm:p-5">
+        {/* Scrolls internally on large screens so the whole portfolio stays one
+            view with the snapshot always visible beside it. */}
+        <div className="product-panel p-4 sm:p-5 lg:max-h-[calc(100vh-8rem)] lg:overflow-y-auto">
           <div className="mb-4 flex items-center justify-between gap-4">
             <div>
               <div className="flex items-center gap-2">

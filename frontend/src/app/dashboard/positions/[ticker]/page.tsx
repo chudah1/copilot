@@ -1285,19 +1285,14 @@ function PositionDetailInner() {
                             </div>
                           )
                         )}
-                        <div className={decompositionEnvelope?.decomposition ? "space-y-3" : ""}>
-                          {decompositionEnvelope?.decomposition && (
-                            <p className="font-mono text-[10px] uppercase tracking-[0.2em] text-muted-foreground">Signal setup</p>
-                          )}
-                          <ThesisDecompositionReview
-                            key={`${decompositionEnvelope?.decomposition?.id ?? "empty"}:${decompositionEnvelope?.status ?? "none"}`}
-                            envelope={decompositionEnvelope}
-                            loading={decompositionLoading}
-                            saving={decompositionSaving}
-                            onGenerate={handleGenerateDecomposition}
-                            onConfirm={handleConfirmDecomposition}
-                          />
-                        </div>
+                        <ThesisDecompositionReview
+                          key={`${decompositionEnvelope?.decomposition?.id ?? "empty"}:${decompositionEnvelope?.status ?? "none"}`}
+                          envelope={decompositionEnvelope}
+                          loading={decompositionLoading}
+                          saving={decompositionSaving}
+                          onGenerate={handleGenerateDecomposition}
+                          onConfirm={handleConfirmDecomposition}
+                        />
 
                         {/* ── Historical audit card ──────────────────────── */}
                         {activeThesis && (decompositionEnvelope?.status === "confirmed" || decompositionEnvelope?.status === "partially_confirmed") && (
