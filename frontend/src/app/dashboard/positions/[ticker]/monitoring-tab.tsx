@@ -126,7 +126,11 @@ export function MonitoringTab({
         />
       )}
 
-      {supportingItems.length > 0 && <HeldUpThisWeek items={supportingItems} />}
+      {/* While a check-in is open, supporting evidence already renders inside
+          each claim card — repeating it here showed the same items twice. */}
+      {unreviewedEvents === 0 && supportingItems.length > 0 && (
+        <HeldUpThisWeek items={supportingItems} />
+      )}
 
       {reviewedItems.length > 0 && <ReviewedThisWeek items={reviewedItems} />}
 
