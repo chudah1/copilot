@@ -22,7 +22,7 @@ const DECISION_RING: Record<string, string> = {
   changed: "ring-1 ring-amber-500/20",
 };
 
-function cardStatusCopy(args: {
+export function cardStatusCopy(args: {
   hasThesis: boolean;
   pulse?: HoldingPulse;
   thesis?: Thesis;
@@ -134,6 +134,9 @@ interface PositionCardProps {
   livePrice?: LivePrice;
   totalValue: number;
   onGenerateDraft?: () => void;
+  /** When set, a plain left-click peeks instead of navigating. Modifier
+      clicks and middle-clicks keep native link behavior (new tab, etc.). */
+  onPeek?: () => void;
   investorProfile?: "thesis_driven" | "hearsay_driven" | null;
   index: number;
 }
@@ -146,6 +149,7 @@ export function PositionCard({
   livePrice,
   totalValue,
   onGenerateDraft,
+  onPeek,
   investorProfile,
   index,
 }: PositionCardProps) {
@@ -191,7 +195,16 @@ export function PositionCard({
       className="h-full"
       initial={false}
     >
-      <Link href={`/dashboard/positions/${holding.ticker}`} className="block h-full">
+      <Link
+        href={`/dashboard/positions/${holding.ticker}`}
+        className="block h-full"
+        onClick={(e) => {
+          if (!onPeek) return;
+          if (e.metaKey || e.ctrlKey || e.shiftKey || e.altKey || e.button !== 0) return;
+          e.preventDefault();
+          onPeek();
+        }}
+      >
         <div
           className={`h-full group relative flex flex-col gap-3 border border-border bg-card p-4 transition-all duration-150 hover:border-foreground/20 hover:shadow-md cursor-pointer ${ringClass}`}
         >

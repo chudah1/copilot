@@ -22,6 +22,7 @@ import { QuickAddHolding } from "@/components/portfolio/quick-add-holding";
 import { SinceLastVisit } from "@/components/portfolio/since-last-visit";
 import { DigestCountdown } from "@/components/portfolio/digest-countdown";
 import { PositionCard, cleanTicker } from "@/components/portfolio/position-card";
+import { PositionPeek } from "@/components/portfolio/position-peek";
 import { AttentionCard } from "@/components/portfolio/attention-card";
 import { DashboardSkeleton } from "@/components/portfolio/dashboard-skeleton";
 import { ErrorBoundary } from "@/components/ui/error-boundary";
@@ -305,6 +306,7 @@ function DashboardInner() {
   const searchParams = useSearchParams();
   const [draftBannerDismissed, setDraftBannerDismissed] = useState(false);
   const [showAddForm, setShowAddForm] = useState(false);
+  const [peekHoldingId, setPeekHoldingId] = useState<string | null>(null);
   const [onboardingBannerVisible, setOnboardingBannerVisible] = useState(false);
   const [activationBannerDismissed, setActivationBannerDismissed] = useState(() => {
     if (typeof window === "undefined") return false;
@@ -859,6 +861,7 @@ function DashboardInner() {
                 livePrice={livePrices[h.ticker]}
                 totalValue={summary?.total_value ?? 0}
                 onGenerateDraft={() => handleGenerateDraft(h.id, h.ticker)}
+                onPeek={() => setPeekHoldingId(h.id)}
                 investorProfile={onboardingState?.investor_profile ?? null}
                 index={i}
               />
@@ -944,6 +947,23 @@ function DashboardInner() {
         </aside>
         </div>
       </div>
+
+      {/* ── Position peek (slide-over) ───────────────────────────────── */}
+      {(() => {
+        const peeked = peekHoldingId ? holdings.find((h) => h.id === peekHoldingId) ?? null : null;
+        return (
+          <PositionPeek
+            holding={peeked}
+            thesis={peeked ? thesesByHolding[peeked.id] : undefined}
+            pulse={peeked ? pulseByHolding[peeked.id] : undefined}
+            earnings={peeked ? earningsByHolding[peeked.id] : undefined}
+            livePrice={peeked ? livePrices[peeked.ticker] : undefined}
+            totalValue={summary?.total_value ?? 0}
+            investorProfile={onboardingState?.investor_profile ?? null}
+            onClose={() => setPeekHoldingId(null)}
+          />
+        );
+      })()}
 
       {/* ── Footer strip ─────────────────────────────────────────────── */}
       {(visibleEarnings.length > 0) && (
