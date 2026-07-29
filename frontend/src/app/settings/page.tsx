@@ -96,6 +96,7 @@ function Section({ label, children, disabled }: { label: string; children: React
 
 export default function SettingsPage() {
   const [prefs, setPrefs] = useState<UserPreferences>({
+    display_name: "",
     digest_frequency: "weekly",
     digest_day: "sunday",
     digest_time: "17:00",
@@ -176,6 +177,22 @@ export default function SettingsPage() {
             </div>
           )}
         </div>
+
+        <Section label="Name">
+          <div className="space-y-3">
+            <input
+              type="text"
+              value={prefs.display_name ?? ""}
+              onChange={(e) => set("display_name", e.target.value)}
+              placeholder="First name or nickname"
+              maxLength={40}
+              className="flex h-10 w-full sm:w-72 border border-input bg-background px-3 py-2 text-sm text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+            />
+            <p className="max-w-xl font-sans text-xs leading-relaxed text-muted-foreground">
+              Used to greet you on the dashboard. Leave blank to keep things anonymous.
+            </p>
+          </div>
+        </Section>
 
         {/* Portfolio sources */}
         <Section label="Portfolio">

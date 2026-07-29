@@ -38,7 +38,15 @@ import type {
   PortfolioPulse,
   QuarterlyReviewCurrent,
   UpcomingEarnings,
+  UserPreferences,
 } from "@/types";
+
+function greetingForHour(hour: number) {
+  if (hour < 5) return "Working late";
+  if (hour < 12) return "Good morning";
+  if (hour < 18) return "Good afternoon";
+  return "Good evening";
+}
 
 interface RecentReviewBannerState {
   ticker: string;
@@ -328,8 +336,11 @@ function DashboardInner() {
   const { data: quarterlyReview = null } = useSWR<QuarterlyReviewCurrent>("/api/quarterly-review/current", fetcher);
   const { data: draftStatus = null, mutate: mutateDraftStatus } = useSWR<DraftStatus>("/api/portfolio/draft-status", fetcher);
   const { data: onboardingState = null } = useSWR<OnboardingState>("/api/onboarding/state", fetcher);
+  const { data: userPrefs = null } = useSWR<UserPreferences>("/api/settings", fetcher);
   const investorProfile = onboardingState?.investor_profile ?? null;
   const copy = dashboardCopy(investorProfile);
+  const displayName = userPrefs?.display_name?.trim() || null;
+  const greeting = greetingForHour(new Date().getHours());
 
   // Live prices (updates in background every 60s)
   const { data: livePricesRaw } = useSWR<LivePrice[]>("/api/portfolio/live-prices", fetcher, {
@@ -587,7 +598,10 @@ function DashboardInner() {
                     </InfoTip>
                   </div>
                   <h1 className="mt-2 font-display text-[2rem] italic leading-tight text-foreground sm:text-[2.5rem]">
-                    What needs your attention.
+                    {displayName ? `${greeting}, ${displayName}.` : `${greeting}.`}
+                    <span className="block text-foreground/60 text-[0.72em] mt-1">
+                      Here&apos;s what needs your attention.
+                    </span>
                   </h1>
                 </div>
 

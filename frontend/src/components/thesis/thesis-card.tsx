@@ -508,15 +508,24 @@ export function ThesisCard({ thesis, decomposition, investorProfile, monitoringG
         </div>
       )}
 
-      {/* ── AI summary ── */}
+      {/* ── AI summary — the model's read gets its own ink card, distinct
+             from the user's own words and the data chrome around it ── */}
       {thesis.ai_summary && (
         <div className="px-5 py-4">
-          <p className="font-mono text-[10px] uppercase tracking-[0.18em] text-muted-foreground mb-1.5">
-            Snapshot
-          </p>
-          <p className="font-sans text-xs text-muted-foreground/80 leading-relaxed">
-            {thesis.ai_summary}
-          </p>
+          <div className="relative overflow-hidden bg-[#17150F] border border-[#332F24] px-4 py-4">
+            <div aria-hidden className="absolute top-0 left-4 right-4 h-[2px] bg-emerald-600/70" />
+            <div className="flex items-center gap-1.5">
+              <p className="font-mono text-[10px] uppercase tracking-[0.18em] text-[#A8A293]">
+                penKeep&apos;s read
+              </p>
+              <InfoTip label="penKeep's read" iconClassName="text-[#A8A293] hover:text-[#ECE7DB]">
+                The model&apos;s short summary of your written case. It restates what you wrote — it is not advice.
+              </InfoTip>
+            </div>
+            <p className="mt-2 font-display italic text-[1.05rem] leading-relaxed text-[#ECE7DB]">
+              {thesis.ai_summary}
+            </p>
+          </div>
         </div>
       )}
 

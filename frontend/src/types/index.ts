@@ -406,6 +406,7 @@ export interface UpcomingEarnings {
 }
 
 export interface UserPreferences {
+  display_name: string;
   digest_frequency: string;
   digest_day: string;
   digest_time: string;

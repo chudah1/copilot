@@ -53,6 +53,39 @@ async def test_update_settings_persists_supported_values_only(client, auth_heade
 # --- New Phase 8 tests ---
 
 
+async def test_display_name_round_trip_and_partial_update(client, auth_headers, db, test_user):
+    # Partial body: only display_name — other preferences must survive the merge.
+    test_user.preferences = {"digest_frequency": "monthly"}
+    await db.commit()
+
+    response = await client.put(
+        "/api/settings",
+        json={"display_name": "  Kwasi  "},
+        headers=auth_headers,
+    )
+    assert response.status_code == 200
+    body = response.json()
+    assert body["display_name"] == "Kwasi"  # stripped
+    assert body["digest_frequency"] == "monthly"  # preserved
+
+    fetched = await client.get("/api/settings", headers=auth_headers)
+    assert fetched.json()["display_name"] == "Kwasi"
+
+
+async def test_display_name_defaults_empty_and_ignores_non_string(client, auth_headers, db, test_user):
+    test_user.preferences = {"display_name": 42}
+    await db.commit()
+
+    response = await client.get("/api/settings", headers=auth_headers)
+    assert response.status_code == 200
+    assert response.json()["display_name"] == ""
+
+
+def test_display_name_capped_at_40_chars():
+    prefs = UserPreferences(display_name="x" * 60)
+    assert len(prefs.display_name) == 40
+
+
 def test_invalid_frequency_defaults_to_weekly():
     prefs = UserPreferences(digest_frequency="hourly")
     assert prefs.digest_frequency == "weekly"

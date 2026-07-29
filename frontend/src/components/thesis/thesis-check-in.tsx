@@ -73,7 +73,12 @@ function EvidenceRow({
           </div>
           <p className="mt-1.5 font-sans text-sm leading-relaxed text-foreground/90">{item.summary || item.title}</p>
           {item.ai_analysis && (
-            <p className="mt-1 font-sans text-xs leading-relaxed text-muted-foreground">{item.ai_analysis}</p>
+            <div className="mt-2.5 border-l-2 border-emerald-600/50 bg-emerald-600/[0.04] py-1.5 pl-3 pr-2">
+              <p className="font-mono text-[9px] uppercase tracking-[0.16em] text-emerald-700/80">
+                penKeep&apos;s read
+              </p>
+              <p className="mt-1 font-sans text-xs leading-relaxed text-foreground/75">{item.ai_analysis}</p>
+            </div>
           )}
           {item.source_url && (
             <a

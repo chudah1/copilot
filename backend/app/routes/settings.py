@@ -34,6 +34,7 @@ def _normalize_bool(value, *, default: bool) -> bool:
 
 
 class UserPreferences(BaseModel):
+    display_name: str = ""
     digest_frequency: str = "weekly"
     digest_day: str = "sunday"
     digest_time: str = "17:00"
@@ -42,6 +43,11 @@ class UserPreferences(BaseModel):
     email_enabled: bool = True
     notification_sensitivity: str = "all"
     portfolio_currency: str = DEFAULT_PORTFOLIO_CURRENCY
+
+    @field_validator("display_name")
+    @classmethod
+    def validate_display_name(cls, v: str) -> str:
+        return v.strip()[:40]
 
     @field_validator("digest_frequency")
     @classmethod
@@ -77,7 +83,9 @@ class UserPreferences(BaseModel):
 def get_user_prefs(user: User) -> UserPreferences:
     """Return normalized preferences for a user, applying defaults for missing keys."""
     raw = user.preferences or {}
+    stored_name = raw.get("display_name")
     return UserPreferences(
+        display_name=stored_name if isinstance(stored_name, str) else "",
         digest_frequency=raw.get("digest_frequency", "weekly"),
         digest_day=raw.get("digest_day", "sunday"),
         digest_time=raw.get("digest_time", "17:00"),
