@@ -193,7 +193,9 @@ export function PositionCard({
   return (
     <motion.div
       className="h-full"
-      initial={false}
+      initial={{ opacity: 0, y: 10 }}
+      animate={{ opacity: 1, y: 0 }}
+      transition={{ duration: 0.35, delay: Math.min(index, 11) * 0.04, ease: "easeOut" }}
     >
       <Link
         href={`/dashboard/positions/${holding.ticker}`}
@@ -206,7 +208,7 @@ export function PositionCard({
         }}
       >
         <div
-          className={`h-full group relative flex flex-col gap-3 border border-border bg-card p-4 transition-all duration-150 hover:border-foreground/20 hover:shadow-md cursor-pointer ${ringClass}`}
+          className={`h-full group relative flex flex-col gap-3 border border-border bg-card p-4 transition-all duration-200 ease-out hover:border-foreground/20 hover:-translate-y-0.5 hover:shadow-[0_10px_30px_-12px_rgba(52,40,24,0.28)] cursor-pointer ${ringClass}`}
         >
           {/* Allocation bar — top edge */}
           <div className="absolute top-0 left-0 right-0 h-[3px] bg-border overflow-hidden">

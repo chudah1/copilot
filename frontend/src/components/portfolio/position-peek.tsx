@@ -5,6 +5,7 @@ import Link from "next/link";
 import { motion, AnimatePresence } from "framer-motion";
 import { formatCurrency, formatPercent, formatDate } from "@/lib/utils";
 import { getDecisionState } from "@/lib/decision-state";
+import { AnimatedCurrency } from "@/components/ui/animated-currency";
 import { cardStatusCopy, cleanTicker } from "./position-card";
 import type { Holding, Thesis, HoldingPulse, LivePrice, UpcomingEarnings } from "@/types";
 
@@ -13,6 +14,11 @@ const DECISION_DOT: Record<string, string> = {
   changed: "bg-amber-400",
   needs_decision: "bg-red-500",
   needs_written_case: "bg-border",
+};
+
+const PEEK_SECTION = {
+  hidden: { opacity: 0, y: 6 },
+  visible: { opacity: 1, y: 0, transition: { duration: 0.28, ease: "easeOut" as const } },
 };
 
 interface PositionPeekProps {
@@ -152,12 +158,18 @@ function PeekContent({
         </button>
       </div>
 
-      {/* Body */}
-      <div className="min-h-0 flex-1 space-y-5 overflow-y-auto px-5 py-5">
-        {/* Value block */}
-        <div>
+      {/* Body — sections settle in sequence once the panel has slid in */}
+      <motion.div
+        className="min-h-0 flex-1 space-y-5 overflow-y-auto px-5 py-5"
+        initial="hidden"
+        animate="visible"
+        variants={{
+          visible: { transition: { staggerChildren: 0.06, delayChildren: 0.12 } },
+        }}
+      >
+        <motion.div variants={PEEK_SECTION}>
           <p className="font-mono text-[1.5rem] tabular-nums leading-tight text-foreground">
-            {formatCurrency(value, currency)}
+            <AnimatedCurrency value={value} currency={currency} />
           </p>
           <p className={`mt-0.5 font-mono text-[12px] tabular-nums ${pnl >= 0 ? "text-emerald-700" : "text-red-600"}`}>
             {pnl >= 0 ? "+" : ""}
@@ -186,20 +198,20 @@ function PeekContent({
               </p>
             </div>
           </div>
-        </div>
+        </motion.div>
 
         {/* Status */}
-        <div className="border-l-2 border-border/70 pl-3">
+        <motion.div variants={PEEK_SECTION} className="border-l-2 border-border/70 pl-3">
           <p className={`font-mono text-[10px] uppercase tracking-[0.16em] ${statusCopy.tone}`}>
             {statusCopy.eyebrow}
           </p>
           <p className="mt-1 font-sans text-sm leading-relaxed text-foreground/90">{statusCopy.headline}</p>
           <p className="mt-0.5 font-sans text-xs leading-relaxed text-muted-foreground">{statusCopy.detail}</p>
-        </div>
+        </motion.div>
 
         {/* Earnings */}
         {earnings && (
-          <div className="flex items-center gap-3 border border-sky-500/25 bg-sky-500/8 px-3 py-2.5">
+          <motion.div variants={PEEK_SECTION} className="flex items-center gap-3 border border-sky-500/25 bg-sky-500/8 px-3 py-2.5">
             <span className="font-mono text-[10px] uppercase tracking-[0.16em] text-sky-700">
               Earnings{" "}
               {earnings.days_until === 0
@@ -209,12 +221,12 @@ function PeekContent({
                   : `in ${earnings.days_until} days`}
             </span>
             <span className="font-mono text-[10px] text-muted-foreground">{formatDate(earnings.report_date)}</span>
-          </div>
+          </motion.div>
         )}
 
         {/* Written case */}
         {thesis?.why_own_it ? (
-          <div className="space-y-4">
+          <motion.div variants={PEEK_SECTION} className="space-y-4">
             <div>
               <p className="font-mono text-[10px] uppercase tracking-[0.16em] text-muted-foreground">
                 {investorProfile === "thesis_driven" ? "Your thesis" : "Your reason"}
@@ -248,18 +260,18 @@ function PeekContent({
             <p className="font-mono text-[10px] text-muted-foreground/60">
               Updated {formatDate(thesis.updated_at)}
             </p>
-          </div>
+          </motion.div>
         ) : (
-          <div className="border border-border/60 bg-card/60 px-4 py-3.5">
+          <motion.div variants={PEEK_SECTION} className="border border-border/60 bg-card/60 px-4 py-3.5">
             <p className="font-sans text-sm leading-relaxed text-foreground/85">
               {investorProfile === "hearsay_driven" ? "No reason written yet." : "No thesis written yet."}
             </p>
             <p className="mt-1 font-sans text-xs leading-relaxed text-muted-foreground">
               Write it and monitoring can start judging evidence against it.
             </p>
-          </div>
+          </motion.div>
         )}
-      </div>
+      </motion.div>
 
       {/* Footer */}
       <div className="flex items-center gap-2 border-t border-border/60 px-5 py-4">

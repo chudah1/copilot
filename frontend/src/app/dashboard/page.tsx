@@ -16,13 +16,14 @@ import { formatAssumptionLabel } from "@/lib/assumption-label";
 import { getErrorMessage } from "@/lib/errors";
 import { buildDecisionInbox } from "@/lib/decision-inbox";
 import type { DecisionInboxEntry } from "@/lib/decision-inbox";
-import { formatCurrency, formatPercent } from "@/lib/utils";
+import { formatPercent } from "@/lib/utils";
 import { OnboardingBanner } from "@/components/onboarding/onboarding-banner";
 import { QuickAddHolding } from "@/components/portfolio/quick-add-holding";
 import { SinceLastVisit } from "@/components/portfolio/since-last-visit";
 import { DigestCountdown } from "@/components/portfolio/digest-countdown";
 import { PositionCard, cleanTicker } from "@/components/portfolio/position-card";
 import { PositionPeek } from "@/components/portfolio/position-peek";
+import { AnimatedCurrency } from "@/components/ui/animated-currency";
 import { AttentionCard } from "@/components/portfolio/attention-card";
 import { DashboardSkeleton } from "@/components/portfolio/dashboard-skeleton";
 import { ErrorBoundary } from "@/components/ui/error-boundary";
@@ -874,9 +875,11 @@ function DashboardInner() {
             Portfolio snapshot
           </p>
           <div className="mt-3 flex flex-wrap items-baseline gap-2">
-            <span className="font-display text-[1.9rem] italic leading-none tracking-tight text-foreground">
-              {formatCurrency(displayTotalValue, summary?.portfolio_currency ?? "GBP")}
-            </span>
+            <AnimatedCurrency
+              value={displayTotalValue}
+              currency={summary?.portfolio_currency ?? "GBP"}
+              className="font-display text-[1.9rem] italic leading-none tracking-tight text-foreground tabular-nums"
+            />
             {(livePnlPct != null ? livePnlPct : summary?.total_pnl_pct) != null && (
               <span className={`font-mono text-[10px] tabular-nums ${
                 (livePnl ?? summary?.total_pnl ?? 0) >= 0 ? "text-emerald-700" : "text-red-600"
