@@ -7,14 +7,9 @@ import { toast } from "sonner";
 import { api } from "@/lib/api";
 import { getErrorMessage } from "@/lib/errors";
 import { AppShell } from "@/components/layout/app-shell";
+import { digestStatusLabel, digestStatusTone } from "@/lib/digest-status";
 import { formatDate } from "@/lib/utils";
 import type { Digest } from "@/types";
-
-function statusDot(status: string) {
-  if (status === "sent" || status === "ready") return "text-emerald-700";
-  if (status === "draft") return "text-amber-700";
-  return "text-muted-foreground";
-}
 
 function digestArchiveCopy(investorProfile: "thesis_driven" | "hearsay_driven" | null) {
   if (investorProfile === "thesis_driven") {
@@ -305,8 +300,8 @@ export default function DigestsPage() {
 
                 {/* Right: status + date */}
                 <div className="shrink-0 text-right space-y-1">
-                  <p className={`font-mono text-[11px] uppercase tracking-[0.15em] ${statusDot(d.status)}`}>
-                    ● {d.status}
+                  <p className={`font-mono text-[11px] uppercase tracking-[0.15em] ${digestStatusTone(d)}`}>
+                    ● {digestStatusLabel(d)}
                   </p>
                   {d.sent_at && (
                     <p className="font-mono text-[10px] text-muted-foreground/50">

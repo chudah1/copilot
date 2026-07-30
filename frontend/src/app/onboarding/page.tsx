@@ -17,6 +17,12 @@ import {
 import type { Holding, HoldingContext, Thesis } from "@/types";
 
 type Step = "QUESTION_1" | "QUESTION_2" | "ON_RECORD";
+type SynthesisResult = {
+  thesis_id: string;
+  why_own_it: string;
+  must_remain_true: string;
+  what_would_change_my_mind: string;
+};
 
 const PROFILE_CONTENT: Record<
   InvestorProfile,
@@ -179,16 +185,13 @@ function WizardInner() {
     setSaving(true);
     setError("");
     try {
-      await api.post<Thesis>("/api/theses", {
+      await api.post<SynthesisResult>("/api/onboarding/synthesize", {
         holding_id: wizardState.holdingId,
-        thesis_kind: "company",
-        why_own_it: wizardState.answer1.trim(),
-        must_remain_true: null,
-        what_would_change_my_mind: wizardState.answer2.trim(),
-        status: "active",
-        confidence: "medium",
-        review_cadence_days: 30,
-        source: "user",
+        investor_profile: wizardState.investorProfile,
+        question1: profileContent.q1,
+        answer1: wizardState.answer1.trim(),
+        question2: profileContent.q2,
+        answer2: wizardState.answer2.trim(),
       });
       await api.post("/api/onboarding/complete").catch(() => null);
       clearState();
@@ -335,7 +338,7 @@ function WizardInner() {
           {holding ? `Your reason for ${holding.ticker} is on record.` : "Your first reason is on record."}
         </h1>
         <p className="max-w-xl font-sans text-sm leading-relaxed text-foreground/75">
-          penKeep is turning it into monitoring checks now. From here, three things happen:
+          Your complete written case is saved. The first evidence check runs in the background. From here, three things happen:
         </p>
       </div>
 

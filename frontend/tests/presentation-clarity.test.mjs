@@ -10,7 +10,7 @@ test("dashboard puts positions before supporting portfolio context", async () =>
 
   assert.match(dashboard, /id="positions" className="order-1/);
   assert.match(dashboard, /Portfolio snapshot/);
-  assert.match(dashboard, /lg:sticky lg:top-20/);
+  assert.match(dashboard, /lg:sticky lg:top-\[96px\]/);
   assert.match(dashboard, /No earnings calls in the next three weeks/);
   assert.doesNotMatch(dashboard, /usable but not sharp/i);
 });
@@ -52,7 +52,7 @@ test("long evidence and history lists are collapsed by default", async () => {
     "src/components/thesis/historical-audit-card.tsx",
   );
 
-  assert.match(history, /entries\.slice\(0, 2\)/);
+  assert.match(history, /filteredEntries\.slice\(0, 2\)/);
   assert.match(heldUp, /items\.slice\(0, 3\)/);
   assert.match(reviewed, /items\.slice\(0, 3\)/);
   assert.match(audit, /results\.slice\(0, 3\)/);
@@ -64,7 +64,28 @@ test("homepage offers the stock risk check directly", async () => {
   const research = await source("src/app/research/page.tsx");
 
   assert.match(landing, /<StressTestSearch/);
-  assert.match(search, /Check a stock before you buy/);
+  assert.match(search, /Free stress test — before you buy/);
   assert.match(search, /router\.push\(`\/research\/\$\{ticker\}`\)/);
   assert.match(research, /Check the case before you buy/);
+});
+
+test("portfolio weights use the same live total shown in the snapshot", async () => {
+  const dashboard = await source("src/app/dashboard/page.tsx");
+
+  assert.equal(
+    dashboard.match(/totalValue=\{displayTotalValue\}/g)?.length,
+    2,
+    "both the position card and position peek should use the displayed live total",
+  );
+  assert.doesNotMatch(dashboard, /totalValue=\{summary\?\.total_value \?\? 0\}/);
+});
+
+test("digest delivery failures are not shown as failed content", async () => {
+  const archive = await source("src/app/digests/page.tsx");
+  const detail = await source("src/app/digests/[id]/page.tsx");
+
+  assert.match(archive, /digestStatusLabel\(d\)/);
+  assert.match(detail, /digestStatusLabel\(digest\)/);
+  assert.doesNotMatch(archive, /● \{d\.status\}/);
+  assert.doesNotMatch(detail, /● \{digest\.status\}/);
 });

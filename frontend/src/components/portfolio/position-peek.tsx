@@ -140,7 +140,9 @@ function PeekContent({
   const cost = holding.quantity * holding.average_cost_basis;
   const pnl = value - cost;
   const pnlPct = cost > 0 ? (pnl / cost) * 100 : 0;
-  const allocationPct = totalValue > 0 ? (value / totalValue) * 100 : 0;
+  const allocationPct = totalValue > 0
+    ? Math.min(100, Math.max(0, (value / totalValue) * 100))
+    : 0;
   const currency = holding.portfolio_currency ?? "GBP";
   const hasThesis = Boolean(thesis?.why_own_it);
   const decisionState = getDecisionState({ thesis, pulse });

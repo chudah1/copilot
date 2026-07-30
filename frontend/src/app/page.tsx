@@ -249,9 +249,11 @@ export default function LandingPage() {
                   letterSpacing: "-0.025em",
                   margin: "0 0 clamp(16px, 2vw, 22px)",
                   color: mk.ink,
+                  textWrap: "balance",
                 }}
               >
-                Be sure of what you&apos;re buying. Stay sure while you hold it.
+                Be sure of what you&apos;re buying. Stay sure while you{" "}
+                <span style={{ whiteSpace: "nowrap" }}>hold it.</span>
               </h1>
 
               <p

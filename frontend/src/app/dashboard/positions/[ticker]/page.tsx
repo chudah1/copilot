@@ -736,15 +736,10 @@ function PositionDetailInner() {
     investorProfile: onboardingState?.investor_profile ?? null,
   });
   const onboardingMonitoringMessage = decompositionLoading
-    ? "Turning your first reason into watchable signals."
+    ? "Building a watchlist from the conditions you wrote."
     : decompositionEnvelope?.decomposition
-        ? "Your first reason is live and watchable."
-        : "Your first reason is live. Next, confirm what to watch.";
-  const onboardingMonitoringNextStep = decompositionLoading
-    ? "Next: give us a moment to finish the signal candidates."
-    : decompositionEnvelope?.decomposition
-      ? "Next: confirm these signals."
-      : "Next: review the first monitoring rules and tighten anything vague.";
+      ? "Your case is saved. Review the suggested watchlist once so future alerts reflect what you meant."
+      : "Your case is saved. The first evidence check is running in the background.";
 
   const tabs: { id: TabId; label: string; badge?: number | string }[] = [
     { id: "thesis", label: "Original case" },
@@ -834,7 +829,7 @@ function PositionDetailInner() {
           "Review prompts fire on evidence that hits your thesis, regardless of price.",
           "The next digest reads like a portfolio memo, not a watchlist alert.",
         ];
-  const suppressSecondaryThesisPrompts = Boolean(decisionPrompt || showEarningsBanner);
+  const suppressSecondaryThesisPrompts = Boolean(decisionPrompt || showEarningsBanner || fromOnboarding);
 
   const handleNextStepAction = () => {
     if (!nextStepNotice?.action) return;
@@ -901,7 +896,7 @@ function PositionDetailInner() {
           >
             <div className="space-y-2">
               <p className="font-mono text-[10px] uppercase tracking-[0.2em] text-emerald-700">
-                ● First holding activated
+                ● Written case saved
               </p>
               <p className="font-sans text-sm text-foreground/80 leading-relaxed">
                 {onboardingMonitoringMessage}
@@ -924,9 +919,24 @@ function PositionDetailInner() {
               </div>
             )}
 
-            <p className="font-sans text-xs text-foreground/80 leading-relaxed">
-              {onboardingMonitoringNextStep}
-            </p>
+            <button
+              type="button"
+              onClick={() => {
+                setActiveTab("thesis");
+                setThesisSubTab("signals");
+                if (!decompositionEnvelope?.decomposition && !decompositionLoading) {
+                  void handleGenerateDecomposition();
+                }
+              }}
+              disabled={decompositionLoading}
+              className="font-mono text-[10px] uppercase tracking-[0.15em] text-primary transition-colors hover:text-primary/80 disabled:opacity-50"
+            >
+              {decompositionLoading
+                ? "Building watchlist…"
+                : decompositionEnvelope?.decomposition
+                  ? "Review watchlist →"
+                  : "Build watchlist →"}
+            </button>
           </motion.div>
         )}
 
@@ -994,7 +1004,7 @@ function PositionDetailInner() {
           </motion.div>
         )}
 
-        {decisionPrompt && activeThesis && !(fromBlindSpot && !activeThesis && !editing) && (
+        {decisionPrompt && activeThesis && !fromOnboarding && !(fromBlindSpot && !activeThesis && !editing) && (
           <motion.div
             initial={{ opacity: 0, y: -4 }}
             animate={{ opacity: 1, y: 0 }}

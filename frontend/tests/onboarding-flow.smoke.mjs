@@ -17,3 +17,9 @@ test("onboarding does not gate the next question behind an exit animation", () =
   assert.doesNotMatch(onboardingSource, /AnimatePresence/);
   assert.doesNotMatch(onboardingSource, /exit=/);
 });
+
+test("onboarding saves a complete written case from the two answers", () => {
+  assert.match(onboardingSource, /\/api\/onboarding\/synthesize/);
+  assert.doesNotMatch(onboardingSource, /must_remain_true:\s*null/);
+  assert.doesNotMatch(onboardingSource, /turning it into monitoring checks now/i);
+});

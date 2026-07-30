@@ -29,6 +29,7 @@ from app.schemas.onboarding import (
     SynthesisResponse,
 )
 from app.services.ai_thesis import assess_thesis_vagueness, synthesize_thesis_from_qa
+from app.services.conviction_log import REASON_CREATED, append_log_entry
 from app.services.decomposition import apply_candidate_signals_to_thesis
 from app.services.stress_test import CandidateSignal
 from app.services.thesis_grounding import build_grounding_payload
@@ -393,6 +394,7 @@ async def review_draft(
 @router.post("/synthesize", response_model=SynthesisResponse, status_code=status.HTTP_201_CREATED)
 async def synthesize_thesis(
     body: SynthesisRequest,
+    background_tasks: BackgroundTasks,
     current_user: User = Depends(get_current_user),
     db: AsyncSession = Depends(get_db),
 ):
@@ -435,6 +437,15 @@ async def synthesize_thesis(
     )
     db.add(thesis)
     await db.flush()
+    append_log_entry(
+        db,
+        thesis_id=thesis.id,
+        holding_id=holding.id,
+        user_id=current_user.id,
+        entry_type=REASON_CREATED,
+        content=thesis.why_own_it,
+        metadata={"confidence": thesis.confidence, "source": thesis.source},
+    )
 
     draft_result = await db.execute(
         select(OnboardingDraft).where(
@@ -456,6 +467,12 @@ async def synthesize_thesis(
         state.drafts_reviewed_at = now
 
     await db.commit()
+
+    # The two-question onboarding path now creates the complete three-part case.
+    # Run the same truthful first check as the regular thesis creation endpoint
+    # so a new position is not presented as calm before any evidence was read.
+    from app.services.check_now import run_first_pulse
+    background_tasks.add_task(run_first_pulse, current_user.id, holding.id)
 
     # Assess the user's RAW answers (not the AI-cleaned output) to decide whether
     # the thesis should enter the hype-buyer climb (ground via stress-test).

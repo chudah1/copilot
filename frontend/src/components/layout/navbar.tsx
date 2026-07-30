@@ -3,7 +3,7 @@
 import { useState } from "react";
 import Link from "next/link";
 import { usePathname } from "next/navigation";
-import { Bell, Menu, X } from "lucide-react";
+import { Bell, BookOpenText, BriefcaseBusiness, Menu, Search, X } from "lucide-react";
 import useSWR from "swr";
 import { useAuth } from "@/lib/auth";
 import { fetcher } from "@/lib/api";
@@ -49,8 +49,15 @@ export function Navbar() {
     : alertCount > 0
       ? `${alertCount} change${alertCount === 1 ? "" : "s"} waiting`
     : "Nothing waiting";
+  const mobileLinks = [
+    { href: "/dashboard", label: "Portfolio", icon: BriefcaseBusiness },
+    { href: "/research", label: "Research", icon: Search },
+    { href: alertsHref, label: "Review", icon: Bell, count: alertCount },
+    { href: "/digests", label: "Digests", icon: BookOpenText },
+  ];
 
   return (
+    <>
     <nav className="sticky top-0 z-40 border-b border-border/80 bg-background/88 backdrop-blur-xl">
       <div className="px-4 py-3 sm:px-8">
         <div className="product-panel product-panel-muted flex items-center justify-between gap-4 px-4 py-3 sm:px-5">
@@ -216,5 +223,40 @@ export function Navbar() {
         </div>
       )}
     </nav>
+    {showAuthenticatedNav && (
+      <>
+        <div aria-hidden className="h-[4.5rem] sm:hidden" />
+        <div className="fixed inset-x-0 bottom-0 z-50 border-t border-border/80 bg-background/94 px-2 pb-[max(0.45rem,env(safe-area-inset-bottom))] pt-2 backdrop-blur-xl sm:hidden">
+          <div className="mx-auto grid max-w-md grid-cols-4">
+            {mobileLinks.map(({ href, label, icon: Icon, count }) => {
+              const active = pathname === href.split("?")[0] ||
+                (label === "Research" && pathname.startsWith("/research")) ||
+                (label === "Digests" && pathname.startsWith("/digests"));
+              return (
+                <Link
+                  key={label}
+                  href={href}
+                  aria-label={label === "Review" ? reviewStatus : label}
+                  className={`relative flex min-h-12 flex-col items-center justify-center gap-1 px-1 font-mono text-[9px] uppercase tracking-[0.08em] transition-colors ${
+                    active ? "text-primary" : "text-muted-foreground"
+                  }`}
+                >
+                  <span className="relative">
+                    <Icon className="h-[18px] w-[18px]" strokeWidth={active ? 2.1 : 1.7} />
+                    {count && count > 0 ? (
+                      <span className="absolute -right-2.5 -top-1.5 inline-flex min-w-4 items-center justify-center rounded-full bg-destructive px-1 text-[8px] leading-4 text-white">
+                        {count}
+                      </span>
+                    ) : null}
+                  </span>
+                  <span>{label}</span>
+                </Link>
+              );
+            })}
+          </div>
+        </div>
+      </>
+    )}
+    </>
   );
 }

@@ -139,6 +139,7 @@ interface PositionCardProps {
   onPeek?: () => void;
   investorProfile?: "thesis_driven" | "hearsay_driven" | null;
   index: number;
+  featured?: boolean;
 }
 
 export function PositionCard({
@@ -152,12 +153,15 @@ export function PositionCard({
   onPeek,
   investorProfile,
   index,
+  featured = false,
 }: PositionCardProps) {
   const value = livePrice?.current_value ?? holding.current_value ?? 0;
   const cost = holding.quantity * holding.average_cost_basis;
   const pnl = value - cost;
   const pnlPct = cost > 0 ? (pnl / cost) * 100 : 0;
-  const allocationPct = totalValue > 0 ? (value / totalValue) * 100 : 0;
+  const allocationPct = totalValue > 0
+    ? Math.min(100, Math.max(0, (value / totalValue) * 100))
+    : 0;
 
   const hasThesis = Boolean(thesis?.why_own_it);
   const noThesisCta =
@@ -193,7 +197,7 @@ export function PositionCard({
   return (
     <motion.div
       className="h-full"
-      initial={{ opacity: 0, y: 10 }}
+      initial={false}
       animate={{ opacity: 1, y: 0 }}
       transition={{ duration: 0.35, delay: Math.min(index, 11) * 0.04, ease: "easeOut" }}
     >
@@ -208,7 +212,11 @@ export function PositionCard({
         }}
       >
         <div
-          className={`h-full group relative flex flex-col gap-3 border border-border bg-card p-4 transition-all duration-200 ease-out hover:border-foreground/20 hover:-translate-y-0.5 hover:shadow-[0_10px_30px_-12px_rgba(52,40,24,0.28)] cursor-pointer ${ringClass}`}
+          className={`h-full group relative gap-3 border border-border bg-card p-4 transition-all duration-200 ease-out hover:border-foreground/20 hover:-translate-y-0.5 hover:shadow-[0_10px_30px_-12px_rgba(52,40,24,0.28)] cursor-pointer ${
+            featured
+              ? "grid grid-cols-1 sm:grid-cols-[minmax(12rem,0.75fr)_minmax(0,1.25fr)] sm:grid-rows-[auto_auto_1fr] sm:gap-x-6"
+              : "flex flex-col"
+          } ${ringClass}`}
         >
           {/* Allocation bar — top edge */}
           <div className="absolute top-0 left-0 right-0 h-[3px] bg-border overflow-hidden">
@@ -221,7 +229,7 @@ export function PositionCard({
           </div>
 
           {/* Header row */}
-          <div className="flex items-start justify-between pt-1">
+          <div className={`flex items-start justify-between pt-1 ${featured ? "sm:col-start-1 sm:row-start-1" : ""}`}>
             <div className="min-w-0">
               <p className="font-mono text-[11px] font-semibold tracking-[0.2em] text-primary">
                 {cleanTicker(holding.ticker)}
@@ -241,7 +249,7 @@ export function PositionCard({
           </div>
 
           {/* Value + P&L */}
-          <div>
+          <div className={featured ? "sm:col-start-1 sm:row-start-2" : ""}>
             <p className="font-mono text-[1.05rem] tabular-nums text-foreground font-medium leading-tight">
               {formatCurrency(value, holding.portfolio_currency ?? "GBP")}
             </p>
@@ -252,7 +260,7 @@ export function PositionCard({
           </div>
 
           {/* Allocation % with bar */}
-          <div className="space-y-1">
+          <div className={`space-y-1 ${featured ? "sm:col-start-1 sm:row-start-3" : ""}`}>
             <div className="flex items-center justify-between">
               <span className="font-mono text-[10px] uppercase tracking-[0.1em] text-muted-foreground/70">
                 Portfolio weight
@@ -272,9 +280,11 @@ export function PositionCard({
           </div>
 
           {/* Spacer — pushes thesis/CTA flush to bottom */}
-          <div className="flex-1" />
+          {!featured && <div className="flex-1" />}
 
-          <div className="space-y-1 border-t border-border/60 pt-2.5">
+          <div className={`space-y-1 border-t border-border/60 pt-2.5 ${
+            featured ? "sm:col-start-2 sm:row-start-1 sm:row-span-2 sm:border-l sm:border-t-0 sm:pl-6 sm:pt-0" : ""
+          }`}>
             <div className="flex items-center justify-between gap-2">
               <span className={`font-mono text-[10px] uppercase tracking-[0.14em] ${statusCopy.tone}`}>
                 {statusCopy.eyebrow}
@@ -308,13 +318,17 @@ export function PositionCard({
 
           {/* Thesis snippet or CTA */}
           {thesis?.why_own_it ? (
-            <p className="font-sans text-[11px] italic text-foreground/85 leading-relaxed line-clamp-2">
+            <p className={`font-sans text-[11px] italic text-foreground/85 leading-relaxed line-clamp-2 ${
+              featured ? "sm:col-start-2 sm:row-start-3 sm:border-l sm:border-border/60 sm:pl-6" : ""
+            }`}>
               {thesis.why_own_it}
             </p>
           ) : (
             <button
               onClick={(e) => { e.preventDefault(); e.stopPropagation(); onGenerateDraft?.(); }}
-              className="font-mono text-[10px] tracking-[0.04em] text-muted-foreground/70 hover:text-primary transition-colors text-left"
+              className={`font-mono text-[10px] tracking-[0.04em] text-muted-foreground/70 hover:text-primary transition-colors text-left ${
+                featured ? "sm:col-start-2 sm:row-start-3 sm:border-l sm:border-border/60 sm:pl-6" : ""
+              }`}
             >
               {noThesisCta}
             </button>

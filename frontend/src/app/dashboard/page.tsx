@@ -810,7 +810,7 @@ function DashboardInner() {
 
       {/* ── Positions grid ───────────────────────────────────────────── */}
       <div id="positions" className="order-1 px-4 sm:px-8 pt-6 pb-8 flex-1 scroll-mt-24">
-        <div className="grid gap-5 lg:grid-cols-[minmax(0,1fr)_20rem]">
+        <div className="grid items-start gap-5 lg:grid-cols-[minmax(0,1fr)_20rem]">
         {/* Scrolls internally on large screens so the whole portfolio stays one
             view with the snapshot always visible beside it. */}
         <div className="product-panel p-4 sm:p-5 lg:max-h-[calc(100vh-8rem)] lg:overflow-y-auto">
@@ -851,7 +851,9 @@ function DashboardInner() {
             )}
           </AnimatePresence>
 
-          <div className="grid grid-cols-1 gap-3 sm:grid-cols-2 xl:grid-cols-3">
+          <div className={`grid grid-cols-1 gap-3 ${
+            sortedHoldings.length === 1 ? "" : "sm:grid-cols-2 xl:grid-cols-3"
+          }`}>
             {sortedHoldings.map((h, i) => (
               <PositionCard
                 key={h.id}
@@ -860,11 +862,12 @@ function DashboardInner() {
                 pulse={pulseByHolding[h.id]}
                 earnings={earningsByHolding[h.id]}
                 livePrice={livePrices[h.ticker]}
-                totalValue={summary?.total_value ?? 0}
+                totalValue={displayTotalValue}
                 onGenerateDraft={() => handleGenerateDraft(h.id, h.ticker)}
                 onPeek={() => setPeekHoldingId(h.id)}
                 investorProfile={onboardingState?.investor_profile ?? null}
                 index={i}
+                featured={sortedHoldings.length === 1}
               />
             ))}
           </div>
@@ -961,7 +964,7 @@ function DashboardInner() {
             pulse={peeked ? pulseByHolding[peeked.id] : undefined}
             earnings={peeked ? earningsByHolding[peeked.id] : undefined}
             livePrice={peeked ? livePrices[peeked.ticker] : undefined}
-            totalValue={summary?.total_value ?? 0}
+            totalValue={displayTotalValue}
             investorProfile={onboardingState?.investor_profile ?? null}
             onClose={() => setPeekHoldingId(null)}
           />

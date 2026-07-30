@@ -5,6 +5,7 @@ import { useParams } from "next/navigation";
 import Link from "next/link";
 import { api } from "@/lib/api";
 import { AppShell } from "@/components/layout/app-shell";
+import { digestStatusLabel, digestStatusTone } from "@/lib/digest-status";
 import { formatDate } from "@/lib/utils";
 import type { Digest } from "@/types";
 
@@ -163,8 +164,8 @@ export default function DigestDetailPage() {
           <div className="grid gap-5 lg:grid-cols-[minmax(0,1fr)_16rem]">
             <div className="space-y-3">
               <div className="flex flex-wrap items-center gap-3">
-                <span className={`font-mono text-[10px] uppercase tracking-[0.2em] ${digest.status === "sent" ? "text-emerald-700" : "text-amber-700"}`}>
-                  ● {digest.status}
+                <span className={`font-mono text-[10px] uppercase tracking-[0.2em] ${digestStatusTone(digest)}`}>
+                  ● {digestStatusLabel(digest)}
                 </span>
                 {digest.content.digest_mode && (
                   <span className="font-mono text-[10px] uppercase tracking-[0.15em] text-muted-foreground/60">
@@ -184,7 +185,7 @@ export default function DigestDetailPage() {
               </h1>
 
               <p className="font-mono text-[10px] uppercase tracking-[0.2em] text-muted-foreground/60">
-                {digest.sent_at ? `Sent ${formatDate(digest.sent_at)}` : "Not yet sent"}
+                {digest.sent_at ? `Emailed ${formatDate(digest.sent_at)}` : "Saved in your archive"}
                 {" · "}Review window {formatDate(digest.period_start)} — {formatDate(digest.period_end)}
               </p>
             </div>
