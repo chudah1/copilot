@@ -1156,6 +1156,7 @@ async def get_price_history(
     events = [
         PriceHistoryEvent(
             date=event.created_at.date().isoformat(),
+            title=event.title,
             verdict=event.verdict,
             severity=event.severity,
         )

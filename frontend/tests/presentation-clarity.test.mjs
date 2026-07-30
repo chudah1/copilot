@@ -89,3 +89,13 @@ test("digest delivery failures are not shown as failed content", async () => {
   assert.doesNotMatch(archive, /● \{d\.status\}/);
   assert.doesNotMatch(detail, /● \{digest\.status\}/);
 });
+
+test("the price sparkline explains its period, prices and evidence markers", async () => {
+  const sparkline = await source("src/components/portfolio/price-sparkline.tsx");
+
+  assert.match(sparkline, /Price since you wrote this case/);
+  assert.match(sparkline, /Evidence that tested your case/);
+  assert.match(sparkline, /formatCurrency\(firstClose, data\.currency\)/);
+  assert.match(sparkline, /<button/);
+  assert.match(sparkline, /event\.title/);
+});

@@ -412,6 +412,7 @@ export interface PricePoint {
 
 export interface PriceHistoryEvent {
   date: string;
+  title: string;
   verdict: "supports" | "threatens" | "review" | "neutral" | null;
   severity: "info" | "warning" | "thesis_breaking";
 }

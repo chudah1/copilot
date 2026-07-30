@@ -206,6 +206,7 @@ class PricePoint(BaseModel):
 
 class PriceHistoryEvent(BaseModel):
     date: str  # ISO date
+    title: str
     verdict: str | None = None  # supports | threatens | review | neutral
     severity: str  # info | warning | thesis_breaking
 

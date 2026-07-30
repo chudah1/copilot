@@ -426,6 +426,7 @@ async def test_price_history_anchors_to_thesis_and_includes_events(client, auth_
     assert len(data["points"]) == 60
     assert data["points"][0]["close"] == 91.0
     assert len(data["events"]) == 1
+    assert data["events"][0]["title"] == "Margin pressure reported"
     assert data["events"][0]["verdict"] == "threatens"
     assert data["events"][0]["severity"] == "warning"
 

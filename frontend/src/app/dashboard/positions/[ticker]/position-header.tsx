@@ -190,7 +190,7 @@ export function PositionHeader({
           </div>
 
           {/* The decision's price line — collapses with the rest of the header */}
-          <div className={`overflow-hidden transition-all duration-200 ${headerCollapsed ? "max-h-0 opacity-0 sm:max-h-24 sm:opacity-100" : "max-h-24"}`}>
+          <div className={`overflow-hidden transition-all duration-200 ${headerCollapsed ? "max-h-0 opacity-0 sm:max-h-36 sm:opacity-100" : "max-h-36"}`}>
             <PriceSparkline holdingId={holding.id} className="mb-3" />
           </div>
 
