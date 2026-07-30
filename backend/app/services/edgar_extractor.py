@@ -17,10 +17,9 @@ import logging
 import re
 from typing import Any
 
-import httpx
-
 from app.config import settings
 from app.models.thesis import Thesis
+from app.services.edgar import fetch_sec_text
 
 logger = logging.getLogger(__name__)
 
@@ -97,15 +96,7 @@ async def _find_exhibit_url(cik: str, accession: str) -> str | None:
         f"/{accession_clean}/{accession}-index.htm"
     )
     try:
-        async with httpx.AsyncClient() as client:
-            resp = await client.get(
-                index_url,
-                headers={"User-Agent": settings.edgar_user_agent},
-                timeout=15,
-            )
-            if resp.status_code != 200:
-                return None
-            html = resp.text
+        html = await fetch_sec_text(index_url)
     except Exception as exc:
         logger.debug("Filing index fetch failed (%s): %s", accession, exc)
         return None
@@ -146,14 +137,7 @@ def _strip_html(html: str) -> str:
 
 async def _fetch_text(url: str) -> str | None:
     try:
-        async with httpx.AsyncClient() as client:
-            resp = await client.get(
-                url,
-                headers={"User-Agent": settings.edgar_user_agent},
-                timeout=20,
-            )
-            resp.raise_for_status()
-            return _strip_html(resp.text)
+        return _strip_html(await fetch_sec_text(url))
     except Exception as exc:
         logger.debug("Exhibit fetch failed (%s): %s", url, exc)
         return None

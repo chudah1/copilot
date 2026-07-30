@@ -31,6 +31,7 @@ from app.models import (  # noqa: F401
     onboarding_draft,
 )
 from app.jobs.scheduler import setup_scheduler, shutdown_scheduler
+from app.services.edgar import close_edgar_client
 
 
 def _cors_origins() -> list[str]:
@@ -66,6 +67,7 @@ async def lifespan(app: FastAPI):
     yield
     if scheduler_started:
         shutdown_scheduler()
+    await close_edgar_client()
 
 
 app = FastAPI(title="penKeep", version="0.1.0", lifespan=lifespan)

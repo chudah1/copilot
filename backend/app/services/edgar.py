@@ -1,16 +1,20 @@
 """EDGAR (SEC) filing client.
 
 Polls the SEC submissions API for 8-K filings and Form 4 insider transactions
-for US-listed tickers. No API key required; SEC policy requires a User-Agent.
-Rate limit: 10 requests/second — well within normal usage.
+for US-listed tickers. All SEC traffic goes through one conservative request
+budget so scheduled and manual checks cannot burst past the SEC's fair-access
+limit.
 """
 from __future__ import annotations
 
 import asyncio
 import logging
+import random
+import time
 import xml.etree.ElementTree as ET
 from dataclasses import dataclass
 from datetime import date, datetime, timedelta, timezone
+from email.utils import parsedate_to_datetime
 from typing import Any
 
 import httpx
@@ -23,6 +27,13 @@ EDGAR_BASE = "https://data.sec.gov"
 SEC_BASE = "https://www.sec.gov"
 TICKERS_URL = f"{SEC_BASE}/files/company_tickers.json"
 EDGAR_LOOKBACK_DAYS = 7
+_SUBMISSIONS_CACHE_TTL_SECONDS = 15 * 60
+_SUBMISSIONS_CACHE_MAX_ENTRIES = 128
+_REQUESTS_PER_SECOND = 5
+_MIN_REQUEST_INTERVAL_SECONDS = 1 / _REQUESTS_PER_SECOND
+_MAX_REQUEST_ATTEMPTS = 4
+_TRANSIENT_STATUS_CODES = {429, 500, 502, 503, 504}
+_MAX_RETRY_AFTER_SECONDS = 60.0
 
 # 8-K items that are investment-relevant
 MATERIAL_8K_ITEMS: dict[str, str] = {
@@ -44,6 +55,13 @@ _ADMIN_ONLY_ITEMS = {"9.01"}
 
 _ticker_cik_cache: dict[str, str] | None = None
 _ticker_cik_lock = asyncio.Lock()
+_submissions_cache: dict[str, tuple[float, dict[str, Any]]] = {}
+_submissions_inflight: dict[str, asyncio.Task[dict[str, Any]]] = {}
+_submissions_lock = asyncio.Lock()
+_http_client: httpx.AsyncClient | None = None
+_http_client_lock = asyncio.Lock()
+_request_slot_lock = asyncio.Lock()
+_last_request_started_at = 0.0
 
 
 @dataclass
@@ -56,19 +74,168 @@ class EdgarFiling:
     description: str  # human-readable item summary
 
 
+async def _get_http_client() -> httpx.AsyncClient:
+    """Return the one connection-pooled client used for all SEC requests."""
+    global _http_client
+    async with _http_client_lock:
+        if _http_client is None or _http_client.is_closed:
+            _http_client = httpx.AsyncClient(
+                headers={
+                    "User-Agent": settings.edgar_user_agent,
+                    "Accept-Encoding": "gzip, deflate",
+                },
+                timeout=20,
+                follow_redirects=True,
+            )
+        return _http_client
+
+
+async def close_edgar_client() -> None:
+    """Close the shared SEC connection pool during application shutdown."""
+    global _http_client
+    async with _http_client_lock:
+        client = _http_client
+        _http_client = None
+    if client is not None and not client.is_closed:
+        await client.aclose()
+
+
+async def _wait_for_request_slot() -> None:
+    """Space SEC request starts to a conservative five requests per second."""
+    global _last_request_started_at
+    async with _request_slot_lock:
+        now = time.monotonic()
+        delay = _MIN_REQUEST_INTERVAL_SECONDS - (now - _last_request_started_at)
+        if delay > 0:
+            await asyncio.sleep(delay)
+        _last_request_started_at = time.monotonic()
+
+
+def _retry_delay(response: httpx.Response, attempt: int) -> float:
+    """Use Retry-After when supplied, otherwise exponential backoff plus jitter."""
+    retry_after = response.headers.get("Retry-After")
+    if retry_after:
+        try:
+            return min(max(float(retry_after), 0.0), _MAX_RETRY_AFTER_SECONDS)
+        except ValueError:
+            try:
+                retry_at = parsedate_to_datetime(retry_after)
+                if retry_at.tzinfo is None:
+                    retry_at = retry_at.replace(tzinfo=timezone.utc)
+                seconds = (retry_at - datetime.now(timezone.utc)).total_seconds()
+                return min(max(seconds, 0.0), _MAX_RETRY_AFTER_SECONDS)
+            except (TypeError, ValueError, OverflowError):
+                pass
+    return min((2 ** attempt) + random.uniform(0, 0.25), _MAX_RETRY_AFTER_SECONDS)
+
+
+async def _request(url: str) -> httpx.Response:
+    """Fetch one SEC URL with global throttling and transient-error retries."""
+    client = await _get_http_client()
+    response: httpx.Response | None = None
+    for attempt in range(_MAX_REQUEST_ATTEMPTS):
+        await _wait_for_request_slot()
+        try:
+            response = await client.get(url)
+        except httpx.TransportError as exc:
+            if attempt == _MAX_REQUEST_ATTEMPTS - 1:
+                raise
+            delay = min((2 ** attempt) + random.uniform(0, 0.25), 8.0)
+            logger.warning(
+                "SEC transport error; retrying in %.2fs (%d/%d): %s",
+                delay,
+                attempt + 1,
+                _MAX_REQUEST_ATTEMPTS,
+                exc,
+            )
+            await asyncio.sleep(delay)
+            continue
+
+        if response.status_code not in _TRANSIENT_STATUS_CODES:
+            response.raise_for_status()
+            return response
+        if attempt == _MAX_REQUEST_ATTEMPTS - 1:
+            response.raise_for_status()
+        delay = _retry_delay(response, attempt)
+        logger.warning(
+            "SEC returned %d; retrying in %.2fs (%d/%d): %s",
+            response.status_code,
+            delay,
+            attempt + 1,
+            _MAX_REQUEST_ATTEMPTS,
+            url,
+        )
+        await asyncio.sleep(delay)
+
+    if response is not None:  # Defensive: the loop always returns or raises.
+        response.raise_for_status()
+    raise RuntimeError(f"SEC request failed without a response: {url}")
+
+
+async def _request_json(url: str) -> dict[str, Any]:
+    response = await _request(url)
+    return response.json()
+
+
+async def fetch_sec_text(url: str) -> str:
+    """Fetch text from an SEC-owned URL through the shared request budget."""
+    if not url.startswith((f"{SEC_BASE}/", f"{EDGAR_BASE}/")):
+        raise ValueError("fetch_sec_text only accepts SEC URLs")
+    response = await _request(url)
+    return response.text
+
+
+async def _fetch_and_cache_submissions(cik: str) -> dict[str, Any]:
+    url = f"{EDGAR_BASE}/submissions/CIK{cik.zfill(10)}.json"
+    data = await _request_json(url)
+    async with _submissions_lock:
+        _submissions_cache[cik] = (time.monotonic(), data)
+        if len(_submissions_cache) > _SUBMISSIONS_CACHE_MAX_ENTRIES:
+            oldest_cik = min(
+                _submissions_cache,
+                key=lambda cached_cik: _submissions_cache[cached_cik][0],
+            )
+            _submissions_cache.pop(oldest_cik, None)
+    return data
+
+
+async def _get_submissions(cik: str) -> dict[str, Any]:
+    """Return one cached/coalesced submissions payload per CIK."""
+    normalized_cik = str(int(cik))
+    now = time.monotonic()
+    async with _submissions_lock:
+        expired = [
+            cached_cik
+            for cached_cik, (cached_at, _) in _submissions_cache.items()
+            if now - cached_at >= _SUBMISSIONS_CACHE_TTL_SECONDS
+        ]
+        for cached_cik in expired:
+            _submissions_cache.pop(cached_cik, None)
+
+        cached = _submissions_cache.get(normalized_cik)
+        if cached:
+            return cached[1]
+
+        task = _submissions_inflight.get(normalized_cik)
+        if task is None:
+            task = asyncio.create_task(_fetch_and_cache_submissions(normalized_cik))
+            _submissions_inflight[normalized_cik] = task
+
+    try:
+        return await asyncio.shield(task)
+    finally:
+        if task.done():
+            async with _submissions_lock:
+                if _submissions_inflight.get(normalized_cik) is task:
+                    _submissions_inflight.pop(normalized_cik, None)
+
+
 async def _load_ticker_cik_map() -> dict[str, str]:
     global _ticker_cik_cache
     async with _ticker_cik_lock:
         if _ticker_cik_cache is not None:
             return _ticker_cik_cache
-        async with httpx.AsyncClient() as client:
-            resp = await client.get(
-                TICKERS_URL,
-                headers={"User-Agent": settings.edgar_user_agent},
-                timeout=30,
-            )
-            resp.raise_for_status()
-            data = resp.json()
+        data = await _request_json(TICKERS_URL)
         _ticker_cik_cache = {v["ticker"].upper(): str(v["cik_str"]) for v in data.values()}
         return _ticker_cik_cache
 
@@ -111,16 +278,8 @@ async def get_recent_8k_filings(ticker: str, since: date | None = None) -> list[
     if not cik:
         return []
 
-    url = f"{EDGAR_BASE}/submissions/CIK{cik.zfill(10)}.json"
     try:
-        async with httpx.AsyncClient() as client:
-            resp = await client.get(
-                url,
-                headers={"User-Agent": settings.edgar_user_agent},
-                timeout=15,
-            )
-            resp.raise_for_status()
-            data = resp.json()
+        data = await _get_submissions(cik)
     except Exception as exc:
         logger.warning("EDGAR request failed for %s: %s", ticker, exc)
         raise
@@ -280,12 +439,8 @@ async def get_recent_form4_transactions(ticker: str, since: date | None = None) 
     if not cik:
         return []
 
-    url = f"{EDGAR_BASE}/submissions/CIK{cik.zfill(10)}.json"
     try:
-        async with httpx.AsyncClient() as client:
-            resp = await client.get(url, headers={"User-Agent": settings.edgar_user_agent}, timeout=15)
-            resp.raise_for_status()
-            data = resp.json()
+        data = await _get_submissions(cik)
     except Exception as exc:
         logger.warning("EDGAR Form 4 submissions fetch failed for %s: %s", ticker, exc)
         return []
@@ -312,12 +467,7 @@ async def get_recent_form4_transactions(ticker: str, since: date | None = None) 
         doc_url = _filing_url(cik, accession, primary_doc)
 
         try:
-            async with httpx.AsyncClient() as client:
-                resp = await client.get(
-                    doc_url, headers={"User-Agent": settings.edgar_user_agent}, timeout=15
-                )
-                resp.raise_for_status()
-                xml_text = resp.text
+            xml_text = await fetch_sec_text(doc_url)
         except Exception as exc:
             logger.warning("Failed to fetch Form 4 document %s: %s", doc_url, exc)
             continue

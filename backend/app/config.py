@@ -59,7 +59,7 @@ class Settings(BaseSettings):
     trading212_base_url: str = "https://live.trading212.com/api/v0"
     alpha_vantage_api_key: str = ""
     market_data_provider: str = "yfinance"
-    edgar_user_agent: str = "penKeep contact@penkeep.io"
+    edgar_user_agent: str = "PenKeep/1.0 contact@penkeep.io"
     frontend_url: str = "http://localhost:3000"
     app_url: str = ""  # e.g. https://app.penkeep.io — added to CORS alongside frontend_url
 
