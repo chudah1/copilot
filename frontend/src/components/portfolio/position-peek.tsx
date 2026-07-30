@@ -6,6 +6,7 @@ import { motion, AnimatePresence } from "framer-motion";
 import { formatCurrency, formatPercent, formatDate } from "@/lib/utils";
 import { getDecisionState } from "@/lib/decision-state";
 import { AnimatedCurrency } from "@/components/ui/animated-currency";
+import { PriceSparkline } from "./price-sparkline";
 import { cardStatusCopy, cleanTicker } from "./position-card";
 import type { Holding, Thesis, HoldingPulse, LivePrice, UpcomingEarnings } from "@/types";
 
@@ -198,6 +199,7 @@ function PeekContent({
               </p>
             </div>
           </div>
+          <PriceSparkline holdingId={holding.id} className="mt-4" />
         </motion.div>
 
         {/* Status */}

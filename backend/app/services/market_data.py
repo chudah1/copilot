@@ -195,6 +195,38 @@ def _yfinance_close_on_sync(ticker: str, when: datetime) -> float | None:
         return None
 
 
+def _yfinance_daily_closes_sync(ticker: str, start: datetime) -> list[tuple[str, float]]:
+    """Blocking call — daily closing prices from `start` to now via history."""
+    import yfinance as yf
+
+    try:
+        hist = yf.Ticker(ticker).history(start=start.date())
+        if hist is None or hist.empty:
+            return []
+        closes = hist["Close"].dropna()
+        return [(index.date().isoformat(), float(value)) for index, value in closes.items()]
+    except Exception:
+        return []
+
+
+async def fetch_daily_closes(ticker: str, start: datetime) -> list[tuple[str, float]]:
+    """Daily closes since `start` (native trading currency). Cached a few hours —
+    daily bars only gain one point per trading day."""
+    normalized = _normalize_ticker(ticker)
+    cache_key = f"daily_closes_{normalized}_{start.date().isoformat()}"
+    cached = _cache.get(cache_key)
+    if cached is not None:
+        return cached
+    try:
+        closes = await asyncio.to_thread(_yfinance_daily_closes_sync, normalized, start)
+    except Exception:
+        logger.warning("daily closes fetch failed for %s", normalized, exc_info=True)
+        return []
+    if closes:
+        _cache.set(cache_key, closes, _CACHE_TTL_SHORT)
+    return closes
+
+
 async def fetch_price_on(ticker: str, when: datetime) -> float | None:
     """The closing price for a ticker on (or just before) a past date. Used to
     reconstruct a benchmark's level at decision time for the 'vs market' read.

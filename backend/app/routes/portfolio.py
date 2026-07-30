@@ -25,6 +25,9 @@ from app.schemas.holding import (
     PortfolioPulseResponse,
     PortfolioSummary,
     PortfolioTrendResponse,
+    PriceHistoryEvent,
+    PriceHistoryResponse,
+    PricePoint,
     PriorityHoldingSummary,
     SimulateTradeRequest,
     SimulateTradeResponse,
@@ -1095,6 +1098,79 @@ async def delete_holding(
 
     await db.delete(holding)
     await db.commit()
+
+
+@router.get("/holdings/{holding_id}/price-history", response_model=PriceHistoryResponse)
+async def get_price_history(
+    holding_id: uuid.UUID,
+    current_user: User = Depends(get_current_user),
+    db: AsyncSession = Depends(get_db),
+):
+    """Daily closes since the written case was recorded (capped 30–90 days),
+    plus the monitoring events in that window — the chart is the life of the
+    decision, not a market ticker."""
+    from datetime import timedelta
+
+    from app.models.monitoring_event import MonitoringEvent
+    from app.services.market_data import fetch_daily_closes
+
+    holding_result = await db.execute(
+        select(Holding).where(Holding.id == holding_id, Holding.user_id == current_user.id)
+    )
+    holding = holding_result.scalar_one_or_none()
+    if holding is None:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Holding not found")
+
+    thesis_result = await db.execute(
+        select(Thesis)
+        .where(
+            Thesis.holding_id == holding_id,
+            Thesis.status.in_(["active", "needs_review", "draft"]),
+        )
+        .order_by(Thesis.created_at.desc())
+        .limit(1)
+    )
+    thesis = thesis_result.scalar_one_or_none()
+
+    now = datetime.now(timezone.utc)
+    min_start = now - timedelta(days=30)
+    max_start = now - timedelta(days=90)
+    thesis_created = None
+    if thesis is not None:
+        thesis_created = thesis.created_at
+        if thesis_created.tzinfo is None:
+            thesis_created = thesis_created.replace(tzinfo=timezone.utc)
+    thesis_anchored = thesis_created is not None and thesis_created < min_start
+    start = min(max(thesis_created, max_start), min_start) if thesis_created else min_start
+
+    closes = await fetch_daily_closes(holding.ticker, start)
+
+    events_result = await db.execute(
+        select(MonitoringEvent)
+        .where(
+            MonitoringEvent.holding_id == holding_id,
+            MonitoringEvent.created_at >= start,
+        )
+        .order_by(MonitoringEvent.created_at.asc())
+    )
+    events = [
+        PriceHistoryEvent(
+            date=event.created_at.date().isoformat(),
+            verdict=event.verdict,
+            severity=event.severity,
+        )
+        for event in events_result.scalars().all()
+    ]
+
+    return PriceHistoryResponse(
+        ticker=holding.ticker,
+        currency=holding.currency or "GBP",
+        thesis_anchored=thesis_anchored,
+        start_date=start.date().isoformat(),
+        points=[PricePoint(date=date, close=close) for date, close in closes],
+        events=events,
+        average_cost=float(holding.average_cost_native) if holding.average_cost_native is not None else None,
+    )
 
 
 @router.get("/holdings/{holding_id}/conviction-log", response_model=ConvictionLogResponse)

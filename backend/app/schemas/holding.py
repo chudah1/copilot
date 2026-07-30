@@ -199,5 +199,26 @@ class ConvictionLogResponse(BaseModel):
     review_count: int = 0
 
 
+class PricePoint(BaseModel):
+    date: str  # ISO date
+    close: float
+
+
+class PriceHistoryEvent(BaseModel):
+    date: str  # ISO date
+    verdict: str | None = None  # supports | threatens | review | neutral
+    severity: str  # info | warning | thesis_breaking
+
+
+class PriceHistoryResponse(BaseModel):
+    ticker: str
+    currency: str
+    thesis_anchored: bool  # window starts at the written case, not an arbitrary lookback
+    start_date: str
+    points: list[PricePoint]
+    events: list[PriceHistoryEvent]
+    average_cost: float | None = None  # native currency, same unit as closes
+
+
 class ManualNoteRequest(BaseModel):
     content: str = Field(min_length=1, max_length=2000)

@@ -358,3 +358,102 @@ async def test_add_manual_note_to_conviction_log(client, auth_headers, db, test_
 
     log_entries = (await db.execute(select(ConvictionLogEntry).where(ConvictionLogEntry.holding_id == holding_id))).scalars().all()
     assert len(log_entries) == 2  # reason_created + manual_note
+
+
+@pytest.mark.asyncio
+async def test_price_history_anchors_to_thesis_and_includes_events(client, auth_headers, db, test_user):
+    from app.models.monitoring_event import MonitoringEvent
+
+    holding = Holding(
+        user_id=test_user.id,
+        ticker="AAPL",
+        name="Apple",
+        quantity=10,
+        average_cost_basis=100,
+        average_cost_native=120.5,
+        currency="USD",
+        current_price=150,
+        current_value=1500,
+    )
+    db.add(holding)
+    await db.flush()
+
+    thesis = Thesis(
+        user_id=test_user.id,
+        holding_id=holding.id,
+        status="active",
+        thesis_kind="company",
+        why_own_it="Services margin keeps expanding.",
+        confidence="high",
+        review_cadence_days=30,
+        source="user",
+        created_at=datetime.now(timezone.utc) - timedelta(days=60),
+    )
+    db.add(thesis)
+    await db.flush()
+
+    event = MonitoringEvent(
+        holding_id=holding.id,
+        thesis_id=thesis.id,
+        event_type="news_keyword_match",
+        severity="warning",
+        verdict="threatens",
+        title="Margin pressure reported",
+        summary="Report questions Services margin.",
+        created_at=datetime.now(timezone.utc) - timedelta(days=10),
+    )
+    db.add(event)
+    await db.commit()
+
+    fake_closes = [
+        ((datetime.now(timezone.utc) - timedelta(days=offset)).date().isoformat(), 150.0 - offset)
+        for offset in range(59, -1, -1)
+    ]
+    with patch("app.services.market_data.fetch_daily_closes", new=AsyncMock(return_value=fake_closes)) as mock_closes:
+        response = await client.get(
+            f"/api/portfolio/holdings/{holding.id}/price-history",
+            headers=auth_headers,
+        )
+
+    assert response.status_code == 200
+    data = response.json()
+    # 60-day-old thesis sits inside the 30..90 day clamp: window anchors to it
+    assert data["thesis_anchored"] is True
+    requested_start = mock_closes.await_args.args[1]
+    assert abs((requested_start - (datetime.now(timezone.utc) - timedelta(days=60))).total_seconds()) < 5
+    assert data["currency"] == "USD"
+    assert data["average_cost"] == 120.5
+    assert len(data["points"]) == 60
+    assert data["points"][0]["close"] == 91.0
+    assert len(data["events"]) == 1
+    assert data["events"][0]["verdict"] == "threatens"
+    assert data["events"][0]["severity"] == "warning"
+
+
+@pytest.mark.asyncio
+async def test_price_history_without_thesis_uses_30_day_window(client, auth_headers, db, test_user):
+    holding = Holding(
+        user_id=test_user.id,
+        ticker="MSFT",
+        name="Microsoft",
+        quantity=1,
+        average_cost_basis=300,
+        current_price=310,
+        current_value=310,
+    )
+    db.add(holding)
+    await db.commit()
+
+    with patch("app.services.market_data.fetch_daily_closes", new=AsyncMock(return_value=[])) as mock_closes:
+        response = await client.get(
+            f"/api/portfolio/holdings/{holding.id}/price-history",
+            headers=auth_headers,
+        )
+
+    assert response.status_code == 200
+    data = response.json()
+    assert data["thesis_anchored"] is False
+    requested_start = mock_closes.await_args.args[1]
+    assert abs((requested_start - (datetime.now(timezone.utc) - timedelta(days=30))).total_seconds()) < 5
+    assert data["points"] == []
+    assert data["average_cost"] is None

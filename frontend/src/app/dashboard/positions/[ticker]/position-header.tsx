@@ -6,6 +6,7 @@ import { formatCurrency } from "@/lib/utils";
 import { CheckNowButton } from "@/components/monitoring/check-now-button";
 import type { CheckNowResponse, Holding, HoldingPulse, Thesis } from "@/types";
 import { WatchReceipt } from "@/components/portfolio/watch-receipt";
+import { PriceSparkline } from "@/components/portfolio/price-sparkline";
 import { ageInDays, getDecisionState } from "@/lib/decision-state";
 import type { CaseReviewPressure } from "@/lib/decision-state";
 import { cleanTicker } from "./position-helpers";
@@ -186,6 +187,11 @@ export function PositionHeader({
                 </p>
               )}
             </div>
+          </div>
+
+          {/* The decision's price line — collapses with the rest of the header */}
+          <div className={`overflow-hidden transition-all duration-200 ${headerCollapsed ? "max-h-0 opacity-0 sm:max-h-24 sm:opacity-100" : "max-h-24"}`}>
+            <PriceSparkline holdingId={holding.id} className="mb-3" />
           </div>
 
           {/* Status ribbon */}

@@ -405,6 +405,27 @@ export interface UpcomingEarnings {
   days_until: number;
 }
 
+export interface PricePoint {
+  date: string;
+  close: number;
+}
+
+export interface PriceHistoryEvent {
+  date: string;
+  verdict: "supports" | "threatens" | "review" | "neutral" | null;
+  severity: "info" | "warning" | "thesis_breaking";
+}
+
+export interface PriceHistoryResponse {
+  ticker: string;
+  currency: string;
+  thesis_anchored: boolean;
+  start_date: string;
+  points: PricePoint[];
+  events: PriceHistoryEvent[];
+  average_cost: number | null;
+}
+
 export interface UserPreferences {
   display_name: string;
   digest_frequency: string;
