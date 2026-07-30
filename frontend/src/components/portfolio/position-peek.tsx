@@ -1,6 +1,7 @@
 "use client";
 
-import { useEffect, useRef } from "react";
+import { useEffect, useRef, useSyncExternalStore } from "react";
+import { createPortal } from "react-dom";
 import Link from "next/link";
 import { motion, AnimatePresence } from "framer-motion";
 import { formatCurrency, formatPercent, formatDate } from "@/lib/utils";
@@ -16,6 +17,10 @@ const DECISION_DOT: Record<string, string> = {
   needs_decision: "bg-red-500",
   needs_written_case: "bg-border",
 };
+
+const subscribeToNothing = () => () => undefined;
+const getClientSnapshot = () => true;
+const getServerSnapshot = () => false;
 
 const PEEK_SECTION = {
   hidden: { opacity: 0, y: 6 },
@@ -50,6 +55,12 @@ export function PositionPeek({
 }: PositionPeekProps) {
   const closeRef = useRef<HTMLButtonElement>(null);
   const open = Boolean(holding);
+  // The dashboard's AppShell wraps content in a positioned, z-indexed layer
+  // (.product-main), which traps any fixed-position descendant inside its own
+  // stacking context — the peek's z-50 would then lose to the navbar's z-40
+  // even though 50 > 40, because they're no longer compared in the same
+  // context. Portal to <body> to escape it, the same way Radix's Dialog does.
+  const mounted = useSyncExternalStore(subscribeToNothing, getClientSnapshot, getServerSnapshot);
 
   useEffect(() => {
     if (!open) return;
@@ -66,7 +77,9 @@ export function PositionPeek({
     };
   }, [open, onClose]);
 
-  return (
+  if (!mounted) return null;
+
+  return createPortal(
     <AnimatePresence>
       {holding && (
         <>
@@ -104,7 +117,8 @@ export function PositionPeek({
           </motion.aside>
         </>
       )}
-    </AnimatePresence>
+    </AnimatePresence>,
+    document.body,
   );
 }
 
