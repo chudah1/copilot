@@ -255,7 +255,7 @@ export default function SettingsPage() {
                 value={prefs.digest_frequency}
                 onValueChange={(v) => v && set("digest_frequency", v)}
               >
-                <SelectTrigger className="w-52">
+                <SelectTrigger className="w-full sm:w-52">
                   <SelectValue />
                 </SelectTrigger>
                 <SelectContent>
@@ -326,7 +326,7 @@ export default function SettingsPage() {
               value={prefs.notification_sensitivity}
               onValueChange={(v) => v && set("notification_sensitivity", v)}
             >
-              <SelectTrigger className="w-56">
+              <SelectTrigger className="w-full sm:w-64">
                 <SelectValue />
               </SelectTrigger>
               <SelectContent>
