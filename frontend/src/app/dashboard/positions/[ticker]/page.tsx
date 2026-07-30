@@ -619,8 +619,8 @@ function PositionDetailInner() {
   // ── Loading ──────────────────────────────────────────────────────────────
 
   if (loading) return (
-    <div className="min-h-[calc(100vh-53px)] animate-pulse">
-      <div className="sticky top-[52px] z-20 bg-background border-b border-border/60">
+    <div className="min-h-[calc(100vh-84px)] animate-pulse">
+      <div className="sticky top-[84px] z-20 bg-background border-b border-border/60">
         <div className="max-w-5xl mx-auto px-6 lg:px-10">
           <div className="flex items-center justify-between pt-4 pb-2">
             <div className="h-2.5 w-20 bg-muted rounded" />
@@ -857,7 +857,7 @@ function PositionDetailInner() {
   // ── Render ───────────────────────────────────────────────────────────────
 
   return (
-    <div className="min-h-[calc(100vh-53px)]">
+    <div className="min-h-[calc(100vh-84px)]">
 
       {/* ── Sticky header ────────────────────────────────────────────────── */}
       <PositionHeader

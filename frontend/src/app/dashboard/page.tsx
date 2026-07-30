@@ -522,7 +522,7 @@ function DashboardInner() {
 
   if (loadError && (!holdings || holdings.length === 0)) {
     return (
-      <div className="flex flex-col items-center justify-center min-h-[calc(100vh-54px)] gap-4 text-center px-6">
+      <div className="flex flex-col items-center justify-center min-h-[calc(100vh-84px)] gap-4 text-center px-6">
         <p className="font-sans text-sm text-muted-foreground">
           {getErrorMessage(loadError, "Failed to load portfolio")}
         </p>
@@ -539,7 +539,7 @@ function DashboardInner() {
   // Empty state
   if (!holdings || holdings.length === 0) {
     return (
-      <div className="flex flex-col items-center justify-center min-h-[calc(100vh-54px)] gap-8 text-center px-6">
+      <div className="flex flex-col items-center justify-center min-h-[calc(100vh-84px)] gap-8 text-center px-6">
         <motion.div
           initial={{ opacity: 0, y: 10 }}
           animate={{ opacity: 1, y: 0 }}
@@ -870,7 +870,7 @@ function DashboardInner() {
           </div>
         </div>
 
-        <aside className="product-panel self-start p-4 sm:p-5 lg:sticky lg:top-20">
+        <aside className="product-panel self-start p-4 sm:p-5 lg:sticky lg:top-[96px]">
           <p className="font-mono text-[10px] uppercase tracking-[0.16em] text-muted-foreground">
             Portfolio snapshot
           </p>

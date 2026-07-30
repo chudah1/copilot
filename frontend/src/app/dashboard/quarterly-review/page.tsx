@@ -80,7 +80,7 @@ const RESPONSE_LABELS: Record<string, { label: string; color: string }> = {
 
 function LoadingSkeleton() {
   return (
-    <div className="min-h-[calc(100vh-53px)] flex items-center justify-center px-4 py-10 sm:px-8">
+    <div className="min-h-[calc(100vh-84px)] flex items-center justify-center px-4 py-10 sm:px-8">
       <div className="product-panel product-panel-muted w-full max-w-xl p-8 text-center">
         <p className="font-mono text-[10px] uppercase tracking-[0.3em] text-foreground/30 animate-pulse">
           Loading review…
@@ -94,7 +94,7 @@ function LoadingSkeleton() {
 
 function EmptyState() {
   return (
-    <div className="min-h-[calc(100vh-53px)] flex items-center justify-center px-4 py-10 sm:px-8">
+    <div className="min-h-[calc(100vh-84px)] flex items-center justify-center px-4 py-10 sm:px-8">
       <div className="product-panel product-panel-muted w-full max-w-xl p-8 text-center space-y-6">
         <div className="space-y-2">
           <p className="font-mono text-[10px] uppercase tracking-[0.2em] text-foreground/40">
@@ -122,7 +122,7 @@ function EmptyState() {
 
 function CompletionState({ review }: { review: QuarterlyReviewCurrent }) {
   return (
-    <div className="min-h-[calc(100vh-53px)]">
+    <div className="min-h-[calc(100vh-84px)]">
       <div className="mx-auto max-w-4xl px-4 py-10 sm:px-8 space-y-6">
         <div className="product-panel product-panel-muted p-6 sm:p-7 space-y-3">
           <p className="font-mono text-[10px] uppercase tracking-[0.2em] text-foreground/40">
@@ -261,7 +261,7 @@ export default function QuarterlyReviewPage() {
 
   if (loadError) {
     return (
-      <div className="min-h-[calc(100vh-53px)] flex items-center justify-center px-4 py-10 sm:px-8">
+      <div className="min-h-[calc(100vh-84px)] flex items-center justify-center px-4 py-10 sm:px-8">
         <div className="product-panel product-panel-muted w-full max-w-xl p-8 text-center space-y-4">
           <p className="font-sans text-sm text-muted-foreground">{loadError}</p>
           <button
@@ -282,7 +282,7 @@ export default function QuarterlyReviewPage() {
   const progressPct = (review.completed_count / review.total_holdings) * 100;
 
   return (
-    <div className="min-h-[calc(100vh-53px)]">
+    <div className="min-h-[calc(100vh-84px)]">
       <div className="mx-auto max-w-4xl px-4 py-10 sm:px-8 space-y-6">
         <div className="product-panel product-panel-muted overflow-hidden">
           <div className="h-1 bg-border/40 w-full">

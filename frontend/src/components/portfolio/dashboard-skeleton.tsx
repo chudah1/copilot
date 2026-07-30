@@ -2,7 +2,7 @@
 
 export function DashboardSkeleton() {
   return (
-    <div className="min-h-[calc(100vh-54px)] flex flex-col animate-pulse bg-background">
+    <div className="min-h-[calc(100vh-84px)] flex flex-col animate-pulse bg-background">
       {/* Stat Strip Skeleton */}
       <div className="border-b border-border bg-card px-8 py-4">
         <div className="flex items-center justify-between gap-6 flex-wrap">

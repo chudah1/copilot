@@ -17,7 +17,7 @@ export default function ResearchLandingPage() {
   const [query, setQuery] = useState("");
 
   return (
-    <div className="min-h-[calc(100vh-54px)] px-4 py-12 sm:px-8">
+    <div className="min-h-[calc(100vh-84px)] px-4 py-12 sm:px-8">
       <motion.div
         initial={{ opacity: 0, y: 10 }}
         animate={{ opacity: 1, y: 0 }}

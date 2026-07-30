@@ -153,7 +153,7 @@ function PeekContent({
           ref={closeRef}
           onClick={onClose}
           aria-label="Close peek"
-          className="shrink-0 font-mono text-sm leading-none text-muted-foreground transition-colors hover:text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary/35"
+          className="-m-2 shrink-0 p-3 font-mono text-sm leading-none text-muted-foreground transition-colors hover:text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary/35"
         >
           ✕
         </button>
@@ -276,7 +276,7 @@ function PeekContent({
       </motion.div>
 
       {/* Footer */}
-      <div className="flex items-center gap-2 border-t border-border/60 px-5 py-4">
+      <div className="flex items-center gap-2 border-t border-border/60 px-5 pt-4 pb-[max(1rem,env(safe-area-inset-bottom))]">
         <Link
           href={hasThesis ? positionHref : `${positionHref}?source=dashboard_blind_spot`}
           className="flex-1 bg-primary px-4 py-2.5 text-center font-mono text-[10px] uppercase tracking-[0.16em] text-primary-foreground transition-colors hover:bg-primary/90"

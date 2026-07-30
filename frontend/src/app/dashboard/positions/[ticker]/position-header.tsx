@@ -57,7 +57,7 @@ export function PositionHeader({
   }[decisionState.kind];
 
   return (
-      <div className="sticky top-[52px] z-20 bg-background border-b border-border/60">
+      <div className="sticky top-[84px] z-20 bg-background border-b border-border/60">
         <div className="max-w-5xl mx-auto px-4 sm:px-6 lg:px-10">
 
           {/* Nav row */}

@@ -94,7 +94,7 @@ export default function ResearchPage() {
   }
 
   return (
-    <div className="min-h-[calc(100vh-54px)] px-4 py-10 sm:px-8">
+    <div className="min-h-[calc(100vh-84px)] px-4 py-10 sm:px-8">
       <div className="mx-auto max-w-4xl space-y-5">
 
         <motion.div initial={{ opacity: 0, y: 8 }} animate={{ opacity: 1, y: 0 }} transition={{ duration: 0.3 }}>
@@ -482,7 +482,7 @@ function GatePage({
   onRegister: () => void;
 }) {
   return (
-    <div className="min-h-[calc(100vh-54px)] flex items-center justify-center px-4">
+    <div className="min-h-[calc(100vh-84px)] flex items-center justify-center px-4">
       <motion.div
         initial={{ opacity: 0, y: 12 }}
         animate={{ opacity: 1, y: 0 }}
