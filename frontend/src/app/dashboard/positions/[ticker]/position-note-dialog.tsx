@@ -42,7 +42,7 @@ export function PositionNoteDialog({
       }}
     >
       <DialogContent className="product-panel product-panel-muted max-w-lg p-0 overflow-hidden">
-        <DialogHeader>
+        <DialogHeader className="px-5 pt-5 pr-14 sm:px-6 sm:pt-6 sm:pr-14">
           <DialogTitle className="font-display italic text-[1.65rem] leading-tight">
             Add a note to this position
           </DialogTitle>
@@ -51,8 +51,9 @@ export function PositionNoteDialog({
             The note will appear in the position history.
           </DialogDescription>
         </DialogHeader>
-        <div className="px-6 pb-2">
+        <div className="px-5 pb-5 sm:px-6">
           <textarea
+            aria-label="Position note"
             value={note}
             onChange={(event) => setNote(event.target.value)}
             placeholder="What do you want to remember?"
@@ -61,7 +62,7 @@ export function PositionNoteDialog({
             className="w-full resize-none border border-border bg-background px-4 py-3 font-sans text-sm leading-relaxed text-foreground placeholder:text-muted-foreground/50 focus:border-primary/50 focus:outline-none"
           />
         </div>
-        <DialogFooter>
+        <DialogFooter className="mx-0 mb-0 rounded-none px-5 py-4 sm:px-6">
           <Button
             variant="outline"
             onClick={() => onOpenChange(false)}

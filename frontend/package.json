@@ -9,6 +9,7 @@
     "lint": "eslint",
     "test:onboarding-flow": "node --test tests/onboarding-flow.smoke.mjs",
     "test:onboarding-selection": "node --test tests/onboarding-selection.test.mts",
+    "test:position-note-dialog": "node --test tests/position-note-dialog.smoke.mjs",
     "test:share-preview": "node --test tests/share-preview.smoke.mjs"
   },
   "dependencies": {
