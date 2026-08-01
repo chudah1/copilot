@@ -6,14 +6,41 @@ same story persist twice. The guard re-checks anchors inside the write path.
 """
 from __future__ import annotations
 
+import uuid
 from datetime import datetime, timezone
+from types import SimpleNamespace
+from unittest.mock import AsyncMock, MagicMock
 
 import pytest
 
 from app.models.holding import Holding
 from app.models.monitoring_event import MonitoringEvent
 from app.models.thesis import Thesis
-from app.services.monitoring_pipeline import persist_classified_candidates
+from app.services.monitoring_pipeline import (
+    _acquire_story_anchor_lock,
+    persist_classified_candidates,
+)
+
+
+@pytest.mark.asyncio
+async def test_postgres_anchor_guard_uses_transaction_lock():
+    db = AsyncMock()
+    db.get_bind = MagicMock(
+        return_value=SimpleNamespace(
+            dialect=SimpleNamespace(name="postgresql")
+        )
+    )
+    holding_id = uuid.uuid4()
+
+    await _acquire_story_anchor_lock(
+        db,
+        holding_id=holding_id,
+        story_anchor="gemini_news:source:stable123",
+    )
+
+    statement, params = db.execute.await_args.args
+    assert "pg_advisory_xact_lock" in str(statement)
+    assert params["anchor_lock_key"].startswith(str(holding_id))
 
 
 async def _setup(db, test_user):

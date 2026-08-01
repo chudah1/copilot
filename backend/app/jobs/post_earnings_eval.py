@@ -7,6 +7,7 @@ from sqlalchemy import select, and_
 from app.database import async_session
 from app.models.earnings_calendar import EarningsCalendar
 from app.models.holding import Holding
+from app.models.monitoring_event import MonitoringEvent
 from app.models.thesis import Thesis
 from app.models.user import User
 from app.services.check_now import run_check_now
@@ -14,6 +15,14 @@ from app.services.email import send_earnings_alert_email
 from app.config import settings
 
 logger = logging.getLogger(__name__)
+
+
+def event_requires_post_earnings_email(event: MonitoringEvent) -> bool:
+    """Only adverse evidence should interrupt the user after earnings."""
+    return (
+        event.severity in {"warning", "thesis_breaking"}
+        and event.verdict not in {"supports", "neutral"}
+    )
 
 
 async def run_post_earnings_evaluation() -> None:
@@ -57,32 +66,84 @@ async def run_post_earnings_evaluation() -> None:
             users_result = await db.execute(select(User).where(User.id.in_(user_ids)))
             users_map = {u.id: u for u in users_result.scalars().all()}
 
-        evaluated = 0
+        targets: list[dict] = []
         for holding, thesis in pairs:
-            try:
-                result = await run_check_now(holding, thesis, db)
-                if result.events_created > 0:
-                    logger.info(
-                        "Post-earnings: %d events for %s (user %s)",
-                        result.events_created,
-                        holding.ticker,
-                        holding.user_id,
+            holding_user_id = holding.user_id
+            user = users_map.get(holding_user_id)
+            targets.append(
+                {
+                    "holding_id": holding.id,
+                    "thesis_id": thesis.id,
+                    "ticker": holding.ticker,
+                    "company_name": holding.name,
+                    "user_id": holding_user_id,
+                    "email": user.email if user else None,
+                    "preferences": dict(user.preferences or {}) if user else {},
+                }
+            )
+
+    evaluated = 0
+    for target in targets:
+        ticker = target["ticker"]
+        company_name = target["company_name"]
+        holding_user_id = target["user_id"]
+        user_email = target["email"]
+        prefs = target["preferences"]
+        try:
+            # run_check_now deliberately rolls back its caller-owned session
+            # before external work. Give every target a fresh session so that
+            # rollback cannot expire the ORM objects for the next holding.
+            async with async_session() as db:
+                holding = (
+                    await db.execute(
+                        select(Holding).where(Holding.id == target["holding_id"])
                     )
-                    user = users_map.get(holding.user_id)
-                    prefs = user.preferences or {} if user else {}
-                    if user and user.email and prefs.get("email_enabled", True) and prefs.get("earnings_alerts", True):
-                        subject = f"{holding.ticker} reported — {result.events_created} signal{'s' if result.events_created != 1 else ''} affected your reason"
-                        html = _build_post_earnings_email(holding.ticker, holding.name, result.events_created)
-                        await send_earnings_alert_email(user.email, subject, html)
-                evaluated += 1
-            except Exception as exc:
-                logger.error(
-                    "Post-earnings eval failed for %s / user %s: %s",
-                    holding.ticker,
-                    holding.user_id,
-                    exc,
-                    exc_info=True,
+                ).scalar_one_or_none()
+                thesis = (
+                    await db.execute(
+                        select(Thesis).where(Thesis.id == target["thesis_id"])
+                    )
+                ).scalar_one_or_none()
+                if holding is None or thesis is None:
+                    continue
+
+                # This job owns the single post-earnings email. Suppress the
+                # normal immediate alert from check-now so one event cannot
+                # produce two messages.
+                result = await run_check_now(holding, thesis, db, send_alerts=False)
+                adverse_events: list[MonitoringEvent] = []
+                if result.created_event_ids:
+                    created_rows = await db.execute(
+                        select(MonitoringEvent).where(
+                            MonitoringEvent.id.in_(result.created_event_ids)
+                        )
+                    )
+                    adverse_events = [
+                        event
+                        for event in created_rows.scalars().all()
+                        if event_requires_post_earnings_email(event)
+                    ]
+            if adverse_events:
+                adverse_count = len(adverse_events)
+                logger.info(
+                    "Post-earnings: %d events for %s (user %s)",
+                    adverse_count,
+                    ticker,
+                    holding_user_id,
                 )
+                if user_email and prefs.get("email_enabled", True) and prefs.get("earnings_alerts", True):
+                    subject = f"{ticker} reported — {adverse_count} signal{'s' if adverse_count != 1 else ''} affected your reason"
+                    html = _build_post_earnings_email(ticker, company_name, adverse_count)
+                    await send_earnings_alert_email(user_email, subject, html)
+            evaluated += 1
+        except Exception as exc:
+            logger.error(
+                "Post-earnings eval failed for %s / user %s: %s",
+                ticker,
+                holding_user_id,
+                exc,
+                exc_info=True,
+            )
 
     logger.info("Post-earnings evaluation complete: %d holdings evaluated", evaluated)
 

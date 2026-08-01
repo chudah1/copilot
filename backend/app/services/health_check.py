@@ -9,6 +9,7 @@ from app.services.market_data import CompanyData, fetch_company_data
 from app.services.monitoring import (
     RuleCheckResult,
     check_metric_watch_hints,
+    company_metric_matches_signal_scope,
     generate_monitoring_candidates,
 )
 
@@ -108,7 +109,12 @@ async def _classify_candidates(
     return classified
 
 
-async def run_health_check(thesis: Thesis, holding: Holding) -> HealthCheckResult:
+async def run_health_check(
+    thesis: Thesis,
+    holding: Holding,
+    *,
+    signal_labels_by_id: dict[str, str] | None = None,
+) -> HealthCheckResult:
     """Run a stateless health check for a single thesis against live market data."""
     company_data: CompanyData | None = None
     try:
@@ -123,6 +129,7 @@ async def run_health_check(thesis: Thesis, holding: Holding) -> HealthCheckResul
         thesis.interpretation,
         company_data,
         holding.current_price,
+        signal_labels_by_id=signal_labels_by_id,
     )
 
     classified = await _classify_candidates(
@@ -133,7 +140,16 @@ async def run_health_check(thesis: Thesis, holding: Holding) -> HealthCheckResul
         sector=company_data.sector,
         investor_profile=thesis.interpretation.get("investor_profile") if thesis.interpretation else None,
     )
-    watch_hints_status = check_metric_watch_hints(thesis.interpretation, _market_values(company_data))
+    watch_hints_status = [
+        result
+        for result in check_metric_watch_hints(thesis.interpretation, _market_values(company_data))
+        if company_metric_matches_signal_scope(
+            result.metric,
+            (signal_labels_by_id or {}).get(str(result.signal_id)),
+            ticker=company_data.ticker,
+            company_name=company_data.name,
+        )
+    ]
 
     # Candidates that failed classification are kept (severity=None) so _assess still
     # surfaces them as "watch" rather than silently collapsing to all_clear.

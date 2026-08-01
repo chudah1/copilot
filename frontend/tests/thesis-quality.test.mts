@@ -28,8 +28,6 @@ function thesis(overrides: Partial<Thesis> = {}): Thesis {
     updated_at: "2026-06-01T00:00:00.000Z",
     invalidated_at: null,
     invalidation_reason: null,
-    health_score: null,
-    health_label: null,
     ...overrides,
   };
 }

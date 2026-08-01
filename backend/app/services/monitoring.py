@@ -1,4 +1,5 @@
 import operator
+import re
 from dataclasses import dataclass
 from datetime import datetime, timezone
 from decimal import Decimal
@@ -9,6 +10,18 @@ from app.services.market_data import CompanyData, shortlist_qualitative_candidat
 OPERATORS = {
     ">=": operator.ge, "<=": operator.le, ">": operator.gt, "<": operator.lt, "==": operator.eq,
 }
+
+PERCENTAGE_METRICS = frozenset({
+    "revenue_growth_yoy",
+    "earnings_growth_yoy",
+    "dividend_yield",
+})
+
+_GENERIC_COMPANY_METRIC_WORDS = frozenset({
+    "company", "consolidated", "corporation", "corp", "earnings", "growth",
+    "group", "inc", "income", "overall", "revenue", "revenues", "total",
+    "year", "yearly", "yoy",
+})
 
 
 def _coerce_float(value: Any) -> float | None:
@@ -37,6 +50,40 @@ class RuleCheckResult:
     rationale: str
     signal_id: str | None = None
     claim_id: str | None = None
+    unit: str | None = None
+
+
+def _canonical_metric_threshold(metric: str, unit: str | None, threshold: float) -> float:
+    """Return thresholds in the same units used by market-data providers.
+
+    Growth and yield values arrive as fractions (25% == 0.25). Older generated
+    cases sometimes stored the human-facing number (25), so normalize those
+    values at the comparison boundary without rewriting user data.
+    """
+    if metric in PERCENTAGE_METRICS and unit == "pct" and abs(threshold) > 1:
+        return threshold / 100
+    return threshold
+
+
+def company_metric_matches_signal_scope(
+    metric: str,
+    signal_label: str | None,
+    *,
+    ticker: str,
+    company_name: str,
+) -> bool:
+    """Reject segment-specific labels for company-wide provider metrics.
+
+    `revenue_growth_yoy` is consolidated company revenue. It must not be used
+    as a stand-in for Azure, HBM, subscriptions, advertising, or another
+    segment named in a signal label.
+    """
+    if metric not in {"revenue_growth_yoy", "earnings_growth_yoy"} or not signal_label:
+        return True
+    label_words = set(re.findall(r"[a-z0-9]+", signal_label.lower()))
+    company_words = set(re.findall(r"[a-z0-9]+", f"{ticker} {company_name}".lower()))
+    scope_words = label_words - company_words - _GENERIC_COMPANY_METRIC_WORDS
+    return not scope_words
 
 
 def extract_watch_hints(interpretation: dict[str, Any] | None) -> list[dict[str, Any]]:
@@ -65,6 +112,8 @@ def check_metric_watch_hints(
         op_func = OPERATORS.get(op_str)
         if op_func is None or threshold is None or actual is None:
             continue
+        unit = str(hint.get("unit") or "").strip().lower() or None
+        threshold = _canonical_metric_threshold(metric_name, unit, threshold)
         met = op_func(actual, threshold)
         results.append(
             RuleCheckResult(
@@ -76,6 +125,7 @@ def check_metric_watch_hints(
                 rationale=hint.get("rationale", ""),
                 signal_id=hint.get("signal_id"),
                 claim_id=hint.get("claim_id"),
+                unit=unit,
             )
         )
     return results
@@ -139,6 +189,7 @@ def generate_monitoring_candidates(
     *,
     now: datetime | None = None,
     transcript_max_age_days: int = 14,
+    signal_labels_by_id: dict[str, str] | None = None,
 ) -> list[dict[str, Any]]:
     if company_data is None:
         return []
@@ -183,12 +234,21 @@ def generate_monitoring_candidates(
     market_values = {k: v for k, v in market_values.items() if v is not None}
     for breach in check_metric_watch_hints(effective, market_values):
         if breach.breached:
+            signal_label = (signal_labels_by_id or {}).get(str(breach.signal_id))
+            if not company_metric_matches_signal_scope(
+                breach.metric,
+                signal_label,
+                ticker=company_data.ticker,
+                company_name=company_data.name,
+            ):
+                continue
             evidence = {
                 "metric": breach.metric,
                 "actual_value": breach.actual_value,
                 "operator": breach.operator,
                 "threshold": breach.threshold,
                 "rationale": breach.rationale,
+                "unit": breach.unit,
             }
             if breach.signal_id:
                 evidence["signal_id"] = breach.signal_id

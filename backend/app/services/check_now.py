@@ -251,6 +251,8 @@ async def run_check_now(
     holding: Holding,
     thesis: Thesis,
     db: AsyncSession,
+    *,
+    send_alerts: bool = True,
 ) -> CheckNowResult:
     holding_snapshot = HoldingSnapshot(
         id=holding.id,
@@ -315,6 +317,11 @@ async def run_check_now(
 
         decomposition = await load_active_decomposition(prep_db, thesis_snapshot.id)
         claims = decomposition.claims if decomposition else None
+        claims_by_id, signals_by_id = build_claim_signal_lookup(claims)
+        signal_labels_by_id = {
+            signal_id: str(signal.signal_label or "")
+            for signal_id, signal in signals_by_id.items()
+        }
         investor_profile = await load_investor_profile(prep_db, thesis_snapshot.user_id)
         alert_user = (
             await prep_db.execute(select(User).where(User.id == thesis_snapshot.user_id))
@@ -341,6 +348,7 @@ async def run_check_now(
         previous_price,
         now=now,
         transcript_max_age_days=MAX_CURRENT_TRANSCRIPT_AGE_DAYS,
+        signal_labels_by_id=signal_labels_by_id,
     )
 
     # check-now is a single user-initiated pass; tag retrieval-source failures
@@ -476,9 +484,6 @@ async def run_check_now(
         )
         coverage.record_stage(STAGE_AFTER_THESIS_FLOOR, len(candidates))
 
-        # Build lookup tables for narrative generation
-        claims_by_id, signals_by_id = build_claim_signal_lookup(claims)
-
         # Build snapshot — always returned, even when 0 events
         snapshot = await _build_snapshot(
             company_data,
@@ -598,13 +603,15 @@ async def run_check_now(
 
             from app.services.alerts import prepare_monitoring_alert
 
-            pending_alert = prepare_monitoring_alert(
-                email=alert_email,
-                preferences=alert_preferences,
-                ticker=holding_snapshot.ticker,
-                status_before=status_before,
-                persisted_events=persisted_events,
-            )
+            pending_alert = None
+            if send_alerts:
+                pending_alert = prepare_monitoring_alert(
+                    email=alert_email,
+                    preferences=alert_preferences,
+                    ticker=holding_snapshot.ticker,
+                    status_before=status_before,
+                    persisted_events=persisted_events,
+                )
 
             await write_db.commit()
         coverage_committed = True
@@ -705,7 +712,7 @@ async def _run_first_pulse_with_session(
             ).scalar_one_or_none()
             if holding is None or thesis is None:
                 continue
-            await run_check_now(holding, thesis, db)
+            await run_check_now(holding, thesis, db, send_alerts=False)
             checked += 1
         except Exception:
             # One holding failing (bad ticker, market data outage) must not stop
@@ -1068,6 +1075,13 @@ async def _run_historical_audit_with_session(
     audit_floor_anchor = now - timedelta(days=HISTORICAL_AUDIT_LOOKBACK_DAYS - 1)
 
     try:
+        decomposition = await load_active_decomposition(db, thesis.id)
+        claims = decomposition.claims if decomposition else None
+        claims_by_id, signals_by_id = build_claim_signal_lookup(claims)
+        signal_labels_by_id = {
+            signal_id: str(signal.signal_label or "")
+            for signal_id, signal in signals_by_id.items()
+        }
         company_data = await fetch_company_data(holding.ticker)
         if company_data is None:
             await _persist_historical_audit_state(db, thesis_id=thesis_id, status="failed")
@@ -1080,6 +1094,7 @@ async def _run_historical_audit_with_session(
             previous_price,
             now=now,
             transcript_max_age_days=MAX_CURRENT_TRANSCRIPT_AGE_DAYS,
+            signal_labels_by_id=signal_labels_by_id,
         )
 
         # Tag retrieval failures with a per-audit run_id so users see the gap
@@ -1110,8 +1125,6 @@ async def _run_historical_audit_with_session(
             await write_monitoring_gap(db, thesis.id, "edgar", str(exc), audit_run_id)
             coverage.record_source("edgar_8k", candidates_returned=0, error=str(exc))
 
-        decomposition = await load_active_decomposition(db, thesis.id)
-        claims = decomposition.claims if decomposition else None
         signal_descriptors = signal_search_descriptors_from_claims(claims)
 
         try:
@@ -1152,7 +1165,6 @@ async def _run_historical_audit_with_session(
         candidates = apply_thesis_floor(candidates, audit_floor_anchor)
         coverage.record_stage(STAGE_AFTER_THESIS_FLOOR, len(candidates))
 
-        claims_by_id, signals_by_id = build_claim_signal_lookup(claims)
         investor_profile = await load_investor_profile(db, thesis.user_id)
 
         news_watches = extract_news_watches(claims)

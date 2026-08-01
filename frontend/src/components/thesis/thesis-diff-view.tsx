@@ -1,13 +1,11 @@
 "use client";
 
-import { InfoTip } from "@/components/ui/info-tip";
 import { formatDate } from "@/lib/utils";
 import type {
   MonitoringEvent,
   ThesisDecomposition,
   ThesisDecompositionClaim,
   ThesisDecompositionSignal,
-  ThesisHealthSnapshot,
 } from "@/types";
 
 type EffectiveVerdict = "supports" | "threatens" | "neutral" | "ignored";
@@ -68,81 +66,6 @@ function claimHealth(signals: SignalWithEvents[]): ClaimHealth {
   if (threats > 0 && threats >= supports) return "Threatened";
   if (supports > 0 && threats === 0) return "Supporting";
   return "Mixed";
-}
-
-function HealthSparkline({ snapshots }: { snapshots: ThesisHealthSnapshot[] }) {
-  if (snapshots.length < 2) return null;
-
-  const width = 220;
-  const height = 44;
-  const scores = snapshots.map((snapshot) => snapshot.score);
-  const minScore = Math.min(...scores);
-  const maxScore = Math.max(...scores);
-  const range = maxScore - minScore || 1;
-  const latest = snapshots[snapshots.length - 1];
-  const toneClass =
-    latest.label === "Healthy"
-      ? "text-emerald-700"
-      : latest.label === "At Risk"
-        ? "text-amber-700"
-        : "text-red-600";
-  const stroke =
-    latest.label === "Healthy"
-      ? "#15803d"
-      : latest.label === "At Risk"
-        ? "#b45309"
-        : "#dc2626";
-
-  const points = scores.map((score, index) => {
-    const x = (index / (scores.length - 1)) * width;
-    const y = height - ((score - minScore) / range) * (height - 8) - 4;
-    return `${x},${y}`;
-  });
-
-  const latestX = width;
-  const latestY = height - ((scores[scores.length - 1] - minScore) / range) * (height - 8) - 4;
-
-  return (
-    <div className="product-panel p-5 sm:p-6">
-      <div className="grid gap-4 lg:grid-cols-[minmax(0,12rem)_minmax(0,1fr)_auto] lg:items-center">
-        <div>
-          <div className="flex items-center gap-1">
-            <p className="font-mono text-[10px] uppercase tracking-[0.18em] text-muted-foreground">
-              Health score
-            </p>
-            <InfoTip label="Health score">
-              A 0–100 summary of how recent evidence compares with your written reason. It is not a prediction or recommendation.
-            </InfoTip>
-          </div>
-          <div className="mt-2 flex items-baseline gap-2">
-            <span className={`font-display text-[2rem] italic leading-none ${toneClass}`}>
-              {latest.score}
-            </span>
-            <span className={`font-mono text-[10px] uppercase tracking-[0.14em] ${toneClass}`}>
-              {latest.label}
-            </span>
-          </div>
-        </div>
-
-        <svg width={width} height={height} className="w-full max-w-[220px] lg:max-w-none">
-          <polyline
-            points={points.join(" ")}
-            fill="none"
-            stroke={stroke}
-            strokeWidth="1.5"
-            strokeLinecap="round"
-            strokeLinejoin="round"
-            opacity="0.75"
-          />
-          <circle cx={latestX} cy={latestY} r="3" fill={stroke} />
-        </svg>
-
-        <div className="font-mono text-[10px] uppercase tracking-[0.14em] text-muted-foreground">
-          {snapshots.length} checks
-        </div>
-      </div>
-    </div>
-  );
 }
 
 function SignalRow({ signalWithEvents }: { signalWithEvents: SignalWithEvents }) {
@@ -260,13 +183,11 @@ function ClaimCard({
 interface ThesisDiffViewProps {
   decomposition: ThesisDecomposition | null;
   monitoringEvents: MonitoringEvent[];
-  healthSnapshots: ThesisHealthSnapshot[];
 }
 
 export function ThesisDiffView({
   decomposition,
   monitoringEvents,
-  healthSnapshots,
 }: ThesisDiffViewProps) {
   if (!decomposition || decomposition.claims.length === 0) {
     return (
@@ -292,8 +213,6 @@ export function ThesisDiffView({
 
   return (
     <div className="space-y-4">
-      <HealthSparkline snapshots={healthSnapshots} />
-
       {decomposition.claims
         .slice()
         .sort((a, b) => (a.position ?? 0) - (b.position ?? 0))

@@ -12,8 +12,6 @@ const FAQS = [
         "No. penKeep shows you what you wrote, what changed, and what you decided afterward. It does not tell you what to do."],
       ["How is this different from a news alert or an AI investing chat?",
         "A news alert tells you what happened. An AI chat answers the question you ask today. penKeep keeps the notes you wrote before the event and puts them beside the decision you made afterward."],
-      ["What's the thesis health score?",
-        "A 0–100 summary of how clearly your reason was turned into checks and how recent evidence compares with those checks. Healthy is 75–100, At Risk is 45–74, and Broken is below 45. It is not a prediction or a buy or sell signal."],
       ["What if I'm a complete beginner?",
         "The counter-thesis gives you the strongest argument against a stock and names risks you can check later. penKeep is not a stock-picking course; you still need to make the investment decision."],
       ["What stocks does it support?",

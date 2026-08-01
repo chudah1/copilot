@@ -101,16 +101,17 @@ def apply_thesis_floor(
 # Cooldown hours per evidence_type (mapped from event_type before this runs)
 COOLDOWN_HOURS: dict[str, int] = {
     "price_move": 24,
-    "metric_breach": 24,
     "news": 48,
     "earnings": 48,
     "insider": 48,
     "analyst_revision": 72,
+    # A breached numeric condition remains the same evidence until it recovers
+    # or the user changes the signal. Do not create a new warning every day.
+    "metric_breach": 24 * 30,
 }
 DEFAULT_COOLDOWN_HOURS = 24
 COARSE_COOLDOWN_EVENT_TYPES = frozenset({
     "price_move",
-    "metric_threshold",
     "upcoming_earnings",
     "earnings_surprise",
     "monitoring_inactive",
@@ -258,6 +259,13 @@ def story_anchor_for_candidate(candidate: dict[str, Any]) -> str | None:
             if actor:
                 return f"{event_type}:insider:{transaction_date}:{actor}"
             return f"{event_type}:insider:{transaction_date}"
+
+    if event_type == "metric_threshold":
+        signal_id = str(evidence.get("signal_id") or "general").strip()
+        metric = str(evidence.get("metric") or "metric").strip()
+        operator = str(evidence.get("operator") or "").strip()
+        threshold = str(evidence.get("threshold") or "").strip()
+        return f"{event_type}:signal:{signal_id}:{metric}:{operator}:{threshold}"
 
     if event_type == "edgar_8k":
         filing_date = _normalize_story_date(evidence.get("filing_date") or evidence.get("date"))

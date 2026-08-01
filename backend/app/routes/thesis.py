@@ -590,7 +590,21 @@ async def thesis_health_check(
     if thesis.holding is None:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Holding not found")
 
-    check = await run_health_check(thesis, thesis.holding)
+    from app.services.monitoring_pipeline import build_claim_signal_lookup
+    from app.services.signal_matching import load_active_decomposition
+
+    decomposition = await load_active_decomposition(db, thesis.id)
+    claims = decomposition.claims if decomposition else None
+    _, signals_by_id = build_claim_signal_lookup(claims)
+    signal_labels_by_id = {
+        signal_id: str(signal.signal_label or "")
+        for signal_id, signal in signals_by_id.items()
+    }
+    check = await run_health_check(
+        thesis,
+        thesis.holding,
+        signal_labels_by_id=signal_labels_by_id,
+    )
     return HealthCheckResponse(
         thesis_id=thesis.id,
         ticker=check.ticker,
@@ -754,32 +768,6 @@ async def earnings_review(
         log_entry_id=log_entry.id,
         reviewed_at=reviewed_at,
     )
-
-
-@router.get("/{thesis_id}/health-history")
-async def get_health_history(
-    thesis_id: uuid.UUID,
-    user: User = Depends(get_current_user),
-    db: AsyncSession = Depends(get_db),
-):
-    from app.models.thesis_health_snapshot import ThesisHealthSnapshot
-    result = await db.execute(
-        select(Thesis)
-        .where(Thesis.id == thesis_id, Thesis.user_id == user.id)
-    )
-    if result.scalar_one_or_none() is None:
-        raise HTTPException(status_code=404, detail="Thesis not found")
-
-    snaps = await db.execute(
-        select(ThesisHealthSnapshot)
-        .where(ThesisHealthSnapshot.thesis_id == thesis_id)
-        .order_by(ThesisHealthSnapshot.computed_at.asc())
-        .limit(90)
-    )
-    return [
-        {"score": s.score, "label": s.label, "computed_at": s.computed_at.isoformat()}
-        for s in snaps.scalars().all()
-    ]
 
 
 # ── Thesis check-in (claim-level review) ─────────────────────────────────────

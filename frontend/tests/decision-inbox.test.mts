@@ -43,8 +43,6 @@ function thesis(holdingId: string, overrides: Partial<Thesis> = {}): Thesis {
     updated_at: "2026-07-10T12:00:00Z",
     invalidated_at: null,
     invalidation_reason: null,
-    health_score: null,
-    health_label: null,
     ...overrides,
   };
 }

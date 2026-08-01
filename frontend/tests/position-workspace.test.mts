@@ -45,8 +45,6 @@ function thesis(id: string, status: Thesis["status"], updatedAt = "2026-07-10T12
     updated_at: updatedAt,
     invalidated_at: status === "invalidated" ? updatedAt : null,
     invalidation_reason: null,
-    health_score: null,
-    health_label: null,
   };
 }
 

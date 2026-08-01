@@ -58,6 +58,90 @@ def test_metric_breach_accepts_string_thresholds():
     assert results[0].breached is True
 
 
+def test_percentage_metric_normalizes_whole_percent_threshold():
+    """Provider growth values are fractions; a user-facing 60% is 0.60."""
+    interpretation = {
+        "watch_hints": [
+            {
+                "kind": "metric_threshold",
+                "metric": "revenue_growth_yoy",
+                "operator": ">=",
+                "threshold": 60.0,
+                "unit": "pct",
+                "rationale": "Revenue must grow at least 60%.",
+            }
+        ]
+    }
+    results = check_metric_watch_hints(
+        interpretation,
+        {"revenue_growth_yoy": 3.457},
+    )
+    assert len(results) == 1
+    assert results[0].threshold == 0.60
+    assert results[0].breached is False
+
+
+def test_percentage_metric_preserves_fractional_threshold():
+    interpretation = {
+        "watch_hints": [
+            {
+                "kind": "metric_threshold",
+                "metric": "revenue_growth_yoy",
+                "operator": ">=",
+                "threshold": 0.25,
+                "unit": "pct",
+                "rationale": "Revenue must grow at least 25%.",
+            }
+        ]
+    }
+    results = check_metric_watch_hints(
+        interpretation,
+        {"revenue_growth_yoy": 0.177},
+    )
+    assert results[0].threshold == 0.25
+    assert results[0].breached is True
+
+
+def test_company_metric_does_not_test_segment_specific_signal():
+    interpretation = {
+        "watch_hints": [
+            {
+                "kind": "metric_threshold",
+                "metric": "revenue_growth_yoy",
+                "operator": ">=",
+                "threshold": 60.0,
+                "unit": "pct",
+                "signal_id": "signal-hbm",
+                "rationale": "Measures HBM momentum.",
+            }
+        ]
+    }
+    company_data = SimpleNamespace(
+        ticker="MU",
+        name="Micron Technology",
+        current_price=100.0,
+        revenue_growth_yoy=0.40,
+        earnings_growth_yoy=None,
+        pe_ratio=None,
+        dividend_yield=None,
+        news_items=[],
+        recent_earnings_surprise_pct=None,
+        upcoming_earnings_date=None,
+        earnings_call=None,
+        earnings_calls=[],
+        insider_transactions=[],
+    )
+
+    candidates = generate_monitoring_candidates(
+        interpretation,
+        company_data,
+        previous_price=100.0,
+        signal_labels_by_id={"signal-hbm": "MU HBM revenue growth"},
+    )
+
+    assert not [c for c in candidates if c["event_type"] == "metric_threshold"]
+
+
 def test_price_move_detection():
     assert check_price_move(current_price=110.0, previous_price=100.0, threshold_pct=10.0) is True
     assert check_price_move(current_price=105.0, previous_price=100.0, threshold_pct=10.0) is False
@@ -519,7 +603,11 @@ async def test_run_monitoring_applies_thesis_relevance_filter(db, job_session_fa
         "description": "Apple Services article",
         "evidence": {"headline": "Apple Services article"},
     }
-    fake_claim = SimpleNamespace(claim_text="Services revenue grows", entities=[])
+    fake_claim = SimpleNamespace(
+        id=uuid.uuid4(),
+        claim_text="Services revenue grows",
+        entities=[],
+    )
     fake_decomposition = SimpleNamespace(claims=[fake_claim])
 
     with patch("app.jobs.monitoring_run.settings") as mock_settings:
@@ -718,7 +806,6 @@ async def test_run_monitoring_sends_one_warning_for_adverse_evidence(db, job_ses
              patch("app.jobs.monitoring_run.get_recent_form4_transactions", new_callable=AsyncMock, return_value=[]), \
              patch("app.jobs.monitoring_run.collect_news_evidence", new_callable=AsyncMock, return_value=[]), \
              patch("app.jobs.monitoring_run.classify_candidates_for_thesis", new_callable=AsyncMock, return_value=classified), \
-             patch("app.jobs.monitoring_run.refresh_thesis_health", new_callable=AsyncMock, return_value=(45, "At Risk", "Healthy")), \
              patch("app.services.email.send_thesis_warning_email", new_callable=AsyncMock, return_value=True) as send_warning:
             await run_monitoring()
 
@@ -780,7 +867,6 @@ async def test_run_monitoring_does_not_email_for_neutral_info_band_drop(db, job_
              patch("app.jobs.monitoring_run.get_recent_form4_transactions", new_callable=AsyncMock, return_value=[]), \
              patch("app.jobs.monitoring_run.collect_news_evidence", new_callable=AsyncMock, return_value=[]), \
              patch("app.jobs.monitoring_run.classify_candidates_for_thesis", new_callable=AsyncMock, return_value=classified), \
-             patch("app.jobs.monitoring_run.refresh_thesis_health", new_callable=AsyncMock, return_value=(45, "At Risk", "Healthy")), \
              patch("app.services.email.send_thesis_warning_email", new_callable=AsyncMock, return_value=True) as send_warning:
             await run_monitoring()
 

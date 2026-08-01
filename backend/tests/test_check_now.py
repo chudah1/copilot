@@ -256,7 +256,13 @@ async def test_run_check_now_returns_created_event_ids(db, test_user):
     assert all(event_id is not None for event_id in result.created_event_ids)
 
 
-async def test_run_check_now_emails_new_thesis_break_after_commit(db, test_user):
+@pytest.mark.parametrize(
+    ("send_alerts", "expected_calls"),
+    [(True, 1), (False, 0)],
+)
+async def test_run_check_now_respects_alert_dispatch_mode(
+    db, test_user, send_alerts, expected_calls
+):
     test_user.preferences = {
         **(test_user.preferences or {}),
         "email_enabled": True,
@@ -317,11 +323,12 @@ async def test_run_check_now_emails_new_thesis_break_after_commit(db, test_user)
         new_callable=AsyncMock,
         return_value=True,
     ) as send_email:
-        result = await run_check_now(holding, thesis, db)
+        result = await run_check_now(holding, thesis, db, send_alerts=send_alerts)
 
     assert result.status == "completed"
-    send_email.assert_awaited_once()
-    assert send_email.await_args.args[0] == test_user.email
+    assert send_email.await_count == expected_calls
+    if expected_calls:
+        assert send_email.await_args.args[0] == test_user.email
 
 
 async def test_run_check_now_uses_broader_current_transcript_window(db, test_user):

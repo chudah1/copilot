@@ -16,7 +16,7 @@ _TRANSCRIPT_LOOKBACK = 2
 # (they test a number against the user's own threshold — no judgment needed).
 DETERMINISTIC_BREACH_EVENT_TYPES = {"price_move", "metric_threshold"}
 
-from sqlalchemy import select
+from sqlalchemy import select, text
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.config import settings
@@ -37,6 +37,7 @@ from app.services.news_watch import (
     match_news_watches,
 )
 from app.services.noise_filter import (
+    COOLDOWN_HOURS,
     DEFAULT_COOLDOWN_HOURS,
     EVIDENCE_TYPE_MAP,
     _story_anchor_uses_cooldown,
@@ -44,6 +45,25 @@ from app.services.noise_filter import (
     story_anchor_for_candidate,
 )
 from app.services.signal_matching import build_evidence_summary, determine_verdict
+
+
+async def _acquire_story_anchor_lock(
+    db: AsyncSession,
+    *,
+    holding_id: uuid.UUID,
+    story_anchor: str,
+) -> None:
+    """Serialize PostgreSQL writers for one holding/story pair."""
+    bind = db.get_bind()
+    if bind.dialect.name != "postgresql":
+        return
+    await db.execute(
+        text(
+            "SELECT pg_advisory_xact_lock("
+            "hashtextextended(:anchor_lock_key, 0))"
+        ),
+        {"anchor_lock_key": f"{holding_id}:{story_anchor}"},
+    )
 
 
 def _event_title(ticker: str, candidate: dict[str, Any], claim_obj: Any | None) -> str:
@@ -677,11 +697,7 @@ async def persist_classified_candidates(
     investor_profile: str | None = None,
     persisted_events_out: list[MonitoringEvent] | None = None,
 ) -> list[uuid.UUID]:
-    # Write-time anchor guard. The read-at-start noise filter can't see events
-    # committed by a concurrently running pass (check-now, edgar_watch and
-    # monitoring_run can overlap), so the same story would persist once per
-    # pass. Re-checking recent anchors here, in the same session as the
-    # insert, closes that window.
+    # Fast-path guard for events already visible when this transaction starts.
     anchor_rows = await db.execute(
         select(MonitoringEvent.story_anchor).where(
             MonitoringEvent.holding_id == holding.id,
@@ -691,8 +707,15 @@ async def persist_classified_candidates(
     )
     recent_anchors: set[str] = set(anchor_rows.scalars().all())
 
+    # Consistent lock order avoids deadlocks when two passes contain several of
+    # the same stories in a different source order.
+    ordered_classified = sorted(
+        classified,
+        key=lambda item: story_anchor_for_candidate(item[0]) or "",
+    )
+
     events: list[MonitoringEvent] = []
-    for candidate, severity, ai_analysis in classified:
+    for candidate, severity, ai_analysis in ordered_classified:
         evidence = candidate.get("evidence", {})
         source_url = evidence.get("url")
         has_proxy_context = bool(evidence.get("proxy_ticker"))
@@ -708,6 +731,45 @@ async def persist_classified_candidates(
                 holding.id, candidate_anchor, DEFAULT_COOLDOWN_HOURS,
             )
             continue
+
+        if candidate_anchor:
+            # PostgreSQL transaction-scoped advisory locks serialize writers
+            # for the same holding + story. The second concurrent pass waits,
+            # then sees the first pass's committed row before it can insert.
+            await _acquire_story_anchor_lock(
+                db,
+                holding_id=holding.id,
+                story_anchor=candidate_anchor,
+            )
+
+            event_type = str(candidate.get("event_type", ""))
+            if _story_anchor_uses_cooldown(event_type):
+                evidence_type = EVIDENCE_TYPE_MAP.get(event_type, event_type)
+                guard_since = now - timedelta(
+                    hours=COOLDOWN_HOURS.get(evidence_type, DEFAULT_COOLDOWN_HOURS)
+                )
+            else:
+                # Coarse event types may legitimately recur later, but two jobs
+                # processing the same snapshot within minutes are duplicates.
+                guard_since = now - timedelta(minutes=5)
+
+            existing_anchor = await db.execute(
+                select(MonitoringEvent.id)
+                .where(
+                    MonitoringEvent.holding_id == holding.id,
+                    MonitoringEvent.story_anchor == candidate_anchor,
+                    MonitoringEvent.created_at >= guard_since,
+                )
+                .limit(1)
+            )
+            if existing_anchor.scalar_one_or_none() is not None:
+                logger.warning(
+                    "Skipped concurrent duplicate for holding %s: story anchor %s",
+                    holding.id,
+                    candidate_anchor,
+                )
+                recent_anchors.add(candidate_anchor)
+                continue
 
         evidence_signal_id = evidence.get("signal_id")
         evidence_claim_id = evidence.get("claim_id")

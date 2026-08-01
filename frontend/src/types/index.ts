@@ -41,8 +41,6 @@ export interface Thesis {
   updated_at: string;
   invalidated_at: string | null;
   invalidation_reason: string | null;
-  health_score: number | null;
-  health_label: "Healthy" | "At Risk" | "Broken" | null;
 }
 
 export interface StressTestResult {
@@ -203,12 +201,6 @@ export interface SubmitClaimReviewsResponse {
   session_id: string;
   thesis_status: string;
   thesis_confidence: string;
-}
-
-export interface ThesisHealthSnapshot {
-  score: number;
-  label: string;
-  computed_at: string;
 }
 
 export interface MonitoringGap {

@@ -15,7 +15,6 @@ from app.models.thesis import Thesis
 from app.models.monitoring_event import MonitoringEvent
 from app.services.check_now import HoldingSnapshot, ThesisSnapshot
 from app.services.monitoring import check_metric_watch_hints, generate_monitoring_candidates
-from app.services.thesis_health import refresh_thesis_health
 from app.services.market_data import (
     MAX_CURRENT_TRANSCRIPT_AGE_DAYS,
     CompanyData,
@@ -337,6 +336,11 @@ async def _process_monitoring_thesis(
     async with session_factory() as prep_db:
         decomposition = await load_active_decomposition(prep_db, ctx.thesis.id)
         claims = decomposition.claims if decomposition else None
+        claims_by_id, signals_by_id = build_claim_signal_lookup(claims)
+        signal_labels_by_id = {
+            signal_id: str(signal.signal_label or "")
+            for signal_id, signal in signals_by_id.items()
+        }
         investor_profile = await load_investor_profile(prep_db, ctx.user.id)
 
     # Direct ticker candidates (external work, no session)
@@ -346,6 +350,7 @@ async def _process_monitoring_thesis(
         ctx.holding.current_price,
         now=now,
         transcript_max_age_days=MAX_CURRENT_TRANSCRIPT_AGE_DAYS,
+        signal_labels_by_id=signal_labels_by_id,
     )
     coverage.record_source("qualitative_market_data", candidates_returned=len(candidates))
     coverage.record_source(
@@ -448,10 +453,7 @@ async def _process_monitoring_thesis(
     candidates = await expand_transcript_candidates_for_signals(candidates, claims)
 
     # Phase 3: chunking + noise filter in a short session
-    claims_by_id: dict = {}
-    signals_by_id: dict = {}
     if candidates:
-        claims_by_id, signals_by_id = build_claim_signal_lookup(claims)
         async with session_factory() as filter_db:
             await best_effort_persist_candidate_evidence_chunks(
                 filter_db,
@@ -552,10 +554,6 @@ async def _process_monitoring_thesis(
                 "coverage.persist failed inline for thesis %s (events still committing)",
                 ctx.thesis.id,
             )
-
-        await refresh_thesis_health(
-            write_db, live_thesis, claims, decomposition, now=now
-        )
 
         # Select from rows that were actually persisted, then email only after
         # commit so a network hop cannot hold the transaction open.

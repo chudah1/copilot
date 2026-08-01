@@ -131,8 +131,6 @@ class ThesisResponse(BaseModel):
     updated_at: datetime
     invalidated_at: datetime | None
     invalidation_reason: str | None
-    health_score: int | None
-    health_label: str | None
     model_config = {"from_attributes": True}
 
 

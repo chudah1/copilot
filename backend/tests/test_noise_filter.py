@@ -274,6 +274,16 @@ def test_signal_cooldown_handles_naive_last_fired_at():
     assert len(result) == 0
 
 
+def test_metric_breach_uses_long_story_cooldown():
+    from app.services.noise_filter import (
+        COOLDOWN_HOURS,
+        _story_anchor_uses_cooldown,
+    )
+
+    assert _story_anchor_uses_cooldown("metric_threshold") is True
+    assert COOLDOWN_HOURS["metric_breach"] >= 24 * 30
+
+
 # ---------------------------------------------------------------------------
 # Rule 3: Priority suppression (operates on classified tuples)
 # ---------------------------------------------------------------------------
