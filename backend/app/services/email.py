@@ -88,34 +88,6 @@ async def send_earnings_alert_email(to_email: str, subject: str, html_content: s
     return _send_email_via_resend("penKeep <alerts@penkeep.io>", to_email, subject, html_content)
 
 
-async def send_health_band_drop_email(
-    to_email: str, ticker: str, prev_label: str, new_label: str, score: int
-) -> bool:
-    dashboard_url = f"{settings.frontend_url}/dashboard"
-    body = (
-        f'<p style="margin:0 0 10px;font-family:{_MONO};font-size:10px;letter-spacing:0.20em;text-transform:uppercase;color:{_F};">{escape(ticker)} &middot; Thesis health</p>'
-        f'<h1 style="margin:0 0 28px;font-size:24px;font-weight:normal;color:{_I};line-height:1.25;">Your health score has dropped</h1>'
-        f'<table role="presentation" width="100%" cellpadding="0" cellspacing="0" border="0" style="margin:0 0 28px;border:1px solid {_B};">'
-        f'<tr>'
-        f'<td width="50%" style="padding:16px 20px;border-right:1px solid {_B};vertical-align:top;">'
-        f'<p style="margin:0 0 6px;font-family:{_MONO};font-size:10px;letter-spacing:0.18em;text-transform:uppercase;color:{_F};">Was</p>'
-        f'<p style="margin:0;font-size:20px;font-weight:normal;color:{_T};">{escape(prev_label)}</p></td>'
-        f'<td width="50%" style="padding:16px 20px;vertical-align:top;">'
-        f'<p style="margin:0 0 6px;font-family:{_MONO};font-size:10px;letter-spacing:0.18em;text-transform:uppercase;color:{_F};">Now</p>'
-        f'<p style="margin:0;font-size:20px;font-weight:normal;color:{_R};">{escape(new_label)}</p></td>'
-        f'</tr>'
-        f'<tr><td colspan="2" style="padding:12px 20px;border-top:1px solid {_B};background:#EDE5DB;">'
-        f'<p style="margin:0;font-family:{_MONO};font-size:11px;letter-spacing:0.12em;text-transform:uppercase;color:{_F};">Current score: <strong style="color:{_T};">{score} / 100</strong></p>'
-        f'</td></tr></table>'
-        f'<p style="margin:0 0 32px;font-size:14px;line-height:1.75;color:{_T};">Recent monitoring events have weakened one or more of your core claims. Review them to understand what changed and decide whether your thesis still holds.</p>'
-        + _btn(dashboard_url, "Review thesis")
-    )
-    html = _email_shell("Health update", "#B07D3A", "#B07D3A", body)
-    return _send_email_via_resend(
-        "penKeep <alerts@penkeep.io>", to_email, f"{ticker} thesis dropped to {new_label}", html
-    )
-
-
 async def send_thesis_break_email(to_email: str, ticker: str, summary: str) -> bool:
     review_url = f"{settings.frontend_url}/dashboard/positions/{ticker}"
     body = (

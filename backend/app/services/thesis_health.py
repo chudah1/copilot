@@ -19,11 +19,8 @@ _THESIS_BREAKING_DECAY_FLOOR = 0.5
 _EVENT_WEIGHTS: dict[tuple[str, str], int] = {
     ("thesis_breaking", "threatens"): -30,
     ("thesis_breaking", "review"):    -20,
-    ("thesis_breaking", "neutral"):   -20,
     ("warning",         "threatens"): -15,
     ("warning",         "review"):    -8,
-    ("warning",         "neutral"):   -5,
-    ("info",            "neutral"):   -2,
 }
 _SUPPORTS_BONUS = 5
 
@@ -77,6 +74,10 @@ def compute_health_score(
 
         if verdict == "supports":
             delta += _SUPPORTS_BONUS
+            continue
+        if verdict == "neutral":
+            # Neutral evidence is a monitoring receipt: it neither supports nor
+            # weakens the written case, regardless of the candidate severity.
             continue
 
         base_weight = _EVENT_WEIGHTS.get((severity, verdict), -5)
@@ -161,28 +162,3 @@ async def refresh_thesis_health(
     db.add(snapshot)
 
     return score, label, prev_label
-
-
-_BAND_ORDER = {"Healthy": 2, "At Risk": 1, "Broken": 0}
-
-
-async def maybe_notify_band_drop(
-    user_email: str,
-    ticker: str,
-    prev_label: str | None,
-    new_label: str,
-    score: int,
-) -> None:
-    from app.services.email import send_health_band_drop_email
-
-    if prev_label is None or prev_label == new_label:
-        return
-    if _BAND_ORDER.get(new_label, 0) >= _BAND_ORDER.get(prev_label, 2):
-        return  # improvement or same level — don't notify
-    await send_health_band_drop_email(
-        to_email=user_email,
-        ticker=ticker,
-        prev_label=prev_label,
-        new_label=new_label,
-        score=score,
-    )

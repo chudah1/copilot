@@ -15,7 +15,7 @@ from app.models.thesis import Thesis
 from app.models.monitoring_event import MonitoringEvent
 from app.services.check_now import HoldingSnapshot, ThesisSnapshot
 from app.services.monitoring import check_metric_watch_hints, generate_monitoring_candidates
-from app.services.thesis_health import maybe_notify_band_drop, refresh_thesis_health
+from app.services.thesis_health import refresh_thesis_health
 from app.services.market_data import (
     MAX_CURRENT_TRANSCRIPT_AGE_DAYS,
     CompanyData,
@@ -496,9 +496,6 @@ async def _process_monitoring_thesis(
 
     # Phase 4: write session (persist events + apply_market_price + refresh_health + commit)
     pending_alert = None
-    score: int | None = None
-    new_label: str | None = None
-    prev_label: str | None = None
     async with session_factory() as write_db:
         live_holding = (
             await write_db.execute(
@@ -556,7 +553,7 @@ async def _process_monitoring_thesis(
                 ctx.thesis.id,
             )
 
-        score, new_label, prev_label = await refresh_thesis_health(
+        await refresh_thesis_health(
             write_db, live_thesis, claims, decomposition, now=now
         )
 
@@ -575,28 +572,12 @@ async def _process_monitoring_thesis(
         await write_db.commit()
 
     # Phase 5: post-commit emails (no session held)
-    alert_sent = False
+    # Immediate email is controlled only by newly persisted adverse evidence.
+    # A derived score-band change must not bypass those evidence alert rules.
     if pending_alert:
         from app.services.alerts import send_monitoring_alert
 
-        alert_sent = await send_monitoring_alert(pending_alert)
-
-    preferences = ctx.user.preferences or {}
-    if (
-        not alert_sent
-        and ctx.user.email
-        and preferences.get("email_enabled", True) is not False
-        and preferences.get("notification_sensitivity", "all") == "all"
-        and score is not None
-        and new_label is not None
-    ):
-        await maybe_notify_band_drop(
-            user_email=ctx.user.email,
-            ticker=ctx.holding.ticker,
-            prev_label=prev_label,
-            new_label=new_label,
-            score=score,
-        )
+        await send_monitoring_alert(pending_alert)
 
 
 async def run_monitoring():

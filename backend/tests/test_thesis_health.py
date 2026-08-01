@@ -114,6 +114,23 @@ def test_supports_verdict_adds_points():
     assert score == 80
 
 
+def test_neutral_info_event_does_not_reduce_health():
+    """Neutral evidence is a receipt, not evidence against the written case.
+
+    This reproduces the SOFI sequence where a neutral price move took a thesis
+    from 76/Healthy to 74/At Risk and caused a misleading email.
+    """
+    score, label = compute_health_score(
+        decomposition_confidence=0.76,
+        events=[_event("info", "neutral")],
+        claims=[],
+        reviewed_event_ids=set(),
+        now=NOW,
+    )
+    assert score == 76
+    assert label == "Healthy"
+
+
 # --- Behavior 7: old event weighs less than fresh event ---
 
 def test_old_event_weighs_less_than_fresh():
@@ -235,35 +252,3 @@ async def test_thesis_response_includes_health_fields(client, auth_headers):
     data = resp.json()
     assert "health_score" in data
     assert "health_label" in data
-
-
-# --- Behavior 12: email sent on band drop (Healthy → At Risk) ---
-
-@pytest.mark.asyncio
-async def test_email_sent_on_band_drop():
-    from app.services.thesis_health import maybe_notify_band_drop
-
-    with patch("app.services.email.send_health_band_drop_email", new_callable=AsyncMock) as mock_email:
-        await maybe_notify_band_drop(
-            user_email="investor@example.com",
-            ticker="NVDA",
-            prev_label="Healthy",
-            new_label="At Risk",
-            score=62,
-        )
-        mock_email.assert_awaited_once()
-
-
-@pytest.mark.asyncio
-async def test_no_email_sent_within_same_band():
-    from app.services.thesis_health import maybe_notify_band_drop
-
-    with patch("app.services.email.send_health_band_drop_email", new_callable=AsyncMock) as mock_email:
-        await maybe_notify_band_drop(
-            user_email="investor@example.com",
-            ticker="NVDA",
-            prev_label="Healthy",
-            new_label="Healthy",
-            score=80,
-        )
-        mock_email.assert_not_awaited()

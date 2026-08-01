@@ -671,10 +671,8 @@ def _band_drop_setup():
     return company_data, classified
 
 
-async def test_run_monitoring_suppresses_band_drop_email_after_warning_alert_sent(db, job_session_factory):
-    """A warning event that already emailed the user should not also trigger
-    a separate band-drop email in the same pass — one email per run, not two
-    for the same underlying deterioration."""
+async def test_run_monitoring_sends_one_warning_for_adverse_evidence(db, job_session_factory):
+    """A qualifying adverse event sends the evidence warning once."""
     user = User(
         email="doublealert@example.com",
         password_hash=hash_password("testpass123"),
@@ -721,22 +719,18 @@ async def test_run_monitoring_suppresses_band_drop_email_after_warning_alert_sen
              patch("app.jobs.monitoring_run.collect_news_evidence", new_callable=AsyncMock, return_value=[]), \
              patch("app.jobs.monitoring_run.classify_candidates_for_thesis", new_callable=AsyncMock, return_value=classified), \
              patch("app.jobs.monitoring_run.refresh_thesis_health", new_callable=AsyncMock, return_value=(45, "At Risk", "Healthy")), \
-             patch("app.services.email.send_thesis_warning_email", new_callable=AsyncMock, return_value=True) as send_warning, \
-             patch("app.services.email.send_health_band_drop_email", new_callable=AsyncMock, return_value=True) as send_band_drop:
+             patch("app.services.email.send_thesis_warning_email", new_callable=AsyncMock, return_value=True) as send_warning:
             await run_monitoring()
 
     send_warning.assert_awaited_once()
-    send_band_drop.assert_not_awaited()
 
 
-async def test_run_monitoring_sends_band_drop_email_when_no_warning_alert_sent(db, job_session_factory):
-    """Sanity check for the other side of the gate: with sensitivity held at
-    "all" (so the sensitivity check alone can't explain a suppressed email),
-    an info-severity event doesn't qualify for prepare_monitoring_alert, so
-    alert_sent stays False and the band-drop notification still fires. This
-    isolates the `not alert_sent` condition specifically — it only suppresses
-    a *redundant* second email for the same run, it doesn't blanket-suppress
-    band-drop notifications."""
+async def test_run_monitoring_does_not_email_for_neutral_info_band_drop(db, job_session_factory):
+    """A score-band change cannot bypass the evidence alert rules.
+
+    Neutral informational evidence must not send an "At Risk" email even if a
+    legacy health calculation reports a lower band.
+    """
     user = User(
         email="singlealert@example.com",
         password_hash=hash_password("testpass123"),
@@ -787,12 +781,10 @@ async def test_run_monitoring_sends_band_drop_email_when_no_warning_alert_sent(d
              patch("app.jobs.monitoring_run.collect_news_evidence", new_callable=AsyncMock, return_value=[]), \
              patch("app.jobs.monitoring_run.classify_candidates_for_thesis", new_callable=AsyncMock, return_value=classified), \
              patch("app.jobs.monitoring_run.refresh_thesis_health", new_callable=AsyncMock, return_value=(45, "At Risk", "Healthy")), \
-             patch("app.services.email.send_thesis_warning_email", new_callable=AsyncMock, return_value=True) as send_warning, \
-             patch("app.services.email.send_health_band_drop_email", new_callable=AsyncMock, return_value=True) as send_band_drop:
+             patch("app.services.email.send_thesis_warning_email", new_callable=AsyncMock, return_value=True) as send_warning:
             await run_monitoring()
 
     send_warning.assert_not_awaited()
-    send_band_drop.assert_awaited_once()
 
 
 async def test_run_monitoring_uses_broader_current_transcript_window(db, job_session_factory):
