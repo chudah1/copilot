@@ -92,14 +92,16 @@ Two production formats now exist: carousels (this account's original
 format) and video (`content/tiktok/videos.mjs`).
 
 - **Current-event thesis tests default to video.** These posts benefit most
-  from reach — people are already searching for the company or event — and
-  video reaches roughly 5–6x further than a carousel. Publish within the
-  existing 24-hour window (Section 6, Step 7) while search interest is live.
+  from reach — people are already searching for the company or event.
+  Publish within the existing 24-hour window (Section 6, Step 7) while
+  search interest is live.
 - **Evergreen decision stories default to carousels.** These reward saves
-  and re-reading; carousels get roughly 2–3x more saves and comments than
-  video for the same idea.
+  and re-reading.
 - **Crossover is allowed either direction** when an idea's shape calls for
   it — this is a rule of thumb, not a hard rule.
+- Once both formats have real posting data, use Section 11's measurement
+  routine to check these defaults against actual performance rather than
+  assumption.
 
 ## 5. The story model
 
@@ -262,7 +264,8 @@ investment concept naturally in the title or caption.
 
 ### First 14 days
 
-- Publish one high-quality carousel each day.
+- Publish one high-quality post each day (carousel or video, per the
+  format assignment in Section 4).
 - Publish a second post only when a genuinely timely event justifies it.
 - Alternate current and evergreen stories where possible.
 - Do not publish several posts within minutes of one another.
@@ -307,7 +310,8 @@ Prioritise:
 3. thoughtful comments;
 4. profile visits per 1,000 views;
 5. follows from profile visits;
-6. carousel completion or reading time where available.
+6. carousel completion/reading time, or video watch-through and replay
+   rate, where available.
 
 Follower count and raw views are secondary. A post with fewer views but strong
 saves and relevant comments may be more valuable than a broad low-intent post.

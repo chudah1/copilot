@@ -3,7 +3,7 @@ import { mkdirSync, writeFileSync } from "node:fs";
 import { dirname, resolve } from "node:path";
 import { fileURLToPath, pathToFileURL } from "node:url";
 import { videos } from "./videos.mjs";
-import { videoDuration } from "./video-scenes.mjs";
+import { renderDuration } from "./video-scenes.mjs";
 
 const here = dirname(fileURLToPath(import.meta.url));
 const outputRoot = resolve(here, "output");
@@ -29,7 +29,7 @@ const browser = await chromium.launch({
 });
 
 for (const video of targets) {
-  const duration = videoDuration(video);
+  const duration = renderDuration(video);
   const outputDir = resolve(outputRoot, video.slug);
   const outputVideo = resolve(outputDir, "video.mp4");
   mkdirSync(outputDir, { recursive: true });

@@ -59,12 +59,12 @@
     </main>
     <script type="module">
       import { videos } from "./videos.mjs";
-      import { renderSceneHTML, resolveActiveScene, sceneVisibility, sceneFadeIn, chartProgress, videoDuration } from "./video-scenes.mjs";
+      import { renderSceneHTML, resolveActiveScene, sceneVisibility, sceneFadeIn, chartProgress, renderDuration } from "./video-scenes.mjs";
 
       const params = new URLSearchParams(location.search);
       const requestedSlug = params.get("video");
       const video = videos.find((entry) => entry.slug === requestedSlug) || videos[0];
-      const duration = videoDuration(video);
+      const duration = renderDuration(video);
 
       document.querySelector(".series").textContent = video.series || "";
 

@@ -7,6 +7,7 @@ import {
   sceneFadeIn,
   resolveActiveScene,
   videoDuration,
+  renderDuration,
   chartProgress,
   renderSceneHTML,
 } from "./video-scenes.mjs";
@@ -54,6 +55,11 @@ test("resolveActiveScene picks the most visible scene at a given time", () => {
 test("videoDuration returns the latest scene end time", () => {
   const video = { scenes: [{ end: 2.8 }, { end: 21 }, { end: 11.45 }] };
   assert.equal(videoDuration(video), 21);
+});
+
+test("renderDuration is videoDuration minus the crossfade window", () => {
+  const video = { scenes: [{ end: 2.8 }, { end: 21 }, { end: 11.45 }] };
+  assert.equal(renderDuration(video), 21 - 0.38);
 });
 
 test("chartProgress rises from 0 at the scene start to 1 after 1.6s", () => {

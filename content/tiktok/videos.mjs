@@ -50,7 +50,7 @@ export const videos = [
         },
       },
       {
-        type: "hook",
+        type: "statement",
         treatment: "night",
         start: 11.1,
         end: 14.2,

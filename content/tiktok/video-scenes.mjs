@@ -1,4 +1,4 @@
-const CROSSFADE = 0.38;
+export const CROSSFADE = 0.38;
 const CHART_DURATION = 1.6;
 
 export const clamp = (value, min = 0, max = 1) => Math.max(min, Math.min(max, value));
@@ -38,6 +38,8 @@ export const resolveActiveScene = (scenes, time) =>
   );
 
 export const videoDuration = (video) => video.scenes.reduce((max, scene) => Math.max(max, scene.end), 0);
+
+export const renderDuration = (video) => videoDuration(video) - CROSSFADE;
 
 export const chartProgress = (scene, time) => smooth((time - scene.start) / CHART_DURATION);
 
