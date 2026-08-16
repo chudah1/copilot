@@ -1,5 +1,5 @@
 import { formatAssumptionLabel } from "./assumption-label.ts";
-import { positionBlindSpotHref, positionDetailHref } from "./position-links.ts";
+import { positionBlindSpotHref, positionDetailHref, positionThesisEditorHref } from "./position-links.ts";
 import type {
   DashboardBlindSpot,
   DashboardCoachMemory,
@@ -373,7 +373,7 @@ export function deriveDashboardCoach(args: {
         href:
           primaryBlindSpot.blind_spot_kind === "missing"
             ? positionBlindSpotHref(primaryBlindSpot.holding.ticker)
-            : positionDetailHref(primaryBlindSpot.holding.ticker),
+            : positionThesisEditorHref(primaryBlindSpot.holding.ticker),
         label: primaryBlindSpot.blind_spot_kind === "missing" ? `Write ${cleanTicker(primaryBlindSpot.holding.ticker)}` : `Tighten ${cleanTicker(primaryBlindSpot.holding.ticker)}`,
       },
       secondaryCta: {

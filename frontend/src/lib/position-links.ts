@@ -17,6 +17,10 @@ export function positionBlindSpotHref(ticker: string) {
   return positionDetailHref(ticker, { source: "dashboard_blind_spot" });
 }
 
+export function positionThesisEditorHref(ticker: string) {
+  return `/dashboard/positions/${ticker}?tab=thesis&edit=1`;
+}
+
 export function positionMonitoringHref(ticker: string) {
   return positionDetailHref(ticker, { tab: "monitoring" });
 }

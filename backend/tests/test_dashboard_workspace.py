@@ -192,6 +192,17 @@ async def test_dashboard_workspace_includes_recent_decisions(
             metadata_json={"action": "reaffirmed", "assumption_label": "Server share gains"},
         )
     )
+    db.add(
+        ConvictionLogEntry(
+            id=uuid.uuid4(),
+            thesis_id=thesis.id,
+            holding_id=holding.id,
+            user_id=test_user.id,
+            entry_type="evidence_reviewed",
+            content="reaffirmed: Server share gains still look intact.",
+            metadata_json={"action": "reaffirmed", "assumption_label": "Server share gains"},
+        )
+    )
     await db.commit()
 
     response = await client.get("/api/dashboard/workspace", headers=auth_headers)

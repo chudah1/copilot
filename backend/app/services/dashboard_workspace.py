@@ -153,11 +153,14 @@ async def _load_recent_decisions(
                 ConvictionLogEntry.entry_type.in_(interesting_types),
             )
             .order_by(ConvictionLogEntry.created_at.desc())
-            .limit(limit)
+            # Pull a small buffer so duplicate writes do not crowd an older,
+            # distinct decision out of the dashboard preview.
+            .limit(limit * 3)
         )
     ).all()
 
     results: list[DashboardRecentDecisionResponse] = []
+    seen_keys: set[tuple] = set()
     for entry, ticker, name in rows:
         metadata = entry.metadata_json or {}
         action = metadata.get("action") if isinstance(metadata, dict) else None
@@ -166,6 +169,18 @@ async def _load_recent_decisions(
             raw = metadata.get("signal_label") or metadata.get("assumption_label")
             if isinstance(raw, str) and raw.strip():
                 assumption_label = raw.strip()
+        content_key = " ".join((entry.content or "").split()).casefold()
+        dedupe_key = (
+            entry.holding_id,
+            entry.entry_type,
+            action if isinstance(action, str) else None,
+            assumption_label,
+            content_key,
+            entry.created_at.date() if entry.created_at else None,
+        )
+        if dedupe_key in seen_keys:
+            continue
+        seen_keys.add(dedupe_key)
         results.append(
             DashboardRecentDecisionResponse(
                 holding_id=entry.holding_id,
@@ -179,6 +194,8 @@ async def _load_recent_decisions(
                 created_at=entry.created_at,
             )
         )
+        if len(results) >= limit:
+            break
     return results
 
 

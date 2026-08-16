@@ -1,6 +1,6 @@
 "use client";
 
-import { Suspense, startTransition, useEffect, useMemo, useState } from "react";
+import { Suspense, startTransition, useEffect, useMemo, useRef, useState } from "react";
 import { useParams, usePathname, useRouter, useSearchParams } from "next/navigation";
 import { motion, AnimatePresence } from "framer-motion";
 import { api } from "@/lib/api";
@@ -86,6 +86,8 @@ function PositionDetailInner() {
   const searchParams = useSearchParams();
   const router = useRouter();
   const requestedTab = searchParams.get("tab");
+  const initialRequestedTab = useRef(requestedTab);
+  const editRequested = searchParams.get("edit") === "1";
   const initialTabState = resolvePositionTabs(requestedTab);
   const [activeTab, setActiveTab] = useState<TabId>(
     initialTabState.activeTab,
@@ -228,7 +230,7 @@ function PositionDetailInner() {
               .catch(() => null);
         }
         // Auto-switch to monitoring if there are unreviewed events
-        if (workspace.events.some((event) => !event.review_action)) {
+        if (!initialRequestedTab.current && workspace.events.some((event) => !event.review_action)) {
           setActiveTab("monitoring");
         }
       } catch (err) {
@@ -245,6 +247,26 @@ function PositionDetailInner() {
       cancelled = true;
     };
   }, [ticker]);
+
+  useEffect(() => {
+    if (loading || editing || !editRequested) return;
+
+    const timeoutId = window.setTimeout(() => {
+      startTransition(() => {
+        setActiveTab("thesis");
+        setThesisSubTab("thesis");
+        setEditing(true);
+      });
+
+      // Consume the one-shot command so saving the edit does not reopen it.
+      const params = new URLSearchParams(searchParams.toString());
+      params.delete("edit");
+      const query = params.toString();
+      router.replace(query ? `${pathname}?${query}` : pathname, { scroll: false });
+    }, 0);
+
+    return () => window.clearTimeout(timeoutId);
+  }, [editRequested, editing, loading, pathname, router, searchParams]);
 
   useEffect(() => {
     if (

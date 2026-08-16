@@ -6,6 +6,7 @@ import {
   positionDecisionTrailHref,
   positionDetailHref,
   positionMonitoringHref,
+  positionThesisEditorHref,
 } from "../src/lib/position-links.ts";
 
 test("builds a plain position detail href", () => {
@@ -28,5 +29,12 @@ test("builds the blind-spot write flow href", () => {
   assert.equal(
     positionBlindSpotHref("TSLA"),
     "/dashboard/positions/TSLA?source=dashboard_blind_spot",
+  );
+});
+
+test("builds a direct thesis editor href", () => {
+  assert.equal(
+    positionThesisEditorHref("TSLA"),
+    "/dashboard/positions/TSLA?tab=thesis&edit=1",
   );
 });

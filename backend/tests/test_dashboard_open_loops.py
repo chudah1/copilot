@@ -195,6 +195,7 @@ async def test_dismissing_open_loop_hides_it_until_expiry(
     assert open_response.status_code == 200
     loops = open_response.json()
     weak_loop = next(item for item in loops if item["loop_type"] == "weak_thesis")
+    assert weak_loop["cta_href"] == f"/dashboard/positions/SHOP?tab=thesis&edit=1"
 
     dismiss_response = await client.post(
         "/api/dashboard/open-loops/dismiss",

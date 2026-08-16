@@ -202,7 +202,7 @@ def _case_quality_loops(*, holding: Holding, thesis: Thesis, now: datetime) -> l
                 opened_at=thesis_updated_at,
                 priority=2,
                 cta_label="Tighten thesis",
-                cta_href=f"/dashboard/positions/{holding.ticker}",
+                cta_href=f"/dashboard/positions/{holding.ticker}?tab=thesis&edit=1",
             )
         )
 
