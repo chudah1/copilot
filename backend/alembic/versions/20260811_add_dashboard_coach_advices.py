@@ -1,6 +1,6 @@
 """add dashboard coach advices
 
-Revision ID: 20260811_add_dashboard_coach_advices
+Revision ID: 20260811_coach_advices
 Revises: 20260810_open_loops
 Create Date: 2026-08-11 10:00:00.000000
 """
@@ -12,7 +12,7 @@ import sqlalchemy as sa
 
 
 # revision identifiers, used by Alembic.
-revision: str = "20260811_add_dashboard_coach_advices"
+revision: str = "20260811_coach_advices"
 down_revision: str | None = "20260810_open_loops"
 branch_labels: Sequence[str] | None = None
 depends_on: Sequence[str] | None = None
