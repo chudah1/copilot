@@ -32,14 +32,13 @@ export function ReviewedThisWeek({ items, className = "" }: Props) {
   const visibleItems = showAll ? items : items.slice(0, 3);
 
   return (
-    <section className={`border border-border/50 bg-card/50 px-4 py-3.5 space-y-3 ${className}`}>
+    <section className={`product-panel border border-border/60 bg-background/88 px-4 py-4 sm:px-5 sm:py-5 space-y-4 ${className}`}>
       <div className="space-y-1">
         <p className="font-mono text-[10px] uppercase tracking-[0.18em] text-muted-foreground">
           Checked, no decision needed
         </p>
-        <p className="font-sans text-xs text-muted-foreground/80 leading-relaxed">
-          PenKeep checked these items against your written case. None directly
-          tested it.
+        <p className="font-sans text-sm text-muted-foreground/80 leading-relaxed">
+          PenKeep checked these items against your case. None changed the call.
         </p>
       </div>
 
@@ -63,7 +62,7 @@ export function ReviewedThisWeek({ items, className = "" }: Props) {
             </>
           );
           return (
-            <li key={`${item.ticker}-${i}`} className="border-l-2 border-border/60 pl-3">
+            <li key={`${item.ticker}-${i}`} className="border border-border/60 bg-background/70 px-3 py-3">
               {item.url ? (
                 <a
                   href={item.url}

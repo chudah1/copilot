@@ -350,6 +350,22 @@ export interface Digest {
     summary_points?: string[];
     missing_theses_count?: number;
     stale_theses_count?: number;
+    open_loops_count?: number;
+    open_loops?: Array<{
+      loop_key: string;
+      loop_type: string;
+      holding_id: string;
+      thesis_id: string | null;
+      ticker: string;
+      name: string;
+      title: string;
+      detail: string;
+      opened_at: string;
+      age_days: number;
+      priority: number;
+      cta_label: string;
+      cta_href: string;
+    }>;
     concentration_warning?: string;
     monitoring_receipt?: string;
     quiet_nudge?: string | null;
@@ -387,6 +403,172 @@ export interface HoldingPulse {
 export interface PortfolioPulse {
   pulses: HoldingPulse[];
   next_digest_at: string | null;
+}
+
+export interface DashboardSummaryMetrics {
+  total_value: number;
+  total_cost: number;
+  total_pnl: number;
+  total_pnl_pct: number;
+  portfolio_currency: string;
+  preferred_currency: string;
+  fx_unavailable: boolean;
+  holdings_count: number;
+  monitored_count: number;
+  needs_decision_count: number;
+  changed_count: number;
+  needs_written_case_count: number;
+  drafts_ready_count: number;
+  drafts_pending_count: number;
+}
+
+export interface DashboardPortfolioState {
+  kind: "needs_decision" | "changed" | "needs_written_case" | "calm";
+  primary_holding_id: string | null;
+  primary_ticker: string | null;
+  assumption_label: string | null;
+  needs_decision_count: number;
+  changed_count: number;
+  needs_written_case_count: number;
+}
+
+export interface DashboardWorkspaceItem {
+  holding: Holding;
+  thesis_id: string | null;
+  decision_state: "needs_decision" | "changed" | "needs_written_case" | "calm";
+  case_quality: "missing" | "weak" | "review_overdue" | "workable" | "sharp";
+  pulse_status: "intact" | "watch" | "review" | null;
+  pulse_basis: "evidence" | "case_review" | "missing_case" | "none" | null;
+  assumption_label: string | null;
+  reason: string;
+  latest_event_summary: string | null;
+  urgency_score: number;
+  days_since_thesis_update: number | null;
+  review_cadence_days: number | null;
+}
+
+export interface DashboardBlindSpot {
+  holding: Holding;
+  thesis_id: string | null;
+  blind_spot_kind: "missing" | "weak" | "review_overdue" | "workable";
+  reason: string;
+  review_cadence_days: number | null;
+  days_since_thesis_update: number | null;
+}
+
+export interface DashboardRecentDecision {
+  holding_id: string;
+  thesis_id: string;
+  ticker: string;
+  name: string;
+  entry_type: string;
+  action: string | null;
+  assumption_label: string | null;
+  content: string;
+  created_at: string;
+}
+
+export interface DashboardDecisionPattern {
+  kind: string;
+  tone: "warning" | "calm" | "neutral" | string;
+  headline: string;
+  detail: string;
+  instances: number;
+  hits: number;
+}
+
+export interface DashboardDecisionMemory {
+  resolved_count: number;
+  open_followups_count: number;
+  has_pattern: boolean;
+  primary_pattern: DashboardDecisionPattern | null;
+  secondary_patterns: DashboardDecisionPattern[];
+}
+
+export interface DashboardCoachModeStats {
+  presented_count: number;
+  acted_count: number;
+  skipped_count: number;
+  resolved_count: number;
+  helpful_count: number;
+  hurt_count: number;
+}
+
+export interface DashboardCoachMemory {
+  total_presented: number;
+  acted_count: number;
+  skipped_count: number;
+  last_feedback: "presented" | "acted" | "skipped" | null;
+  last_mode: string | null;
+  mode_stats: Record<string, DashboardCoachModeStats>;
+}
+
+export interface DashboardOpenLoop {
+  loop_key: string;
+  loop_type: "claim_review" | "quarterly_unsure" | "review_overdue" | "weak_thesis" | "draft_unreviewed" | string;
+  holding_id: string;
+  thesis_id: string | null;
+  ticker: string;
+  name: string;
+  title: string;
+  detail: string;
+  opened_at: string;
+  age_days: number;
+  priority: number;
+  cta_label: string;
+  cta_href: string;
+}
+
+export interface DashboardCommandCenterHolding {
+  holding: Holding;
+  thesis_id: string | null;
+  workflow_state: "no_thesis" | "draft_ready" | "signals_unconfirmed" | "calm" | "review_due" | "pressure_building" | "decision_needed" | string;
+  workflow_label: string;
+  workflow_reason: string;
+  primary_cta_label: string;
+  primary_cta_href: string;
+  pulse_status: "intact" | "watch" | "review" | null;
+  pulse_basis: "evidence" | "case_review" | "missing_case" | "none" | null;
+  assumption_label: string | null;
+  case_quality: "missing" | "weak" | "review_overdue" | "workable" | "sharp" | string | null;
+  days_since_thesis_update: number | null;
+  latest_event_summary: string | null;
+  supporting_title: string | null;
+  supporting_summary: string | null;
+  supporting_created_at: string | null;
+  open_loop_count: number;
+  open_loop_title: string | null;
+  open_loop_detail: string | null;
+}
+
+export interface DashboardCommandCenterSection {
+  kind: "needs_review" | "held_up" | "unclear_theses" | "decision_debt" | string;
+  title: string;
+  count: number;
+  empty_copy: string;
+  items: DashboardCommandCenterHolding[];
+}
+
+export interface DashboardCommandCenter {
+  investor_profile?: "thesis_driven" | "hearsay_driven" | null;
+  summary: {
+    needs_review_count: number;
+    held_up_count: number;
+    unclear_theses_count: number;
+    decision_debt_count: number;
+  };
+  sections: DashboardCommandCenterSection[];
+}
+
+export interface DashboardWorkspace {
+  investor_profile: "thesis_driven" | "hearsay_driven" | null;
+  portfolio_state: DashboardPortfolioState;
+  summary_metrics: DashboardSummaryMetrics;
+  top_decision: DashboardWorkspaceItem | null;
+  watchlist: DashboardWorkspaceItem[];
+  blind_spots: DashboardBlindSpot[];
+  recent_decisions: DashboardRecentDecision[];
+  decision_memory: DashboardDecisionMemory;
 }
 
 export interface UpcomingEarnings {

@@ -15,8 +15,8 @@ function digestArchiveCopy(investorProfile: "thesis_driven" | "hearsay_driven" |
   if (investorProfile === "thesis_driven") {
     return {
       title: "Digest archive",
-      subtitle: "Weekly thesis review, in one place.",
-      empty: "Your first digest lands once at least one position is written and monitoring is running.",
+      subtitle: "Your weekly thesis review.",
+      empty: "Your first digest lands once at least one position has a live thesis and monitoring is running.",
       fallbackHeadline: "Weekly thesis review",
     };
   }
@@ -24,17 +24,17 @@ function digestArchiveCopy(investorProfile: "thesis_driven" | "hearsay_driven" |
   if (investorProfile === "hearsay_driven") {
     return {
       title: "Digest archive",
-      subtitle: "Weekly reason review, in one place.",
-      empty: "Your first digest lands once at least one position has a written reason and monitoring is running.",
+      subtitle: "Your weekly reason review.",
+      empty: "Your first digest lands once at least one position has a clear reason and monitoring is running.",
       fallbackHeadline: "Weekly reason review",
     };
   }
 
   return {
     title: "Digest archive",
-    subtitle: "Weekly review, in one place.",
-    empty: "Your first digest lands once at least one holding has an active thesis and monitoring is running.",
-    fallbackHeadline: "Weekly thesis review",
+    subtitle: "Your weekly review.",
+    empty: "Your first digest lands once at least one holding has an active reason and monitoring is running.",
+    fallbackHeadline: "Weekly review",
   };
 }
 
@@ -48,7 +48,7 @@ function normalizeDigestTerminology(
 
   return value
     .replace(/Missing reasons:/g, "Missing theses:")
-    .replace(/Stale reasons:/g, "Stale theses:")
+    .replace(/Stale reasons:/g, "Theses due for refresh:")
     .replace(/(\d+) of your reasons need review this week\./g, "$1 of your theses need review this week.");
 }
 
@@ -83,7 +83,7 @@ function dedupeDigests(digests: Digest[]) {
     const stats = [
       `${digest.content.events_count ?? 0} events`,
       `${digest.content.holdings_count ?? 0} holdings`,
-      `${digest.content.stale_theses_count ?? 0} stale`,
+      `${digest.content.stale_theses_count ?? 0} refresh_due`,
       `${digest.content.missing_theses_count ?? 0} missing`,
     ].join("|");
     const key = [
@@ -98,6 +98,30 @@ function dedupeDigests(digests: Digest[]) {
     seen.add(key);
     return true;
   });
+}
+
+function digestUnlockSteps(investorProfile: "thesis_driven" | "hearsay_driven" | null) {
+  if (investorProfile === "thesis_driven") {
+    return [
+      "Write one live thesis.",
+      "Confirm what should actually be watched.",
+      "Let the first weekly review land.",
+    ];
+  }
+
+  if (investorProfile === "hearsay_driven") {
+    return [
+      "Write one clear reason.",
+      "Confirm what should actually be watched.",
+      "Let the first weekly review land.",
+    ];
+  }
+
+  return [
+    "Write one live reason.",
+    "Confirm what should actually be watched.",
+    "Let the first weekly review land.",
+  ];
 }
 
 export default function DigestsPage() {
@@ -130,12 +154,13 @@ export default function DigestsPage() {
   const latestDigest = visibleDigests[0] ?? null;
   const totalEvents = visibleDigests.reduce((sum, digest) => sum + (digest.content.events_count || 0), 0);
   const hasDigests = visibleDigests.length > 0;
+  const unlockSteps = digestUnlockSteps(investorProfile);
 
   return (
     <AppShell>
       <div className="max-w-5xl mx-auto px-4 sm:px-8 py-10 space-y-6">
 
-        <div className="product-panel product-panel-muted overflow-hidden p-5 sm:p-6">
+        <div className="product-panel overflow-hidden border border-border/70 bg-[linear-gradient(180deg,rgba(163,126,79,0.07),rgba(255,255,255,0.96))] p-5 sm:p-6">
           <div className="flex items-end justify-between gap-4">
             <div className="space-y-2">
             <p className="font-mono text-[10px] uppercase tracking-[0.3em] text-muted-foreground mb-2">
@@ -168,7 +193,7 @@ export default function DigestsPage() {
                 </p>
               ) : (
                 <p className="mt-2 font-sans text-sm leading-relaxed text-foreground">
-                  Ready once monitoring is live.
+                  Your first review starts when monitoring is live.
                 </p>
               )}
             </div>
@@ -226,15 +251,47 @@ export default function DigestsPage() {
                     First digest
                   </p>
                   <p className="font-display italic text-[1.9rem] leading-tight text-foreground">
-                    Nothing on file yet.
+                    Nothing here yet.
                   </p>
                   <p className="max-w-xl font-sans text-sm leading-relaxed text-muted-foreground">
                     {copy.empty}
                   </p>
                 </div>
-
+                <div className="flex flex-wrap gap-2 pt-1">
+                  <Link
+                    href="/dashboard"
+                    className="border border-primary/30 bg-background/72 px-4 py-2 font-mono text-[10px] uppercase tracking-[0.14em] text-primary transition-colors hover:border-primary/60"
+                  >
+                    Go to dashboard
+                  </Link>
+                  <Link
+                    href="/connect?return=digests"
+                    className="border border-border/70 bg-background/72 px-4 py-2 font-mono text-[10px] uppercase tracking-[0.14em] text-muted-foreground transition-colors hover:text-foreground"
+                  >
+                    Import positions
+                  </Link>
+                </div>
               </div>
-
+              <div className="product-panel border border-border/60 bg-background/72 p-4 sm:p-5">
+                <p className="font-mono text-[10px] uppercase tracking-[0.16em] text-muted-foreground">
+                  What unlocks this
+                </p>
+                <div className="mt-4 space-y-3">
+                  {unlockSteps.map((step, index) => (
+                    <div key={step} className="flex items-start gap-3">
+                      <span className="mt-0.5 font-mono text-[10px] text-primary/55">
+                        0{index + 1}
+                      </span>
+                      <p className="font-sans text-sm leading-relaxed text-foreground/82">
+                        {step}
+                      </p>
+                    </div>
+                  ))}
+                </div>
+                <p className="mt-4 border-t border-border/50 pt-3 font-sans text-xs leading-relaxed text-muted-foreground">
+                  Digests are meant to read like a weekly decision memo, not another alert stream.
+                </p>
+              </div>
             </div>
           </div>
         ) : (
@@ -243,7 +300,7 @@ export default function DigestsPage() {
               <Link
                 key={d.id}
                 href={`/digests/${d.id}`}
-                className="group product-panel p-5 flex items-start justify-between gap-6 transition-colors hover:bg-card"
+                className="group product-panel border border-border/60 bg-background/82 p-5 flex items-start justify-between gap-6 transition-colors hover:border-foreground/20"
               >
                 <div className="flex-1 min-w-0 space-y-2">
                   {/* Date range */}
@@ -283,7 +340,7 @@ export default function DigestsPage() {
                       <>
                         <span className="text-border/60">·</span>
                         <span className="font-mono text-[10px] text-amber-700/80">
-                          {d.content.stale_theses_count} stale
+                          {d.content.stale_theses_count} refresh due
                         </span>
                       </>
                     )}
@@ -308,6 +365,9 @@ export default function DigestsPage() {
                       {formatDate(d.sent_at)}
                     </p>
                   )}
+                  <p className="font-mono text-[10px] uppercase tracking-[0.14em] text-primary/70">
+                    Read digest
+                  </p>
                 </div>
               </Link>
             ))}

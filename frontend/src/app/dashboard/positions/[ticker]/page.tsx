@@ -1,11 +1,16 @@
 "use client";
 
-import { Suspense, startTransition, useEffect, useState } from "react";
-import { useParams, useRouter, useSearchParams } from "next/navigation";
+import { Suspense, startTransition, useEffect, useMemo, useState } from "react";
+import { useParams, usePathname, useRouter, useSearchParams } from "next/navigation";
 import { motion, AnimatePresence } from "framer-motion";
 import { api } from "@/lib/api";
 import { getErrorMessage } from "@/lib/errors";
 import { ageInDays, getCaseReviewPressure } from "@/lib/decision-state";
+import {
+  clearPreActionCheckpointDraft,
+  loadPreActionCheckpointDraft,
+  type PreActionCheckpointDraft,
+} from "@/lib/pre-action-checkpoint";
 import {
   loadPositionWorkspace,
   selectActiveThesis,
@@ -24,12 +29,14 @@ import { PositionHeader } from "./position-header";
 import { PositionNoteDialog } from "./position-note-dialog";
 import { ThesisHealthCheck } from "@/components/thesis/thesis-health-check";
 import { CounterThesisCard } from "@/components/thesis/counter-thesis-card";
+import { OpenLoopsSection } from "@/components/dashboard/open-loops-section";
 import { InfoTip } from "@/components/ui/info-tip";
 import { EarningsReviewModal } from "@/components/thesis/earnings-review-modal";
 import type {
   CheckNowResponse,
   ConfirmDecompositionRequest,
   ConvictionLogResponse,
+  DashboardOpenLoop,
   HealthCheckResult,
   HistoricalAuditResponse,
   Holding,
@@ -71,30 +78,24 @@ import {
   buildCheckNowNotice,
   isRecentEvent,
 } from "./position-helpers";
+import { encodePositionTab, resolvePositionTabs } from "./position-tab-state";
 
 function PositionDetailInner() {
   const { ticker } = useParams<{ ticker: string }>();
+  const pathname = usePathname();
   const searchParams = useSearchParams();
   const router = useRouter();
   const requestedTab = searchParams.get("tab");
+  const initialTabState = resolvePositionTabs(requestedTab);
   const [activeTab, setActiveTab] = useState<TabId>(
-    requestedTab === "monitoring" ? "monitoring" : "thesis",
+    initialTabState.activeTab,
   );
   const [thesisSubTab, setThesisSubTab] = useState<ThesisSubTab>(
-    requestedTab === "decisions" ? "log" : "thesis",
+    initialTabState.thesisSubTab,
   );
-  useEffect(() => {
-    if (requestedTab === "monitoring") {
-      // eslint-disable-next-line react-hooks/set-state-in-effect -- navigation can change the requested tab without remounting this route
-      setActiveTab(requestedTab);
-    } else if (requestedTab === "decisions") {
-      // The standalone Decisions tab folded into History — honour old links.
-      setActiveTab("thesis");
-      setThesisSubTab("log");
-    }
-  }, [requestedTab]);
   const [holdings, setHoldings] = useState<Holding[]>([]);
   const [theses, setTheses] = useState<Thesis[]>([]);
+  const [openLoops, setOpenLoops] = useState<DashboardOpenLoop[]>([]);
   const [events, setEvents] = useState<MonitoringEvent[]>([]);
   const [decompositionEnvelope, setDecompositionEnvelope] = useState<ThesisDecompositionEnvelope | null>(null);
   const [editing, setEditing] = useState(false);
@@ -133,11 +134,46 @@ function PositionDetailInner() {
     historicalAuditThesisId === activeThesis?.id ? historicalAudit : null;
   const fromOnboarding = searchParams.get("source") === "onboarding";
   const fromBlindSpot = searchParams.get("source") === "dashboard_blind_spot";
+  const fromSimulateCheckpoint = searchParams.get("source") === "simulate_checkpoint";
+  const arrivedOnDecisionTrail = requestedTab === "decisions";
   const latestInvalidatedThesis = selectLatestInvalidatedThesis(theses);
+  const checkpointDraft: PreActionCheckpointDraft | null = useMemo(
+    () => (fromSimulateCheckpoint ? loadPreActionCheckpointDraft(ticker) : null),
+    [fromSimulateCheckpoint, ticker],
+  );
 
   const refreshPulse = async (holdingId: string) => {
     const portfolioPulse = await api.get<PortfolioPulse>("/api/portfolio/pulse").catch(() => null);
     setPulse(portfolioPulse?.pulses.find((p) => p.holding_id === holdingId) ?? null);
+  };
+
+  const syncRouteTab = (nextActiveTab: TabId, nextThesisSubTab: ThesisSubTab) => {
+    const nextTab = encodePositionTab(nextActiveTab, nextThesisSubTab);
+    const params = new URLSearchParams(searchParams.toString());
+    if (nextTab) {
+      params.set("tab", nextTab);
+    } else {
+      params.delete("tab");
+    }
+    const query = params.toString();
+    router.replace(query ? `${pathname}?${query}` : pathname, { scroll: false });
+  };
+
+  const openThesisSubTab = (nextThesisSubTab: ThesisSubTab) => {
+    setActiveTab("thesis");
+    setThesisSubTab(nextThesisSubTab);
+    syncRouteTab("thesis", nextThesisSubTab);
+  };
+
+  const openMainTab = (nextTab: TabId) => {
+    if (nextTab === "monitoring") {
+      setActiveTab("monitoring");
+      syncRouteTab("monitoring", thesisSubTab);
+      return;
+    }
+    setActiveTab("thesis");
+    setThesisSubTab("thesis");
+    syncRouteTab("thesis", "thesis");
   };
 
   const waitForRebuiltSignalMap = async (thesisId: string, previousMapId: string) => {
@@ -156,7 +192,7 @@ function PositionDetailInner() {
       toast.message("The signal map is still updating. It will appear when the rebuild finishes.");
     } catch (error) {
       console.error(error);
-      toast.error("The case was saved, but the signal map could not be refreshed yet.");
+      toast.error("Your update was saved, but the signal map could not be refreshed yet.");
     } finally {
       setDecompositionLoading(false);
     }
@@ -174,6 +210,7 @@ function PositionDetailInner() {
         if (cancelled) return;
         setHoldings(workspace.holdings);
         setTheses(workspace.theses);
+        setOpenLoops(workspace.openLoops);
         setEvents(workspace.events);
         setConvictionLog(workspace.convictionLog);
         setUpcomingEarnings(workspace.upcomingEarnings);
@@ -238,6 +275,27 @@ function PositionDetailInner() {
     latestInvalidatedThesis,
     loading,
   ]);
+
+  useEffect(() => {
+    if (
+      loading ||
+      editing ||
+      !fromSimulateCheckpoint ||
+      !checkpointDraft ||
+      activeThesis
+    ) {
+      return;
+    }
+
+    const timeoutId = window.setTimeout(() => {
+      startTransition(() => {
+        setActiveTab("thesis");
+        setEditing(true);
+      });
+    }, 0);
+
+    return () => window.clearTimeout(timeoutId);
+  }, [activeThesis, checkpointDraft, editing, fromSimulateCheckpoint, loading]);
 
   useEffect(() => {
     const onScroll = () => setHeaderCollapsed(window.scrollY > 80);
@@ -357,6 +415,12 @@ function PositionDetailInner() {
     }
   };
 
+  const refreshOpenLoops = async () => {
+    if (!holding) return;
+    const refreshed = await api.get<DashboardOpenLoop[]>(`/api/dashboard/open-loops?holding_id=${holding.id}`);
+    setOpenLoops(refreshed);
+  };
+
   const handleAssist = async (draft: {
     why_own_it: string;
     must_remain_true: string;
@@ -421,20 +485,20 @@ function PositionDetailInner() {
       setHistoricalAuditThesisId(null);
       setEditing(false);
       if (savedThesisId) {
+        clearPreActionCheckpointDraft(ticker);
         if (previousMapId) {
           void waitForRebuiltSignalMap(savedThesisId, previousMapId);
         }
         runHealthCheck(savedThesisId);
         setShowCounterThesis(true);
         setShowAnalysis(true);
-        setActiveTab("thesis");
-        setThesisSubTab("thesis");
+        openThesisSubTab("thesis");
         setNextStepNotice(buildPostSaveNotice({
           investorProfile: onboardingState?.investor_profile ?? null,
           blindSpotStart: fromBlindSpot && !activeThesis && !latestInvalidatedThesis,
         }));
       }
-      await refreshConvictionLog();
+      await Promise.all([refreshConvictionLog(), refreshOpenLoops()]);
     } catch (err) {
       console.error(err);
       toast.error(getErrorMessage(err, "Failed to save reason"));
@@ -449,7 +513,7 @@ function PositionDetailInner() {
       setDecompositionEnvelope(null);
       setInvalidateOpen(false);
       setInvalidateReason("");
-      await refreshConvictionLog();
+      await Promise.all([refreshConvictionLog(), refreshOpenLoops()]);
     } catch (err) {
       console.error(err);
     }
@@ -461,7 +525,7 @@ function PositionDetailInner() {
       setReaffirming(true);
       const updated = await api.post<Thesis>(`/api/theses/${activeThesis.id}/reaffirm`);
       setTheses(theses.map((t) => (t.id === updated.id ? updated : t)));
-      await refreshConvictionLog();
+      await Promise.all([refreshConvictionLog(), refreshOpenLoops()]);
     } catch (err) {
       console.error(err);
     } finally {
@@ -475,8 +539,7 @@ function PositionDetailInner() {
       setDecompositionLoading(true);
       const envelope = await api.post<ThesisDecompositionEnvelope>(`/api/theses/${activeThesis.id}/decompose`);
       setDecompositionEnvelope(envelope);
-      setActiveTab("thesis");
-      setThesisSubTab("signals");
+      openThesisSubTab("signals");
       setNextStepNotice(buildPostDecompositionNotice(envelope, onboardingState?.investor_profile ?? null));
       await refreshCurrentThesis();
     } catch (error) {
@@ -505,7 +568,7 @@ function PositionDetailInner() {
           0,
         ) ?? 0;
       setDecompositionEnvelope(envelope);
-      setActiveTab("monitoring");
+      openMainTab("monitoring");
       setNextStepNotice(
         buildPostConfirmationNotice({
           investorProfile: onboardingState?.investor_profile ?? null,
@@ -513,7 +576,7 @@ function PositionDetailInner() {
         }),
       );
       await refreshCurrentThesis();
-      await refreshConvictionLog();
+      await Promise.all([refreshConvictionLog(), refreshOpenLoops()]);
     } catch (error) {
       toast.error(getErrorMessage(error, "Failed to save signal setup"));
     } finally {
@@ -539,7 +602,7 @@ function PositionDetailInner() {
   const handleFlagEvent = async (eventId: string) => {
     try {
       await api.post(`/api/monitoring/events/${eventId}/review`, { action: "not_relevant" });
-      await Promise.all([refreshEvents(), refreshConvictionLog()]);
+      await Promise.all([refreshEvents(), refreshConvictionLog(), refreshOpenLoops()]);
     } catch (error) {
       console.error(error);
       toast.error("Failed to flag the event");
@@ -551,12 +614,12 @@ function PositionDetailInner() {
     result: SubmitClaimReviewsResponse,
     thesisAction: "keep_lowered" | "rewrite" | "invalidate" | null,
   ) => {
-    const [refreshedEvents] = await Promise.all([refreshEvents(), refreshConvictionLog(), refreshCurrentThesis()]);
+    const [refreshedEvents] = await Promise.all([refreshEvents(), refreshConvictionLog(), refreshCurrentThesis(), refreshOpenLoops()]);
     if (thesisAction === "invalidate") {
-      setActiveTab("thesis");
+      openThesisSubTab("thesis");
       setNextStepNotice(buildPostInvalidationNotice(onboardingState?.investor_profile ?? null));
     } else if (thesisAction === "rewrite") {
-      setActiveTab("thesis");
+      openThesisSubTab("thesis");
       setEditing(true);
     } else if (refreshedEvents && refreshedEvents.every((candidate) => candidate.review_action)) {
       setNextStepNotice(buildPostReviewClearNotice(onboardingState?.investor_profile ?? null));
@@ -581,7 +644,7 @@ function PositionDetailInner() {
     try {
       setNoteSaving(true);
       await api.post(`/api/portfolio/holdings/${holding.id}/conviction-log`, { content });
-      await refreshConvictionLog();
+      await Promise.all([refreshConvictionLog(), refreshOpenLoops()]);
       toast.success("Note saved");
     } catch (error) {
       console.error(error);
@@ -609,7 +672,7 @@ function PositionDetailInner() {
       setReviewedItems(nextReviewed);
       setSupportingItems(nextSupporting);
     }
-    setActiveTab("monitoring");
+    openMainTab("monitoring");
     setNextStepNotice(buildCheckNowNotice({
       result,
       investorProfile: onboardingState?.investor_profile ?? null,
@@ -718,6 +781,13 @@ function PositionDetailInner() {
     decompositionEnvelope?.decomposition?.claims.some((claim) =>
       claim.entities.some((entity) => entity.signals.some((signal) => signal.active)),
     ) ?? false;
+  const needsSignalReview =
+    decompositionEnvelope?.decomposition?.claims.some((claim) =>
+      claim.entities.some((entity) =>
+        (entity.confirmation_required && entity.user_confirmed == null) ||
+        entity.signals.some((signal) => signal.confirmation_required && signal.user_confirmed == null),
+      ),
+    ) ?? false;
   const watchHints = Array.isArray(activeThesis?.interpretation?.watch_hints)
     ? activeThesis.interpretation.watch_hints.filter((hint): hint is Record<string, unknown> => typeof hint === "object" && hint !== null)
     : [];
@@ -733,16 +803,23 @@ function PositionDetailInner() {
     hasThesis: Boolean(activeThesis),
     hasSignals,
     hasActiveSignals,
+    needsSignalReview,
     investorProfile: onboardingState?.investor_profile ?? null,
   });
+  const thesisLabel =
+    onboardingState?.investor_profile === "thesis_driven"
+      ? "thesis"
+      : onboardingState?.investor_profile === "hearsay_driven"
+        ? "reason"
+        : "reason";
   const onboardingMonitoringMessage = decompositionLoading
-    ? "Building a watchlist from the conditions you wrote."
+    ? `Preparing checks from the ${thesisLabel} you wrote.`
     : decompositionEnvelope?.decomposition
-      ? "Your case is saved. Review the suggested watchlist once so future alerts reflect what you meant."
-      : "Your case is saved. The first evidence check is running in the background.";
+      ? `Your ${thesisLabel} is saved. Review the suggested checks once so future alerts reflect what you meant.`
+      : `Your ${thesisLabel} is saved. The first evidence check is running in the background.`;
 
   const tabs: { id: TabId; label: string; badge?: number | string }[] = [
-    { id: "thesis", label: "Original case" },
+    { id: "thesis", label: onboardingState?.investor_profile === "thesis_driven" ? "Thesis" : "Reason" },
     { id: "monitoring", label: "What changed", badge: unreviewedEvents > 0 ? unreviewedEvents : undefined },
   ];
 
@@ -785,19 +862,19 @@ function PositionDetailInner() {
         eyebrow: onboardingState?.investor_profile === "thesis_driven" ? "Rewrite from the last thesis" : "Rewrite from the last reason",
         title:
           onboardingState?.investor_profile === "thesis_driven"
-            ? "Keep the part of the case you still believe. Replace the part that already broke."
-            : "Keep the part of the story you still believe. Replace the part that already broke.",
+            ? "Keep the part of the thesis you still believe. Replace the part that already broke."
+            : "Keep the part of the reason you still believe. Replace the part that no longer holds.",
         body:
           onboardingState?.investor_profile === "thesis_driven"
             ? "Start from the previous thesis, remove the failed assumption, and write the version you would still buy today."
-            : "Start from the previous reason, remove the broken story, and write the version you would still buy today.",
+            : "Start from the previous reason, remove the part that no longer holds, and write the version you would still buy today.",
         cta: onboardingState?.investor_profile === "thesis_driven" ? "Rewrite the thesis" : "Rewrite the reason",
       }
     : {
-        eyebrow: onboardingState?.investor_profile === "hearsay_driven" ? "Turn the story into a system" : "Turn the position into a system",
+        eyebrow: onboardingState?.investor_profile === "hearsay_driven" ? "Turn the reason into a system" : "Turn the position into a system",
         title:
           onboardingState?.investor_profile === "hearsay_driven"
-            ? "Write the case that tells penKeep what to watch."
+            ? "Write the reason that tells PenKeep what to watch."
             : "Write the thesis that tells penKeep what to watch.",
         body:
           onboardingState?.investor_profile === "hearsay_driven"
@@ -820,14 +897,14 @@ function PositionDetailInner() {
   const firstWriteUnlocks =
     onboardingState?.investor_profile === "hearsay_driven"
       ? [
-          "Signals get matched to the written story instead of generic price noise.",
-          "Review prompts land when the business case moves, regardless of the tape.",
+          "Signals get matched to the reason instead of just price swings.",
+          "Review prompts land when the business picture changes, not just the chart.",
           "The next digest explains what matters for this position in plain language.",
         ]
       : [
           "Signals get tied to explicit assumptions instead of generic headlines.",
-          "Review prompts fire on evidence that hits your thesis, regardless of price.",
-          "The next digest reads like a portfolio memo, not a watchlist alert.",
+          "Review prompts fire when evidence touches your thesis, not just the share price.",
+          "The next digest reads like a portfolio memo, not just an alert feed.",
         ];
   const suppressSecondaryThesisPrompts = Boolean(decisionPrompt || showEarningsBanner || fromOnboarding);
 
@@ -837,16 +914,19 @@ function PositionDetailInner() {
     setNextStepNotice(null);
     if (action === "edit") {
       setEditing(true);
-      setActiveTab("thesis");
+      openThesisSubTab("thesis");
       return;
     }
     if (action === "generate_signals") {
-      setActiveTab("thesis");
-      setThesisSubTab("signals");
+      openThesisSubTab("signals");
       void handleGenerateDecomposition();
       return;
     }
-    setActiveTab("monitoring");
+    if (action === "confirm_signals") {
+      openThesisSubTab("signals");
+      return;
+    }
+    openMainTab("monitoring");
   };
 
   // ── Render ───────────────────────────────────────────────────────────────
@@ -874,7 +954,7 @@ function PositionDetailInner() {
         onDelete={handleDelete}
         onSetDeleteConfirming={setDeleteConfirming}
         onCheckNowComplete={handleCheckNowComplete}
-        onSelectTab={(id) => { setActiveTab(id); if (id === "thesis") setThesisSubTab("thesis"); }}
+        onSelectTab={openMainTab}
         onOpenNote={() => setNoteOpen(true)}
       />
 
@@ -896,7 +976,7 @@ function PositionDetailInner() {
           >
             <div className="space-y-2">
               <p className="font-mono text-[10px] uppercase tracking-[0.2em] text-emerald-700">
-                ● Written case saved
+                ● {onboardingState?.investor_profile === "thesis_driven" ? "Written thesis saved" : "Written reason saved"}
               </p>
               <p className="font-sans text-sm text-foreground/80 leading-relaxed">
                 {onboardingMonitoringMessage}
@@ -922,8 +1002,7 @@ function PositionDetailInner() {
             <button
               type="button"
               onClick={() => {
-                setActiveTab("thesis");
-                setThesisSubTab("signals");
+                openThesisSubTab("signals");
                 if (!decompositionEnvelope?.decomposition && !decompositionLoading) {
                   void handleGenerateDecomposition();
                 }
@@ -932,10 +1011,10 @@ function PositionDetailInner() {
               className="font-mono text-[10px] uppercase tracking-[0.15em] text-primary transition-colors hover:text-primary/80 disabled:opacity-50"
             >
               {decompositionLoading
-                ? "Building watchlist…"
+                ? "Building checks…"
                 : decompositionEnvelope?.decomposition
-                  ? "Review watchlist →"
-                  : "Build watchlist →"}
+                  ? "Review checks →"
+                  : "Set up checks →"}
             </button>
           </motion.div>
         )}
@@ -959,7 +1038,7 @@ function PositionDetailInner() {
             </div>
             <button
               onClick={() => setEditing(true)}
-              className="font-mono text-[10px] uppercase tracking-[0.15em] text-primary hover:text-primary/80 transition-colors"
+              className="inline-flex items-center border border-amber-500/30 bg-background/72 px-3 py-2 font-mono text-[10px] uppercase tracking-[0.15em] text-amber-800 transition-colors hover:border-amber-500/45"
             >
               {blindSpotArrivalCopy.cta}
             </button>
@@ -988,7 +1067,7 @@ function PositionDetailInner() {
               </div>
               <button
                 onClick={() => setNextStepNotice(null)}
-                className="font-mono text-[10px] uppercase tracking-[0.15em] text-muted-foreground hover:text-foreground transition-colors"
+                className="inline-flex items-center border border-border/60 bg-background/72 px-3 py-2 font-mono text-[10px] uppercase tracking-[0.15em] text-muted-foreground transition-colors hover:border-border hover:text-foreground"
               >
                 Dismiss
               </button>
@@ -996,7 +1075,7 @@ function PositionDetailInner() {
             {nextStepNotice.ctaLabel && nextStepNotice.action && (
               <button
                 onClick={handleNextStepAction}
-                className="font-mono text-[10px] uppercase tracking-[0.15em] text-primary hover:text-primary/80 transition-colors"
+                className="inline-flex items-center border border-primary/30 bg-background/72 px-3 py-2 font-mono text-[10px] uppercase tracking-[0.15em] text-primary transition-colors hover:border-primary/45"
               >
                 {nextStepNotice.ctaLabel}
               </button>
@@ -1025,10 +1104,10 @@ function PositionDetailInner() {
               onClick={() => {
                 if (decisionPrompt.action === "edit") {
                   setEditing(true);
-                  setActiveTab("thesis");
+                  openThesisSubTab("thesis");
                   return;
                 }
-                setActiveTab("monitoring");
+                openMainTab("monitoring");
               }}
               className="font-mono text-[10px] uppercase tracking-[0.15em] text-primary hover:text-primary/80 transition-colors"
             >
@@ -1090,10 +1169,10 @@ function PositionDetailInner() {
                 className="font-mono text-[10px] uppercase tracking-[0.15em] border border-amber-600/40 text-amber-700 bg-amber-50 hover:bg-amber-100 px-4 py-2 transition-colors"
               >
                 {onboardingState?.investor_profile === "thesis_driven"
-                  ? "Review thesis claim by claim →"
+                  ? "Review thesis step by step →"
                   : onboardingState?.investor_profile === "hearsay_driven"
-                    ? "Review the reason claim by claim →"
-                    : "Review reason claim by claim →"}
+                    ? "Review the reason step by step →"
+                    : "Review reason step by step →"}
               </button>
             </div>
           </motion.div>
@@ -1126,7 +1205,7 @@ function PositionDetailInner() {
               <>
                 {/* Action prompt */}
                 {thesisInsights.canReaffirm && !editing && !suppressSecondaryThesisPrompts && (
-                  <div className="border-l-2 border-primary/30 pl-4 py-1 flex items-start justify-between gap-4">
+                  <div className="product-panel border border-primary/20 bg-primary/[0.04] px-4 py-3 flex items-start justify-between gap-4">
                     <p className="font-sans text-sm text-foreground/80 leading-relaxed max-w-xl">
                       {thesisInsights.nextStep}
                     </p>
@@ -1153,7 +1232,7 @@ function PositionDetailInner() {
                 )}
 
                 {thesisHandoffPrompt && !editing && !suppressSecondaryThesisPrompts && (
-                  <div className="border-l-2 border-sky-500/30 pl-4 py-1 flex items-start justify-between gap-4">
+                  <div className="product-panel border border-sky-500/25 bg-sky-500/[0.05] px-4 py-3 flex items-start justify-between gap-4">
                     <div className="space-y-1">
                       <p className="font-sans text-sm text-foreground/90 leading-relaxed max-w-xl">
                         {thesisHandoffPrompt.title}
@@ -1164,9 +1243,8 @@ function PositionDetailInner() {
                     </div>
                     <button
                       onClick={() => {
-                        setActiveTab("thesis");
-                        setThesisSubTab("signals");
-                        if (thesisHandoffPrompt.action === "generate") {
+                        openThesisSubTab("signals");
+                        if (thesisHandoffPrompt.action === "generate_signals") {
                           void handleGenerateDecomposition();
                         }
                       }}
@@ -1183,6 +1261,7 @@ function PositionDetailInner() {
                     thesis={editorSeedThesis}
                     investorProfile={onboardingState?.investor_profile ?? null}
                     mode={editorMode}
+                    initialDraft={checkpointDraft}
                     onSave={handleSave}
                     onAssist={handleAssist}
                     onCancel={() => setEditing(false)}
@@ -1192,17 +1271,34 @@ function PositionDetailInner() {
                 {/* ── Sub-tabs (when thesis exists and not editing) ───────── */}
                 {activeThesis && !editing && (
                   <>
+                    {arrivedOnDecisionTrail && thesisSubTab === "log" && (
+                      <motion.div
+                        initial={{ opacity: 0, y: -4 }}
+                        animate={{ opacity: 1, y: 0 }}
+                        className="border border-sky-500/25 bg-sky-500/8 px-4 py-3"
+                      >
+                        <p className="font-mono text-[10px] uppercase tracking-[0.18em] text-sky-700">
+                          Decision trail
+                        </p>
+                        <p className="mt-1 font-sans text-sm leading-relaxed text-foreground/82">
+                          {onboardingState?.investor_profile === "hearsay_driven"
+                            ? "This is the running memory for the position: which parts of the reason you kept trusting, questioned, or backed away from over time."
+                            : "This is the running memory for the position: what you reaffirmed, what you dismissed, and where confidence changed over time."}
+                        </p>
+                      </motion.div>
+                    )}
+
                     <div className="flex gap-1 -mx-1 border-b border-border/40">
                       {(
                         [
                           { id: "thesis" as ThesisSubTab, label: "Thesis" },
                           { id: "signals" as ThesisSubTab, label: "Signals", badge: hasActiveSignals ? activeSignalCount : undefined },
-                          { id: "log" as ThesisSubTab, label: "History", badge: (convictionLog?.entries.length ?? 0) > 0 ? convictionLog!.entries.length : undefined },
+                          { id: "log" as ThesisSubTab, label: "Trail", badge: (convictionLog?.entries.length ?? 0) > 0 ? convictionLog!.entries.length : undefined },
                         ]
                       ).map((sub) => (
                         <button
                           key={sub.id}
-                          onClick={() => setThesisSubTab(sub.id)}
+                          onClick={() => openThesisSubTab(sub.id)}
                           className="relative pb-3 px-3 font-mono text-[10px] uppercase tracking-[0.18em] transition-colors flex items-center gap-1.5"
                           style={{ color: thesisSubTab === sub.id ? "var(--primary)" : "var(--muted-foreground)" }}
                         >
@@ -1219,126 +1315,191 @@ function PositionDetailInner() {
 
                     {/* ── Thesis sub-tab ──────────────────────────────────── */}
                     {thesisSubTab === "thesis" && (
-                      <div className="space-y-6">
-                        <ThesisCard
-                          thesis={activeThesis}
-                          decomposition={decompositionEnvelope?.decomposition ?? null}
-                          investorProfile={onboardingState?.investor_profile ?? null}
-                          monitoringGaps={allGaps.filter((g) => g.thesis_id === activeThesis.id)}
-                          onEdit={() => setEditing(true)}
-                          onInvalidate={() => setInvalidateOpen(true)}
-                        />
-                        {(healthCheck || healthCheckLoading || showCounterThesis) && (
-                          <div className="product-panel p-5 sm:p-6">
-                            <div className="flex items-center justify-between gap-4">
-                              <div className="flex items-center gap-1">
-                                <p className="font-mono text-[10px] uppercase tracking-[0.18em] text-muted-foreground">
-                                  Optional case checks
+                      <div className="grid items-start gap-5 xl:grid-cols-[minmax(0,1fr)_18rem]">
+                        <div className="space-y-6">
+                          <ThesisCard
+                            thesis={activeThesis}
+                            decomposition={decompositionEnvelope?.decomposition ?? null}
+                            investorProfile={onboardingState?.investor_profile ?? null}
+                            monitoringGaps={allGaps.filter((g) => g.thesis_id === activeThesis.id)}
+                            onEdit={() => setEditing(true)}
+                            onInvalidate={() => setInvalidateOpen(true)}
+                          />
+                        </div>
+
+                        <aside className="space-y-5 xl:sticky xl:top-[7.5rem]">
+                          {openLoops.length > 0 && (
+                            <OpenLoopsSection
+                              loops={openLoops}
+                              onDismiss={async (loopKey) => {
+                                await api.post("/api/dashboard/open-loops/dismiss", {
+                                  loop_key: loopKey,
+                                  dismiss_for_days: 7,
+                                });
+                                setOpenLoops((current) => current.filter((loop) => loop.loop_key !== loopKey));
+                                toast.success("Follow-up hidden for a week.");
+                              }}
+                            />
+                          )}
+
+                          {(healthCheck || healthCheckLoading || showCounterThesis) && (
+                            <div className="product-panel p-5 sm:p-6">
+                              <div className="space-y-2">
+                                <div className="flex items-center gap-1">
+                                  <p className="font-mono text-[10px] uppercase tracking-[0.18em] text-muted-foreground">
+                                    Optional extra checks
+                                  </p>
+                                  <InfoTip label="Optional extra checks">
+                                    Open a valuation check or the strongest argument against owning this position. These stay separate from your main view unless you choose to rewrite it.
+                                  </InfoTip>
+                                </div>
+                                <p className="font-sans text-sm leading-relaxed text-foreground/78">
+                                  Extra angles to test the position without interrupting the core {thesisLabel}.
                                 </p>
-                                <InfoTip label="Optional case checks">
-                                  Open a valuation check or the strongest argument against owning this position. These checks do not change your written case unless you edit it.
-                                </InfoTip>
                               </div>
-                              <button onClick={() => setShowAnalysis((s) => !s)} className="font-mono text-[10px] uppercase tracking-[0.2em] text-muted-foreground hover:text-foreground transition-colors shrink-0">
+                              <button
+                                onClick={() => setShowAnalysis((s) => !s)}
+                                className="mt-4 inline-flex items-center border border-primary/25 bg-background/72 px-3 py-2 font-mono text-[10px] uppercase tracking-[0.16em] text-primary transition-colors hover:border-primary/45"
+                              >
                                 {showAnalysis ? "Hide checks" : "Show checks"}
                               </button>
+                              {showAnalysis && (
+                                <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} className="mt-4 space-y-4">
+                                  {(healthCheck || healthCheckLoading) && (
+                                    <ThesisHealthCheck result={healthCheck} loading={healthCheckLoading} investorProfile={onboardingState?.investor_profile ?? null} />
+                                  )}
+                                  {showCounterThesis && <CounterThesisCard thesisId={activeThesis.id} investorProfile={onboardingState?.investor_profile ?? null} />}
+                                </motion.div>
+                              )}
                             </div>
-                            {showAnalysis && (
-                              <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} className={`mt-4 grid gap-4 ${showCounterThesis && (healthCheck || healthCheckLoading) ? "lg:grid-cols-2" : ""}`}>
-                                {(healthCheck || healthCheckLoading) && (
-                                  <ThesisHealthCheck result={healthCheck} loading={healthCheckLoading} investorProfile={onboardingState?.investor_profile ?? null} />
-                                )}
-                                {showCounterThesis && <CounterThesisCard thesisId={activeThesis.id} investorProfile={onboardingState?.investor_profile ?? null} />}
-                              </motion.div>
-                            )}
-                          </div>
-                        )}
+                          )}
+                        </aside>
                       </div>
                     )}
 
                     {/* ── Signals sub-tab ─────────────────────────────────── */}
                     {thesisSubTab === "signals" && (
-                      <div className="space-y-8">
-                        {!decompositionEnvelope?.decomposition && (
-                          !decompositionLoading && (
-                            <div className="space-y-6">
-                              {monitoringPreviewItems.length > 0 && (
-                                <div className="product-panel p-5 sm:p-6 space-y-4">
-                                  <div className="space-y-1.5">
-                                    <p className="font-mono text-[10px] uppercase tracking-[0.18em] text-muted-foreground">
-                                      Current watch rules
-                                    </p>
-                                    <p className="font-sans text-sm text-foreground/80 leading-relaxed">
-                                      These rules are already saved. Build monitoring checks to connect each rule to public evidence.
-                                    </p>
+                      <div className="grid items-start gap-5 xl:grid-cols-[minmax(0,1fr)_18rem]">
+                        <div className="space-y-8">
+                          {!decompositionEnvelope?.decomposition && (
+                            !decompositionLoading && (
+                              <div className="space-y-6">
+                                {monitoringPreviewItems.length > 0 && (
+                                  <div className="product-panel p-5 sm:p-6 space-y-4">
+                                    <div className="space-y-1.5">
+                                      <p className="font-mono text-[10px] uppercase tracking-[0.18em] text-muted-foreground">
+                                        Saved watch rules
+                                      </p>
+                                      <p className="font-sans text-sm text-foreground/80 leading-relaxed">
+                                        These rules are already there. Build checks that connect them to public evidence.
+                                      </p>
+                                    </div>
+                                    <div className="grid gap-3">
+                                      {monitoringPreviewItems.map((item) => (
+                                        <div key={item.key} className="border border-border/60 bg-background/70 px-4 py-3 space-y-1.5">
+                                          <p className="font-sans text-sm text-foreground">{item.label}</p>
+                                          <p className="font-sans text-xs text-muted-foreground leading-relaxed">{item.detail}</p>
+                                        </div>
+                                      ))}
+                                    </div>
                                   </div>
-                                  <div className="grid gap-3">
-                                    {monitoringPreviewItems.map((item) => (
-                                      <div key={item.key} className="border border-border/60 bg-background/70 px-4 py-3 space-y-1.5">
-                                        <p className="font-sans text-sm text-foreground">{item.label}</p>
-                                        <p className="font-sans text-xs text-muted-foreground leading-relaxed">{item.detail}</p>
-                                      </div>
-                                    ))}
-                                  </div>
+                                )}
+                                <div className="py-6 text-center space-y-3">
+                                  <p className="font-display italic text-xl text-foreground/50">
+                                    {monitoringPreviewItems.length > 0 ? "Checks are not live yet." : "No live checks yet."}
+                                  </p>
+                                  <p className="font-sans text-sm text-muted-foreground max-w-md mx-auto leading-relaxed">
+                                    {monitoringPreviewItems.length > 0
+                                      ? "Turn these rules into live checks."
+                                      : `Set up checks from your ${thesisLabel}.`}
+                                  </p>
+                                  <button onClick={handleGenerateDecomposition} className="font-mono text-[10px] uppercase tracking-[0.15em] border border-primary/40 text-primary px-5 py-2.5 hover:border-primary transition-colors">
+                                    Set up monitoring checks
+                                  </button>
                                 </div>
-                              )}
-                              <div className="py-6 text-center space-y-3">
-                                <p className="font-display italic text-xl text-foreground/50">
-                                  {monitoringPreviewItems.length > 0 ? "Monitoring checks are not built yet." : "No monitoring checks yet."}
+                              </div>
+                            )
+                          )}
+                          <ThesisDecompositionReview
+                            key={`${decompositionEnvelope?.decomposition?.id ?? "empty"}:${decompositionEnvelope?.status ?? "none"}`}
+                            envelope={decompositionEnvelope}
+                            loading={decompositionLoading}
+                            saving={decompositionSaving}
+                            onGenerate={handleGenerateDecomposition}
+                            onConfirm={handleConfirmDecomposition}
+                          />
+                        </div>
+
+                        <aside className="space-y-5 xl:sticky xl:top-[7.5rem]">
+                          <div className="product-panel p-5 sm:p-6">
+                            <p className="font-mono text-[10px] uppercase tracking-[0.18em] text-muted-foreground">
+                              How to review this setup
+                            </p>
+                            <div className="mt-3 space-y-3">
+                              <div className="product-panel border border-border/60 bg-background/72 px-3 py-3">
+                                <p className="font-sans text-sm leading-relaxed text-foreground/80">
+                                  Keep only the checks that truly represent what has to stay true.
                                 </p>
-                                <p className="font-sans text-sm text-muted-foreground max-w-md mx-auto leading-relaxed">
-                                  {monitoringPreviewItems.length > 0
-                                    ? "Build checks from the rules you already saved."
-                                    : "Build checks from the written thesis."}
+                              </div>
+                              <div className="product-panel border border-border/60 bg-background/72 px-3 py-3">
+                                <p className="font-sans text-sm leading-relaxed text-foreground/80">
+                                  Broad or speculative signals should earn their place before they go live.
                                 </p>
-                                <button onClick={handleGenerateDecomposition} className="font-mono text-[10px] uppercase tracking-[0.15em] border border-primary/40 text-primary px-5 py-2.5 hover:border-primary transition-colors">
-                                  Build monitoring checks
-                                </button>
+                              </div>
+                              <div className="product-panel border border-border/60 bg-background/72 px-3 py-3">
+                                <p className="font-sans text-sm leading-relaxed text-foreground/80">
+                                  Take your time here. These are the checks the rest of PenKeep will trust.
+                                </p>
                               </div>
                             </div>
-                          )
-                        )}
-                        <ThesisDecompositionReview
-                          key={`${decompositionEnvelope?.decomposition?.id ?? "empty"}:${decompositionEnvelope?.status ?? "none"}`}
-                          envelope={decompositionEnvelope}
-                          loading={decompositionLoading}
-                          saving={decompositionSaving}
-                          onGenerate={handleGenerateDecomposition}
-                          onConfirm={handleConfirmDecomposition}
-                        />
+                          </div>
 
-                        {/* ── Historical audit card ──────────────────────── */}
-                        {activeThesis && (decompositionEnvelope?.status === "confirmed" || decompositionEnvelope?.status === "partially_confirmed") && (
-                          <HistoricalAuditCard audit={currentHistoricalAudit} />
-                        )}
+                          {activeThesis && (decompositionEnvelope?.status === "confirmed" || decompositionEnvelope?.status === "partially_confirmed") && (
+                            <HistoricalAuditCard audit={currentHistoricalAudit} />
+                          )}
+                        </aside>
                       </div>
                     )}
 
                     {/* ── Log sub-tab ─────────────────────────────────────── */}
                     {thesisSubTab === "log" && (
-                      <>
+                      <div className="grid items-start gap-5 xl:grid-cols-[minmax(0,1fr)_18rem]">
                         <ConvictionLog
                           data={convictionLog}
                           loading={convictionLogLoading}
                           investorProfile={onboardingState?.investor_profile ?? null}
                         />
-                        {invalidatedTheses.length > 0 && (
-                          <div className="border-t border-border/40 pt-6 space-y-3">
-                            <p className="font-mono text-[10px] uppercase tracking-[0.2em] text-muted-foreground">
-                              {onboardingState?.investor_profile === "thesis_driven" ? "Previous theses" : "Previous reasons"}
+
+                        <aside className="space-y-5 xl:sticky xl:top-[7.5rem]">
+                          <div className="product-panel p-5 sm:p-6">
+                            <p className="font-mono text-[10px] uppercase tracking-[0.18em] text-muted-foreground">
+                              What this trail shows
                             </p>
-                            {invalidatedTheses.map((t) => (
-                              <div key={t.id} className="border-l-2 border-border/60 pl-4 py-3 space-y-1.5">
-                                <p className="font-sans text-sm text-foreground/85 leading-relaxed italic">&ldquo;{t.why_own_it}&rdquo;</p>
-                                {t.invalidation_reason && (
-                                  <p className="font-sans text-xs text-muted-foreground">Closed: {t.invalidation_reason}</p>
-                                )}
-                                <p className="font-mono text-[10px] text-muted-foreground/60">{formatDate(t.updated_at)}</p>
-                              </div>
-                            ))}
+                            <p className="mt-2 font-sans text-sm leading-relaxed text-foreground/80">
+                              The point is not more notes. It shows what you believed, what you acted on, and what the market proved after.
+                            </p>
                           </div>
-                        )}
-                      </>
+
+                          {invalidatedTheses.length > 0 && (
+                            <div className="product-panel p-5 sm:p-6 space-y-3">
+                              <p className="font-mono text-[10px] uppercase tracking-[0.2em] text-muted-foreground">
+                                {onboardingState?.investor_profile === "thesis_driven" ? "Previous theses" : "Previous reasons"}
+                              </p>
+                              <div className="space-y-3">
+                                {invalidatedTheses.map((t) => (
+                                  <div key={t.id} className="product-panel border border-border/60 bg-background/72 px-4 py-3 space-y-1.5">
+                                    <p className="font-sans text-sm text-foreground/85 leading-relaxed italic">&ldquo;{t.why_own_it}&rdquo;</p>
+                                    {t.invalidation_reason && (
+                                      <p className="font-sans text-xs text-muted-foreground">Closed: {t.invalidation_reason}</p>
+                                    )}
+                                    <p className="font-mono text-[10px] text-muted-foreground/60">{formatDate(t.updated_at)}</p>
+                                  </div>
+                                ))}
+                              </div>
+                            </div>
+                          )}
+                        </aside>
+                      </div>
                     )}
                   </>
                 )}
@@ -1346,7 +1507,7 @@ function PositionDetailInner() {
                 {/* No thesis empty state */}
                 {!activeThesis && !editing && (
                   <div className="grid gap-5 lg:grid-cols-[minmax(0,1.2fr)_minmax(16rem,20rem)]">
-                    <section className="product-panel product-panel-muted overflow-hidden p-5 sm:p-6">
+                    <section className="product-panel overflow-hidden border border-border/70 bg-[linear-gradient(180deg,rgba(163,126,79,0.05),rgba(255,255,255,0.96))] p-5 sm:p-6">
                       <div className="space-y-5">
                         <div className="space-y-2">
                           <p className="font-mono text-[10px] uppercase tracking-[0.2em] text-primary">
@@ -1397,7 +1558,7 @@ function PositionDetailInner() {
                       </p>
                       <div className="mt-4 space-y-3">
                         {firstWriteUnlocks.map((item) => (
-                          <div key={item} className="border-l-2 border-primary/20 pl-3">
+                          <div key={item} className="product-panel border border-border/60 bg-background/72 px-3 py-3">
                             <p className="font-sans text-sm leading-relaxed text-foreground/80">
                               {item}
                             </p>
@@ -1435,7 +1596,7 @@ function PositionDetailInner() {
                   supportingItems={supportingItems}
                   onFlagEvent={handleFlagEvent}
                   onAfterCheckIn={handleCheckInComplete}
-                  onWriteThesis={() => { setEditing(true); setActiveTab("thesis"); }}
+                  onWriteThesis={() => { setEditing(true); openThesisSubTab("thesis"); }}
                 />
               </div>
             )}

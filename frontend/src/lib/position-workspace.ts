@@ -1,5 +1,6 @@
 import type {
   ConvictionLogResponse,
+  DashboardOpenLoop,
   Holding,
   HoldingPulse,
   MonitoringEvent,
@@ -22,6 +23,7 @@ export interface PositionWorkspaceSnapshot {
   holding: Holding | null;
   theses: Thesis[];
   activeThesis: Thesis | undefined;
+  openLoops: DashboardOpenLoop[];
   events: MonitoringEvent[];
   convictionLog: ConvictionLogResponse | null;
   upcomingEarnings: UpcomingEarnings | null;
@@ -45,6 +47,7 @@ export async function loadPositionWorkspace(
 
   const [
     theses,
+    openLoops,
     events,
     convictionLog,
     earnings,
@@ -55,6 +58,7 @@ export async function loadPositionWorkspace(
     supportingItems,
   ] = await Promise.all([
     reader.get<Thesis[]>(`/api/theses/holding/${holding.id}`),
+    optional(reader.get<DashboardOpenLoop[]>(`/api/dashboard/open-loops?holding_id=${holding.id}`), [], optionalTimeoutMs),
     reader.get<MonitoringEvent[]>(`/api/monitoring/holdings/${holding.id}/events`),
     optional(reader.get<ConvictionLogResponse>(`/api/portfolio/holdings/${holding.id}/conviction-log`), null, optionalTimeoutMs),
     optional(reader.get<UpcomingEarnings[]>("/api/portfolio/upcoming-earnings"), [], optionalTimeoutMs),
@@ -74,6 +78,7 @@ export async function loadPositionWorkspace(
     holding,
     theses,
     activeThesis,
+    openLoops,
     events,
     convictionLog,
     upcomingEarnings: earnings.find((item) => item.holding_id === holding.id) ?? null,
@@ -142,6 +147,7 @@ function emptySnapshot(holdings: Holding[]): PositionWorkspaceSnapshot {
     holding: null,
     theses: [],
     activeThesis: undefined,
+    openLoops: [],
     events: [],
     convictionLog: null,
     upcomingEarnings: null,

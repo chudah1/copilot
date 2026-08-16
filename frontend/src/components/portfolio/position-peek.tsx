@@ -4,6 +4,7 @@ import { useEffect, useRef, useSyncExternalStore } from "react";
 import { createPortal } from "react-dom";
 import Link from "next/link";
 import { motion, AnimatePresence } from "framer-motion";
+import { positionBlindSpotHref, positionDetailHref, positionMonitoringHref } from "@/lib/position-links";
 import { formatCurrency, formatPercent, formatDate } from "@/lib/utils";
 import { getDecisionState } from "@/lib/decision-state";
 import { AnimatedCurrency } from "@/components/ui/animated-currency";
@@ -148,7 +149,13 @@ function PeekContent({
   const decisionState = getDecisionState({ thesis, pulse });
   const statusCopy = cardStatusCopy({ hasThesis, pulse, thesis, investorProfile });
   const hasLivePulse = pulse?.pulse_status === "review" || pulse?.pulse_status === "watch";
-  const positionHref = `/dashboard/positions/${holding.ticker}`;
+  const positionHref = positionDetailHref(holding.ticker);
+  const writtenNoun =
+    investorProfile === "hearsay_driven"
+      ? "reason"
+      : investorProfile === "thesis_driven"
+        ? "thesis"
+        : "reason";
 
   return (
     <>
@@ -185,6 +192,9 @@ function PeekContent({
         }}
       >
         <motion.div variants={PEEK_SECTION}>
+          <p className="font-mono text-[10px] uppercase tracking-[0.16em] text-muted-foreground">
+            Live snapshot
+          </p>
           <p className="font-mono text-[1.5rem] tabular-nums leading-tight text-foreground">
             <AnimatedCurrency value={value} currency={currency} />
           </p>
@@ -215,11 +225,15 @@ function PeekContent({
               </p>
             </div>
           </div>
-          <PriceSparkline holdingId={holding.id} className="mt-4" />
+          <PriceSparkline
+            holdingId={holding.id}
+            className="mt-4"
+            investorProfile={investorProfile}
+          />
         </motion.div>
 
         {/* Status */}
-        <motion.div variants={PEEK_SECTION} className="border-l-2 border-border/70 pl-3">
+        <motion.div variants={PEEK_SECTION} className="product-panel border border-border/60 bg-background/88 px-4 py-4">
           <p className={`font-mono text-[10px] uppercase tracking-[0.16em] ${statusCopy.tone}`}>
             {statusCopy.eyebrow}
           </p>
@@ -229,64 +243,91 @@ function PeekContent({
 
         {/* Earnings */}
         {earnings && (
-          <motion.div variants={PEEK_SECTION} className="flex items-center gap-3 border border-sky-500/25 bg-sky-500/8 px-3 py-2.5">
-            <span className="font-mono text-[10px] uppercase tracking-[0.16em] text-sky-700">
-              Earnings{" "}
-              {earnings.days_until === 0
-                ? "today"
-                : earnings.days_until === 1
-                  ? "tomorrow"
-                  : `in ${earnings.days_until} days`}
-            </span>
+          <motion.div variants={PEEK_SECTION} className="product-panel flex items-center justify-between gap-3 border border-sky-500/25 bg-sky-500/8 px-4 py-3">
+            <div>
+              <p className="font-mono text-[10px] uppercase tracking-[0.16em] text-sky-700">
+                Earnings
+              </p>
+              <p className="mt-1 font-sans text-xs leading-relaxed text-foreground/82">
+                {earnings.days_until === 0
+                  ? "Reports today."
+                  : earnings.days_until === 1
+                    ? "Reports tomorrow."
+                    : `Reports in ${earnings.days_until} days.`}
+              </p>
+            </div>
             <span className="font-mono text-[10px] text-muted-foreground">{formatDate(earnings.report_date)}</span>
           </motion.div>
         )}
 
         {/* Written case */}
         {thesis?.why_own_it ? (
-          <motion.div variants={PEEK_SECTION} className="space-y-4">
-            <div>
+          <motion.div variants={PEEK_SECTION} className="product-panel space-y-4 border border-border/60 bg-card/70 px-4 py-4">
+            <div className="space-y-4">
               <p className="font-mono text-[10px] uppercase tracking-[0.16em] text-muted-foreground">
                 {investorProfile === "thesis_driven" ? "Your thesis" : "Your reason"}
               </p>
-              <blockquote className="mt-2 border-l-2 border-primary/25 pl-3">
+              <div className="product-panel border border-border/60 bg-background/72 px-4 py-3">
                 <p className="font-display italic text-[1.02rem] leading-relaxed text-foreground/90">
                   {thesis.why_own_it}
                 </p>
-              </blockquote>
+              </div>
             </div>
-            {thesis.must_remain_true && (
-              <div>
-                <p className="font-mono text-[10px] uppercase tracking-[0.16em] text-muted-foreground">
-                  Still true if
-                </p>
-                <p className="mt-1.5 font-sans text-[13px] leading-relaxed text-foreground/80">
-                  {thesis.must_remain_true}
-                </p>
-              </div>
-            )}
-            {thesis.what_would_change_my_mind && (
-              <div>
-                <p className="font-mono text-[10px] uppercase tracking-[0.16em] text-muted-foreground">
-                  Breaks if
-                </p>
-                <p className="mt-1.5 font-sans text-[13px] leading-relaxed text-foreground/80">
-                  {thesis.what_would_change_my_mind}
-                </p>
-              </div>
-            )}
-            <p className="font-mono text-[10px] text-muted-foreground/60">
-              Updated {formatDate(thesis.updated_at)}
-            </p>
+            <div className="grid gap-3">
+              {thesis.must_remain_true && (
+                <div className="border-t border-border/50 pt-3">
+                  <p className="font-mono text-[10px] uppercase tracking-[0.16em] text-muted-foreground">
+                    Still true if
+                  </p>
+                  <p className="mt-1.5 font-sans text-[13px] leading-relaxed text-foreground/80">
+                    {thesis.must_remain_true}
+                  </p>
+                </div>
+              )}
+              {thesis.what_would_change_my_mind && (
+                <div className="border-t border-border/50 pt-3">
+                  <p className="font-mono text-[10px] uppercase tracking-[0.16em] text-muted-foreground">
+                    Breaks if
+                  </p>
+                  <p className="mt-1.5 font-sans text-[13px] leading-relaxed text-foreground/80">
+                    {thesis.what_would_change_my_mind}
+                  </p>
+                </div>
+              )}
+              <p className="font-mono text-[10px] text-muted-foreground/60">
+                Updated {formatDate(thesis.updated_at)}
+              </p>
+            </div>
           </motion.div>
         ) : (
-          <motion.div variants={PEEK_SECTION} className="border border-border/60 bg-card/60 px-4 py-3.5">
-            <p className="font-sans text-sm leading-relaxed text-foreground/85">
-              {investorProfile === "hearsay_driven" ? "No reason written yet." : "No thesis written yet."}
+          <motion.div variants={PEEK_SECTION} className="product-panel border border-border/60 bg-card/70 px-4 py-4">
+            <p className="font-mono text-[10px] uppercase tracking-[0.16em] text-muted-foreground">
+              First step
             </p>
-            <p className="mt-1 font-sans text-xs leading-relaxed text-muted-foreground">
-              Write it and monitoring can start judging evidence against it.
+            <p className="mt-2 font-display italic text-[1.05rem] leading-tight text-foreground">
+              {investorProfile === "hearsay_driven" ? "Start with the reason." : investorProfile === "thesis_driven" ? "Start with the thesis." : "Start with the reason."}
             </p>
+            <p className="mt-2 font-sans text-xs leading-relaxed text-muted-foreground">
+              Once you write it down, monitoring can tell what deserves attention and what does not.
+            </p>
+            <div className="mt-4 grid gap-2">
+              <div className="border border-border/50 bg-background/70 px-3 py-2">
+                <p className="font-mono text-[9px] uppercase tracking-[0.14em] text-muted-foreground">
+                  Own it because
+                </p>
+                <p className="mt-1 font-sans text-xs leading-relaxed text-foreground/82">
+                  Name the real driver behind the position.
+                </p>
+              </div>
+              <div className="border border-border/50 bg-background/70 px-3 py-2">
+                <p className="font-mono text-[9px] uppercase tracking-[0.14em] text-muted-foreground">
+                  Breaks if
+                </p>
+                <p className="mt-1 font-sans text-xs leading-relaxed text-foreground/82">
+                  Name what would force a decision later.
+                </p>
+              </div>
+            </div>
           </motion.div>
         )}
       </motion.div>
@@ -294,21 +335,23 @@ function PeekContent({
       {/* Footer */}
       <div className="flex items-center gap-2 border-t border-border/60 px-5 pt-4 pb-[max(1rem,env(safe-area-inset-bottom))]">
         <Link
-          href={hasThesis ? positionHref : `${positionHref}?source=dashboard_blind_spot`}
+          href={hasThesis ? positionHref : positionBlindSpotHref(holding.ticker)}
           className="flex-1 bg-primary px-4 py-2.5 text-center font-mono text-[10px] uppercase tracking-[0.16em] text-primary-foreground transition-colors hover:bg-primary/90"
         >
           {hasThesis
             ? "Open position"
             : investorProfile === "hearsay_driven"
-              ? "Write the reason"
-              : "Write the thesis"}
+              ? "Write reason"
+              : investorProfile === "thesis_driven"
+                ? "Write thesis"
+                : `Write ${writtenNoun}`}
         </Link>
         {hasLivePulse && (
           <Link
-            href={`${positionHref}?tab=monitoring`}
+            href={positionMonitoringHref(holding.ticker)}
             className="flex-1 border border-primary/30 px-4 py-2.5 text-center font-mono text-[10px] uppercase tracking-[0.16em] text-primary transition-colors hover:border-primary/60"
           >
-            What changed
+            Review signal
           </Link>
         )}
       </div>

@@ -142,3 +142,74 @@ async def test_different_anchor_still_persists(db, test_user):
     await db.commit()
 
     assert len(created) == 1
+
+
+@pytest.mark.asyncio
+async def test_directional_unlinked_analyst_revision_persists(db, test_user):
+    holding, thesis = await _setup(db, test_user)
+    now = datetime.now(timezone.utc)
+
+    created = await persist_classified_candidates(
+        db,
+        thesis=thesis,
+        holding=holding,
+        classified=[
+            (
+                {
+                    "event_type": "analyst_revision",
+                    "description": "12 net analyst upgrades in the past 30 days.",
+                    "evidence": {
+                        "analyst_revision_id": "NOW",
+                        "net_changes_30d": 12,
+                        "signal_direction": "supports",
+                    },
+                },
+                "info",
+                "Analyst sentiment is reinforcing the thesis right now.",
+            )
+        ],
+        claims_by_id={},
+        signals_by_id={},
+        now=now,
+    )
+    await db.commit()
+
+    assert len(created) == 1
+
+    events = (await db.execute(MonitoringEvent.__table__.select())).all()
+    assert len(events) == 1
+    row = events[0]
+    assert row.event_type == "analyst_revision"
+    assert row.verdict == "supports"
+
+
+@pytest.mark.asyncio
+async def test_generic_unlinked_analyst_revision_still_skips(db, test_user):
+    holding, thesis = await _setup(db, test_user)
+    now = datetime.now(timezone.utc)
+
+    created = await persist_classified_candidates(
+        db,
+        thesis=thesis,
+        holding=holding,
+        classified=[
+            (
+                {
+                    "event_type": "analyst_revision",
+                    "description": "12 net analyst upgrades in the past 30 days.",
+                    "evidence": {
+                        "analyst_revision_id": "NOW",
+                        "net_changes_30d": 12,
+                    },
+                },
+                "info",
+                "Generic analyst revision with no thesis direction.",
+            )
+        ],
+        claims_by_id={},
+        signals_by_id={},
+        now=now,
+    )
+    await db.commit()
+
+    assert created == []

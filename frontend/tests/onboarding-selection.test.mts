@@ -2,6 +2,7 @@ import assert from "node:assert/strict";
 import test from "node:test";
 
 import {
+  recoverWizardStateForMissingHolding,
   resolveInitialWizardState,
   selectLargestUncoveredHolding,
   type WizardState,
@@ -98,4 +99,42 @@ test("an explicit holding after import keeps the fresh state", () => {
   assert.equal(resolved.holdingId, "selected-holding");
   assert.equal(resolved.answer1, "");
   assert.equal(resolved.answer2, "");
+});
+
+test("recovering from a missing onboarding holding resets answers onto the next uncovered name", () => {
+  const current: WizardState = {
+    holdingId: "missing-holding",
+    investorProfile: "thesis_driven",
+    answer1: "Old draft",
+    answer2: "Old break",
+  };
+
+  const covered = holding("covered", "NVDA", 5, 100, 700);
+  const next = holding("next", "TSLA", 2, 200, 450);
+  const thesis = { holding_id: covered.id } as Thesis;
+
+  const recovered = recoverWizardStateForMissingHolding([covered, next], [thesis], current);
+
+  assert.deepEqual(recovered, {
+    holdingId: "next",
+    investorProfile: "thesis_driven",
+    answer1: "",
+    answer2: "",
+  });
+});
+
+test("recovering from a missing onboarding holding returns null when nothing else is uncovered", () => {
+  const current: WizardState = {
+    holdingId: "missing-holding",
+    investorProfile: "hearsay_driven",
+    answer1: "Old draft",
+    answer2: "Old break",
+  };
+
+  const covered = holding("covered", "NVDA", 5, 100, 700);
+  const thesis = { holding_id: covered.id } as Thesis;
+
+  const recovered = recoverWizardStateForMissingHolding([covered], [thesis], current);
+
+  assert.equal(recovered, null);
 });

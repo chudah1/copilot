@@ -30,17 +30,31 @@ export function SinceLastVisit({ summary, trend }: SinceLastVisitProps) {
   }
 
   if (changes.length === 0) {
-    changes.push("No meaningful change");
+    return null;
   }
 
   return (
-    <div className="flex flex-wrap items-center gap-x-3 gap-y-1 rounded-lg border border-emerald-500/25 bg-emerald-500/8 px-4 py-2.5 text-emerald-700">
-      <span className="font-mono text-[10px] uppercase tracking-[0.16em] text-emerald-700/80">
-        Since {daysLabel}
-      </span>
-      <span className="font-sans text-sm">
-        {changes.join(" · ")}
-      </span>
+    <div className="product-panel border-emerald-500/25 bg-emerald-500/8 px-4 py-3">
+      <div className="flex flex-col gap-2 sm:flex-row sm:items-start sm:justify-between">
+        <div className="space-y-1">
+          <p className="font-mono text-[10px] uppercase tracking-[0.16em] text-emerald-700/80">
+            Since last visit
+          </p>
+          <p className="font-sans text-sm leading-relaxed text-foreground/80">
+            Here&apos;s what changed across the portfolio since {daysLabel}.
+          </p>
+        </div>
+        <div className="flex flex-wrap gap-2">
+          {changes.map((change) => (
+            <span
+              key={change}
+              className="border border-emerald-600/15 bg-background/70 px-2.5 py-1 font-mono text-[10px] uppercase tracking-[0.12em] text-emerald-700/85"
+            >
+              {change}
+            </span>
+          ))}
+        </div>
+      </div>
     </div>
   );
 }

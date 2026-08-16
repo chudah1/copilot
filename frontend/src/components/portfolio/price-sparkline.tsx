@@ -7,7 +7,7 @@ import { formatCurrency, formatDate } from "@/lib/utils";
 import type { PriceHistoryEvent, PriceHistoryResponse } from "@/types";
 
 /**
- * The life of the decision, drawn: daily closes since the written case was
+ * The life of the decision, drawn: daily closes since the written reason was
  * recorded, with penKeep's monitoring events marked on the line. Deliberately
  * quiet — one muted line, no axes, no numbers, no red/green mood fill. The
  * question it answers is "when the price moved, did my reason move?"
@@ -31,9 +31,14 @@ function dotTone(event: PriceHistoryEvent): "red" | "amber" | null {
 interface PriceSparklineProps {
   holdingId: string;
   className?: string;
+  investorProfile?: "thesis_driven" | "hearsay_driven" | null;
 }
 
-export function PriceSparkline({ holdingId, className = "" }: PriceSparklineProps) {
+export function PriceSparkline({
+  holdingId,
+  className = "",
+  investorProfile = null,
+}: PriceSparklineProps) {
   const [activeEventIndex, setActiveEventIndex] = useState<number | null>(null);
   const { data } = useSWR<PriceHistoryResponse>(
     `/api/portfolio/holdings/${holdingId}/price-history`,
@@ -86,6 +91,12 @@ export function PriceSparkline({ holdingId, className = "" }: PriceSparklineProp
   const lastClose = closes[closes.length - 1];
   const activeEvent =
     activeEventIndex == null ? null : dotByIndex.get(activeEventIndex)?.event ?? null;
+  const writtenNoun =
+    investorProfile === "hearsay_driven"
+      ? "reason"
+      : investorProfile === "thesis_driven"
+        ? "thesis"
+        : "reason";
 
   return (
     <div className={className}>
@@ -130,7 +141,7 @@ export function PriceSparkline({ holdingId, className = "" }: PriceSparklineProp
       <div className="mt-1.5 flex flex-wrap items-center justify-between gap-x-3 gap-y-1">
         <p className="font-mono text-[9px] uppercase tracking-[0.12em] text-muted-foreground/70">
           {data.thesis_anchored
-            ? `Price since you wrote this case · ${formatDate(data.start_date)}`
+            ? `Price since you wrote this ${writtenNoun} · ${formatDate(data.start_date)}`
             : "Price · last 30 days"}
         </p>
         <p className="font-mono text-[9px] tabular-nums text-muted-foreground/70">
@@ -142,7 +153,7 @@ export function PriceSparkline({ holdingId, className = "" }: PriceSparklineProp
           {dotByIndex.size > 0 && (
             <span className="inline-flex items-center gap-1.5">
               <span className="h-1.5 w-1.5 rounded-full bg-amber-400" />
-              Evidence that tested your case
+              Evidence that tested your {writtenNoun}
             </span>
           )}
           {avgCostVisible && (
@@ -154,7 +165,7 @@ export function PriceSparkline({ holdingId, className = "" }: PriceSparklineProp
         </div>
       )}
       {activeEvent && (
-        <div role="status" className="mt-2 border-l-2 border-amber-400/70 pl-2.5">
+        <div role="status" className="mt-2 border border-amber-500/30 bg-amber-500/[0.06] px-3 py-2">
           <p className="font-mono text-[9px] uppercase tracking-[0.12em] text-muted-foreground">
             Evidence reviewed · {formatDate(activeEvent.date)}
           </p>

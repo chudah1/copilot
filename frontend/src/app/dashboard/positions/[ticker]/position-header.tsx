@@ -61,7 +61,7 @@ export function PositionHeader({
         <div className="max-w-5xl mx-auto px-4 sm:px-6 lg:px-10">
 
           {/* Nav row */}
-          <div className="flex flex-col gap-3 pt-4 pb-2 sm:flex-row sm:items-center sm:justify-between">
+          <div className="flex flex-col gap-3 pt-4 pb-3 sm:flex-row sm:items-center sm:justify-between">
             <Link
               href="/dashboard"
               className="font-mono text-[10px] uppercase tracking-[0.2em] text-muted-foreground hover:text-primary transition-colors"
@@ -70,18 +70,20 @@ export function PositionHeader({
             </Link>
             <div className="flex flex-wrap items-center gap-2 sm:justify-end">
               {deleteConfirming ? (
-                <div className="flex flex-wrap items-center gap-2 sm:justify-end">
-                  <span className="font-mono text-[10px] text-muted-foreground">Remove all data?</span>
+                <div className="flex flex-wrap items-center gap-2 border border-red-500/20 bg-red-500/5 px-3 py-2 sm:justify-end">
+                  <span className="font-mono text-[10px] uppercase tracking-[0.14em] text-red-700/80">
+                    Remove all data?
+                  </span>
                   <button
                     onClick={onDelete}
                     disabled={deleteLoading}
-                    className="font-mono text-[10px] uppercase tracking-[0.15em] text-red-600 hover:text-red-700 transition-colors disabled:opacity-40"
+                    className="border border-red-500/25 bg-background/80 px-3 py-1.5 font-mono text-[10px] uppercase tracking-[0.15em] text-red-700/80 transition-colors hover:border-red-500/40 hover:text-red-800 disabled:opacity-40"
                   >
                     {deleteLoading ? "Removing…" : "Confirm"}
                   </button>
                   <button
                     onClick={() => onSetDeleteConfirming(false)}
-                    className="font-mono text-[10px] uppercase tracking-[0.15em] text-muted-foreground hover:text-foreground transition-colors"
+                    className="border border-border/60 bg-background/72 px-3 py-1.5 font-mono text-[10px] uppercase tracking-[0.15em] text-muted-foreground transition-colors hover:border-border hover:text-foreground"
                   >
                     Cancel
                   </button>
@@ -89,7 +91,7 @@ export function PositionHeader({
               ) : (
                 <button
                   onClick={() => onSetDeleteConfirming(true)}
-                  className="font-mono text-[10px] uppercase tracking-[0.15em] text-muted-foreground/70 hover:text-muted-foreground transition-colors"
+                  className="border border-border/60 bg-background/72 px-3 py-2 font-mono text-[10px] uppercase tracking-[0.15em] text-muted-foreground transition-colors hover:border-border hover:text-foreground"
                 >
                   Remove position
                 </button>
@@ -114,6 +116,9 @@ export function PositionHeader({
           {/* Identity + value row */}
           <div className={`flex flex-col gap-4 pb-3 overflow-hidden transition-all duration-200 sm:flex-row sm:items-end sm:justify-between sm:gap-6 ${headerCollapsed ? "max-h-0 pb-0 opacity-0 sm:max-h-40 sm:pb-3 sm:opacity-100" : "max-h-60 sm:max-h-40"}`}>
             <div>
+              <p className="font-mono text-[10px] uppercase tracking-[0.16em] text-muted-foreground">
+                Position
+              </p>
               <h1 className="font-display italic text-[2.9rem] leading-none text-primary tracking-tight sm:text-[3.5rem]">
                 {cleanTicker(holding.ticker)}
               </h1>
@@ -124,6 +129,9 @@ export function PositionHeader({
               )}
             </div>
             <div className="shrink-0 pb-0.5 sm:text-right">
+              <p className="font-mono text-[10px] uppercase tracking-[0.16em] text-muted-foreground">
+                Live value
+              </p>
               {hasPrice ? (
                 <>
                   <p className="font-mono text-[1.6rem] tabular-nums text-foreground leading-tight">
@@ -191,7 +199,11 @@ export function PositionHeader({
 
           {/* The decision's price line — collapses with the rest of the header */}
           <div className={`overflow-hidden transition-all duration-200 ${headerCollapsed ? "max-h-0 opacity-0 sm:max-h-36 sm:opacity-100" : "max-h-36"}`}>
-            <PriceSparkline holdingId={holding.id} className="mb-3" />
+            <PriceSparkline
+              holdingId={holding.id}
+              className="mb-3"
+              investorProfile={investorProfile}
+            />
           </div>
 
           {/* Status ribbon */}
@@ -205,13 +217,13 @@ export function PositionHeader({
             {activeThesis && (
               <div className="flex flex-wrap items-center gap-2">
                 <span className="font-mono text-[10px] text-muted-foreground/60">
-                  updated {ageInDays(activeThesis.updated_at)}d ago
+                  Updated {ageInDays(activeThesis.updated_at)}d ago
                 </span>
                 {stalePressure && (
                   <>
                     <span className="text-border text-[10px]">·</span>
                     <span className="font-mono text-[10px] text-amber-700/80">
-                      {stalePressure.cadenceDays}d cadence
+                      Review cadence {stalePressure.cadenceDays}d
                     </span>
                   </>
                 )}

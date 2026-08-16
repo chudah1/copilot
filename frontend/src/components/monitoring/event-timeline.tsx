@@ -32,7 +32,7 @@ function verdictConfig(
     ? "thesis"
     : investorProfile === "hearsay_driven"
       ? "reason"
-      : "case";
+      : "reason";
 
   const configs: Record<string, { label: string; sentence: string; className: string }> = {
     supports: {
@@ -76,7 +76,7 @@ function reviewDecisionConfig(
     ? "thesis"
     : investorProfile === "hearsay_driven"
       ? "reason"
-      : "case";
+      : "reason";
 
   switch (action) {
     case "reaffirmed":
@@ -115,9 +115,9 @@ function reviewDecisionConfig(
 function reviewLanguage(investorProfile?: "thesis_driven" | "hearsay_driven" | null) {
   if (investorProfile === "thesis_driven") {
     return {
-      empty: "Nothing new yet. We're still watching this position against your thesis.",
+      empty: "Nothing has tested this position yet. We're still watching it against your thesis.",
       title: "What does this do to your thesis?",
-      description: "Log what you decided so the record stays clean.",
+      description: "Save what you decided so the decision trail stays clear.",
       hold: "Thesis still holds",
       edit: "Update thesis",
       lower: "Assumption weaker",
@@ -128,21 +128,21 @@ function reviewLanguage(investorProfile?: "thesis_driven" | "hearsay_driven" | n
 
   if (investorProfile === "hearsay_driven") {
     return {
-      empty: "Nothing new yet. We're still checking whether the reason you wrote still holds.",
+      empty: "Nothing has tested this position yet. We're still checking whether your reason still holds.",
       title: "What does this do to your reason?",
-      description: "Log whether this changes the story or just sharpens it.",
+      description: "Save whether this changes the reason or simply clarifies it.",
       hold: "Reason still holds",
       edit: "Rewrite the reason",
       lower: "Less sure now",
-      broken: "Story is broken",
+      broken: "Reason is broken",
       irrelevant: "Not relevant",
     };
   }
 
   return {
-    empty: "Nothing new yet. We're still watching this position against what you wrote.",
+    empty: "Nothing has tested this position yet. We're still watching it against your reason.",
     title: "What do you want to do?",
-    description: "Log what you decided so future alerts stay useful.",
+    description: "Save what you decided so future alerts stay useful.",
     hold: "Reason still holds",
     edit: "Update my reason",
     lower: "Lower confidence",
@@ -232,10 +232,10 @@ export function EventTimeline({ events, onReview, onEditReason, reviewingEventId
       <div className="product-panel p-5 sm:p-6">
         <div className="space-y-2">
           <p className="font-mono text-[10px] uppercase tracking-[0.2em] text-muted-foreground">
-            History
+            Review trail
           </p>
           <p className="font-display italic text-[1.35rem] leading-tight text-foreground">
-            No reviewed evidence on file yet.
+            Nothing reviewed yet.
           </p>
           <p className="text-foreground/85">{copy.empty}</p>
         </div>
@@ -248,25 +248,27 @@ export function EventTimeline({ events, onReview, onEditReason, reviewingEventId
       <div className="grid gap-0 border-b border-border/50 lg:grid-cols-[minmax(0,1.2fr)_minmax(16rem,20rem)]">
         <div className="p-5 sm:p-6">
           <p className="font-mono text-[10px] uppercase tracking-[0.2em] text-muted-foreground">
-            History
+            Review trail
           </p>
           <p className="mt-2 font-display italic text-[1.55rem] leading-tight text-foreground">
-            Evidence and verdicts on file.
+            What has been tested so far
           </p>
           <p className="mt-2 max-w-2xl font-sans text-sm leading-relaxed text-foreground/80">
             See what was tested, how you ruled, and what changed.
           </p>
         </div>
-        <aside className="border-t border-border/50 bg-muted/15 p-5 sm:p-6 lg:border-l lg:border-t-0">
-          <p className="font-mono text-[10px] uppercase tracking-[0.2em] text-muted-foreground">
-            On file
-          </p>
-          <p className="mt-2 font-display text-[1.7rem] italic leading-none text-foreground">
-            {reviewedCount}
-          </p>
-          <p className="mt-2 font-sans text-xs leading-relaxed text-muted-foreground">
-            Reviewed event{reviewedCount === 1 ? "" : "s"} logged for this position.
-          </p>
+        <aside className="border-t border-border/50 bg-background/82 p-5 sm:p-6 lg:border-t-0">
+          <div className="product-panel border border-border/60 bg-background/72 px-4 py-4">
+            <p className="font-mono text-[10px] uppercase tracking-[0.2em] text-muted-foreground">
+              Reviewed so far
+            </p>
+            <p className="mt-2 font-display text-[1.7rem] italic leading-none text-foreground">
+              {reviewedCount}
+            </p>
+            <p className="mt-2 font-sans text-xs leading-relaxed text-muted-foreground">
+              Reviewed event{reviewedCount === 1 ? "" : "s"} saved in the trail for this position.
+            </p>
+          </div>
         </aside>
       </div>
 
@@ -301,14 +303,14 @@ export function EventTimeline({ events, onReview, onEditReason, reviewingEventId
                   )}
 
                   {youSaid && (
-                    <blockquote className="border-l-2 border-primary/20 pl-3">
+                    <div className="product-panel border border-border/60 bg-background/72 px-4 py-3">
                       <p className="font-mono text-[10px] uppercase tracking-[0.16em] text-muted-foreground">
                         What you wrote
                       </p>
                       <p className="mt-2 text-sm italic text-foreground/75">
                         &quot;{youSaid}&quot;
                       </p>
-                    </blockquote>
+                    </div>
                   )}
 
                   <div className="space-y-2">
@@ -317,7 +319,11 @@ export function EventTimeline({ events, onReview, onEditReason, reviewingEventId
                         Evidence read
                       </p>
                       <InfoTip label="Evidence read">
-                        A summary of the public information PenKeep checked against the relevant part of your written case.
+                        {investorProfile === "thesis_driven"
+                          ? "A summary of the public information PenKeep checked against the relevant part of your thesis."
+                          : investorProfile === "hearsay_driven"
+                            ? "A summary of the public information PenKeep checked against the relevant part of your reason."
+                            : "A summary of the public information PenKeep checked against the relevant part of your reason."}
                       </InfoTip>
                     </div>
                     {e.evidence_summary ? (
@@ -343,16 +349,20 @@ export function EventTimeline({ events, onReview, onEditReason, reviewingEventId
                   )}
                 </div>
 
-                <aside className="space-y-3 border-t border-border/50 pt-4 lg:border-l lg:border-t-0 lg:pl-4 lg:pt-0">
-                  <div className="space-y-1">
+                <aside className="space-y-3 border-t border-border/50 pt-4 lg:border-t-0 lg:pt-0">
+                  <div className="product-panel border border-border/60 bg-background/72 px-3 py-3 space-y-1">
                     <div className="flex items-center gap-1.5">
                       <p className="font-mono text-[10px] uppercase tracking-[0.16em] text-muted-foreground">
                         {reviewDecision ? "Your ruling" : "Verdict"}
                       </p>
                       <InfoTip label={reviewDecision ? "Your ruling" : "Verdict"}>
                         {reviewDecision
-                          ? "The decision you recorded after reading the evidence. Your ruling remains separate from the model read."
-                          : "PenKeep's read of how the evidence relates to your case. You still decide whether the case holds."}
+                          ? "The decision you saved after reading the evidence. Your ruling stays separate from the model read."
+                          : investorProfile === "thesis_driven"
+                            ? "PenKeep's read of how the evidence relates to your thesis. You still decide whether the thesis holds."
+                            : investorProfile === "hearsay_driven"
+                              ? "PenKeep's read of how the evidence relates to your reason. You still decide whether the reason holds."
+                              : "PenKeep's read of how the evidence relates to your reason. You still decide whether it still holds."}
                       </InfoTip>
                     </div>
                     {reviewDecision ? (
@@ -364,12 +374,12 @@ export function EventTimeline({ events, onReview, onEditReason, reviewingEventId
                         {verdict.sentence}
                       </p>
                     ) : (
-                      <p className="text-sm text-muted-foreground">No model verdict on file.</p>
+                      <p className="text-sm text-muted-foreground">No model verdict yet.</p>
                     )}
                   </div>
 
                   {reviewDecision && verdict && (
-                    <div className="space-y-1">
+                    <div className="product-panel border border-border/60 bg-background/72 px-3 py-3 space-y-1">
                       <div className="flex items-center gap-1.5">
                         <p className="font-mono text-[10px] uppercase tracking-[0.16em] text-muted-foreground">
                           Model read
@@ -385,9 +395,9 @@ export function EventTimeline({ events, onReview, onEditReason, reviewingEventId
                   )}
 
                   {e.review_notes && (
-                    <div className="space-y-1">
+                    <div className="product-panel border border-border/60 bg-background/72 px-3 py-3 space-y-1">
                       <p className="font-mono text-[10px] uppercase tracking-[0.16em] text-muted-foreground">
-                        Your ruling
+                        Why you ruled that way
                       </p>
                       <p className="text-sm leading-relaxed text-foreground/85">
                         {e.review_notes}

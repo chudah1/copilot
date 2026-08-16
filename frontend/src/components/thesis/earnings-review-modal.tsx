@@ -84,7 +84,7 @@ function assessmentConfigForProfile(investorProfile?: "thesis_driven" | "hearsay
     },
     thesis_challenged: {
       eyebrow: "Review result",
-      label: investorProfile === "hearsay_driven" ? "Story challenged" : "Reason challenged",
+      label: investorProfile === "hearsay_driven" ? "Reason challenged" : "Thesis challenged",
       tone: "border-red-500/25 bg-red-500/8",
       chip: "text-red-600 bg-red-500/10 border-red-500/20",
     },
@@ -93,12 +93,12 @@ function assessmentConfigForProfile(investorProfile?: "thesis_driven" | "hearsay
 
 function reviewSubtitle(ticker: string, investorProfile?: "thesis_driven" | "hearsay_driven" | null) {
   if (investorProfile === "thesis_driven") {
-    return `${ticker} · check whether the thesis still holds after earnings.`;
+    return `${ticker} · check whether the thesis still holds up after earnings.`;
   }
   if (investorProfile === "hearsay_driven") {
-    return `${ticker} · check whether the original story still works as a reason.`;
+    return `${ticker} · check whether the original reason still holds up after earnings.`;
   }
-  return `${ticker} · check whether your reason still holds after earnings.`;
+  return `${ticker} · check whether your case still holds up after earnings.`;
 }
 
 function formatReviewedAt(value: string) {
@@ -208,7 +208,7 @@ export function EarningsReviewModal({
         <div className="flex-1 overflow-y-auto px-5 py-5 sm:px-6 sm:py-6">
           {!result && !loading && (
             <div className="space-y-5">
-              <div className="product-panel product-panel-muted p-6 sm:p-7">
+              <div className="product-panel border border-border/60 bg-background/82 p-6 sm:p-7">
                 <div className="flex items-start gap-3">
                   <div className="mt-0.5 rounded-full border border-primary/20 bg-primary/8 p-2 text-primary">
                     <ArrowRight className="size-4" />
@@ -219,7 +219,7 @@ export function EarningsReviewModal({
                         What this does
                       </p>
                       <p className="mt-2 font-sans text-base leading-relaxed text-foreground/90">
-                        Run the latest earnings against what you wrote down.
+                        Check the latest quarter against the reason you wrote down.
                       </p>
                     </div>
                     <div className="grid gap-3 sm:grid-cols-3">
@@ -241,10 +241,10 @@ export function EarningsReviewModal({
                       </div>
                       <div className="product-panel p-4">
                         <p className="font-mono text-[10px] uppercase tracking-[0.14em] text-muted-foreground">
-                          On record
+                          Saved after review
                         </p>
                         <p className="mt-2 font-sans text-sm leading-relaxed text-foreground/85">
-                          The result is saved to the conviction log automatically.
+                          The result is saved to the decision trail automatically.
                         </p>
                       </div>
                     </div>
@@ -266,12 +266,12 @@ export function EarningsReviewModal({
           )}
 
           {loading && (
-            <div className="product-panel product-panel-muted flex min-h-[280px] flex-col items-center justify-center gap-4 px-6 py-10 text-center">
+            <div className="product-panel border border-border/60 bg-background/82 flex min-h-[280px] flex-col items-center justify-center gap-4 px-6 py-10 text-center">
               <LoaderCircle className="size-8 animate-spin text-primary" />
               <div className="space-y-2">
-                <p className="font-sans text-base text-foreground/90">Checking the latest quarter against your written case.</p>
+                <p className="font-sans text-base text-foreground/90">Checking the latest quarter against your case.</p>
                 <p className="font-sans text-sm text-muted-foreground">
-                  This usually takes a moment while the review is written and logged.
+                  This usually takes a moment while the review is written and saved.
                 </p>
               </div>
             </div>
@@ -377,14 +377,14 @@ export function EarningsReviewModal({
             <div className="flex items-center gap-2 text-muted-foreground">
               <CheckCircle2 className="size-4 text-emerald-600" />
               <p className="font-mono text-[10px] uppercase tracking-[0.14em]">
-                Saved to conviction log{reviewedAt ? ` · ${reviewedAt}` : ""}
+                Saved to decision trail{reviewedAt ? ` · ${reviewedAt}` : ""}
               </p>
             </div>
             <div className="flex items-center gap-2">
               {verdictCounts.broken > 0 && (
                 <div className="hidden items-center gap-1.5 text-red-600 sm:flex">
                   <AlertTriangle className="size-4" />
-                  <span className="font-sans text-sm">One or more claims broke.</span>
+                  <span className="font-sans text-sm">One or more claims came back broken.</span>
                 </div>
               )}
               <Button variant="outline" onClick={onClose}>

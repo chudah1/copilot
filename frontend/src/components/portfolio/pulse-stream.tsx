@@ -24,16 +24,20 @@ export function PulseStream({ insights, warnings }: PulseStreamProps) {
   return (
     <div className="space-y-5">
       {warnings.map((w, i) => (
-        <div key={i} className="text-sm text-amber-300 leading-relaxed border-l-2 border-amber-500/60 pl-3">
-          {w}
+        <div key={i} className="border border-amber-500/30 bg-amber-500/[0.06] px-3 py-3">
+          <p className="font-sans text-sm leading-relaxed text-foreground/80">
+            {w}
+          </p>
         </div>
       ))}
 
       {insights.map((insight, i) => {
-        const borderColor =
-          insight.type === "warning" ? "border-red-500/60"
-          : insight.type === "event" ? "border-amber-500/60"
-          : "border-emerald-500/60";
+        const cardTone =
+          insight.type === "warning"
+            ? "border-red-500/30 bg-red-500/[0.05]"
+            : insight.type === "event"
+              ? "border-amber-500/30 bg-amber-500/[0.06]"
+              : "border-emerald-500/30 bg-emerald-500/[0.05]";
 
         const tickerColor =
           insight.type === "warning" ? "text-red-600"
@@ -41,7 +45,7 @@ export function PulseStream({ insights, warnings }: PulseStreamProps) {
           : "text-emerald-700";
 
         return (
-          <div key={i} className={`border-l-2 ${borderColor} pl-3 space-y-1`}>
+          <div key={i} className={`border px-3 py-3 space-y-1 ${cardTone}`}>
             <div className="flex items-baseline gap-2 flex-wrap">
               <span className={`font-mono text-[11px] font-bold uppercase tracking-wide ${tickerColor}`}>
                 {insight.ticker}

@@ -89,9 +89,15 @@ async def test_digest_builder_records_missing_and_stale_theses(db, job_session_f
     assert digest.content["subject_line"].endswith(" days — here's what to watch")
     assert digest.content["missing_theses_count"] == 1
     assert digest.content["stale_theses_count"] == 1
+    assert digest.content["open_loops_count"] == 2
+    assert any(loop["ticker"] == "MSFT" and loop["loop_type"] == "weak_thesis" for loop in digest.content["open_loops"])
+    assert any(loop["ticker"] == "AAPL" and loop["loop_type"] == "weak_thesis" for loop in digest.content["open_loops"])
     assert any("Stale theses: MSFT" == point for point in digest.content["summary_points"])
     assert digest.content["next_earnings"]["ticker"] == "AAPL"
     assert "Upcoming:" in html
+    assert "Still open" in html
+    assert "AAPL still needs a clearer written case." in html
+    assert "MSFT still needs a clearer written case." in html
     # No onboarding profile recorded for this user, so the receipt uses the neutral quiet-week copy.
     assert "Checked 3 holdings — all quiet." in digest.content["monitoring_receipt"]
     send_mock.assert_awaited_once()
@@ -347,3 +353,48 @@ async def test_digest_headline_flags_review_only_when_check_in_asks(db, test_use
     await db.commit()
 
     assert digest.content["headline"] == "1 of your reasons needs review this week."
+
+
+async def test_digest_summary_points_include_open_loop_when_room(db, test_user):
+    from app.jobs.digest_builder import build_and_persist_user_digest
+
+    now = datetime.now(timezone.utc)
+    holding = Holding(
+        user_id=test_user.id,
+        ticker="ADBE",
+        name="Adobe",
+        quantity=3,
+        average_cost_basis=300,
+        current_price=320,
+        current_value=960,
+    )
+    db.add(holding)
+    await db.flush()
+    db.add(
+        Thesis(
+            user_id=test_user.id,
+            holding_id=holding.id,
+            status="active",
+            thesis_kind="company",
+            why_own_it="Creative pricing power compounds.",
+            confidence="medium",
+            review_cadence_days=14,
+            source="user",
+            updated_at=now - timedelta(days=140),
+        )
+    )
+    await db.commit()
+
+    digest = await build_and_persist_user_digest(
+        db,
+        test_user,
+        now=now,
+        period_start=now - timedelta(days=7),
+        period_end=now,
+        send_email=False,
+        update_streak=False,
+    )
+    await db.commit()
+
+    assert digest.content["open_loops_count"] == 1
+    assert "Still open: ADBE needs a decision on your reason." in digest.content["summary_points"]

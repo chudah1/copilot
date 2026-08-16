@@ -24,6 +24,7 @@ interface Props {
   thesis?: Thesis | null;
   investorProfile?: "thesis_driven" | "hearsay_driven" | null;
   mode?: "write" | "first_write" | "tighten" | "rewrite";
+  initialDraft?: Partial<ThesisDraftFields> | null;
   onSave: (data: {
     thesis_kind: "company";
     why_own_it: string;
@@ -40,11 +41,17 @@ interface Props {
   onCancel: () => void;
 }
 
-export function ThesisEditor({ thesis, investorProfile, mode = "write", onSave, onAssist, onCancel }: Props) {
+export function ThesisEditor({ thesis, investorProfile, mode = "write", initialDraft, onSave, onAssist, onCancel }: Props) {
   const isAiDraft = thesis?.source === "ai_assisted" && thesis?.status === "draft";
-  const [whyOwnIt, setWhyOwnIt] = useState(isAiDraft ? "" : asText(thesis?.why_own_it));
-  const [mustRemainTrue, setMustRemainTrue] = useState(isAiDraft ? "" : asText(thesis?.must_remain_true));
-  const [changeMind, setChangeMind] = useState(isAiDraft ? "" : asText(thesis?.what_would_change_my_mind));
+  const [whyOwnIt, setWhyOwnIt] = useState(
+    isAiDraft ? "" : asText(thesis?.why_own_it) || asText(initialDraft?.why_own_it),
+  );
+  const [mustRemainTrue, setMustRemainTrue] = useState(
+    isAiDraft ? "" : asText(thesis?.must_remain_true) || asText(initialDraft?.must_remain_true),
+  );
+  const [changeMind, setChangeMind] = useState(
+    isAiDraft ? "" : asText(thesis?.what_would_change_my_mind) || asText(initialDraft?.what_would_change_my_mind),
+  );
   const [confidence, setConfidence] = useState<"high" | "medium" | "low">(thesis?.confidence ?? "medium");
   const [aiSummary, setAiSummary] = useState(asText(thesis?.ai_summary));
   const [interpretation, setInterpretation] = useState<Record<string, unknown> | null>(thesis?.interpretation ?? null);
@@ -82,7 +89,7 @@ export function ThesisEditor({ thesis, investorProfile, mode = "write", onSave, 
       ? {
           title: thesis ? "Edit reason" : "Write your reason",
           helperTitle: "What makes a strong reason here",
-          helperBody: "Turn the original story into something testable.",
+          helperBody: "Turn the original idea into something testable.",
           why: "Why do you own this?",
           whyPlaceholder: "Example: I own this because AI demand should keep revenue growth and margins strong for the next 3 years.",
           must: "What must remain true?",
@@ -108,33 +115,33 @@ export function ThesisEditor({ thesis, investorProfile, mode = "write", onSave, 
           title: "Rewrite the reason",
           helperTitle: "What to rewrite this time",
           helperBody: "Keep what still holds. Cut what already broke.",
-          saveLabel: "Save rewritten reason",
+          saveLabel: "Save revised reason",
         }
       : {
           title: "Rewrite the thesis",
           helperTitle: "What to rewrite this time",
           helperBody: "Keep what still holds. Cut the assumption that broke.",
-          saveLabel: "Save rewritten thesis",
+          saveLabel: "Save revised thesis",
         }
     : mode === "tighten"
       ? investorProfile === "hearsay_driven"
         ? {
-            title: "Tighten the reason",
-            helperTitle: "What to tighten here",
-            helperBody: "Make the business driver clearer, sharpen the break condition, and strip out loose story language.",
-            saveLabel: "Save tighter reason",
+            title: "Clarify the reason",
+            helperTitle: "What to clarify here",
+            helperBody: "Make the business driver clearer, clarify the break condition, and strip out loose story language.",
+            saveLabel: "Save clearer reason",
           }
         : {
-            title: "Tighten the thesis",
-            helperTitle: "What to tighten here",
-            helperBody: "Make the core assumption more specific, sharpen the break condition, and cut wording you cannot tie to evidence.",
-            saveLabel: "Save tighter thesis",
+            title: "Clarify the thesis",
+            helperTitle: "What to clarify here",
+            helperBody: "Make the core assumption more specific, clarify the break condition, and cut wording you cannot tie to evidence.",
+            saveLabel: "Save clearer thesis",
           }
       : mode === "first_write"
         ? investorProfile === "hearsay_driven"
           ? {
               title: "Write the real reason",
-              helperTitle: "Turn the story into something testable",
+              helperTitle: "Turn the original idea into something testable",
               helperBody: "Start with why it caught your eye, then name what would prove you wrong. Messy is fine. Vague is not.",
               saveLabel: "Save reason and start watching",
             }
@@ -157,7 +164,7 @@ export function ThesisEditor({ thesis, investorProfile, mode = "write", onSave, 
   };
   const completionChecklist = [
     {
-      label: investorProfile === "hearsay_driven" ? "Own the story" : "State the core case",
+      label: investorProfile === "hearsay_driven" ? "State the original idea" : "State the core case",
       done: whyOwnIt.trim().length >= 30,
       detail:
         investorProfile === "hearsay_driven"
@@ -190,9 +197,9 @@ export function ThesisEditor({ thesis, investorProfile, mode = "write", onSave, 
         ? "Rewrite the operating case"
         : "Rewrite the operating thesis"
       : mode === "tighten"
-        ? investorProfile === "hearsay_driven"
-          ? "Sharpen the written reason"
-          : "Sharpen the written thesis"
+      ? investorProfile === "hearsay_driven"
+          ? "Clarify the reason"
+          : "Clarify the thesis"
       : mode === "first_write"
         ? investorProfile === "hearsay_driven"
             ? "Write the operating reason"
@@ -265,7 +272,7 @@ export function ThesisEditor({ thesis, investorProfile, mode = "write", onSave, 
                   Draft ready
                 </p>
                 <p className="font-sans text-sm leading-relaxed text-foreground/75">
-                  We prepared a draft from the position context. Load it, tighten it, and make it yours.
+                  We prepared a draft from the position context. Load it, review it, and make it yours.
                 </p>
               </div>
               <button
@@ -281,6 +288,17 @@ export function ThesisEditor({ thesis, investorProfile, mode = "write", onSave, 
               >
                 Load starting point
               </button>
+            </div>
+          )}
+
+          {!thesis && initialDraft?.why_own_it && (
+            <div className="border border-primary/20 bg-primary/5 px-4 py-4">
+              <p className="font-mono text-[10px] uppercase tracking-[0.18em] text-primary">
+                Brought forward from your add checkpoint
+              </p>
+              <p className="mt-2 font-sans text-sm leading-relaxed text-foreground/80">
+                Start from what you noted before adding. Clarify it here and make it monitorable.
+              </p>
             </div>
           )}
 
@@ -362,15 +380,15 @@ export function ThesisEditor({ thesis, investorProfile, mode = "write", onSave, 
                 <div className="flex items-center gap-1">
                   <Label>Writing help</Label>
                   <InfoTip label="Writing help">
-                    PenKeep can make the wording more specific and suggest checks. Nothing changes until you review the text and save it.
+                    PenKeep can make the wording more specific and suggest checks. Nothing changes until you review and save it.
                   </InfoTip>
                 </div>
                 <div className="flex flex-wrap items-center gap-3">
                   <Button type="button" variant="outline" onClick={handleAssist} disabled={assisting}>
-                    {assisting ? "Thinking..." : whyOwnIt.trim().length === 0 ? "Draft with AI" : "Sharpen with AI"}
+                    {assisting ? "Thinking..." : whyOwnIt.trim().length === 0 ? "Draft with AI" : "Clarify with AI"}
                   </Button>
                   <p className="font-sans text-xs leading-relaxed text-muted-foreground">
-                    Tighten the wording and suggest checks based on public data.
+                    Clarify the wording and suggest checks based on public data.
                   </p>
                 </div>
                 {assistError && <p className="text-sm text-red-500">{assistError}</p>}
@@ -411,7 +429,7 @@ export function ThesisEditor({ thesis, investorProfile, mode = "write", onSave, 
           </div>
         </div>
 
-        <aside className="border-t border-border/60 bg-muted/15 p-5 sm:p-6 lg:border-l lg:border-t-0">
+        <aside className="border-t border-border/60 bg-background/82 p-5 sm:p-6 lg:border-t-0">
           <div className="space-y-5">
             <div className="space-y-2">
               <p className="font-mono text-[10px] uppercase tracking-[0.2em] text-muted-foreground">
@@ -419,14 +437,14 @@ export function ThesisEditor({ thesis, investorProfile, mode = "write", onSave, 
               </p>
               <p className="font-display text-[1.45rem] italic leading-tight text-foreground">
                 {completedChecklistCount === completionChecklist.length
-                  ? "Ready to monitor."
+                  ? "Ready to watch."
                   : "A little more specificity will make this much sharper."}
               </p>
             </div>
 
             <div className="space-y-3">
               {completionChecklist.map((item) => (
-                <div key={item.label} className="border-l-2 border-primary/15 pl-3">
+                <div key={item.label} className="product-panel border border-border/60 bg-background/72 px-3 py-3">
                   <p className={`font-mono text-[10px] uppercase tracking-[0.16em] ${item.done ? "text-emerald-700" : "text-muted-foreground"}`}>
                     {item.done ? "Complete" : "Open"}
                   </p>
@@ -491,7 +509,7 @@ export function ThesisEditor({ thesis, investorProfile, mode = "write", onSave, 
                 {ambiguityNote && (
                   <div className="border border-amber-500/20 bg-amber-500/5 px-3 py-3">
                     <p className="font-mono text-[10px] uppercase tracking-[0.18em] text-amber-700">
-                      Needs clearer wording
+                      Needs clarity
                     </p>
                     <p className="mt-2 font-sans text-sm leading-relaxed text-foreground/80">
                       {ambiguityNote}
@@ -500,12 +518,12 @@ export function ThesisEditor({ thesis, investorProfile, mode = "write", onSave, 
                 )}
               </div>
             ) : (
-              <div className="space-y-2 border-t border-border/50 pt-5">
+              <div className="product-panel border border-border/60 bg-background/72 px-3 py-3 space-y-2">
                 <p className="font-mono text-[10px] uppercase tracking-[0.2em] text-muted-foreground">
                   After save
                 </p>
                 <p className="font-sans text-sm leading-relaxed text-foreground/80">
-                  penKeep can generate signals, check earnings and headlines against the written case, and turn this page into a decision trail.
+                  PenKeep can generate signals, check earnings and headlines against the case, and turn this page into a decision trail.
                 </p>
               </div>
             )}

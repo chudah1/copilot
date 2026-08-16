@@ -15,13 +15,16 @@ export default function LoginPage() {
   const [password, setPassword] = useState("");
   const [error, setError] = useState("");
   const [loading, setLoading] = useState(false);
+  const [handoff, setHandoff] = useState(false);
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     setError("");
     setLoading(true);
+    setHandoff(false);
     try {
       await login(email, password);
+      setHandoff(true);
     } catch (error: unknown) {
       setError(getErrorMessage(error, "Login failed"));
     } finally {
@@ -69,6 +72,7 @@ export default function LoginPage() {
               value={email}
               onChange={(e) => setEmail(e.target.value)}
               required
+              disabled={loading || handoff}
               className={inputCls}
             />
           </div>
@@ -91,6 +95,7 @@ export default function LoginPage() {
               value={password}
               onChange={(e) => setPassword(e.target.value)}
               required
+              disabled={loading || handoff}
               className={inputCls}
             />
           </div>
@@ -101,8 +106,23 @@ export default function LoginPage() {
             </p>
           )}
 
+          {(loading || handoff) && !error && (
+            <div className="border border-border/70 bg-background/55 px-3 py-2.5">
+              <p className="font-mono text-[10px] uppercase tracking-[0.14em] text-primary">
+                {handoff ? "Opening dashboard" : "Signing you in"}
+              </p>
+              <p className="mt-1 font-sans text-sm leading-relaxed text-foreground/72">
+                {handoff
+                  ? "Your session is live. Bringing your portfolio and decision inbox into view now."
+                  : "Checking your session and pulling your latest portfolio state. This can take a few seconds."}
+              </p>
+            </div>
+          )}
+
           <Button type="submit" className="w-full" loading={loading}>
-            <span className="font-mono text-[11px] uppercase tracking-[0.15em]">Sign in</span>
+            <span className="font-mono text-[11px] uppercase tracking-[0.15em]">
+              {handoff ? "Opening dashboard" : loading ? "Signing in" : "Sign in"}
+            </span>
           </Button>
         </form>
       </div>

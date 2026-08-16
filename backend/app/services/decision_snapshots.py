@@ -19,6 +19,7 @@ from app.models.earnings_calendar import EarningsCalendar
 from app.models.holding import Holding
 from app.models.monitoring_event import MonitoringEvent
 from app.models.thesis import Thesis
+from app.services.dashboard_coach import attach_dashboard_coach_advice_to_snapshot
 
 logger = logging.getLogger(__name__)
 
@@ -115,6 +116,8 @@ async def _persist_snapshot(
         },
     )
     db.add(snapshot)
+    await db.flush()
+    await attach_dashboard_coach_advice_to_snapshot(db, snapshot=snapshot, now=now)
     return snapshot
 
 

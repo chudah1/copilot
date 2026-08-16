@@ -2,6 +2,7 @@
 
 import Link from "next/link";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
+import { positionDetailHref } from "@/lib/position-links";
 import type { HoldingPulse } from "@/types";
 
 const PULSE_DOT: Record<string, string> = {
@@ -50,7 +51,7 @@ export function PulseGrid({ pulses }: { pulses: HoldingPulse[] }) {
         {pulses.map((pulse) => (
           <Link
             key={pulse.holding_id}
-            href={`/dashboard/positions/${pulse.ticker}`}
+            href={positionDetailHref(pulse.ticker)}
             className={`flex items-center gap-3 px-1 py-3 transition-colors hover:bg-muted/50 first:pt-0 last:pb-0 ${PULSE_BG[pulse.pulse_status] ?? ""}`}
           >
             <span className={`h-2.5 w-2.5 flex-shrink-0 rounded-full ${PULSE_DOT[pulse.pulse_status] ?? "bg-gray-300"}`} />

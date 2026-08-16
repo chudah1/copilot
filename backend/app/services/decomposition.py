@@ -995,6 +995,7 @@ async def _persist_successful_decomposition(
     inferred_watch_keys: set[str] = set()
     primary_claim: ThesisClaim | None = None
     primary_entity: ThesisEntity | None = None
+    has_pending_confirmation = False
 
     for position, claim_data in enumerate(normalized.get("claims", []), start=1):
         if claim_data.get("claim_type") and claim_data["claim_type"] not in interpretation_labels:
@@ -1032,6 +1033,8 @@ async def _persist_successful_decomposition(
             )
             db.add(entity)
             await db.flush()
+            if entity.confirmation_required and entity.user_confirmed is None:
+                has_pending_confirmation = True
             if primary_entity is None and _entity_matches_holding(holding, entity_data):
                 primary_entity = entity
 
@@ -1113,6 +1116,8 @@ async def _persist_successful_decomposition(
                     raw_extraction_json=signal_data.get("raw_extraction_json"),
                 )
                 db.add(signal)
+                if signal.confirmation_required and signal.user_confirmed is None:
+                    has_pending_confirmation = True
                 if auto_activate:
                     active_signals.append(signal)
                     signal_claim_map[str(signal.id)] = str(claim.id)
@@ -1203,7 +1208,12 @@ async def _persist_successful_decomposition(
     # generate_decomposition_for_thesis) and confirmation that leaves zero
     # active signals (see confirm_decomposition_for_thesis).
 
-    decomposition.status = "confirmed" if active_signals else "draft"
+    if active_signals and has_pending_confirmation:
+        decomposition.status = "partially_confirmed"
+    elif active_signals:
+        decomposition.status = "confirmed"
+    else:
+        decomposition.status = "draft"
     if decomposition.status in {"confirmed", "partially_confirmed"}:
         decomposition_result = await db.execute(
             select(ThesisDecomposition)

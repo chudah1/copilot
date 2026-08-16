@@ -6,7 +6,12 @@ import Link from "next/link";
 import { motion, AnimatePresence } from "framer-motion";
 import { api } from "@/lib/api";
 import { classifyCaseQuality } from "@/lib/decision-state";
+import {
+  buildPreActionCheckpointNote,
+  savePreActionCheckpointDraft,
+} from "@/lib/pre-action-checkpoint";
 import { TickerSearch } from "@/components/portfolio/ticker-search";
+import { PreActionCheckpointDialog } from "@/components/dashboard/pre-action-checkpoint-dialog";
 import { Button } from "@/components/ui/button";
 import { formatCurrency } from "@/lib/utils";
 import type { Holding, OnboardingState, PortfolioSummary, SimulateTradeResponse, Thesis } from "@/types";
@@ -54,11 +59,11 @@ function getTradeIntervention(
       title:
         investorProfile === "hearsay_driven"
           ? "This position already has evidence waiting for your decision."
-          : "This thesis already needs review.",
+          : "This thesis is ready for a review first.",
       body:
         investorProfile === "hearsay_driven"
           ? "Adding here increases your stake before you decide whether the reason you wrote still holds."
-          : "Adding here increases your stake before you review evidence that conflicts with your written thesis.",
+          : "Adding here increases your stake before you review evidence that challenges your thesis.",
       ctaLabel: "Review this position first →",
       ctaHref: `/dashboard/positions/${result.ticker}`,
       softenSecondary: true,
@@ -71,13 +76,13 @@ function getTradeIntervention(
       eyebrow: "Before you add more",
       title:
         investorProfile === "hearsay_driven"
-          ? "You are increasing a position with no written reason."
-          : "You're adding size to a position with no written thesis.",
+          ? "You are increasing a position with no clear reason."
+          : "You're adding size to a position with no clear thesis.",
       body:
         investorProfile === "hearsay_driven"
-          ? "That makes it much easier to average into a story without noticing what would prove you wrong."
-          : "Hard to know if you're adding to a real case or just reacting to price and headlines.",
-      ctaLabel: "Add it and write the reason →",
+          ? "That makes it much easier to keep adding without noticing what would prove you wrong."
+          : "It is easier to react to price and headlines when the thesis is not clear.",
+      ctaLabel: investorProfile === "thesis_driven" ? "Add it and write the thesis →" : "Add it and write the reason →",
       ctaHref: null,
       softenSecondary: true,
     };
@@ -89,8 +94,8 @@ function getTradeIntervention(
       eyebrow: "Before you add more",
       title:
         investorProfile === "hearsay_driven"
-          ? "The written reason is stale."
-          : "The written thesis is stale.",
+          ? "The reason needs a refresh."
+          : "The thesis needs a refresh.",
       body:
         investorProfile === "hearsay_driven"
           ? "Review the reason and recent evidence before increasing the position."
@@ -107,14 +112,14 @@ function getTradeIntervention(
       eyebrow: "Before you size up",
       title:
         investorProfile === "hearsay_driven"
-          ? "The current reason is too vague to monitor."
-          : "The current thesis is still too vague.",
+          ? "The current reason still needs more clarity."
+          : "The current thesis still needs more clarity.",
       body:
         ambiguityNote ||
         (investorProfile === "hearsay_driven"
           ? "Name the business result that must continue before you increase the position."
           : "Name the business conditions that must continue before you increase the position."),
-      ctaLabel: "Tighten it on the position page →",
+      ctaLabel: "Clarify it on the position page →",
       ctaHref: `/dashboard/positions/${result.ticker}`,
       softenSecondary: false,
     };
@@ -125,11 +130,11 @@ function getTradeIntervention(
     eyebrow: "Decision check",
     title:
       investorProfile === "hearsay_driven"
-        ? "Can you name what would prove the story is real?"
+        ? "Can you name what would prove the reason is real?"
         : "Can you state what must remain true before this becomes a position?",
     body:
       investorProfile === "hearsay_driven"
-        ? "If you cannot tie this idea to business results you expect to see, the safer move is to add it with a written reason immediately."
+        ? "If you cannot tie this idea to business results you expect to see, the safer move is to add it with a clear reason immediately."
         : "If you can't state why you own it, what has to stay true, and what would make you sell, treat this as a draft idea — not a full-size add.",
     ctaLabel:
       investorProfile === "hearsay_driven"
@@ -215,7 +220,7 @@ function buildNarrative(result: SimulateTradeResponse): string[] {
   if (isNew) lines.push(`This adds a new position — you'd go from ${result.before.holdings_count} to ${result.after.holdings_count} holdings.`);
   if (Math.abs(concDelta) >= 0.5) {
     lines.push(concDelta > 0
-      ? `Concentration tightens: top 3 go from ${pct(result.before.top_3_concentration_pct)} to ${pct(result.after.top_3_concentration_pct)}.`
+      ? `Concentration rises: top 3 go from ${pct(result.before.top_3_concentration_pct)} to ${pct(result.after.top_3_concentration_pct)}.`
       : `Diversification improves: top 3 drop from ${pct(result.before.top_3_concentration_pct)} to ${pct(result.after.top_3_concentration_pct)}.`);
   }
   return lines;
@@ -236,6 +241,10 @@ export default function SimulatePage() {
   const [holdings, setHoldings] = useState<Holding[]>([]);
   const [theses, setTheses] = useState<Thesis[]>([]);
   const [onboardingState, setOnboardingState] = useState<OnboardingState | null>(null);
+  const [checkpointOpen, setCheckpointOpen] = useState(false);
+  const [checkpointWhyOwnIt, setCheckpointWhyOwnIt] = useState("");
+  const [checkpointMustRemainTrue, setCheckpointMustRemainTrue] = useState("");
+  const [checkpointChangeMind, setCheckpointChangeMind] = useState("");
 
   useEffect(() => {
     Promise.all([
@@ -271,26 +280,19 @@ export default function SimulatePage() {
     }
   };
 
-  const addHolding = async (navigateTo: "dashboard" | "thesis") => {
-    if (!result) return;
-    try {
-      setAdding(true);
-      await api.post<Holding>("/api/portfolio/holdings", {
-        ticker: result.ticker,
-        name: result.name,
-        quantity: result.simulated_quantity,
-        average_cost_basis: result.simulated_price,
-        currency: result.simulated_currency,
-      });
-      router.push(navigateTo === "thesis" ? `/dashboard/positions/${result.ticker}` : "/dashboard");
-    } catch {
-      setError("Failed to add holding.");
-      setAdding(false);
-    }
-  };
-
   const verdict = result ? gradeTheTrade(result) : null;
   const narrative = result ? buildNarrative(result) : [];
+  const matchedHolding = result
+    ? holdings.find((holding) => cleanTicker(holding.ticker) === cleanTicker(result.ticker))
+    : null;
+  const matchedThesis = matchedHolding
+    ? theses.find(
+        (thesis) =>
+          thesis.holding_id === matchedHolding.id &&
+          (thesis.status === "draft" || thesis.status === "active" || thesis.status === "needs_review"),
+      ) ?? null
+    : null;
+  const hasExistingCase = Boolean(matchedHolding && matchedThesis);
   const intervention = result
     ? getTradeIntervention(result, holdings, theses, onboardingState?.investor_profile ?? null)
     : null;
@@ -299,13 +301,64 @@ export default function SimulatePage() {
     .sort((a, b) => (b.current_value ?? 0) - (a.current_value ?? 0))
     .slice(0, 5);
 
+  const openCheckpoint = () => {
+    if (!result) return;
+    setCheckpointWhyOwnIt("");
+    setCheckpointMustRemainTrue(matchedThesis?.must_remain_true ?? "");
+    setCheckpointChangeMind(matchedThesis?.what_would_change_my_mind ?? "");
+    setCheckpointOpen(true);
+  };
+
+  const handleCheckpointConfirm = async () => {
+    if (!result) return;
+    try {
+      setAdding(true);
+      const addedHolding = await api.post<Holding>("/api/portfolio/holdings", {
+        ticker: result.ticker,
+        name: result.name,
+        quantity: result.simulated_quantity,
+        average_cost_basis: result.simulated_price,
+        currency: result.simulated_currency,
+      });
+
+      if (hasExistingCase && matchedHolding) {
+        try {
+          await api.post(`/api/portfolio/holdings/${matchedHolding.id}/conviction-log`, {
+            content: buildPreActionCheckpointNote({
+              ticker: result.ticker,
+              why_own_it: checkpointWhyOwnIt,
+              must_remain_true: checkpointMustRemainTrue,
+              what_would_change_my_mind: checkpointChangeMind,
+            }),
+          });
+        } catch (noteError) {
+          console.error(noteError);
+        }
+        router.push(intervention?.ctaHref ?? `/dashboard/positions/${result.ticker}`);
+        return;
+      }
+
+      savePreActionCheckpointDraft({
+        ticker: result.ticker,
+        why_own_it: checkpointWhyOwnIt,
+        must_remain_true: checkpointMustRemainTrue,
+        what_would_change_my_mind: checkpointChangeMind,
+        created_at: new Date().toISOString(),
+      });
+      router.push(`/dashboard/positions/${addedHolding.ticker}?source=simulate_checkpoint`);
+    } catch {
+      setError("Failed to add holding.");
+      setAdding(false);
+    }
+  };
+
   return (
     <div className="mx-auto max-w-5xl px-4 py-10 sm:px-8 space-y-5">
       <Link href="/dashboard" className="inline-block font-mono text-[10px] uppercase tracking-[0.2em] text-muted-foreground hover:text-primary transition-colors">
         ← Portfolio
       </Link>
 
-      <div className="product-panel product-panel-muted p-6 sm:p-7">
+      <div className="product-panel border border-border/70 bg-[linear-gradient(180deg,rgba(163,126,79,0.06),rgba(255,255,255,0.96))] p-6 sm:p-7">
         <div className="grid gap-5 lg:grid-cols-[minmax(0,1fr)_18rem]">
           <div className="space-y-3">
             <h1 className="font-display italic text-[2.7rem] leading-[1.02] text-foreground">
@@ -458,7 +511,7 @@ export default function SimulatePage() {
                   Check the add before the impulse turns into size.
                 </p>
                 <p className="mt-2 font-sans text-sm leading-relaxed text-muted-foreground">
-                  See what the add does to the portfolio and whether the written thesis is strong enough for more size.
+                  See what the add does to the portfolio and whether the current reason is clear enough for more size.
                 </p>
               </div>
             </aside>
@@ -475,7 +528,7 @@ export default function SimulatePage() {
             className="grid gap-5 xl:grid-cols-[minmax(0,1fr)_18rem]"
           >
             <div className="space-y-5">
-              <div className={`product-panel border-l-4 ${verdict.borderClass} p-5`}>
+              <div className={`product-panel border ${verdict.borderClass} bg-background/82 p-5`}>
                 <div className="space-y-1">
                   <div className="flex items-center gap-2">
                     <span className={`h-2 w-2 rounded-full shrink-0 ${verdict.dot}`} />
@@ -499,9 +552,14 @@ export default function SimulatePage() {
                   {result.warnings
                     .filter((w) => !(w.warning_type === "missing_thesis" && intervention))
                     .map((w, i) => (
-                    <div key={i} className="product-panel border-l-2 border-l-amber-400 bg-amber-500/5 p-4">
-                      <p className="font-sans text-sm leading-relaxed text-amber-700">{w.message}</p>
-                    </div>
+                      <div key={i} className="product-panel border border-amber-500/20 bg-amber-500/6 p-4">
+                        <div className="space-y-1.5">
+                          <p className="font-mono text-[10px] uppercase tracking-[0.16em] text-amber-800">
+                            Watch item
+                          </p>
+                          <p className="font-sans text-sm leading-relaxed text-foreground/82">{w.message}</p>
+                        </div>
+                      </div>
                   ))}
                 </div>
               )}
@@ -595,19 +653,35 @@ export default function SimulatePage() {
               <div className="product-panel p-5">
                 <div className="flex flex-col gap-2 sm:flex-row">
                   <Button
-                    onClick={() => addHolding("dashboard")}
+                    onClick={openCheckpoint}
                     disabled={adding}
                     className="flex-1"
                   >
-                    {adding ? "Adding…" : `Add ${cleanTicker(result.ticker)} to portfolio`}
+                    {adding
+                      ? "Adding…"
+                      : hasExistingCase
+                        ? `Record why & add ${cleanTicker(result.ticker)}`
+                        : `Add ${cleanTicker(result.ticker)} and write ${onboardingState?.investor_profile === "thesis_driven" ? "the thesis" : "the reason"}`}
                   </Button>
-                  <button
-                    onClick={() => addHolding("thesis")}
-                    disabled={adding}
-                    className="flex-1 font-mono text-[10px] uppercase tracking-[0.15em] border border-border px-4 py-3 text-foreground/70 transition-colors hover:text-foreground hover:border-foreground/40 disabled:opacity-40"
-                  >
-                    Write thesis first
-                  </button>
+                  {intervention?.ctaHref ? (
+                    <Link
+                      href={intervention.ctaHref}
+                      className="flex-1 border border-border px-4 py-3 text-center font-mono text-[10px] uppercase tracking-[0.15em] text-foreground/70 transition-colors hover:border-foreground/40 hover:text-foreground"
+                    >
+                      {intervention.ctaLabel.replace(" →", "")}
+                    </Link>
+                  ) : (
+                    <button
+                      onClick={() => {
+                        setResult(null);
+                        setCheckpointOpen(false);
+                      }}
+                      disabled={adding}
+                      className="flex-1 font-mono text-[10px] uppercase tracking-[0.15em] border border-border px-4 py-3 text-foreground/70 transition-colors hover:text-foreground hover:border-foreground/40 disabled:opacity-40"
+                    >
+                      Rework the add
+                    </button>
+                  )}
                 </div>
               </div>
             </div>
@@ -625,7 +699,7 @@ export default function SimulatePage() {
                   {intervention.ctaHref && (
                     <Link
                       href={intervention.ctaHref}
-                      className="inline-flex font-mono text-[10px] uppercase tracking-[0.15em] text-primary hover:text-primary/80 transition-colors"
+                      className="inline-flex items-center gap-2 border border-primary/25 bg-background/72 px-3 py-2 font-mono text-[10px] uppercase tracking-[0.15em] text-primary transition-colors hover:border-primary/50"
                     >
                       {intervention.ctaLabel}
                     </Link>
@@ -641,6 +715,24 @@ export default function SimulatePage() {
           </motion.div>
         )}
       </AnimatePresence>
+
+      {result && (
+        <PreActionCheckpointDialog
+          open={checkpointOpen}
+          onOpenChange={setCheckpointOpen}
+          investorProfile={onboardingState?.investor_profile ?? null}
+          hasExistingCase={hasExistingCase}
+          ticker={cleanTicker(result.ticker)}
+          whyOwnIt={checkpointWhyOwnIt}
+          mustRemainTrue={checkpointMustRemainTrue}
+          changeMind={checkpointChangeMind}
+          onWhyOwnItChange={setCheckpointWhyOwnIt}
+          onMustRemainTrueChange={setCheckpointMustRemainTrue}
+          onChangeMindChange={setCheckpointChangeMind}
+          onConfirm={() => void handleCheckpointConfirm()}
+          saving={adding}
+        />
+      )}
     </div>
   );
 }

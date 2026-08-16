@@ -18,6 +18,30 @@ class QuarterlyReviewHoldingResponse(BaseModel):
     reviewed_at: datetime | None = None
 
 
+class DecisionPatternExampleResponse(BaseModel):
+    ticker: str
+    bucket: str
+    bet_text: str | None = None
+    read: str | None = None
+    decided_at: datetime | None = None
+    resolved_at: datetime | None = None
+
+
+class DecisionPatternResponse(BaseModel):
+    kind: str
+    tone: str
+    headline: str
+    detail: str
+    instances: int
+    hits: int
+    examples: list[DecisionPatternExampleResponse] = []
+
+
+class DecisionPatternsResponse(BaseModel):
+    patterns: list[DecisionPatternResponse]
+    resolved_count: int
+
+
 class QuarterlyReviewCurrentResponse(BaseModel):
     review_id: uuid.UUID
     quarter: str

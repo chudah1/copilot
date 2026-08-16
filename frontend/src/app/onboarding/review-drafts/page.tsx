@@ -61,11 +61,11 @@ export default function ReviewDraftsPage() {
         emptyBody: "Draft theses are still generating.",
         pendingTitle: "Drafts are on the way.",
         pendingBody: "We’re still turning imported holdings into draft theses.",
-        missingTitle: "Nothing queued for review yet.",
+        missingTitle: "Nothing is ready for review yet.",
         missingBody: "Add or import holdings first.",
-        connectedMissingBody: "No draft queue is active. Write the first thesis from the dashboard.",
+        connectedMissingBody: "Nothing is waiting for review right now. Write the first thesis from the dashboard.",
         failedTitle: "Drafting needs a manual pass.",
-        failedBody: "We couldn’t prepare these drafts automatically. Write the first thesis from the dashboard.",
+        failedBody: "We couldn’t draft these automatically. Write the first thesis from the dashboard.",
         doneLine: "Monitoring starts tonight.",
         accept: "Keep as working thesis →",
         edit: "Reshape on position page",
@@ -80,11 +80,11 @@ export default function ReviewDraftsPage() {
         emptyBody: "Draft reasons are still generating.",
         pendingTitle: "Draft reasons are on the way.",
         pendingBody: "We’re still turning imported holdings into draft reasons.",
-        missingTitle: "Nothing queued for review yet.",
+        missingTitle: "Nothing is ready for review yet.",
         missingBody: "Add or import holdings first.",
-        connectedMissingBody: "No draft queue is active. Write the first reason from the dashboard.",
+        connectedMissingBody: "Nothing is waiting for review right now. Write the first reason from the dashboard.",
         failedTitle: "Drafting needs a manual pass.",
-        failedBody: "We couldn’t prepare these draft reasons automatically. Write the first reason from the dashboard.",
+        failedBody: "We couldn’t draft these automatically. Write the first reason from the dashboard.",
         doneLine: "Monitoring starts tonight.",
         accept: "Keep as working reason →",
         edit: "Reshape on position page",
@@ -98,11 +98,11 @@ export default function ReviewDraftsPage() {
         emptyBody: "Drafts are still generating.",
         pendingTitle: "Drafts are on the way.",
         pendingBody: "We’re still preparing the first drafts.",
-        missingTitle: "Nothing queued for review yet.",
+        missingTitle: "Nothing is ready for review yet.",
         missingBody: "Add or import holdings first.",
-        connectedMissingBody: "No draft queue is active. Write the first reason from the dashboard.",
+        connectedMissingBody: "Nothing is waiting for review right now. Write the first reason from the dashboard.",
         failedTitle: "Drafting needs a manual pass.",
-        failedBody: "We couldn’t prepare these drafts automatically. Write the first one from the dashboard.",
+        failedBody: "We couldn’t draft these automatically. Write the first one from the dashboard.",
         doneLine: "Monitoring starts tonight.",
         accept: "Keep this draft →",
         edit: "Reshape on position page",
@@ -148,13 +148,13 @@ export default function ReviewDraftsPage() {
         <div className="product-shell-glow" />
         <div className="product-main min-h-screen px-4 py-6 sm:px-8">
           <div className="mx-auto max-w-5xl space-y-5">
-            <div className="product-panel product-panel-muted flex items-center justify-between gap-4 px-4 py-3 sm:px-5">
+            <div className="product-panel flex items-center justify-between gap-4 border border-border/60 bg-background/82 px-4 py-3 sm:px-5">
               <span className="font-mono text-[10px] uppercase tracking-[0.2em] text-muted-foreground">
                 penKeep
               </span>
               <Link
                 href="/dashboard"
-                className="font-mono text-[10px] uppercase tracking-[0.14em] text-muted-foreground hover:text-foreground transition-colors"
+                className="inline-flex items-center border border-border/60 bg-background/72 px-3 py-2 font-mono text-[10px] uppercase tracking-[0.14em] text-muted-foreground transition-colors hover:border-border hover:text-foreground"
               >
                 Skip to dashboard
               </Link>
@@ -162,7 +162,7 @@ export default function ReviewDraftsPage() {
 
             <div className="grid gap-5 xl:grid-cols-[minmax(0,1fr)_18rem]">
               <section className="space-y-5">
-                <div className="product-panel product-panel-muted p-6 sm:p-8">
+                <div className="product-panel border border-border/70 bg-[linear-gradient(180deg,rgba(163,126,79,0.06),rgba(255,255,255,0.96))] p-6 sm:p-8">
                   <div className="grid gap-5 lg:grid-cols-[minmax(0,1fr)_15rem]">
                     <div className="space-y-3">
                       <span className="font-mono text-[10px] uppercase tracking-[0.24em] text-primary block">
@@ -206,7 +206,7 @@ export default function ReviewDraftsPage() {
                 )}
 
                 {!pageLoading && drafts.length === 0 && (
-                  <div className="product-panel p-8 text-center space-y-4">
+                  <div className="product-panel border border-border/60 bg-background/82 p-8 text-center space-y-4">
                     <p className="font-display italic text-[1.5rem] leading-tight text-foreground">
                       {emptyStateVariant === "pending"
                         ? copy.pendingTitle
@@ -233,7 +233,7 @@ export default function ReviewDraftsPage() {
                         href="/dashboard?source=review_drafts"
                         className="inline-block bg-primary text-primary-foreground px-6 py-2.5 text-sm font-mono hover:bg-primary/90 transition-colors"
                       >
-                        Go to dashboard
+                        Open dashboard
                       </Link>
                       {emptyStateVariant !== "pending" && !portfolioConnected && (
                         <Link
@@ -273,7 +273,7 @@ export default function ReviewDraftsPage() {
                     initial={{ opacity: 0, y: 10 }}
                     animate={{ opacity: 1, y: 0 }}
                     transition={{ duration: 0.4 }}
-                    className="product-panel p-6 sm:p-7 space-y-6"
+                    className="product-panel border border-emerald-500/20 bg-[linear-gradient(180deg,rgba(16,185,129,0.08),rgba(255,255,255,0.95))] p-6 sm:p-7 space-y-6"
                   >
                     <div className="space-y-1">
                       <span className="font-mono text-[10px] uppercase tracking-[0.24em] text-primary">
@@ -281,8 +281,8 @@ export default function ReviewDraftsPage() {
                       </span>
                       <p className="font-display italic text-[1.6rem] leading-tight text-foreground">
                         {reviewedCount === 1
-                          ? "1 position now has a working conviction."
-                          : `${reviewedCount} positions now have working conviction statements.`}
+                          ? "1 position now has a working case."
+                          : `${reviewedCount} positions now have working cases.`}
                       </p>
                       <p className="text-sm text-muted-foreground">
                         {copy.doneLine}
@@ -294,14 +294,14 @@ export default function ReviewDraftsPage() {
                           href={`/dashboard/positions/${firstKeptDraft.ticker}?source=review_drafts`}
                           className="inline-block bg-primary text-primary-foreground px-8 py-3 text-sm font-mono tracking-wide hover:bg-primary/90 transition-colors"
                         >
-                          Open {firstKeptDraft.ticker} first
+                          See {firstKeptDraft.ticker} first
                         </Link>
                       )}
                       <Link
                         href="/dashboard?source=review_drafts"
                         className="inline-block border border-border px-6 py-3 text-sm font-mono tracking-wide text-foreground/70 hover:text-foreground hover:border-foreground/30 transition-colors"
                       >
-                        See watched portfolio
+                        Open dashboard
                       </Link>
                     </div>
                   </motion.div>
@@ -317,7 +317,7 @@ export default function ReviewDraftsPage() {
               </section>
 
               <aside className="space-y-4">
-                <div className="product-panel p-5">
+                <div className="product-panel border border-border/60 bg-background/82 p-5">
                   <p className="font-mono text-[10px] uppercase tracking-[0.16em] text-muted-foreground">
                     What you are deciding
                   </p>
@@ -325,12 +325,12 @@ export default function ReviewDraftsPage() {
                     Keep the draft if the shape is right. Fix it on the position page if it is not.
                   </p>
                 </div>
-                <div className="product-panel p-5">
+                <div className="product-panel border border-border/60 bg-background/82 p-5">
                   <p className="font-mono text-[10px] uppercase tracking-[0.16em] text-muted-foreground">
                     Goal
                   </p>
                   <p className="mt-2 font-sans text-sm leading-relaxed text-foreground/80">
-                    Get each important position to a workable thesis quickly.
+                    Get each important position to a workable case quickly.
                   </p>
                 </div>
               </aside>
@@ -377,7 +377,7 @@ function DraftCard({
             Review standard
           </p>
           <p className="mt-1 text-sm text-foreground/80 leading-relaxed">
-            Keep this if the shape is right. Reshape it on the position page if it is not.
+            Keep this if the shape is right. Rewrite it on the position page if it is not.
           </p>
         </div>
         {draft.why_own_it ? (
@@ -409,14 +409,14 @@ function DraftCard({
         </Button>
         <button
           onClick={onEdit}
-          className="text-xs font-mono text-foreground/70 hover:text-foreground transition-colors underline underline-offset-4"
+          className="inline-flex items-center border border-border/60 bg-background/72 px-3 py-2 font-mono text-[10px] uppercase tracking-[0.14em] text-foreground/72 transition-colors hover:border-border hover:text-foreground"
         >
           {editLabel}
         </button>
         <button
           onClick={onDismiss}
           disabled={draft.activating || draft.dismissing}
-          className="text-xs font-mono text-muted-foreground hover:text-foreground transition-colors disabled:opacity-40 sm:ml-auto"
+          className="inline-flex items-center border border-border/60 bg-background/72 px-3 py-2 font-mono text-[10px] uppercase tracking-[0.14em] text-muted-foreground transition-colors hover:border-border hover:text-foreground disabled:opacity-40 sm:ml-auto"
         >
           {draft.dismissing ? "Dismissing…" : dismissLabel}
         </button>

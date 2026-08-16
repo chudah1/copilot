@@ -9,6 +9,7 @@ import { getErrorMessage } from "@/lib/errors";
 import { formatCurrency } from "@/lib/utils";
 import {
   EMPTY_WIZARD_STATE,
+  recoverWizardStateForMissingHolding,
   resolveInitialWizardState,
   selectLargestUncoveredHolding,
   type InvestorProfile,
@@ -103,6 +104,7 @@ function WizardInner() {
   const [drafting, setDrafting] = useState(false);
   const [displayName, setDisplayName] = useState("");
   const [leaving, setLeaving] = useState(false);
+  const [savePhase, setSavePhase] = useState<"idle" | "saving" | "opening">("idle");
 
   const profileContent = PROFILE_CONTENT[wizardState.investorProfile];
   const currentStepIndex = step === "ON_RECORD" ? STEPS.length - 1 : STEPS.indexOf(step);
@@ -178,11 +180,35 @@ function WizardInner() {
     router.push("/dashboard");
   };
 
+  const recoverFromMissingHolding = async () => {
+    try {
+      const [holdings, theses] = await Promise.all([
+        api.get<Holding[]>("/api/portfolio/holdings"),
+        api.get<Thesis[]>("/api/theses/current"),
+      ]);
+      const recovered = recoverWizardStateForMissingHolding(holdings, theses, wizardState);
+      if (!recovered) {
+        clearState();
+        router.replace("/dashboard");
+        return;
+      }
+
+      setHolding(null);
+      setError("");
+      setStep("QUESTION_1");
+      setWizardState(recovered);
+    } catch {
+      clearState();
+      router.replace("/dashboard");
+    }
+  };
+
   const handleSave = async () => {
     if (!wizardState.holdingId || !holding) return;
     if (wizardState.answer1.trim().length < 5 || wizardState.answer2.trim().length < 5) return;
 
     setSaving(true);
+    setSavePhase("saving");
     setError("");
     try {
       await api.post<SynthesisResult>("/api/onboarding/synthesize", {
@@ -195,9 +221,15 @@ function WizardInner() {
       });
       await api.post("/api/onboarding/complete").catch(() => null);
       clearState();
+      setSavePhase("opening");
       setStep("ON_RECORD");
     } catch (cause) {
-      setError(getErrorMessage(cause, "We couldn't save this record yet. Please try again."));
+      setSavePhase("idle");
+      if (cause instanceof Error && cause.message === "Holding not found") {
+        await recoverFromMissingHolding();
+        return;
+      }
+      setError(getErrorMessage(cause, "We couldn't save this yet. Please try again."));
     } finally {
       setSaving(false);
     }
@@ -265,11 +297,14 @@ function WizardInner() {
           placeholder={placeholder}
           rows={6}
           autoFocus
+          disabled={saving || leaving}
           className="w-full resize-none bg-transparent text-base leading-relaxed text-foreground outline-none placeholder:text-muted-foreground/50 font-sans"
         />
         <div className="mt-3 flex items-center justify-between gap-4 border-t border-border/50 pt-3">
           <span className="font-sans text-xs text-muted-foreground">
-            Write the version you would want to defend later.
+            {key === "answer2" && saving
+              ? "Structuring your case and setting up the first monitored version."
+              : "Write the version you would want to defend later."}
           </span>
           <span className="font-mono text-[10px] text-muted-foreground/40">
             {wizardState[key].length} chars
@@ -279,6 +314,19 @@ function WizardInner() {
 
       {error && <p className="font-mono text-sm text-red-600">{error}</p>}
 
+      {key === "answer2" && (saving || savePhase === "opening") && !error && (
+        <div className="border border-border/70 bg-background/55 px-4 py-3">
+          <p className="font-mono text-[10px] uppercase tracking-[0.16em] text-primary">
+            {savePhase === "opening" ? "Opening your position" : "Saving your case"}
+          </p>
+          <p className="mt-1 font-sans text-sm leading-relaxed text-foreground/72">
+            {savePhase === "opening"
+              ? "Your case is saved. Opening the live position page next."
+              : "This usually takes a few seconds while PenKeep turns your answers into a structured case."}
+          </p>
+        </div>
+      )}
+
       <div className="space-y-3">
         <div className="flex items-center gap-4">
           <Button
@@ -286,12 +334,19 @@ function WizardInner() {
             disabled={!holding || wizardState[key].trim().length < 5}
             loading={key === "answer2" && saving}
           >
-            {key === "answer2" ? "Save record" : "Continue"}
+            {key === "answer2"
+              ? savePhase === "opening"
+                ? "Opening your position"
+                : saving
+                  ? "Saving your case"
+                  : "Save case"
+              : "Continue"}
           </Button>
           <button
             type="button"
             onClick={handleSkip}
-            className="font-mono text-xs text-muted-foreground underline underline-offset-4 transition-colors hover:text-foreground"
+            disabled={saving || leaving}
+            className="inline-flex items-center border border-border/60 bg-background/72 px-3 py-2 font-mono text-[10px] uppercase tracking-[0.15em] text-muted-foreground transition-colors hover:border-border hover:text-foreground disabled:opacity-40"
           >
             Skip for now
           </button>
@@ -316,12 +371,12 @@ function WizardInner() {
       ? [
           { label: "Reads the evidence", body: `Filings, news, and earnings for ${holding?.ticker ?? "your position"} get checked against the thesis you just wrote.` },
           { label: "Stays quiet", body: "No pings on ordinary price noise. You hear from us when an assumption is actually tested." },
-          { label: "Keeps the record", body: "Every review and decision is kept next to the original thesis, so hindsight can't rewrite it." },
+          { label: "Keeps the trail", body: "Every review and decision stays next to the original thesis, so hindsight can't rewrite it." },
         ]
       : [
           { label: "Reads the evidence", body: `Filings, news, and earnings for ${holding?.ticker ?? "your position"} get checked against the reason you just wrote.` },
           { label: "Stays quiet", body: "No pings on ordinary price noise. You hear from us when the story is actually tested." },
-          { label: "Keeps the record", body: "Every review and decision is kept next to the original reason, so hindsight can't rewrite it." },
+          { label: "Keeps the trail", body: "Every review and decision stays next to the original reason, so hindsight can't rewrite it." },
         ];
 
   const renderOnRecord = () => (
@@ -332,13 +387,13 @@ function WizardInner() {
             <span className="absolute inline-flex h-full w-full animate-ping rounded-full bg-emerald-500 opacity-60" />
             <span className="relative inline-flex h-1.5 w-1.5 rounded-full bg-emerald-600" />
           </span>
-          On record
+          Saved
         </span>
         <h1 className="font-display italic text-[1.9rem] leading-[1.2] text-foreground tracking-tight">
-          {holding ? `Your reason for ${holding.ticker} is on record.` : "Your first reason is on record."}
+          {holding ? `Your reason for ${holding.ticker} is saved.` : "Your first reason is saved."}
         </h1>
         <p className="max-w-xl font-sans text-sm leading-relaxed text-foreground/75">
-          Your complete written case is saved. The first evidence check runs in the background. From here, three things happen:
+          Your full case is saved. The first evidence check runs in the background. From here, three things happen:
         </p>
       </div>
 
@@ -373,9 +428,21 @@ function WizardInner() {
           placeholder="First name or nickname"
           maxLength={40}
           autoFocus
+          disabled={leaving}
           className="mt-3 w-full bg-transparent font-sans text-base text-foreground outline-none placeholder:text-muted-foreground/50"
         />
       </div>
+
+      {leaving && (
+        <div className="border border-border/70 bg-background/55 px-4 py-3">
+          <p className="font-mono text-[10px] uppercase tracking-[0.16em] text-primary">
+            Opening live position
+          </p>
+          <p className="mt-1 font-sans text-sm leading-relaxed text-foreground/72">
+            Your first case is saved. Bringing {holding?.ticker ?? "the position"} into the live workspace now.
+          </p>
+        </div>
+      )}
 
       <Button onClick={() => void handleEnterProduct()} loading={leaving} disabled={!holding}>
         {holding ? `See ${holding.ticker} live` : "Open your dashboard"} →
@@ -389,7 +456,7 @@ function WizardInner() {
   const sidebarCards = step === "ON_RECORD"
     ? [
         {
-          eyebrow: "Why the record matters",
+          eyebrow: "Why this matters later",
           title: "Six months from now, this page is the antidote to hindsight.",
           body: "Whatever the stock does, you'll know what you believed, what changed, and what you decided.",
         },
@@ -411,7 +478,7 @@ function WizardInner() {
         {
           eyebrow: "Question 2",
           title: "Define what would break the case.",
-          body: "This is the part that keeps the record useful once the stock starts moving.",
+          body: "This is the part that keeps the case useful once the stock starts moving.",
         },
       ];
 
@@ -420,7 +487,7 @@ function WizardInner() {
       <div className="product-shell-glow" />
       <div className="product-main min-h-screen px-4 py-6 sm:px-8">
         <div className="mx-auto max-w-5xl space-y-5">
-          <div className="product-panel product-panel-muted flex items-center justify-between gap-4 px-4 py-3 sm:px-5">
+          <div className="product-panel flex items-center justify-between gap-4 border border-border/60 bg-background/82 px-4 py-3 sm:px-5">
             <span className="font-mono text-[10px] uppercase tracking-[0.2em] text-muted-foreground">
               penKeep
             </span>
@@ -438,7 +505,7 @@ function WizardInner() {
 
           <div className="grid gap-5 xl:grid-cols-[minmax(0,1fr)_18rem]">
             <section className="min-w-0">
-              <div className="product-panel product-panel-muted p-6 sm:p-8">
+              <div className="product-panel border border-border/70 bg-[linear-gradient(180deg,rgba(163,126,79,0.06),rgba(255,255,255,0.96))] p-6 sm:p-8">
                 {step === "ON_RECORD"
                   ? renderOnRecord()
                   : step === "QUESTION_1"
@@ -471,7 +538,7 @@ function WizardInner() {
 
 function SidebarPanel({ eyebrow, title, body }: { eyebrow: string; title: string; body: string }) {
   return (
-    <div className="product-panel p-5">
+    <div className="product-panel border border-border/60 bg-background/82 p-5">
       <p className="font-mono text-[10px] uppercase tracking-[0.16em] text-muted-foreground">{eyebrow}</p>
       <p className="mt-2 font-display text-[1.3rem] italic leading-tight text-foreground">{title}</p>
       <p className="mt-2 font-sans text-sm leading-relaxed text-muted-foreground">{body}</p>

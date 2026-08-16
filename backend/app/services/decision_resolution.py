@@ -21,6 +21,7 @@ from app.models.decision_snapshot import DecisionSnapshot
 from app.models.holding import Holding
 from app.models.monitoring_event import MonitoringEvent
 from app.models.thesis_claim import ThesisClaim
+from app.services.dashboard_coach import sync_dashboard_coach_outcome_for_snapshot
 from app.services.market_data import fetch_company_data, fetch_live_price, fetch_price_on
 from app.services.monitoring import check_metric_watch_hints
 
@@ -224,6 +225,7 @@ async def resolve_snapshot(
             vague=_is_vague(snapshot),
         ),
     }
+    await sync_dashboard_coach_outcome_for_snapshot(db, snapshot=snapshot, now=now)
     return True
 
 

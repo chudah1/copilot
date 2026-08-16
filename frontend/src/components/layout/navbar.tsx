@@ -7,6 +7,7 @@ import { Bell, BookOpenText, BriefcaseBusiness, Menu, Search, X } from "lucide-r
 import useSWR from "swr";
 import { useAuth } from "@/lib/auth";
 import { fetcher } from "@/lib/api";
+import { positionMonitoringHref } from "@/lib/position-links";
 import type { PortfolioPulse } from "@/types";
 
 const NAV_LINKS = [
@@ -42,13 +43,13 @@ export function Navbar() {
     null,
   );
   const alertsHref = primaryReviewPulse
-    ? `/dashboard/positions/${primaryReviewPulse.ticker}?tab=monitoring`
+    ? positionMonitoringHref(primaryReviewPulse.ticker)
     : "/dashboard#positions";
   const reviewStatus = decisionCount > 0
     ? `${decisionCount} decision${decisionCount === 1 ? "" : "s"} waiting`
     : alertCount > 0
       ? `${alertCount} change${alertCount === 1 ? "" : "s"} waiting`
-    : "Nothing waiting";
+    : "All clear";
   const mobileLinks = [
     { href: "/dashboard", label: "Portfolio", icon: BriefcaseBusiness },
     { href: "/research", label: "Research", icon: Search },
@@ -76,6 +77,9 @@ export function Navbar() {
                   : "border-border/70 bg-background/70"
               }`}>
                 <span className={`inline-block h-1.5 w-1.5 rounded-full ${alertCount > 0 ? "bg-amber-500" : "bg-emerald-500"}`} />
+                <span className="font-mono text-[10px] uppercase tracking-[0.14em] text-foreground/45">
+                  Review queue
+                </span>
                 <span className={`font-mono text-[10px] uppercase tracking-[0.14em] ${
                   alertCount > 0 ? "text-amber-700" : "text-muted-foreground"
                 }`}>
@@ -108,7 +112,11 @@ export function Navbar() {
               <>
                 <Link
                   href={alertsHref}
-                  className="relative flex items-center gap-2 border border-border/80 bg-background/70 px-3 py-2 text-muted-foreground transition-colors hover:text-foreground"
+                  className={`relative flex items-center gap-2 border px-3 py-2 transition-colors ${
+                    alertCount > 0
+                      ? "border-amber-500/25 bg-amber-500/8 text-amber-800 hover:border-amber-500/45"
+                      : "border-border/80 bg-background/70 text-muted-foreground hover:text-foreground"
+                  }`}
                   aria-label={reviewStatus}
                 >
                   <Bell className="w-4 h-4" />
@@ -116,14 +124,14 @@ export function Navbar() {
                     Review
                   </span>
                   {alertCount > 0 && (
-                    <span className="inline-flex min-w-5 items-center justify-center bg-destructive px-1.5 py-0.5 font-mono text-[10px] text-white">
+                    <span className="inline-flex min-w-5 items-center justify-center border border-amber-600/20 bg-amber-600/12 px-1.5 py-0.5 font-mono text-[10px] text-amber-900">
                       {alertCount}
                     </span>
                   )}
                 </Link>
                 <button
                   onClick={logout}
-                  className="border border-border/80 px-3 py-2 font-mono text-[10px] uppercase tracking-[0.18em] text-muted-foreground transition-colors hover:border-foreground/20 hover:text-foreground/80"
+                  className="border border-border/80 bg-background/70 px-3 py-2 font-mono text-[10px] uppercase tracking-[0.18em] text-muted-foreground transition-colors hover:border-foreground/20 hover:text-foreground/80"
                 >
                   Sign out
                 </button>
@@ -189,7 +197,7 @@ export function Navbar() {
                     Review
                   </span>
                   {alertCount > 0 && (
-                    <span className="inline-flex min-w-5 items-center justify-center bg-destructive px-1.5 py-0.5 text-[10px] text-white">
+                    <span className="inline-flex min-w-5 items-center justify-center border border-amber-600/20 bg-amber-600/12 px-1.5 py-0.5 text-[10px] text-amber-900">
                       {alertCount}
                     </span>
                   )}
@@ -244,7 +252,7 @@ export function Navbar() {
                   <span className="relative">
                     <Icon className="h-[18px] w-[18px]" strokeWidth={active ? 2.1 : 1.7} />
                     {count && count > 0 ? (
-                      <span className="absolute -right-2.5 -top-1.5 inline-flex min-w-4 items-center justify-center rounded-full bg-destructive px-1 text-[8px] leading-4 text-white">
+                      <span className="absolute -right-2.5 -top-1.5 inline-flex min-w-4 items-center justify-center rounded-full border border-amber-600/20 bg-amber-600/12 px-1 text-[8px] leading-4 text-amber-900">
                         {count}
                       </span>
                     ) : null}

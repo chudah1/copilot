@@ -102,13 +102,18 @@ export function OnboardingBanner({ onVisibilityChange }: { onVisibilityChange?: 
       : null;
 
   return (
-    <div className="flex items-center justify-between gap-4 border border-amber-400/30 bg-amber-50 px-5 py-3">
-      <p className="font-sans text-sm leading-snug text-amber-900">{bannerCopy.body ?? message}</p>
+    <div className="product-panel flex items-center justify-between gap-4 border border-amber-500/25 bg-[linear-gradient(180deg,rgba(245,158,11,0.10),rgba(255,255,255,0.94))] px-5 py-3">
+      <div className="min-w-0 space-y-1">
+        <p className="font-mono text-[10px] uppercase tracking-[0.16em] text-amber-900/70">
+          Continue setup
+        </p>
+        <p className="font-sans text-sm leading-relaxed text-amber-900">{bannerCopy.body ?? message}</p>
+      </div>
       <div className="flex items-center gap-4 shrink-0">
         {actionLabel && (
           <Link
             href={actionHref}
-            className="font-mono text-[10px] uppercase tracking-[0.15em] whitespace-nowrap text-amber-900 hover:text-primary transition-colors"
+            className="border border-amber-900/20 bg-white/70 px-3 py-2 font-mono text-[10px] uppercase tracking-[0.15em] whitespace-nowrap text-amber-900 transition-colors hover:border-amber-900/40"
           >
             {actionLabel}
           </Link>

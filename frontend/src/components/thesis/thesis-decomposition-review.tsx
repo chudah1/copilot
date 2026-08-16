@@ -166,7 +166,7 @@ export function ThesisDecompositionReview({ envelope, loading, saving, onGenerat
 
   if ((isPending || isFailed) && !isReviewable) {
     return (
-      <div className="product-panel p-5 sm:p-6 space-y-3 border-red-200/60 bg-red-500/5">
+      <div className="product-panel border border-red-200/60 bg-red-500/5 p-5 sm:p-6 space-y-3">
         <p className="font-mono text-[10px] uppercase tracking-[0.18em] text-red-600">
           Signal setup failed
         </p>
@@ -220,7 +220,7 @@ export function ThesisDecompositionReview({ envelope, loading, saving, onGenerat
                 Signal setup
               </p>
               <InfoTip label="Signal setup">
-                PenKeep turns the written case into measurable checks. Keep only the signals that genuinely represent what you meant.
+                PenKeep turns the case into measurable checks. Keep only the signals that genuinely represent what you meant.
               </InfoTip>
             </div>
             <p className="font-sans text-sm leading-relaxed text-foreground/80">
@@ -275,7 +275,7 @@ export function ThesisDecompositionReview({ envelope, loading, saving, onGenerat
                   Confidence
                 </p>
                 <InfoTip label="Signal setup confidence">
-                  How confident PenKeep is that it understood and translated the written case correctly. It is not confidence in the stock.
+                  How confident PenKeep is that it understood and translated the case correctly. It is not confidence in the stock.
                 </InfoTip>
               </div>
               <p className="mt-2 font-display text-[1.15rem] italic leading-none text-foreground">
@@ -286,7 +286,7 @@ export function ThesisDecompositionReview({ envelope, loading, saving, onGenerat
         </div>
 
         {!dirty && envelope.status === "draft" && activeCount > 0 && (
-          <p className="mt-4 font-mono text-[9px] uppercase tracking-[0.12em] text-primary/80 border border-primary/20 px-2 py-1 inline-block">
+          <p className="mt-4 inline-block border border-primary/20 px-2 py-1 font-mono text-[9px] uppercase tracking-[0.12em] text-primary/80">
             Setup ready
           </p>
         )}
@@ -319,7 +319,7 @@ export function ThesisDecompositionReview({ envelope, loading, saving, onGenerat
                     {claimActiveSignals} active
                   </span>
                 </div>
-                <blockquote className="border-l-2 border-primary/25 pl-4">
+                <blockquote className="product-panel border border-border/60 bg-background/72 px-4 py-3">
                   <p className="font-display italic text-[1.05rem] leading-snug text-foreground">
                     &ldquo;{claim.claim_text}&rdquo;
                   </p>
@@ -363,10 +363,10 @@ export function ThesisDecompositionReview({ envelope, loading, saving, onGenerat
                             <button
                               key={signal.id}
                               onClick={() => toggleSignal(signal.id)}
-                              className={`w-full flex items-start gap-3 px-4 py-3 text-left transition-all duration-150 border-l-2 border ${
+                              className={`product-panel w-full flex items-start gap-3 px-4 py-3 text-left transition-all duration-150 border ${
                                 selected
-                                  ? "border-l-emerald-500/50 border-border/40 bg-emerald-500/5 hover:bg-emerald-500/8"
-                                  : "border-l-border/40 border-border/30 bg-muted/15 hover:bg-muted/30"
+                                  ? "border-emerald-500/30 bg-emerald-500/5 hover:bg-emerald-500/8"
+                                  : "border-border/50 bg-background/72 hover:border-foreground/20"
                               }`}
                             >
                               {/* Toggle dot */}
@@ -442,7 +442,7 @@ export function ThesisDecompositionReview({ envelope, loading, saving, onGenerat
         <div className="flex items-center gap-2">
           <button
             onClick={onGenerate}
-            className="font-mono text-[9px] uppercase tracking-[0.15em] text-muted-foreground hover:text-foreground transition-colors border border-border/60 px-3 py-1.5 hover:border-border"
+            className="border border-border/60 bg-background/72 px-3 py-1.5 font-mono text-[9px] uppercase tracking-[0.15em] text-muted-foreground transition-colors hover:border-border hover:text-foreground"
           >
             Regenerate
           </button>

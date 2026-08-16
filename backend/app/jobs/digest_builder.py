@@ -175,6 +175,7 @@ def _digest_summary_points(
     observations: dict,
     next_earnings: dict | None = None,
     *,
+    open_loops: list[dict] | None = None,
     investor_profile: InvestorProfile = None,
 ) -> list[str]:
     points: list[str] = []
@@ -192,6 +193,8 @@ def _digest_summary_points(
     if stable and not points:
         prefix = "Stable theses" if investor_profile == "thesis_driven" else "Stable reasons"
         points.append(f"{prefix}: {', '.join(item['ticker'] for item in stable[:3])}")
+    if open_loops and len(points) < 3:
+        points.append(_open_loops_summary_point(open_loops, investor_profile=investor_profile))
     if next_earnings and len(points) < 3:
         days = next_earnings["days_until"]
         if days == 0:
@@ -220,6 +223,43 @@ def _event_rank(event: dict) -> tuple[int, int]:
         verdict_rank.get(event.get("verdict"), 4),
         severity_rank.get(event.get("severity"), 3),
     )
+
+
+def _open_loops_summary_point(
+    open_loops: list[dict],
+    *,
+    investor_profile: InvestorProfile = None,
+) -> str:
+    if not open_loops:
+        return ""
+
+    action_noun = "thesis" if investor_profile == "thesis_driven" else "reason"
+    if len(open_loops) == 1:
+        loop = open_loops[0]
+        return f"Still open: {loop['ticker']} needs a decision on your {action_noun}."
+
+    tickers = ", ".join(loop["ticker"] for loop in open_loops[:3])
+    remainder = len(open_loops) - min(len(open_loops), 3)
+    suffix = f", +{remainder} more" if remainder > 0 else ""
+    return f"Still open: {tickers}{suffix} still need written follow-through."
+
+
+def _serialize_digest_open_loop(loop) -> dict:
+    return {
+        "loop_key": loop.loop_key,
+        "loop_type": loop.loop_type,
+        "holding_id": str(loop.holding_id),
+        "thesis_id": str(loop.thesis_id) if loop.thesis_id else None,
+        "ticker": loop.ticker,
+        "name": loop.name,
+        "title": loop.title,
+        "detail": loop.detail,
+        "opened_at": loop.opened_at.isoformat(),
+        "age_days": loop.age_days,
+        "priority": loop.priority,
+        "cta_label": loop.cta_label,
+        "cta_href": loop.cta_href,
+    }
 
 
 def _signal_status_text(intact_count: int, weakening_count: int) -> str:
@@ -687,6 +727,7 @@ def _render_digest_html(
     *,
     holdings_with_theses: list[dict],
     events_data: list[dict],
+    open_loops: list[dict],
     observations: dict,
     headline: str,
     monitoring_receipt: str,
@@ -841,6 +882,13 @@ def _render_digest_html(
     )
     if reviewed_section:
         parts.append(reviewed_section)
+
+    open_loops_section = _render_open_loops_section(
+        open_loops,
+        investor_profile=investor_profile,
+    )
+    if open_loops_section:
+        parts.append(open_loops_section)
 
     if observations.get("missing_theses"):
         parts.append(
@@ -1017,6 +1065,48 @@ def _render_reviewed_but_dropped_section(
             f'<p style="margin:0;color:{_DZ["muted"]};font-style:italic;">&ldquo;{escape(item["reason"])}&rdquo;</p>'
             f'</div>'
         )
+    return "".join(parts)
+
+
+def _render_open_loops_section(
+    items: list[dict],
+    *,
+    investor_profile: InvestorProfile = None,
+) -> str:
+    if not items:
+        return ""
+
+    intro = (
+        "These are still waiting on a decision, rewrite, or review before the case is truly closed."
+        if investor_profile != "hearsay_driven"
+        else "These are still waiting on a clearer decision, rewrite, or review before the story is truly settled."
+    )
+    parts: list[str] = []
+    parts.append(_section_label("Still open"))
+    parts.append(f'<p style="color:{_DZ["muted"]};margin:6px 0 12px;">{intro}</p>')
+
+    for item in items[:3]:
+        cta_href = f'{settings.frontend_url}{item["cta_href"]}'
+        parts.append(
+            f'<div style="margin:12px 0 14px;padding:12px 14px;border:1px solid {_DZ["line"]};background:{_DZ["card"]};">'
+            f'<p style="margin:0 0 4px;font-family:{_SERIF};font-size:15px;color:{_DZ["ink"]};">'
+            f'<strong>{escape(item["ticker"])}</strong> &mdash; {escape(item["title"])}'
+            f'</p>'
+            f'<p style="margin:0;color:{_DZ["muted"]};line-height:1.55;">{escape(item["detail"])}</p>'
+            f'<p style="margin:10px 0 0;"><a href="{cta_href}" '
+            f'style="color:{_DZ["accent"]};text-decoration:none;font-weight:600;">{escape(item["cta_label"])} &rarr;</a></p>'
+            '</div>'
+        )
+
+    remaining = len(items) - min(len(items), 3)
+    if remaining > 0:
+        noun = "loop" if remaining == 1 else "loops"
+        parts.append(
+            f'<p style="margin:6px 0;color:{_DZ["faint"]};font-size:12px;">'
+            f'+{remaining} more open {noun} waiting on the dashboard.'
+            "</p>"
+        )
+
     return "".join(parts)
 
 
@@ -1217,14 +1307,18 @@ async def build_and_persist_user_digest(
 
     # Decision mirror — the week's reads + open conviction bets.
     from app.services.decision_mirror import get_mirror_for_digest
+    from app.services.open_loops import list_open_loops
 
     mirror = await get_mirror_for_digest(
         db, user_id, period_start=period_start, period_end=period_end, now=now
     )
+    open_loops = await list_open_loops(db, user=user, now=now)
+    digest_open_loops = [_serialize_digest_open_loop(loop) for loop in open_loops[:3]]
 
     html_content = _render_digest_html(
         holdings_with_theses=holdings_with_theses,
         events_data=events_data,
+        open_loops=digest_open_loops,
         observations=observations,
         headline=headline,
         monitoring_receipt=receipt,
@@ -1252,10 +1346,13 @@ async def build_and_persist_user_digest(
                 events_data,
                 observations,
                 next_earnings,
+                open_loops=digest_open_loops,
                 investor_profile=investor_profile,
             ),
             "missing_theses_count": len(missing_theses),
             "stale_theses_count": len(stale_theses),
+            "open_loops_count": len(open_loops),
+            "open_loops": digest_open_loops,
             "concentration_warning": concentration_warnings,
             "monitoring_receipt": receipt,
             "quiet_nudge": quiet_nudge,

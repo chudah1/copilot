@@ -233,6 +233,8 @@ async def test_attention_warning_when_dismissals_broke(db, test_user):
     assert attn["tone"] == "warning"
     assert attn["instances"] == 3 and attn["hits"] == 2
     assert "under-reacting" in attn["detail"]
+    assert len(attn["examples"]) >= 1
+    assert attn["examples"][0]["ticker"] == "MSFT"
 
 
 async def test_attention_calm_when_dismissals_held_up(db, test_user):
@@ -273,3 +275,5 @@ async def test_patterns_endpoint(client, auth_headers, db, test_user):
     data = resp.json()
     assert data["resolved_count"] == 3
     assert any(p["kind"] == "attention" for p in data["patterns"])
+    attention = next(p for p in data["patterns"] if p["kind"] == "attention")
+    assert "examples" in attention

@@ -160,6 +160,33 @@ def _conditions_outcome(resolution_json: dict | None) -> str | None:
     return "broke" if any(s is False for s in states) else "held"
 
 
+def _pattern_examples(
+    snapshots: list[DecisionSnapshot],
+    holdings_by_id: dict[uuid.UUID, Holding],
+    *,
+    limit: int = 3,
+) -> list[dict]:
+    rows = sorted(
+        snapshots,
+        key=lambda snap: _norm(snap.resolved_at) or _norm(snap.decided_at) or datetime.min.replace(tzinfo=timezone.utc),
+        reverse=True,
+    )
+    examples: list[dict] = []
+    for snap in rows[:limit]:
+        holding = holdings_by_id.get(snap.holding_id)
+        examples.append(
+            {
+                "ticker": _clean(holding.ticker) if holding else "?",
+                "bucket": snap.bucket,
+                "bet_text": snap.bet_text,
+                "read": (snap.resolution_json or {}).get("read"),
+                "decided_at": _norm(snap.decided_at).isoformat() if _norm(snap.decided_at) else None,
+                "resolved_at": _norm(snap.resolved_at).isoformat() if _norm(snap.resolved_at) else None,
+            }
+        )
+    return examples
+
+
 async def get_decision_patterns(
     db: AsyncSession,
     user_id: uuid.UUID,
@@ -179,6 +206,12 @@ async def get_decision_patterns(
             )
         )
     ).scalars().all()
+    holdings = (
+        await db.execute(
+            select(Holding).where(Holding.user_id == user_id)
+        )
+    ).scalars().all()
+    holdings_by_id = {holding.id: holding for holding in holdings}
 
     patterns: list[dict] = []
 
@@ -192,6 +225,7 @@ async def get_decision_patterns(
                 "headline": f"Of {len(dismissed)} early warnings you dismissed, {len(hits)} were tied to a reason that later broke.",
                 "detail": "You may be under-reacting to fundamental signals — worth a second look before you wave off the next one.",
                 "instances": len(dismissed), "hits": len(hits),
+                "examples": _pattern_examples(hits or dismissed, holdings_by_id),
             })
         else:
             patterns.append({
@@ -199,31 +233,34 @@ async def get_decision_patterns(
                 "headline": f"Your {len(dismissed)} dismissed warnings have held up — none of those reasons later broke.",
                 "detail": "Your read on what's noise has been sound so far.",
                 "instances": len(dismissed), "hits": 0,
+                "examples": _pattern_examples(dismissed, holdings_by_id),
             })
 
     # Outcome computed once per snapshot, reused for both the count and the gate.
-    outcomes = [(s.bucket, _conditions_outcome(s.resolution_json)) for s in snaps]
+    outcomes = [(s, s.bucket, _conditions_outcome(s.resolution_json)) for s in snaps]
 
     # Conviction (held through a warning).
-    held = [o for b, o in outcomes if b == "held" and o is not None]
+    held = [(s, o) for s, b, o in outcomes if b == "held" and o is not None]
     if len(held) >= min_instances:
-        ok = sum(1 for o in held if o == "held")
+        ok = sum(1 for _, o in held if o == "held")
         patterns.append({
             "kind": "conviction", "tone": "neutral",
             "headline": f"When you held through a warning, the condition you were watching still held {ok} of {len(held)} times.",
             "detail": "How your hold calls have tracked against the reasons you wrote.",
             "instances": len(held), "hits": ok,
+            "examples": _pattern_examples([snap for snap, _ in held], holdings_by_id),
         })
 
     # Exit (reasoning-not-regret: did the break hold up).
-    exited = [o for b, o in outcomes if b == "exited" and o is not None]
+    exited = [(s, o) for s, b, o in outcomes if b == "exited" and o is not None]
     if len(exited) >= min_instances:
-        broke = sum(1 for o in exited if o == "broke")
+        broke = sum(1 for _, o in exited if o == "broke")
         patterns.append({
             "kind": "exit", "tone": "neutral",
             "headline": f"When you exited, the break you flagged held up {broke} of {len(exited)} times.",
             "detail": "Whether the reasons you exited on kept playing out.",
             "instances": len(exited), "hits": broke,
+            "examples": _pattern_examples([snap for snap, _ in exited], holdings_by_id),
         })
 
     return {"patterns": patterns, "resolved_count": len(snaps)}

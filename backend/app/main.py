@@ -92,6 +92,9 @@ app.include_router(portfolio_router)
 from app.routes.monitoring import router as monitoring_router
 app.include_router(monitoring_router)
 
+from app.routes.dashboard import router as dashboard_router
+app.include_router(dashboard_router)
+
 from app.routes.settings import router as settings_router
 app.include_router(settings_router)
 

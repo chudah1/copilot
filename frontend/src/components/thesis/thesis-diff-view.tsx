@@ -117,7 +117,7 @@ function SignalRow({ signalWithEvents }: { signalWithEvents: SignalWithEvents })
           </>
         ) : (
           <p className="font-sans text-xs italic leading-relaxed text-muted-foreground">
-            No evidence yet.
+            Nothing tested yet.
           </p>
         )}
       </div>
@@ -168,7 +168,7 @@ function ClaimCard({
       <div className="px-5 py-4 sm:px-6">
         {activeSignals.length === 0 ? (
           <p className="font-sans text-sm italic leading-relaxed text-muted-foreground">
-            No active signals for this claim.
+            No active signals on this claim.
           </p>
         ) : (
           activeSignals.map((signalWithEvents) => (
@@ -193,7 +193,7 @@ export function ThesisDiffView({
     return (
       <div className="product-panel p-5 sm:p-6">
         <p className="font-sans text-sm italic leading-relaxed text-muted-foreground">
-          No signal map yet. Generate signals first.
+          No signal map yet. Generate signals to start tracking this case.
         </p>
       </div>
     );

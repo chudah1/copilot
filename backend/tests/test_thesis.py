@@ -777,6 +777,105 @@ async def test_decompose_auto_activates_direct_high_confidence_signal_and_syncs_
     assert interpretation["watch_hints"][0]["metric"] == "revenue_growth_yoy"
 
 
+async def test_decompose_with_mixed_direct_and_review_required_signals_returns_partially_confirmed(client, auth_headers, holding):
+    create = await client.post(
+        "/api/theses",
+        json={
+            "holding_id": holding["id"],
+            "status": "active",
+            "thesis_kind": "company",
+            "why_own_it": "Revenue should keep growing while supplier demand stays healthy.",
+            "what_would_change_my_mind": "Material deterioration in fundamentals.",
+            "confidence": "medium",
+            "review_cadence_days": 7,
+            "source": "user",
+        },
+        headers=auth_headers,
+    )
+    thesis_id = create.json()["id"]
+    gateway_result = ReasoningResult(
+        success=True,
+        status="success",
+        provider="anthropic",
+        model="claude-test",
+        prompt_version="v1",
+        normalized_output={
+            "reason_type": "business_performance",
+            "monitorability": "medium",
+            "decomposition_confidence": 0.81,
+            "claims": [
+                {
+                    "claim_text": "Revenue should keep growing.",
+                    "claim_type": "growth",
+                    "confidence": 0.9,
+                    "entities": [
+                        {
+                            "entity_name": "Apple Inc",
+                            "entity_ticker": "AAPL",
+                            "entity_type": "held_company",
+                            "relation_type": "validated_by",
+                            "rationale": "Direct company execution matters.",
+                            "confidence": 0.96,
+                            "confirmation_required": False,
+                            "signals": [
+                                {
+                                    "signal_type": "revenue_growth",
+                                    "signal_label": "Apple revenue growth",
+                                    "signal_config_json": {"operator": ">=", "threshold": 0.0},
+                                    "rationale": "Revenue growth should stay positive.",
+                                    "confidence": 0.91,
+                                    "confirmation_required": False,
+                                }
+                            ],
+                        },
+                        {
+                            "entity_name": "TSMC",
+                            "entity_ticker": "TSM",
+                            "entity_type": "supplier",
+                            "relation_type": "validated_by",
+                            "rationale": "Supplier demand is a proxy check.",
+                            "confidence": 0.7,
+                            "confirmation_required": True,
+                            "signals": [
+                                {
+                                    "signal_type": "news_topic",
+                                    "signal_label": "TSMC demand commentary",
+                                    "signal_config_json": {},
+                                    "rationale": "Proxy commentary needs review first.",
+                                    "confidence": 0.68,
+                                    "confirmation_required": True,
+                                }
+                            ],
+                        },
+                    ],
+                }
+            ],
+        },
+        raw_output={"provider": "anthropic"},
+        confidence=0.81,
+        latency_ms=120,
+        failure_reason=None,
+    )
+    with patch("app.services.decomposition.get_reasoning_gateway", return_value=MockGateway(gateway_result)):
+        response = await client.post(f"/api/theses/{thesis_id}/decompose", headers=auth_headers)
+
+    assert response.status_code == 201
+    envelope = response.json()
+    assert envelope["status"] == "partially_confirmed"
+    signals = [
+        signal
+        for claim in envelope["decomposition"]["claims"]
+        for entity in claim["entities"]
+        for signal in entity["signals"]
+    ]
+    assert any(signal["signal_type"] == "revenue_growth" and signal["active"] is True for signal in signals)
+    assert any(signal["signal_type"] == "news_topic" and signal["active"] is False for signal in signals)
+
+    latest = await client.get(f"/api/theses/{thesis_id}/decomposition", headers=auth_headers)
+    assert latest.status_code == 200
+    assert latest.json()["status"] == "partially_confirmed"
+
+
 async def test_proxy_signal_remains_inactive_and_not_projected(client, auth_headers, holding):
     create = await client.post(
         "/api/theses",

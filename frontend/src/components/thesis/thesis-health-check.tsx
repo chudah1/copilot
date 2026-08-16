@@ -44,17 +44,17 @@ export function ThesisHealthCheck({
     : investorProfile === "hearsay_driven"
       ? {
           title: "Reason check",
-          loading: "Checking whether your written reason still lines up with live market data...",
+          loading: "Checking whether your reason still lines up with live market data...",
           conditions: "What must stay true",
           findings: "What we found",
           empty: "Nothing jumped out. The reason you wrote still looks intact.",
         }
       : {
-          title: "Reality Check",
-          loading: "Checking your thesis against live market data...",
-          conditions: "Your conditions",
+          title: "Reason check",
+          loading: "Checking your reason against live market data...",
+          conditions: "What must stay true",
           findings: "What we found",
-          empty: "Nothing jumped out. Your conditions still look intact.",
+          empty: "Nothing jumped out. Your reason still looks intact.",
         };
   if (loading) {
     return (
@@ -88,8 +88,8 @@ export function ThesisHealthCheck({
           </p>
           <p className="font-sans text-sm leading-relaxed text-foreground/80">
             {checksOnly
-              ? "Baseline market conditions checked against the written case."
-              : "Live data checked against the written case."}
+              ? "Baseline market conditions checked against your reason."
+              : "Live data checked against your reason."}
           </p>
         </div>
         <Badge className={`${assessment.className} shrink-0`}>
@@ -214,7 +214,7 @@ export function ThesisHealthCheck({
 
         {checksOnly && (
           <p className="text-sm text-muted-foreground">
-            No fresh event, filing, or earnings signal was flagged in this pass. This only confirms the written numeric conditions we could test today.
+            No fresh event, filing, or earnings signal was flagged in this pass. This only confirms the numeric conditions we could test today.
           </p>
         )}
 

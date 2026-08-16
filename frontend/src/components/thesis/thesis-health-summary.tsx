@@ -30,11 +30,11 @@ export function ThesisHealthSummary({ summary }: Props) {
       </Card>
       <Card>
         <CardHeader className="pb-2">
-          <CardTitle className="text-sm font-medium text-muted-foreground">Review Debt</CardTitle>
+          <CardTitle className="text-sm font-medium text-muted-foreground">Refresh Queue</CardTitle>
         </CardHeader>
         <CardContent>
           <p className="text-2xl font-bold text-orange-500">{summary.theses_need_review}</p>
-          <p className="text-sm text-muted-foreground">{summary.stale_theses_count} stale theses</p>
+          <p className="text-sm text-muted-foreground">{summary.stale_theses_count} due for refresh</p>
         </CardContent>
       </Card>
       <Card>

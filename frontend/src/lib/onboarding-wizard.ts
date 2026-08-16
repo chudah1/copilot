@@ -50,3 +50,19 @@ export function selectLargestUncoveredHolding(
       return valueDifference || a.ticker.localeCompare(b.ticker);
     })[0] ?? null;
 }
+
+export function recoverWizardStateForMissingHolding(
+  holdings: Holding[],
+  theses: Thesis[],
+  previous: WizardState,
+): WizardState | null {
+  const nextHolding = selectLargestUncoveredHolding(holdings, theses);
+  if (!nextHolding) return null;
+
+  return {
+    holdingId: nextHolding.id,
+    investorProfile: previous.investorProfile,
+    answer1: "",
+    answer2: "",
+  };
+}

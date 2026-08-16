@@ -53,7 +53,7 @@ function AuditResultItem({ item }: { item: HistoricalAuditResultItem }) {
               href={url}
               target="_blank"
               rel="noopener noreferrer"
-              className="hover:underline"
+              className="transition-colors hover:text-primary"
             >
               {item.description}
             </a>
@@ -87,8 +87,11 @@ export function HistoricalAuditCard({ audit }: Props) {
   const [showAll, setShowAll] = useState(false);
   if (audit?.status === "failed") {
     return (
-      <div className="rounded-lg border border-border/60 bg-muted/30 p-4 mt-4">
-        <p className="text-sm text-muted-foreground">
+      <div className="product-panel p-5 sm:p-6">
+        <p className="font-mono text-[10px] uppercase tracking-[0.18em] text-muted-foreground">
+          Recent evidence check
+        </p>
+        <p className="mt-2 text-sm text-muted-foreground">
           We couldn&apos;t complete the 90-day evidence check.
         </p>
       </div>
@@ -97,7 +100,10 @@ export function HistoricalAuditCard({ audit }: Props) {
 
   if (!audit || audit.status === "pending") {
     return (
-      <div className="rounded-lg border border-border/60 bg-muted/30 p-4 mt-4">
+      <div className="product-panel p-5 sm:p-6">
+        <p className="font-mono text-[10px] uppercase tracking-[0.18em] text-muted-foreground">
+          Recent evidence check
+        </p>
         <div className="flex items-center gap-2 text-sm text-muted-foreground">
           <span className="h-3 w-3 rounded-full border-2 border-muted-foreground/40 border-t-foreground animate-spin" />
           Checking evidence from the past 90 days…
@@ -108,8 +114,11 @@ export function HistoricalAuditCard({ audit }: Props) {
 
   if (audit.status === "empty") {
     return (
-      <div className="rounded-lg border border-border/60 bg-muted/30 p-4 mt-4">
-        <p className="text-sm text-muted-foreground">
+      <div className="product-panel p-5 sm:p-6">
+        <p className="font-mono text-[10px] uppercase tracking-[0.18em] text-muted-foreground">
+          Recent evidence check
+        </p>
+        <p className="mt-2 text-sm text-muted-foreground">
           We didn&apos;t find evidence that directly tested this case in the past 90 days.
         </p>
       </div>
@@ -122,21 +131,23 @@ export function HistoricalAuditCard({ audit }: Props) {
   const visibleResults = showAll ? results : results.slice(0, 3);
 
   return (
-    <div className="rounded-lg border border-border/60 bg-card p-4 mt-4">
-      <div className="mb-3 flex items-center gap-1.5">
-        <p className="font-mono text-[10px] uppercase tracking-[0.2em] text-muted-foreground">
-          Evidence from the past 90 days
+    <div className="product-panel p-5 sm:p-6">
+      <div className="space-y-2">
+        <div className="flex items-center gap-1.5">
+          <p className="font-mono text-[10px] uppercase tracking-[0.2em] text-muted-foreground">
+            Recent evidence check
+          </p>
+          <InfoTip label="90-day evidence check" align="end">
+            A one-off look back when the case is created. Held up supports it, Against weakens it, Background is context, and Needs review calls for a closer look.
+          </InfoTip>
+        </div>
+        <p className="text-sm leading-relaxed text-foreground/80">
+          {coverageOnly
+            ? "The lookback was incomplete, so treat a quiet read as missing evidence rather than proof the case held."
+            : "A look at how recent evidence connected to the case you wrote."}
         </p>
-        <InfoTip label="90-day evidence check" align="end">
-          A one-off look back when the case is created. Held up supports it, Against weakens it, Background is context, and Needs review calls for a closer look.
-        </InfoTip>
       </div>
-      <p className="text-sm font-medium text-foreground mb-3">
-        {coverageOnly
-          ? "The evidence check was incomplete, so do not treat a quiet result as proof that the case held up."
-          : "Here is how recent evidence relates to the case you just wrote."}
-      </p>
-      <div>
+      <div className="mt-4">
         {visibleResults.map((item) => (
           <AuditResultItem
             key={`${item.event_type}-${item.event_date ?? "nodate"}-${item.verdict ?? item.severity}-${item.description.slice(0, 20)}`}
@@ -147,7 +158,7 @@ export function HistoricalAuditCard({ audit }: Props) {
       {results.length > 3 && (
         <button
           onClick={() => setShowAll((current) => !current)}
-          className="mt-3 font-mono text-[10px] uppercase tracking-[0.15em] text-primary hover:text-primary/75"
+          className="mt-4 font-mono text-[10px] uppercase tracking-[0.15em] text-primary hover:text-primary/75"
         >
           {showAll ? "Show less" : `See all ${results.length} evidence items`}
         </button>

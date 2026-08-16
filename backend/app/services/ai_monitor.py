@@ -20,6 +20,19 @@ class ClassificationResult:
     direction: str = ""
 
 
+def _provider_failure_kind(exc: Exception) -> str:
+    message = str(exc).lower()
+    if "credit balance is too low" in message or "insufficient_quota" in message or "quota" in message:
+        return "credits_exhausted"
+    if "api key not configured" in message or "not configured" in message:
+        return "not_configured"
+    if "timeout" in message:
+        return "timeout"
+    if "connection" in message:
+        return "connection_error"
+    return type(exc).__name__
+
+
 _CLASSIFY_SYSTEM = """You classify new data against an investor's written reason for holding a stock.
 
 Classify as: "skip" | "info" | "warning" | "thesis_breaking"
@@ -272,6 +285,7 @@ async def classify_event(
         ticker=ticker,
         company_name=company_name,
     )
+    anthropic_failed = False
     if settings.anthropic_api_key:
         try:
             client = anthropic.AsyncAnthropic(api_key=settings.anthropic_api_key)
@@ -301,7 +315,14 @@ async def classify_event(
                 direction=parsed.direction,
             )
         except Exception as e:
-            logger.warning("Anthropic classification failed (%s), trying OpenAI: %s", type(e).__name__, e)
+            anthropic_failed = True
+            logger.warning(
+                "[MONITOR-DIAG] classification provider failed provider=anthropic kind=%s ticker=%s company=%s detail=%s",
+                _provider_failure_kind(e),
+                ticker or "",
+                company_name or "",
+                e,
+            )
 
     if settings.openai_api_key:
         try:
@@ -327,6 +348,14 @@ async def classify_event(
             parsed = _normalize_classification_result(_parse_classification_response(text))
             if parsed.severity == "skip":
                 return None
+            if anthropic_failed:
+                logger.info(
+                    "[MONITOR-DIAG] classification provider fallback_succeeded provider=openai ticker=%s company=%s severity=%s direction=%s",
+                    ticker or "",
+                    company_name or "",
+                    parsed.severity,
+                    parsed.direction or "neutral",
+                )
             return ClassificationResult(
                 severity=parsed.severity,
                 analysis=_normalize_analysis_text(
@@ -338,11 +367,24 @@ async def classify_event(
                 direction=parsed.direction,
             )
         except Exception as e:
-            logger.error("OpenAI classification also failed (%s): %s", type(e).__name__, e)
+            logger.error(
+                "[MONITOR-DIAG] classification provider failed provider=openai kind=%s ticker=%s company=%s detail=%s",
+                _provider_failure_kind(e),
+                ticker or "",
+                company_name or "",
+                e,
+            )
 
     # Qualitative evidence needs an actual thesis judgment. Manufacturing a
     # warning when every classifier is unavailable turns an outage into noise.
     # The monitoring pipeline separately preserves objective threshold breaches
     # and signal-bound transcript evidence, so returning None here stays quiet
     # without hiding deterministic changes.
+    logger.warning(
+        "[MONITOR-DIAG] classification unavailable returning_none ticker=%s company=%s anthropic_enabled=%s openai_enabled=%s",
+        ticker or "",
+        company_name or "",
+        bool(settings.anthropic_api_key),
+        bool(settings.openai_api_key),
+    )
     return None

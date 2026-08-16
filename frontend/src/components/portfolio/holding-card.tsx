@@ -1,6 +1,7 @@
 "use client";
 
 import Link from "next/link";
+import { positionDetailHref } from "@/lib/position-links";
 import { formatCurrency, formatPercent } from "@/lib/utils";
 import type { Holding, Thesis, HoldingPulse, UpcomingEarnings } from "@/types";
 import { WatchReceipt } from "./watch-receipt";
@@ -17,9 +18,9 @@ interface Props {
 function pulseConfig(pulse: HoldingPulse | undefined, hasThesis: boolean) {
   if (!hasThesis) return { color: "bg-border", label: "No reason yet", labelColor: "text-muted-foreground/50" };
   const s = pulse?.pulse_status ?? "intact";
-  if (s === "review") return { color: "bg-red-500", label: "Review", labelColor: "text-red-600" };
+  if (s === "review") return { color: "bg-red-500", label: "Review now", labelColor: "text-red-600" };
   if (s === "watch") return { color: "bg-amber-500", label: "Watch", labelColor: "text-amber-700" };
-  return { color: "bg-emerald-500", label: "Intact", labelColor: "text-emerald-700" };
+  return { color: "bg-emerald-500", label: "Steady", labelColor: "text-emerald-700" };
 }
 
 export function HoldingCard({ holding, thesis, pulse, earnings, onGenerateDraft, index = 0 }: Props) {
@@ -36,7 +37,7 @@ export function HoldingCard({ holding, thesis, pulse, earnings, onGenerateDraft,
 
   return (
     <Link
-      href={`/dashboard/positions/${holding.ticker}`}
+      href={positionDetailHref(holding.ticker)}
       className="group block border-b border-border/50 py-4 transition-colors hover:bg-secondary/60"
       style={{ animationDelay: `${index * 35}ms` }}
     >

@@ -31,9 +31,12 @@ export function DigestCountdown({ nextDigestAt }: { nextDigestAt: string | null 
   });
 
   return (
-    <div className="flex items-baseline gap-2">
+    <div className="flex flex-wrap items-center gap-x-2 gap-y-1">
       <span className="font-mono text-[13px] font-medium text-primary tabular-nums">
         {countdown}
+      </span>
+      <span className="font-sans text-xs text-foreground/78">
+        until the next review digest
       </span>
       <span className="font-mono text-[10px] text-muted-foreground/70">
         {dateLabel}

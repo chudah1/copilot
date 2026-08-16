@@ -60,9 +60,9 @@ export function MonitoringTab({
 }: MonitoringTabProps) {
   if (!hasThesis) {
     return (
-      <section className="product-panel product-panel-muted p-5 sm:p-6">
+      <section className="product-panel border border-border/70 bg-[linear-gradient(180deg,rgba(163,126,79,0.05),rgba(255,255,255,0.96))] p-5 sm:p-6">
         <p className="font-mono text-[10px] uppercase tracking-[0.2em] text-primary">
-          Monitoring is off
+          Set up monitoring
         </p>
         <h2 className="mt-2 font-display italic text-[1.6rem] leading-tight text-foreground sm:text-[1.85rem]">
           {emptyCopy.title}
@@ -81,32 +81,45 @@ export function MonitoringTab({
   }
 
   const noCurrentEvidence = unreviewedEvents === 0;
+  const evidenceHeadline = noCurrentEvidence
+    ? "Nothing new needs your decision."
+    : `${unreviewedEvents} new evidence item${unreviewedEvents === 1 ? "" : "s"} arrived.`;
   const monitoringStatus = decompositionLoading
-    ? "Monitoring checks are being updated."
+    ? "Monitoring checks are updating."
     : hasSignals
       ? `${activeSignalCount} monitoring check${activeSignalCount === 1 ? " is" : "s are"} active.`
-      : "The written case is saved, but its monitoring checks still need confirmation.";
+      : investorProfile === "thesis_driven"
+        ? "The thesis is saved. Confirm the suggested checks to finish setup."
+        : investorProfile === "hearsay_driven"
+          ? "The reason is saved. Confirm the suggested checks to finish setup."
+          : "Your notes are saved. Confirm the suggested checks to finish setup.";
 
   return (
     <div className="space-y-8">
-      <section className="product-panel product-panel-muted p-5 sm:p-6">
+      <section className="product-panel border border-border/70 bg-[linear-gradient(180deg,rgba(163,126,79,0.05),rgba(255,255,255,0.96))] p-5 sm:p-6">
         <div className="flex items-center gap-1.5">
           <p className="font-mono text-[10px] uppercase tracking-[0.2em] text-primary">
             What changed
           </p>
           <InfoTip label="What changed">
-            This page shows evidence that supports or challenges something in your written case. Evidence already reviewed stays in History.
+            {investorProfile === "thesis_driven"
+              ? "This page shows evidence that supports or challenges something in your thesis. Reviewed items move to the review trail."
+              : investorProfile === "hearsay_driven"
+                ? "This page shows evidence that supports or challenges something in your reason. Reviewed items move to the review trail."
+                : "This page shows evidence that supports or challenges something in your reason. Reviewed items move to the review trail."}
           </InfoTip>
         </div>
         <h2 className="mt-2 font-display italic text-[1.6rem] leading-tight text-foreground sm:text-[1.85rem]">
-          {noCurrentEvidence
-            ? "No new evidence needs a decision."
-            : `${unreviewedEvents} evidence item${unreviewedEvents === 1 ? "" : "s"} need your review.`}
+          {evidenceHeadline}
         </h2>
         <p className="mt-2 max-w-2xl font-sans text-sm leading-relaxed text-foreground/80">
           {noCurrentEvidence
             ? calmState.body
-            : "Each item below shows the part of your written case it affects. You decide whether the reason still holds."}
+            : investorProfile === "hearsay_driven"
+              ? "Each item below shows the part of your reason it touches. Some items only add context; stronger evidence will ask for a real decision."
+            : investorProfile === "thesis_driven"
+                ? "Each item below shows the part of your thesis it touches. Some items only add context; stronger evidence will ask for a real decision."
+                : "Each item below shows the part of your reason it touches. Some items only add context; stronger evidence will ask for a real decision."}
         </p>
         <div className="mt-4 border-t border-border/60 pt-3">
           <p className="font-sans text-xs leading-relaxed text-muted-foreground">
@@ -120,6 +133,7 @@ export function MonitoringTab({
         <ThesisCheckIn
           thesisId={thesisId}
           ticker={ticker}
+          investorProfile={investorProfile}
           writtenCase={writtenCase}
           onFlagEvent={onFlagEvent}
           onAfterSubmit={onAfterCheckIn}
@@ -138,11 +152,13 @@ export function MonitoringTab({
         !decompositionLoading &&
         supportingItems.length === 0 &&
         reviewedItems.length === 0 && (
-          <div className="border border-border/50 bg-card/60 px-4 py-3">
+          <div className="product-panel border border-border/60 bg-background/72 px-4 py-4">
             <p className="font-sans text-sm leading-relaxed text-muted-foreground">
               {investorProfile === "thesis_driven"
-                ? "Monitoring is active. No public evidence has tested the written case yet."
-                : "Monitoring is active. No public evidence has tested the written reason yet."}
+                ? "Nothing public is asking you to revisit this thesis yet."
+                : investorProfile === "hearsay_driven"
+                  ? "Nothing public is asking you to revisit this reason yet."
+                  : "Nothing public is asking you to revisit this reason yet."}
             </p>
           </div>
         )}

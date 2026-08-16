@@ -1,9 +1,11 @@
 "use client";
 
 import Link from "next/link";
+import { useRouter } from "next/navigation";
 import { motion } from "framer-motion";
 import { formatAssumptionLabel } from "@/lib/assumption-label";
 import { tightenInvestorCopy } from "@/lib/investor-language";
+import { positionBlindSpotHref, positionDetailHref } from "@/lib/position-links";
 import { formatCurrency, formatPercent } from "@/lib/utils";
 import { classifyCaseQuality, getDecisionState } from "@/lib/decision-state";
 import { aiAssistWeakMessaging } from "@/lib/ai-assisted-thesis";
@@ -29,6 +31,12 @@ export function cardStatusCopy(args: {
   investorProfile?: "thesis_driven" | "hearsay_driven" | null;
 }) {
   const { hasThesis, pulse, thesis, investorProfile } = args;
+  const noun =
+    investorProfile === "hearsay_driven"
+      ? "reason"
+      : investorProfile === "thesis_driven"
+        ? "thesis"
+        : "reason";
   const aiAssistCopy = aiAssistWeakMessaging(investorProfile);
   const assumptionLabel = formatAssumptionLabel(pulse?.assumption_label, investorProfile, {
     maxLength: 54,
@@ -41,15 +49,19 @@ export function cardStatusCopy(args: {
   const decisionState = getDecisionState({ thesis, pulse });
   if (decisionState.kind === "needs_written_case" || !hasThesis) {
     return {
-      eyebrow: "Missing",
+      eyebrow: "First step",
       headline:
         investorProfile === "hearsay_driven"
           ? "No reason yet."
-          : "No thesis yet.",
+          : investorProfile === "thesis_driven"
+            ? "No thesis yet."
+            : "No reason yet.",
       detail:
         investorProfile === "hearsay_driven"
-          ? "Write it so it can be tracked."
-          : "Write it so it can be tracked.",
+          ? "Write it down so signal and noise do not blur together."
+          : investorProfile === "thesis_driven"
+            ? "Write it down so monitoring has something real to test."
+            : "Write it down so monitoring has something real to test.",
       tone: "text-muted-foreground/70",
     };
   }
@@ -57,7 +69,7 @@ export function cardStatusCopy(args: {
   if (decisionState.kind === "needs_decision") {
     return {
       eyebrow: "Needs decision",
-      headline: `${assumptionLabel} needs a call.`,
+      headline: `${assumptionLabel} needs your read.`,
       detail: pulseReason || "Something meaningful changed.",
       tone: "text-red-600",
     };
@@ -66,7 +78,7 @@ export function cardStatusCopy(args: {
   if (decisionState.kind === "changed") {
     return {
       eyebrow: "Changed",
-      headline: `${assumptionLabel} is under pressure.`,
+      headline: `${assumptionLabel} is being tested.`,
       detail: pulseReason || "Not broken, but no longer quiet.",
       tone: "text-amber-700",
     };
@@ -75,49 +87,38 @@ export function cardStatusCopy(args: {
   if (quality.kind === "weak") {
     const assisted = thesis?.source === "ai_assisted";
     return {
-      eyebrow: "Calm",
+      eyebrow: "Needs clarity",
       headline:
         assisted
           ? aiAssistCopy.cardHeadline
-          : investorProfile === "hearsay_driven"
-            ? "This reason is too soft."
-            : "This thesis is too soft.",
-      detail: assisted ? aiAssistCopy.cardDetail : "Too vague to trust.",
+          : `This ${noun} still needs a clearer edge.`,
+      detail: assisted ? aiAssistCopy.cardDetail : "Clarify the break condition before you size it with conviction.",
       tone: "text-emerald-700",
     };
   }
 
   if (quality.kind === "review_overdue") {
     return {
-      eyebrow: "Calm",
-      headline:
-        investorProfile === "hearsay_driven"
-          ? "Reason intact."
-          : "Thesis intact.",
-      detail: `${quality.daysOld}d old. Cadence ${quality.cadenceDays}d.`,
+      eyebrow: "Refresh due",
+      headline: `This ${noun} is due for a refresh.`,
+      detail: `${quality.daysOld}d since the last refresh. Reconfirm it soon.`,
       tone: "text-emerald-700",
     };
   }
 
   if (quality.kind === "workable") {
     return {
-      eyebrow: "Calm",
-      headline:
-        investorProfile === "hearsay_driven"
-          ? "The reason needs one clearer condition."
-          : "The written case needs one clearer condition.",
-      detail: "Monitoring is active, but one part is still broad.",
+      eyebrow: "Can sharpen",
+      headline: `This ${noun} needs one sharper rule.`,
+      detail: "One watch rule can still be more specific.",
       tone: "text-emerald-700",
     };
   }
 
   return {
-    eyebrow: "Calm",
-    headline:
-      investorProfile === "hearsay_driven"
-        ? "Reason intact."
-        : "Thesis intact.",
-    detail: "Nothing needs a call right now.",
+    eyebrow: "Quiet",
+    headline: "Calm right now.",
+    detail: "Nothing active needs your call.",
     tone: "text-emerald-700",
   };
 }
@@ -133,7 +134,6 @@ interface PositionCardProps {
   earnings?: UpcomingEarnings;
   livePrice?: LivePrice;
   totalValue: number;
-  onGenerateDraft?: () => void;
   /** When set, a plain left-click peeks instead of navigating. Modifier
       clicks and middle-clicks keep native link behavior (new tab, etc.). */
   onPeek?: () => void;
@@ -149,12 +149,12 @@ export function PositionCard({
   earnings,
   livePrice,
   totalValue,
-  onGenerateDraft,
   onPeek,
   investorProfile,
   index,
   featured = false,
 }: PositionCardProps) {
+  const router = useRouter();
   const value = livePrice?.current_value ?? holding.current_value ?? 0;
   const cost = holding.quantity * holding.average_cost_basis;
   const pnl = value - cost;
@@ -168,19 +168,20 @@ export function PositionCard({
     investorProfile === "hearsay_driven"
       ? "Write reason"
       : "Write thesis";
+  const noThesisHref = positionBlindSpotHref(holding.ticker);
   const quality = classifyCaseQuality(thesis);
   const decisionState = getDecisionState({ thesis, pulse });
   const dotColor = DECISION_DOT[decisionState.kind];
   const ringClass = DECISION_RING[decisionState.kind] ?? "";
   const qualityChipLabel =
     quality.kind === "sharp"
-      ? "Ready to monitor"
+      ? "Ready"
       : quality.kind === "review_overdue"
-        ? "Review overdue"
+        ? "Refresh due"
         : quality.kind === "workable"
-          ? "Needs detail"
+          ? "Can sharpen"
           : quality.kind === "weak"
-            ? "Needs clearer reason"
+            ? "Too broad"
             : "Missing";
   const statusCopy = cardStatusCopy({
     hasThesis,
@@ -202,7 +203,7 @@ export function PositionCard({
       transition={{ duration: 0.35, delay: Math.min(index, 11) * 0.04, ease: "easeOut" }}
     >
       <Link
-        href={`/dashboard/positions/${holding.ticker}`}
+        href={positionDetailHref(holding.ticker)}
         className="block h-full"
         onClick={(e) => {
           if (!onPeek) return;
@@ -325,9 +326,13 @@ export function PositionCard({
             </p>
           ) : (
             <button
-              onClick={(e) => { e.preventDefault(); e.stopPropagation(); onGenerateDraft?.(); }}
-              className={`font-mono text-[10px] tracking-[0.04em] text-muted-foreground/70 hover:text-primary transition-colors text-left ${
-                featured ? "sm:col-start-2 sm:row-start-3 sm:border-l sm:border-border/60 sm:pl-6" : ""
+              onClick={(e) => {
+                e.preventDefault();
+                e.stopPropagation();
+                router.push(noThesisHref);
+              }}
+              className={`inline-flex w-fit items-center border border-border/70 px-2.5 py-1 font-mono text-[10px] uppercase tracking-[0.12em] text-muted-foreground/70 transition-colors hover:border-primary/40 hover:text-primary text-left ${
+                featured ? "sm:col-start-2 sm:row-start-3 sm:ml-6" : ""
               }`}
             >
               {noThesisCta}

@@ -28,11 +28,11 @@ export class ErrorBoundary extends Component<Props, State> {
     if (this.state.hasError) {
       return (
         this.props.fallback || (
-          <div className="border border-red-500/20 bg-red-500/5 p-4 rounded text-center my-4">
-            <p className="font-mono text-[10px] uppercase tracking-[0.15em] text-red-600 font-semibold">
+          <div className="product-panel my-4 border border-red-500/20 bg-[linear-gradient(180deg,rgba(239,68,68,0.08),rgba(255,255,255,0.95))] p-4 text-center">
+            <p className="font-mono text-[10px] font-semibold uppercase tracking-[0.15em] text-red-600">
               Section Unavailable
             </p>
-            <p className="font-sans text-[11px] text-muted-foreground mt-1">
+            <p className="mt-1 font-sans text-[11px] leading-relaxed text-foreground/72">
               An error occurred while loading this section of your dashboard.
             </p>
           </div>

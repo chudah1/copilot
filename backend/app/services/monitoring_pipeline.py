@@ -47,6 +47,17 @@ from app.services.noise_filter import (
 from app.services.signal_matching import build_evidence_summary, determine_verdict
 
 
+def _candidate_log_detail(candidate: dict[str, Any]) -> str:
+    evidence = candidate.get("evidence", {}) if isinstance(candidate.get("evidence"), dict) else {}
+    detail = (
+        evidence.get("headline")
+        or evidence.get("description")
+        or candidate.get("description")
+        or ""
+    )
+    return str(detail).replace("\n", " ")[:160]
+
+
 async def _acquire_story_anchor_lock(
     db: AsyncSession,
     *,
@@ -672,6 +683,22 @@ async def classify_candidates_for_thesis(
         # returns skip — numeric monitoring must not silently depend on the LLM.
         if candidate.get("event_type") in DETERMINISTIC_BREACH_EVENT_TYPES:
             classified.append((candidate, "warning", None))
+            logger.info(
+                "[MONITOR-DIAG] candidate preserved_without_llm reason=deterministic_threshold ticker=%s event_type=%s detail=%r",
+                ticker or "",
+                candidate.get("event_type", ""),
+                _candidate_log_detail(candidate),
+            )
+            continue
+
+        logger.info(
+            "[MONITOR-DIAG] candidate dropped_after_classification reason=no_classification_result ticker=%s event_type=%s signal_id=%s claim_id=%s detail=%r",
+            ticker or "",
+            candidate.get("event_type", ""),
+            str(candidate.get("evidence", {}).get("signal_id") or ""),
+            str(candidate.get("evidence", {}).get("claim_id") or ""),
+            _candidate_log_detail(candidate),
+        )
     return classified
 
 
@@ -778,14 +805,44 @@ async def persist_classified_candidates(
 
         verdict = determine_verdict(severity, candidate)
         if claim_obj is None and signal_obj is None:
-            if candidate.get("event_type") == "analyst_revision":
+            if (
+                candidate.get("event_type") == "analyst_revision"
+                and evidence.get("signal_direction") not in {"supports", "threatens"}
+            ):
+                logger.info(
+                    "[MONITOR-DIAG] candidate dropped_before_persistence reason=unlinked_analyst_revision_without_direction holding_id=%s thesis_id=%s event_type=%s severity=%s verdict=%s detail=%r",
+                    holding.id,
+                    thesis.id,
+                    candidate.get("event_type", ""),
+                    severity,
+                    verdict,
+                    _candidate_log_detail(candidate),
+                )
                 continue
             if candidate.get("event_type") == "earnings_surprise" and not has_proxy_context:
+                logger.info(
+                    "[MONITOR-DIAG] candidate dropped_before_persistence reason=unlinked_earnings_surprise_without_proxy holding_id=%s thesis_id=%s event_type=%s severity=%s verdict=%s detail=%r",
+                    holding.id,
+                    thesis.id,
+                    candidate.get("event_type", ""),
+                    severity,
+                    verdict,
+                    _candidate_log_detail(candidate),
+                )
                 continue
             if (
                 candidate.get("event_type") in (NEWS_LIKE_EVENT_TYPES - {"edgar_8k", "earnings_call_transcript"})
                 and verdict == "neutral"
             ):
+                logger.info(
+                    "[MONITOR-DIAG] candidate dropped_before_persistence reason=unlinked_neutral_news_like_event holding_id=%s thesis_id=%s event_type=%s severity=%s verdict=%s detail=%r",
+                    holding.id,
+                    thesis.id,
+                    candidate.get("event_type", ""),
+                    severity,
+                    verdict,
+                    _candidate_log_detail(candidate),
+                )
                 continue
 
         evidence_summary = build_evidence_summary(
@@ -826,6 +883,18 @@ async def persist_classified_candidates(
         )
         db.add(event)
         events.append(event)
+        logger.info(
+            "[MONITOR-DIAG] event persisted holding_id=%s thesis_id=%s event_id=%s event_type=%s severity=%s verdict=%s signal_id=%s claim_id=%s detail=%r",
+            holding.id,
+            thesis.id,
+            event.id,
+            event.event_type,
+            event.severity,
+            event.verdict,
+            str(event.signal_id or ""),
+            str(event.claim_id or ""),
+            _candidate_log_detail(candidate),
+        )
         if candidate_anchor:
             recent_anchors.add(candidate_anchor)
         # Mark cooldown on every matched signal, not just the primary, so a

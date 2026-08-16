@@ -21,6 +21,7 @@ type ThesisAction = "keep_lowered" | "rewrite" | "invalidate";
 interface Props {
   thesisId: string;
   ticker: string;
+  investorProfile: "thesis_driven" | "hearsay_driven" | null;
   writtenCase: {
     whyOwnIt: string;
     stillTrueIf: string | null;
@@ -52,14 +53,80 @@ function claimKey(claim: ClaimCheckInState): string {
   return claim.claim_id ?? "general";
 }
 
+function decisionCoachCopy(args: {
+  investorProfile: "thesis_driven" | "hearsay_driven" | null;
+  ticker: string;
+  pendingClaims: number;
+  anyBroken: boolean;
+}) {
+  const { investorProfile, ticker, pendingClaims, anyBroken } = args;
+
+  if (anyBroken) {
+    if (investorProfile === "hearsay_driven") {
+      return {
+        eyebrow: "Decision coach",
+        body: `The original reason for ${ticker} just lost support. Decide whether you still have a real reason for owning it.`,
+      };
+    }
+    if (investorProfile === "thesis_driven") {
+      return {
+        eyebrow: "Decision coach",
+        body: `Part of the thesis for ${ticker} broke. Choose whether confidence steps down, the thesis gets rewritten, or the position is closed.`,
+      };
+    }
+    return {
+      eyebrow: "Decision coach",
+      body: `Part of your reason for ${ticker} broke. Decide what changes now while the evidence is still clear.`,
+    };
+  }
+
+  if (investorProfile === "hearsay_driven") {
+    return {
+      eyebrow: "Decision coach",
+      body: `${pendingClaims === 1 ? "This item is" : "These items are"} where the original idea either becomes a durable reason or starts to break. Answer with what the evidence changed, not with a cleaner narrative.`,
+    };
+  }
+  if (investorProfile === "thesis_driven") {
+    return {
+      eyebrow: "Decision coach",
+      body: `${pendingClaims === 1 ? "This item is" : "These items are"} where the thesis meets fresh evidence. Make the call while the read is fresh so the next decision starts from clarity, not drift.`,
+    };
+  }
+  return {
+    eyebrow: "Decision coach",
+    body: `${pendingClaims === 1 ? "This item is" : "These items are"} where your reason meets new evidence. Decide now while the facts are clearer than the price reaction.`,
+  };
+}
+
+function writtenCaseLabel(investorProfile: "thesis_driven" | "hearsay_driven" | null) {
+  if (investorProfile === "hearsay_driven") {
+    return {
+      heading: "Your reason",
+      fallback: "Not tied to a specific part of your reason",
+    };
+  }
+  if (investorProfile === "thesis_driven") {
+    return {
+      heading: "Your thesis",
+      fallback: "Not tied to a specific part of your thesis",
+    };
+  }
+  return {
+    heading: "Your reason",
+    fallback: "Not tied to a specific part of your reason",
+  };
+}
+
 function EvidenceRow({
   item,
   onFlag,
   flagging,
+  removalLabel,
 }: {
   item: ClaimEvidenceItem;
   onFlag: (eventId: string) => Promise<void>;
   flagging: boolean;
+  removalLabel: string;
 }) {
   return (
     <div className="border border-border/60 bg-background/70 px-3 py-2.5">
@@ -74,8 +141,8 @@ function EvidenceRow({
           </div>
           <p className="mt-1.5 font-sans text-sm leading-relaxed text-foreground/90">{item.summary || item.title}</p>
           {item.ai_analysis && (
-            <div className="mt-2.5 border-l-2 border-emerald-600/50 bg-emerald-600/[0.04] py-1.5 pl-3 pr-2">
-              <p className="font-mono text-[9px] uppercase tracking-[0.16em] text-emerald-700/80">
+            <div className="product-panel mt-2.5 border border-emerald-600/20 bg-emerald-600/[0.05] px-3 py-2">
+              <p className="font-mono text-[10px] uppercase tracking-[0.16em] text-emerald-700/80">
                 penKeep&apos;s read
               </p>
               <p className="mt-1 font-sans text-xs leading-relaxed text-foreground/75">{item.ai_analysis}</p>
@@ -98,14 +165,21 @@ function EvidenceRow({
           onClick={() => void onFlag(item.id)}
           className="self-start shrink-0 border border-border/70 bg-background px-2.5 py-1.5 font-sans text-xs text-muted-foreground transition-colors hover:border-foreground/30 hover:text-foreground disabled:cursor-not-allowed disabled:opacity-40"
         >
-          {flagging ? "Removing…" : "Remove from this case"}
+          {flagging ? "Removing…" : removalLabel}
         </button>
       </div>
     </div>
   );
 }
 
-export function ThesisCheckIn({ thesisId, ticker, writtenCase, onFlagEvent, onAfterSubmit }: Props) {
+export function ThesisCheckIn({
+  thesisId,
+  ticker,
+  investorProfile,
+  writtenCase,
+  onFlagEvent,
+  onAfterSubmit,
+}: Props) {
   const { data, mutate, isLoading } = useSWR<ThesisCheckInData>(`/api/theses/${thesisId}/check-in`, fetcher);
   const [decisions, setDecisions] = useState<Record<string, ClaimStatus>>({});
   const [notes, setNotes] = useState("");
@@ -138,6 +212,32 @@ export function ThesisCheckIn({ thesisId, ticker, writtenCase, onFlagEvent, onAf
   const pendingClaims = claims.filter((claim) => claim.needs_review);
   const undecided = pendingClaims.filter((claim) => !decisions[claimKey(claim)]);
   const anyBroken = Object.values(decisions).includes("broken");
+  const writtenCaseCopy = writtenCaseLabel(investorProfile);
+  const coach = decisionCoachCopy({
+    investorProfile,
+    ticker,
+    pendingClaims: pendingClaims.length,
+    anyBroken,
+  });
+  const subjectWord =
+    investorProfile === "thesis_driven"
+      ? "thesis"
+      : investorProfile === "hearsay_driven"
+        ? "reason"
+        : "reason";
+  const possessiveSubject =
+    investorProfile === "thesis_driven"
+      ? "your thesis"
+      : investorProfile === "hearsay_driven"
+        ? "your reason"
+        : "your reason";
+  const removalLabel =
+    investorProfile === "thesis_driven"
+      ? "Remove from this thesis"
+      : investorProfile === "hearsay_driven"
+        ? "Remove from this reason"
+        : "Remove from this reason";
+  const subjectReference = `your ${subjectWord}`;
   const canSubmit =
     Object.keys(decisions).length > 0 &&
     undecided.length === 0 &&
@@ -167,7 +267,7 @@ export function ThesisCheckIn({ thesisId, ticker, writtenCase, onFlagEvent, onAf
         thesis_action: anyBroken ? thesisAction : null,
         notes: notes.trim() ? notes.trim() : null,
       });
-      toast.success("Decision recorded.");
+      toast.success("Decision saved.");
       setDecisions({});
       setNotes("");
       setThesisAction(null);
@@ -175,7 +275,7 @@ export function ThesisCheckIn({ thesisId, ticker, writtenCase, onFlagEvent, onAf
       await onAfterSubmit(result, anyBroken ? thesisAction : null);
     } catch (error) {
       console.error(error);
-      toast.error("Failed to record the decision");
+      toast.error("Failed to save the decision");
     } finally {
       submittingRef.current = false;
       setSubmitting(false);
@@ -191,20 +291,20 @@ export function ThesisCheckIn({ thesisId, ticker, writtenCase, onFlagEvent, onAf
           </p>
           <p className="font-display italic text-[1.6rem] leading-tight text-foreground">
             {pendingClaims.length > 0
-              ? `Does this change your written case for ${ticker}?`
+              ? `Does this change ${possessiveSubject} for ${ticker}?`
               : hasEvidence
                 ? "No decision needed."
-                : "Nothing is testing your written case right now."}
+                : `Nothing is testing ${possessiveSubject} right now.`}
           </p>
           <p className="mt-2 max-w-2xl font-sans text-sm leading-relaxed text-foreground/75">
             {pendingClaims.length > 0
-              ? "Read the evidence, then say whether the part of your case below still holds."
-              : "PenKeep checked the new evidence. It does not currently test your case strongly enough to require a decision."}
+              ? `Read the evidence, then say whether the part of ${possessiveSubject} below still holds.`
+              : `PenKeep checked the new evidence. It does not currently test ${possessiveSubject} strongly enough to need a decision.`}
           </p>
         </div>
 
-        <div className="border-l-2 border-primary/25 bg-background/55 px-4 py-3">
-          <p className="font-mono text-[10px] uppercase tracking-[0.16em] text-muted-foreground">Your written case</p>
+        <div className="product-panel border border-border/60 bg-background/72 px-4 py-3">
+          <p className="font-mono text-[10px] uppercase tracking-[0.16em] text-muted-foreground">{writtenCaseCopy.heading}</p>
           <div className="mt-3 grid gap-4 lg:grid-cols-3">
             <div>
               <p className="font-mono text-[10px] uppercase tracking-[0.14em] text-muted-foreground/80">Why I own it</p>
@@ -227,6 +327,16 @@ export function ThesisCheckIn({ thesisId, ticker, writtenCase, onFlagEvent, onAf
       </div>
 
       <div className="space-y-3">
+        {pendingClaims.length > 0 && (
+          <div className="product-panel border border-primary/15 bg-primary/[0.04] px-4 py-3">
+            <p className="font-mono text-[10px] uppercase tracking-[0.18em] text-primary/75">
+              {coach.eyebrow}
+            </p>
+            <p className="mt-2 font-sans text-sm leading-relaxed text-foreground/82">
+              {coach.body}
+            </p>
+          </div>
+        )}
         {claims.map((claim) => {
           const key = claimKey(claim);
           const decision = decisions[key];
@@ -252,7 +362,7 @@ export function ThesisCheckIn({ thesisId, ticker, writtenCase, onFlagEvent, onAf
                 </p>
               )}
               <p className="mt-2 font-sans text-sm leading-relaxed text-foreground">
-                {claim.claim_id ? `“${claim.label}”` : "Not tied to a specific part of your written case"}
+                {claim.claim_id ? `“${claim.label}”` : writtenCaseCopy.fallback}
               </p>
               {claim.needs_review_reason && (
                 <p className="mt-1 font-sans text-xs leading-relaxed text-amber-700/90">{claim.needs_review_reason}</p>
@@ -267,11 +377,11 @@ export function ThesisCheckIn({ thesisId, ticker, writtenCase, onFlagEvent, onAf
                           {claim.needs_review ? "Against" : "Early pressure"} · {claim.threatens.length}
                         </p>
                         <InfoTip label={claim.needs_review ? "Against" : "Early pressure"}>
-                          Evidence that weakens this part of your written case. It only asks for a decision when the pressure is strong enough.
+                          {`Evidence that weakens this part of ${subjectReference}. It only asks for a decision when the pressure is strong enough.`}
                         </InfoTip>
                       </div>
                       {claim.threatens.map((item) => (
-                        <EvidenceRow key={item.id} item={item} onFlag={handleFlag} flagging={flaggingId === item.id} />
+                        <EvidenceRow key={item.id} item={item} onFlag={handleFlag} flagging={flaggingId === item.id} removalLabel={removalLabel} />
                       ))}
                     </div>
                   )}
@@ -282,11 +392,11 @@ export function ThesisCheckIn({ thesisId, ticker, writtenCase, onFlagEvent, onAf
                           Held up · {claim.supports.length}
                         </p>
                         <InfoTip label="Held up">
-                          Evidence that supports this part of your written case. It stays in the record but does not require a response.
+                          {`Evidence that supports this part of ${subjectReference}. It stays in the trail but does not require a response.`}
                         </InfoTip>
                       </div>
                       {claim.supports.map((item) => (
-                        <EvidenceRow key={item.id} item={item} onFlag={handleFlag} flagging={flaggingId === item.id} />
+                        <EvidenceRow key={item.id} item={item} onFlag={handleFlag} flagging={flaggingId === item.id} removalLabel={removalLabel} />
                       ))}
                     </div>
                   )}
@@ -297,11 +407,11 @@ export function ThesisCheckIn({ thesisId, ticker, writtenCase, onFlagEvent, onAf
                           Background · {claim.neutral.length}
                         </p>
                         <InfoTip label="Background">
-                          Related evidence that neither supports nor weakens this part of your case. It is kept for context and needs no response.
+                          {`Related evidence that neither supports nor weakens this part of ${subjectReference}. It is kept for context and needs no response.`}
                         </InfoTip>
                       </div>
                       {claim.neutral.map((item) => (
-                        <EvidenceRow key={item.id} item={item} onFlag={handleFlag} flagging={flaggingId === item.id} />
+                        <EvidenceRow key={item.id} item={item} onFlag={handleFlag} flagging={flaggingId === item.id} removalLabel={removalLabel} />
                       ))}
                     </div>
                   )}
@@ -310,7 +420,7 @@ export function ThesisCheckIn({ thesisId, ticker, writtenCase, onFlagEvent, onAf
 
               {claim.needs_review ? (
                 <div className="mt-4 space-y-2">
-                  <p className="font-sans text-xs font-medium text-foreground/80">Does this part of your case still hold?</p>
+                  <p className="font-sans text-xs font-medium text-foreground/80">Does this part of {possessiveSubject} still hold?</p>
                   <div className="grid gap-2 sm:grid-cols-3">
                     {(
                       [
@@ -344,7 +454,7 @@ export function ThesisCheckIn({ thesisId, ticker, writtenCase, onFlagEvent, onAf
                   </div>
                 </div>
               ) : evidenceCount > 0 ? (
-                <p className="mt-3 font-sans text-xs text-muted-foreground">No response needed. This stays in the evidence trail.</p>
+                <p className="mt-3 font-sans text-xs text-muted-foreground">No response needed. This stays in the trail.</p>
               ) : null}
             </div>
           );
@@ -355,14 +465,21 @@ export function ThesisCheckIn({ thesisId, ticker, writtenCase, onFlagEvent, onAf
         {anyBroken && (
           <div className="space-y-2">
             <p className="font-mono text-[10px] uppercase tracking-[0.18em] text-red-700">
-              Part of your case broke — what happens now?
+              Part of {possessiveSubject} broke — what happens now?
+            </p>
+            <p className="font-sans text-sm leading-relaxed text-foreground/78">
+              {investorProfile === "hearsay_driven"
+                ? "Choose the outcome that matches reality, not the one that preserves the original idea."
+                : investorProfile === "thesis_driven"
+                  ? "Choose the outcome that matches the evidence, even if it means rewriting or closing the thesis."
+                  : "Choose the outcome that matches the evidence, not the hope you had before it arrived."}
             </p>
             <div className="grid gap-2 sm:grid-cols-3">
               {(
                 [
                   { value: "keep_lowered", label: "Keep, less sure", detail: "Conviction steps down; monitoring continues." },
-                  { value: "rewrite", label: "Rewrite the case", detail: "Update what must be true before monitoring continues." },
-                  { value: "invalidate", label: "Mark the case broken", detail: "Close this written case and record why." },
+                  { value: "rewrite", label: `Rewrite the ${subjectWord}`, detail: "Update what must be true before monitoring continues." },
+                  { value: "invalidate", label: `Mark the ${subjectWord} broken`, detail: "Close it and save why." },
                 ] as const
               ).map((option) => (
                 <button
@@ -388,7 +505,7 @@ export function ThesisCheckIn({ thesisId, ticker, writtenCase, onFlagEvent, onAf
           <Textarea
             value={notes}
             onChange={(event) => setNotes(event.target.value)}
-            placeholder="Optional. Saved to the decision log."
+            placeholder="Optional. Saved to the decision trail."
             className="min-h-20 bg-background/85"
           />
         </div>

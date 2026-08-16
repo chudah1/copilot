@@ -107,7 +107,7 @@ export function CounterThesisCard({
           )}
           {data.blind_spots.length > 0 && (
             <div>
-              <p className="font-mono text-[10px] uppercase tracking-[0.16em] text-muted-foreground">Blind spots</p>
+              <p className="font-mono text-[10px] uppercase tracking-[0.16em] text-muted-foreground">Gaps to examine</p>
               <ul className="mt-2 list-disc pl-4 text-sm text-muted-foreground space-y-1">
                 {data.blind_spots.map((spot, i) => <li key={i}>{spot}</li>)}
               </ul>

@@ -38,15 +38,15 @@ function getHoldingThesisState(thesis: Thesis | undefined) {
   if (thesis.status === "needs_review") {
     return {
       label: "Needs review",
-      detail: "Something changed or this thesis is stale.",
+      detail: "Something changed or this thesis is due for a refresh.",
       badgeClass: "bg-orange-500/15 text-orange-600",
     };
   }
 
   if (monitorability === "low") {
     return {
-      label: "Weak thesis",
-      detail: "Reason is too vague to monitor well.",
+      label: "Needs clarity",
+      detail: "The reason is still too broad to monitor well.",
       badgeClass: "bg-muted text-muted-foreground",
     };
   }
@@ -88,12 +88,15 @@ export function HoldingsTable({ holdings, currentThesesByHolding, pulseByHolding
             const rowBg = PULSE_ROW_BG[pulseStatus] ?? "";
 
             return (
-              <TableRow key={h.id} className={`transition-colors hover:bg-muted/30 ${rowBg}`}>
+              <TableRow key={h.id} className={`transition-colors hover:bg-foreground/[0.03] ${rowBg}`}>
                 <TableCell className="pr-0">
                   <span className={`inline-block h-2.5 w-2.5 rounded-full ${PULSE_DOT[pulseStatus] ?? "bg-muted"}`} title={pulseStatus} />
                 </TableCell>
                 <TableCell>
-                  <Link href={`/dashboard/positions/${h.ticker}`} className="font-medium underline-offset-4 hover:underline">
+                  <Link
+                    href={`/dashboard/positions/${h.ticker}`}
+                    className="font-medium text-foreground transition-colors hover:text-primary"
+                  >
                     {h.ticker}
                   </Link>
                 </TableCell>

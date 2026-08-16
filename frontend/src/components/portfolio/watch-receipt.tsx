@@ -20,16 +20,16 @@ function timeAgo(iso: string): string {
 }
 
 function stateWords(pulse: HoldingPulse, hasThesis: boolean) {
-  if (!hasThesis) return { text: "no thesis yet", color: "text-muted-foreground/70" };
-  if (pulse.pulse_basis === "case_review") return { text: "review overdue", color: "text-amber-700" };
-  if (pulse.pulse_status === "review") return { text: "worth reviewing", color: "text-red-700" };
+  if (!hasThesis) return { text: "nothing written yet", color: "text-muted-foreground/70" };
+  if (pulse.pulse_basis === "case_review") return { text: "refresh due", color: "text-amber-700" };
+  if (pulse.pulse_status === "review") return { text: "review now", color: "text-red-700" };
   if (pulse.pulse_status === "watch") return { text: "watching closely", color: "text-amber-700" };
-  return { text: "thesis intact", color: "text-emerald-700" };
+  return { text: "steady", color: "text-emerald-700" };
 }
 
 /**
  * Small always-on line proving the app has been looking, even when nothing
- * fired. Reads: "Checked 2h ago · 4 sources · thesis intact". The whole
+ * fired. Reads: "Checked 2h ago · 4 sources · steady". The whole
  * point is that a quiet dashboard is only reassuring when the user can see
  * the watchfulness — this component is that receipt.
  */
@@ -45,7 +45,7 @@ export function WatchReceipt({ pulse, hasThesis, className = "" }: Props) {
   if (!pulse?.last_checked_at) {
     return (
       <p className={`${base} ${muted} ${className}`}>
-        Monitoring in progress…
+        First monitoring pass in progress…
       </p>
     );
   }

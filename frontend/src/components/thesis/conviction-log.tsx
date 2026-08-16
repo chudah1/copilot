@@ -61,6 +61,12 @@ const EVENT_TYPE_LABELS: Record<string, string> = {
   news_or_earnings_candidate: "News",
 };
 
+const BUCKET_LABELS: Record<string, string> = {
+  held: "Held",
+  exited: "Exited",
+  dismissed: "Dismissed",
+};
+
 function entryLabel(entryType: string) {
   return ENTRY_LABELS[entryType] ?? entryType.replaceAll("_", " ");
 }
@@ -208,6 +214,10 @@ function DecisionEntry({ entry }: { entry: ConvictionLogEntry }) {
       : entry.outcome === "held"
         ? "text-emerald-700 border-emerald-500/30"
         : "text-muted-foreground/50 border-border/40";
+  const bucketLabel =
+    entry.bucket && BUCKET_LABELS[entry.bucket]
+      ? BUCKET_LABELS[entry.bucket]
+      : null;
 
   return (
     <div className="border border-border/60 bg-background/70 px-4 py-4">
@@ -237,6 +247,12 @@ function DecisionEntry({ entry }: { entry: ConvictionLogEntry }) {
           {outcomeLabel}
         </span>
       </div>
+
+      {bucketLabel && (
+        <p className="mb-3 font-mono text-[10px] uppercase tracking-[0.14em] text-muted-foreground">
+          {bucketLabel} call
+        </p>
+      )}
 
       {entry.event_title && (
         <div className="mb-3">
@@ -287,13 +303,18 @@ function DecisionEntry({ entry }: { entry: ConvictionLogEntry }) {
       </div>
 
       {notes && (
-        <p className="font-sans text-[13px] text-foreground/80 leading-relaxed mt-2.5 pl-1 border-l border-border/30">
-          {notes}
-        </p>
+        <div className="mt-2.5 border border-border/50 bg-background/70 px-3 py-2.5">
+          <p className="font-mono text-[9px] uppercase tracking-[0.15em] text-muted-foreground">
+            Notes you added
+          </p>
+          <p className="mt-1.5 font-sans text-[13px] leading-relaxed text-foreground/80">
+            {notes}
+          </p>
+        </div>
       )}
 
       {entry.resolution_read ? (
-        <div className="mt-3 border border-border/40 bg-muted/15 px-3 py-2.5">
+        <div className="mt-3 border border-border/50 bg-background/72 px-3 py-2.5">
           <p className="font-mono text-[9px] uppercase tracking-[0.15em] text-muted-foreground mb-1">
             What happened next
           </p>
@@ -310,35 +331,34 @@ function DecisionEntry({ entry }: { entry: ConvictionLogEntry }) {
   );
 }
 
-type LogFilter = "all" | "decisions" | "notes";
-
 export function ConvictionLog({
   data,
   loading = false,
   investorProfile,
 }: ConvictionLogProps) {
-  const [showAll, setShowAll] = useState(false);
-  const [filter, setFilter] = useState<LogFilter>("all");
+  const [showResolved, setShowResolved] = useState(false);
+  const [showOpen, setShowOpen] = useState(false);
+  const [showTimeline, setShowTimeline] = useState(false);
 
   const copy =
     investorProfile === "thesis_driven"
       ? {
-          title: "History",
+          title: "Decision memory",
           age: "Thesis age",
           empty:
-            "No history yet. Once you write a thesis, review evidence, or add notes, it will appear here.",
+            "Nothing here yet. Once you write a thesis, review evidence, or add notes, it will show up here.",
         }
       : investorProfile === "hearsay_driven"
         ? {
-          title: "History",
+          title: "Decision memory",
           age: "Reason age",
           empty:
-              "No history yet. Once you write a reason, review evidence, or add notes, it will appear here.",
+              "Nothing here yet. Once you write a reason, review evidence, or add notes, it will show up here.",
           }
         : {
-            title: "History",
+            title: "Decision memory",
             age: "Reason age",
-            empty: "Nothing logged yet. Reviews, notes, and reason changes show up here.",
+            empty: "Nothing here yet. Reviews, notes, and updates show up here.",
           };
 
   const entries = data?.entries ?? [];
@@ -346,20 +366,16 @@ export function ConvictionLog({
   // event_title now, but they are still waiting for a call.
   const isDecision = (e: ConvictionLogEntry) =>
     e.entry_type === "evidence_reviewed" && e.event_title != null;
-  const decisionCount = entries.filter(isDecision).length;
-  const noteCount = entries.filter((e) => e.entry_type === "manual_note").length;
-  const filteredEntries =
-    filter === "decisions"
-      ? entries.filter(isDecision)
-      : filter === "notes"
-        ? entries.filter((e) => e.entry_type === "manual_note")
-        : entries;
-  const visibleEntries = showAll ? filteredEntries : filteredEntries.slice(0, 2);
-  const filterChips: { id: LogFilter; label: string; count: number }[] = [
-    { id: "all", label: "All", count: entries.length },
-    { id: "decisions", label: "Decisions", count: decisionCount },
-    { id: "notes", label: "Notes", count: noteCount },
-  ];
+  const decisionEntries = entries.filter(isDecision);
+  const resolvedDecisionEntries = decisionEntries.filter((entry) => Boolean(entry.resolution_read));
+  const openDecisionEntries = decisionEntries.filter((entry) => !entry.resolution_read);
+  const timelineEntries = entries.filter((entry) => !isDecision(entry));
+  const visibleResolvedEntries = showResolved ? resolvedDecisionEntries : resolvedDecisionEntries.slice(0, 2);
+  const visibleOpenEntries = showOpen ? openDecisionEntries : openDecisionEntries.slice(0, 2);
+  const visibleTimelineEntries = showTimeline ? timelineEntries : timelineEntries.slice(0, 3);
+  const heldCount = resolvedDecisionEntries.filter((entry) => entry.outcome === "held").length;
+  const brokeCount = resolvedDecisionEntries.filter((entry) => entry.outcome === "broke").length;
+  const noteCount = timelineEntries.filter((entry) => entry.entry_type === "manual_note").length;
 
   return (
     <div className="space-y-5">
@@ -370,18 +386,22 @@ export function ConvictionLog({
               {copy.title}
             </p>
             <p className="font-sans text-sm leading-relaxed text-foreground/80">
-              Notes, evidence, and decisions that changed the case over time.
+              What you decided and what happened after the market had time to test it.
             </p>
           </div>
         </div>
-        <div className="mt-4 grid gap-3 sm:grid-cols-2">
+        <div className="mt-4 grid gap-3 sm:grid-cols-2 xl:grid-cols-4">
           <div className="border border-border/60 bg-background/70 p-3">
             <div className="flex items-center gap-1">
               <p className="font-mono text-[10px] uppercase tracking-[0.16em] text-muted-foreground">
                 {copy.age}
               </p>
               <InfoTip label={copy.age}>
-                The number of days since this written reason was first recorded.
+                {investorProfile === "thesis_driven"
+                  ? "The number of days since this thesis was first written."
+                  : investorProfile === "hearsay_driven"
+                    ? "The number of days since this reason was first written."
+                    : "The number of days since this reason was first written."}
               </InfoTip>
             </div>
             <p className="mt-2 font-display text-[1.15rem] italic leading-none text-foreground">
@@ -393,14 +413,44 @@ export function ConvictionLog({
           <div className="border border-border/60 bg-background/70 p-3">
             <div className="flex items-center gap-1">
               <p className="font-mono text-[10px] uppercase tracking-[0.16em] text-muted-foreground">
-                Reviews recorded
+                Reviews completed
               </p>
-              <InfoTip label="Reviews recorded">
-                The number of times you responded to evidence or formally revisited this written reason.
+              <InfoTip label="Reviews completed">
+                {investorProfile === "thesis_driven"
+                  ? "The number of times you responded to evidence or formally revisited this thesis."
+                  : investorProfile === "hearsay_driven"
+                    ? "The number of times you responded to evidence or formally revisited this reason."
+                    : "The number of times you responded to evidence or formally revisited this reason."}
               </InfoTip>
             </div>
             <p className="mt-2 font-display text-[1.15rem] italic leading-none text-foreground">
               {data?.review_count ?? 0}
+            </p>
+          </div>
+          <div className="border border-border/60 bg-background/70 p-3">
+            <div className="flex items-center gap-1">
+              <p className="font-mono text-[10px] uppercase tracking-[0.16em] text-muted-foreground">
+                Tested calls
+              </p>
+              <InfoTip label="Tested calls">
+                Decisions that already reached a later read, such as a post-earnings or soft follow-up outcome.
+              </InfoTip>
+            </div>
+            <p className="mt-2 font-display text-[1.15rem] italic leading-none text-foreground">
+              {resolvedDecisionEntries.length}
+            </p>
+          </div>
+          <div className="border border-border/60 bg-background/70 p-3">
+            <div className="flex items-center gap-1">
+              <p className="font-mono text-[10px] uppercase tracking-[0.16em] text-muted-foreground">
+                Open follow-ups
+              </p>
+              <InfoTip label="Open follow-ups">
+                Decisions still waiting for the market to test the bet you made.
+              </InfoTip>
+            </div>
+            <p className="mt-2 font-display text-[1.15rem] italic leading-none text-foreground">
+              {openDecisionEntries.length}
             </p>
           </div>
         </div>
@@ -409,62 +459,102 @@ export function ConvictionLog({
       {loading ? (
         <div className="product-panel p-5 sm:p-6">
           <p className="font-mono text-[10px] uppercase tracking-[0.2em] text-muted-foreground/40 animate-pulse">
-            Loading history…
+            Loading decision trail…
           </p>
         </div>
       ) : data && data.entries.length > 0 ? (
         <div className="space-y-3">
-          <div className="flex flex-wrap items-center gap-2">
-            {filterChips.map((chip) => (
-              <button
-                key={chip.id}
-                onClick={() => {
-                  setFilter(chip.id);
-                  setShowAll(false);
-                }}
-                className={`border px-3 py-1.5 font-mono text-[10px] uppercase tracking-[0.14em] transition-colors ${
-                  filter === chip.id
-                    ? "border-primary/40 bg-primary/5 text-primary"
-                    : "border-border/60 text-muted-foreground hover:text-foreground"
-                }`}
-              >
-                {chip.label}
-                <span className="ml-1.5 tabular-nums opacity-60">{chip.count}</span>
-              </button>
-            ))}
-          </div>
-          {filter === "decisions" && (
-            <p className="font-sans text-xs leading-relaxed text-muted-foreground">
-              What you decided, and what happened next. A good decision can still lose
-              money; a bad one can still get lucky.
-            </p>
-          )}
-          {filteredEntries.length === 0 ? (
-            <div className="product-panel p-5 sm:p-6">
-              <p className="font-sans text-sm text-muted-foreground">
-                {filter === "decisions"
-                  ? "No decisions recorded yet. Your first call will appear here after you review a change."
-                  : "No notes yet. Use + Note to record what you're thinking."}
-              </p>
-            </div>
-          ) : (
-            <>
-              {visibleEntries.map((entry) =>
-                isDecision(entry) ? (
-                  <DecisionEntry key={entry.id} entry={entry} />
-                ) : (
-                  <SimpleEntry key={entry.id} entry={entry} />
-                ),
-              )}
-              {filteredEntries.length > 2 && (
+          {resolvedDecisionEntries.length > 0 && (
+            <section className="space-y-3">
+              <div className="product-panel p-5 sm:p-6">
+                <div className="flex items-start justify-between gap-4">
+                  <div className="space-y-1">
+                    <p className="font-mono text-[10px] uppercase tracking-[0.18em] text-muted-foreground">
+                      Tested calls
+                    </p>
+                    <p className="font-sans text-sm leading-relaxed text-foreground/80">
+                      Decisions that already came back with a later read.
+                    </p>
+                  </div>
+                  <div className="shrink-0 text-right">
+                    <p className="font-mono text-[10px] uppercase tracking-[0.14em] text-muted-foreground">
+                      Outcomes
+                    </p>
+                    <p className="mt-1 font-sans text-xs text-foreground/75">
+                      {heldCount} held · {brokeCount} broke
+                    </p>
+                  </div>
+                </div>
+              </div>
+              {visibleResolvedEntries.map((entry) => (
+                <DecisionEntry key={entry.id} entry={entry} />
+              ))}
+              {resolvedDecisionEntries.length > 2 && (
                 <button
-                  onClick={() => setShowAll((current) => !current)}
+                  onClick={() => setShowResolved((current) => !current)}
                   className="w-full border border-border/60 bg-background/60 px-4 py-3 font-mono text-[10px] uppercase tracking-[0.16em] text-primary transition-colors hover:border-primary/35"
                 >
-                  {showAll ? "Show less" : `See all ${filteredEntries.length} history items`}
+                  {showResolved ? "Show fewer tested calls" : `See all ${resolvedDecisionEntries.length} tested calls`}
                 </button>
               )}
-            </>
+            </section>
+          )}
+
+          {openDecisionEntries.length > 0 && (
+            <section className="space-y-3">
+              <div className="product-panel p-5 sm:p-6">
+                <div className="space-y-1">
+                  <p className="font-mono text-[10px] uppercase tracking-[0.18em] text-muted-foreground">
+                    Follow-ups still open
+                  </p>
+                  <p className="font-sans text-sm leading-relaxed text-foreground/80">
+                    Calls you already made that the market has not finished testing yet.
+                  </p>
+                </div>
+              </div>
+              {visibleOpenEntries.map((entry) => (
+                <DecisionEntry key={entry.id} entry={entry} />
+              ))}
+              {openDecisionEntries.length > 2 && (
+                <button
+                  onClick={() => setShowOpen((current) => !current)}
+                  className="w-full border border-border/60 bg-background/60 px-4 py-3 font-mono text-[10px] uppercase tracking-[0.16em] text-primary transition-colors hover:border-primary/35"
+                >
+                  {showOpen ? "Show fewer open calls" : `See all ${openDecisionEntries.length} open calls`}
+                </button>
+              )}
+            </section>
+          )}
+
+          {timelineEntries.length > 0 && (
+            <section className="space-y-3">
+              <div className="product-panel p-5 sm:p-6">
+                <div className="flex items-start justify-between gap-4">
+                  <div className="space-y-1">
+                    <p className="font-mono text-[10px] uppercase tracking-[0.18em] text-muted-foreground">
+                      Timeline
+                    </p>
+                    <p className="font-sans text-sm leading-relaxed text-foreground/80">
+                      Notes, edits, and evidence snapshots that shaped the position over time.
+                    </p>
+                  </div>
+                  <p className="shrink-0 font-sans text-xs text-foreground/65">
+                    {noteCount} note{noteCount === 1 ? "" : "s"}
+                  </p>
+                </div>
+              </div>
+              {visibleTimelineEntries.map((entry) => (
+                <SimpleEntry key={entry.id} entry={entry} />
+              ))}
+              {timelineEntries.length > 3 && (
+                <button
+                  onClick={() => setShowTimeline((current) => !current)}
+                  className="w-full border border-border/60 bg-background/60 px-4 py-3 font-mono text-[10px] uppercase tracking-[0.16em] text-primary transition-colors hover:border-primary/35"
+                >
+                  {showTimeline ? "Show less timeline" : `See all ${timelineEntries.length} timeline items`}
+                </button>
+              )}
+            </section>
           )}
         </div>
       ) : (

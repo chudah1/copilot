@@ -24,6 +24,8 @@ from app.models.onboarding_state import OnboardingState
 from app.models.onboarding_draft import OnboardingDraft
 from app.models.thesis_health_snapshot import ThesisHealthSnapshot
 from app.models.decision_snapshot import DecisionSnapshot
+from app.models.dashboard_coach_advice import DashboardCoachAdvice
+from app.models.open_loop_dismissal import OpenLoopDismissal
 
 __all__ = [
     "User",
@@ -52,4 +54,6 @@ __all__ = [
     "OnboardingDraft",
     "ThesisHealthSnapshot",
     "DecisionSnapshot",
+    "DashboardCoachAdvice",
+    "OpenLoopDismissal",
 ]

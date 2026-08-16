@@ -35,15 +35,13 @@ export function HeldUpThisWeek({ items, className = "" }: Props) {
   const visibleItems = showAll ? items : items.slice(0, 3);
 
   return (
-    <section
-      className={`border-l-2 border-emerald-500/60 bg-emerald-500/5 px-4 py-3.5 space-y-3 ${className}`}
-    >
+    <section className={`product-panel border-emerald-500/25 bg-emerald-500/5 px-4 py-4 sm:px-5 sm:py-5 space-y-4 ${className}`}>
       <div className="space-y-1">
         <p className="font-mono text-[10px] uppercase tracking-[0.18em] text-emerald-700">
-          Evidence supporting your reason
+          Holding up
         </p>
-        <p className="font-sans text-xs text-foreground/80 leading-relaxed">
-          Recent evidence that supports something in your written case.
+        <p className="font-sans text-sm text-foreground/80 leading-relaxed">
+          Recent evidence that supported part of your view.
         </p>
       </div>
 
@@ -53,15 +51,15 @@ export function HeldUpThisWeek({ items, className = "" }: Props) {
             .filter(Boolean)
             .join(" · ");
           return (
-            <li key={item.event_id} className="space-y-1">
-              <p className="font-sans text-sm text-foreground leading-snug">
-                {item.title}
-              </p>
+            <li key={item.event_id} className="border border-border/60 bg-background/70 px-3 py-3 space-y-1.5">
               {meta && (
                 <p className="font-mono text-[10px] uppercase tracking-[0.14em] text-muted-foreground/70">
                   {meta}
                 </p>
               )}
+              <p className="font-sans text-sm text-foreground leading-snug">
+                {item.title}
+              </p>
             </li>
           );
         })}

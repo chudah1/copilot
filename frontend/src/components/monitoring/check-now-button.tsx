@@ -51,18 +51,23 @@ function SnapshotCard({
     : null;
 
   return (
-    <div className="mt-4 border border-border bg-card animate-in fade-in slide-in-from-bottom-2 duration-300">
-      <div className="flex items-center gap-2 px-4 py-3 border-b border-border/40">
-        <span className="h-1.5 w-1.5 rounded-full bg-emerald-500 shrink-0" />
-        <p className="font-mono text-[10px] uppercase tracking-[0.2em] text-muted-foreground">
-          {cleanTicker(ticker)} — checked just now
+    <div className="product-panel mt-4 animate-in fade-in slide-in-from-bottom-2 duration-300 overflow-hidden">
+      <div className="border-b border-border/40 px-4 py-3">
+        <div className="flex items-center gap-2">
+          <span className="h-1.5 w-1.5 rounded-full bg-emerald-500 shrink-0" />
+          <p className="font-mono text-[10px] uppercase tracking-[0.2em] text-muted-foreground">
+            Latest read
+          </p>
+        </div>
+        <p className="mt-1 font-sans text-sm leading-relaxed text-foreground/82">
+          {cleanTicker(ticker)} was checked just now.
         </p>
       </div>
 
-      <div className="grid grid-cols-2 gap-0 sm:grid-cols-4 divide-x divide-border/40">
+      <div className="grid grid-cols-2 gap-0 border-b border-border/40 sm:grid-cols-4 divide-x divide-border/40">
         {snapshot.current_price != null && (
           <div className="px-4 py-3">
-            <p className="font-mono text-[10px] uppercase tracking-[0.15em] text-muted-foreground mb-1">Price</p>
+            <p className="mb-1 font-mono text-[10px] uppercase tracking-[0.15em] text-muted-foreground">Price</p>
             <p className="font-mono text-sm font-medium tabular-nums">{formatCurrency(snapshot.current_price, currency)}</p>
             {snapshot.price_change_pct != null && (
               <p className={`font-mono text-[10px] tabular-nums ${priceUp ? "text-emerald-600" : "text-red-600"}`}>
@@ -74,7 +79,7 @@ function SnapshotCard({
 
         {snapshot.pnl != null && (
           <div className="px-4 py-3">
-            <p className="font-mono text-[10px] uppercase tracking-[0.15em] text-muted-foreground mb-1">P&L</p>
+            <p className="mb-1 font-mono text-[10px] uppercase tracking-[0.15em] text-muted-foreground">P&L</p>
             <p className={`font-mono text-sm font-medium tabular-nums ${pnlPositive ? "text-emerald-600" : "text-red-600"}`}>
               {formatCurrency(snapshot.pnl, portfolioCurrency)}
             </p>
@@ -88,7 +93,7 @@ function SnapshotCard({
 
         {snapshot.pe_ratio != null && (
           <div className="px-4 py-3">
-            <p className="font-mono text-[10px] uppercase tracking-[0.15em] text-muted-foreground mb-1">P/E</p>
+            <p className="mb-1 font-mono text-[10px] uppercase tracking-[0.15em] text-muted-foreground">P/E</p>
             <p className="font-mono text-sm font-medium tabular-nums">{snapshot.pe_ratio.toFixed(1)}</p>
             {snapshot.market_cap != null && (
               <p className="font-mono text-[10px] text-muted-foreground">{formatLargeNumber(snapshot.market_cap)}</p>
@@ -97,7 +102,7 @@ function SnapshotCard({
         )}
 
         <div className="px-4 py-3">
-          <p className="font-mono text-[10px] uppercase tracking-[0.15em] text-muted-foreground mb-1">Watchlist</p>
+          <p className="mb-1 font-mono text-[10px] uppercase tracking-[0.15em] text-muted-foreground">Watchlist</p>
           {snapshot.watch_hints_total > 0 ? (
             <p className={`font-mono text-sm font-medium tabular-nums ${hintsOk ? "text-emerald-600" : "text-amber-600"}`}>
               {snapshot.watch_hints_ok}/{snapshot.watch_hints_total}
@@ -112,13 +117,26 @@ function SnapshotCard({
                 : `${snapshot.recent_news_count} source${snapshot.recent_news_count !== 1 ? "s" : ""} checked · no decision needed`}
             </p>
           ) : (
-            <p className="font-mono text-[10px] text-muted-foreground">No fresh evidence sources</p>
+            <p className="font-mono text-[10px] text-muted-foreground">No fresh evidence sources yet</p>
           )}
         </div>
       </div>
 
+      <div className="px-4 py-3 space-y-2">
+        <p className="font-mono text-[10px] uppercase tracking-[0.15em] text-muted-foreground">
+          Evidence read
+        </p>
+        <p className="font-sans text-sm leading-relaxed text-foreground/80">
+          {snapshot.recent_news_count > 0
+            ? eventsCreated > 0
+              ? `${snapshot.recent_news_count} fresh source${snapshot.recent_news_count !== 1 ? "s were" : " was"} checked and ${eventsCreated} item${eventsCreated !== 1 ? "s" : ""} rose to review.`
+              : `${snapshot.recent_news_count} fresh source${snapshot.recent_news_count !== 1 ? "s were" : " was"} checked, but nothing changed the call.`
+            : "No fresh evidence sources were checked in this pass."}
+        </p>
+      </div>
+
       {earningsDate && earningsDays != null && earningsDays > 0 && earningsDays <= 30 && (
-        <div className="px-4 py-2.5 border-t border-border/40">
+        <div className="border-t border-border/40 px-4 py-2.5">
           <p className="font-mono text-[10px] text-muted-foreground/70">
             Earnings {earningsDate} · {earningsDays} day{earningsDays !== 1 ? "s" : ""} away
           </p>

@@ -1,23 +1,22 @@
 "use client";
 
-import { Suspense, useEffect, useMemo, useState } from "react";
+import { Suspense, useEffect, useMemo, useRef, useState } from "react";
 import Link from "next/link";
-import { useSearchParams } from "next/navigation";
+import { useRouter, useSearchParams } from "next/navigation";
 import { motion, AnimatePresence } from "framer-motion";
 import {
   ArrowRight,
   BellRing,
   CalendarClock,
-  CircleAlert,
 } from "lucide-react";
 import useSWR from "swr";
 import { api, fetcher } from "@/lib/api";
 import { formatAssumptionLabel } from "@/lib/assumption-label";
 import { getErrorMessage } from "@/lib/errors";
 import { buildDecisionInbox } from "@/lib/decision-inbox";
-import type { DecisionInboxEntry } from "@/lib/decision-inbox";
 import { formatPercent } from "@/lib/utils";
 import { OnboardingBanner } from "@/components/onboarding/onboarding-banner";
+import { BehavioralMemoryStrip } from "@/components/dashboard/behavioral-memory-strip";
 import { QuickAddHolding } from "@/components/portfolio/quick-add-holding";
 import { SinceLastVisit } from "@/components/portfolio/since-last-visit";
 import { DigestCountdown } from "@/components/portfolio/digest-countdown";
@@ -28,9 +27,17 @@ import { AttentionCard } from "@/components/portfolio/attention-card";
 import { DashboardSkeleton } from "@/components/portfolio/dashboard-skeleton";
 import { ErrorBoundary } from "@/components/ui/error-boundary";
 import { InfoTip } from "@/components/ui/info-tip";
+import { BlindSpotsSection } from "@/components/dashboard/blind-spots-section";
+import { CommandCenterHero } from "@/components/dashboard/command-center-hero";
+import { CommandCenterSection } from "@/components/dashboard/command-center-section";
+import { OpenLoopsSection } from "@/components/dashboard/open-loops-section";
+import { deriveDashboardCoach } from "@/lib/dashboard-coach";
 import { toast } from "sonner";
 import type {
-  DraftStatus,
+  DashboardCommandCenter,
+  DashboardCoachMemory,
+  DashboardOpenLoop,
+  DashboardWorkspace,
   Holding,
   LivePrice,
   OnboardingState,
@@ -67,139 +74,41 @@ function dashboardCopy(investorProfile: "thesis_driven" | "hearsay_driven" | nul
       emptyBody:
         "The market will test your assumptions. Add your positions below and write down exactly why you own them so you can tell when the thesis changes.",
       draftBanner:
-        "Drafts are ready for {count}. Review them before monitoring takes over.",
+        "Drafts are ready for {count}. Review them before monitoring goes live.",
       quarterly:
-        "Quarterly review — {count} position{plural} due",
+        "Quarterly review ready for {count} position{plural}.",
     };
   }
 
   if (investorProfile === "hearsay_driven") {
     return {
       emptyBody:
-        "The market will test the story. Add your positions below and write down why you own them so you can tell signal from panic when things move fast.",
+        "The market will test the reason. Add your positions below and write down why you own them so you can tell signal from noise when things move fast.",
       draftBanner:
-        "Drafts are ready for {count}. Review them before monitoring takes over.",
+        "Drafts are ready for {count}. Review them before monitoring goes live.",
       quarterly:
-        "Quarterly review — {count} position{plural} due",
+        "Quarterly review ready for {count} position{plural}.",
     };
   }
 
   return {
     emptyBody:
-      "The market will test you. Add your positions below and write down exactly why you own them so you don't panic sell when things get tough.",
+      "The market will test you. Add your positions below and write down exactly why you own them so you can make steadier calls when things move fast.",
     draftBanner:
-      "Drafts are ready for {count}. Review them before monitoring takes over.",
+      "Drafts are ready for {count}. Review them before monitoring goes live.",
     quarterly:
-      "Quarterly review — {count} position{plural} due",
+      "Quarterly review ready for {count} position{plural}.",
   };
 }
 
-function dashboardStateCopy(
-  investorProfile: "thesis_driven" | "hearsay_driven" | null,
-  counts: { review: number; watch: number; missing: number },
-  nextEarnings: UpcomingEarnings | null,
-  topAttention: PortfolioPulse["pulses"][number] | null,
-  recentReview: RecentReviewBannerState | null,
-) {
-  const topAttentionLabel = formatAssumptionLabel(topAttention?.assumption_label, investorProfile, { maxLength: 72 });
-  if (counts.review > 0) {
-    return {
-      tone: "border-amber-500/25 bg-amber-500/8",
-      eyebrow: "Needs a decision",
-      title:
-        investorProfile === "hearsay_driven"
-          ? `${counts.review} position${counts.review > 1 ? "s need" : " needs"} a call.`
-          : `${counts.review} position${counts.review > 1 ? "s need" : " needs"} a call.`,
-      body:
-        topAttention
-          ? `${cleanTicker(topAttention.ticker)} first. ${topAttentionLabel} is closest to a call.${recentReview ? ` ${cleanTicker(recentReview.ticker)} cleared.` : ""}`
-          : counts.watch > 0
-            ? `${counts.watch} more position${counts.watch > 1 ? "s are" : " is"} on watch behind it.`
-            : "Start with the review items.",
-    };
+function quietBoardBody(investorProfile: "thesis_driven" | "hearsay_driven" | null) {
+  if (investorProfile === "hearsay_driven") {
+    return "Nothing needs you right now. Use the quiet to clarify one unclear reason before the market asks harder questions.";
   }
-
-  if (counts.watch > 0) {
-    return {
-      tone: "border-sky-500/25 bg-sky-500/8",
-      eyebrow: "Changed",
-      title:
-        investorProfile === "hearsay_driven"
-          ? `${counts.watch} position${counts.watch > 1 ? "s need" : " needs"} a look.`
-          : `${counts.watch} position${counts.watch > 1 ? "s need" : " needs"} a look.`,
-      body: topAttention
-        ? `${cleanTicker(topAttention.ticker)} first. ${topAttentionLabel} is showing early pressure.${recentReview ? ` ${cleanTicker(recentReview.ticker)} cleared.` : ""}`
-        : "Nothing looks broken. These names still need a look.",
-    };
+  if (investorProfile === "thesis_driven") {
+    return "Nothing needs you right now. Use the quiet to clarify one unclear thesis before the market asks harder questions.";
   }
-
-  if (counts.missing > 0) {
-    return {
-      tone: "border-border bg-card",
-      eyebrow: "Needs a written case",
-      title:
-        investorProfile === "hearsay_driven"
-          ? `${counts.missing} position${counts.missing > 1 ? "s need" : " needs"} a reason.`
-          : `${counts.missing} position${counts.missing > 1 ? "s need" : " needs"} a thesis.`,
-      body:
-        investorProfile === "hearsay_driven"
-          ? "Price and news are visible. Your reason is not."
-          : "Price and news are visible. Your thesis is not.",
-    };
-  }
-
-  return {
-    tone: "border-emerald-500/25 bg-emerald-500/8",
-    eyebrow: "Calm",
-    title: "Nothing needs a call right now.",
-    body: nextEarnings
-      ? `${cleanTicker(nextEarnings.ticker)} is the next likely decision point in ${nextEarnings.days_until === 0 ? "today" : nextEarnings.days_until === 1 ? "1 day" : `${nextEarnings.days_until} days`}.${recentReview ? ` ${cleanTicker(recentReview.ticker)} was just resolved.` : ""}`
-      : recentReview
-        ? `${cleanTicker(recentReview.ticker)} was just resolved. Nothing else needs attention right now.`
-        : "No live pressure. Tighten an overdue or weak case next.",
-  };
-}
-
-function dashboardStateCta(args: {
-  primaryEntry: DecisionInboxEntry | null;
-  nearTermEarnings: UpcomingEarnings | null;
-}) {
-  const { primaryEntry, nearTermEarnings } = args;
-  if (!primaryEntry) return null;
-  const ticker = primaryEntry.holding.ticker;
-
-  if (primaryEntry.decisionState.kind === "needs_decision") {
-    return {
-      href: `/dashboard/positions/${ticker}?tab=monitoring`,
-      label: `Review ${cleanTicker(ticker)} →`,
-    };
-  }
-
-  if (primaryEntry.decisionState.kind === "changed") {
-    return {
-      href: `/dashboard/positions/${ticker}?tab=monitoring`,
-      label: `Open ${cleanTicker(ticker)} →`,
-    };
-  }
-
-  if (primaryEntry.decisionState.kind === "needs_written_case") {
-    return {
-      href: `/dashboard/positions/${ticker}?source=dashboard_blind_spot`,
-      label: `Write ${cleanTicker(ticker)} →`,
-    };
-  }
-
-  if (nearTermEarnings?.holding_id === primaryEntry.holding.id) {
-    return {
-      href: `/dashboard/positions/${ticker}`,
-      label: `Open ${cleanTicker(ticker)} before earnings →`,
-    };
-  }
-
-  return {
-    href: `/dashboard/positions/${ticker}`,
-    label: `Open ${cleanTicker(ticker)} →`,
-  };
+  return "Nothing needs you right now. Use the quiet to clarify one unclear reason before the market asks harder questions.";
 }
 
 function isRecentIsoDate(value: string | null | undefined, days: number) {
@@ -238,7 +147,7 @@ function activationBannerCopy(args: {
           ? `Monitoring is live for ${joinedTickers}.`
           : `Monitoring is live for ${joinedTickers}.`,
       body:
-        "We'll stay quiet unless the story gets tested.",
+        "We'll stay quiet unless the reason gets tested.",
     };
   }
 
@@ -278,11 +187,11 @@ function recentReviewBannerCopy(
   if (review.action === "invalidated" || review.thesis_status === "invalidated") {
     return {
       eyebrow: "Reviewed just now",
-      title: `${target} was marked broken for ${ticker}.`,
+      title: `${target} was marked as no longer holding for ${ticker}.`,
       body:
         investorProfile === "hearsay_driven"
-          ? "That position now needs a rewritten reason or an exit call."
-          : "That position now needs a rewritten thesis or an exit call.",
+          ? "That position now needs a clearer reason or an exit decision."
+          : "That position now needs a clearer thesis or an exit decision.",
       href: `/dashboard/positions/${review.ticker}`,
       cta: investorProfile === "hearsay_driven" ? "Rewrite →" : "Rewrite →",
     };
@@ -293,17 +202,18 @@ function recentReviewBannerCopy(
     title: `${target} was reviewed for ${ticker}.`,
     body: review.resolved_all
       ? (investorProfile === "hearsay_driven"
-          ? "That reason is back to quiet unless the story gets tested again."
+          ? "That reason is back to quiet unless it gets tested again."
           : "That thesis is back to quiet unless it gets tested again.")
-      : "That review is on record. Other items are still waiting.",
+      : "That review is saved. Other items are still in play.",
     href: `/dashboard/positions/${review.ticker}`,
-    cta: "Open position →",
+    cta: "See position →",
   };
 }
 
 // ── Dashboard ──────────────────────────────────────────────────────────────
 
 function DashboardInner() {
+  const router = useRouter();
   const searchParams = useSearchParams();
   const [draftBannerDismissed, setDraftBannerDismissed] = useState(false);
   const [showAddForm, setShowAddForm] = useState(false);
@@ -334,16 +244,21 @@ function DashboardInner() {
   const { data: summary, error: summaryError, mutate: mutateSummary } = useSWR<PortfolioSummary>("/api/portfolio/summary", fetcher);
   const { data: trend = null } = useSWR<PortfolioTrend>("/api/portfolio/summary/trend", fetcher);
   const { data: currentTheses, error: thesesError, mutate: mutateTheses } = useSWR<Thesis[]>("/api/theses/current", fetcher);
+  const { data: workspace = null, error: workspaceError, mutate: mutateWorkspace } = useSWR<DashboardWorkspace>("/api/dashboard/workspace", fetcher);
+  const { data: commandCenter = null, mutate: mutateCommandCenter } = useSWR<DashboardCommandCenter>("/api/dashboard/command-center", fetcher);
+  const { data: coachMemory = null, mutate: mutateCoachMemory } = useSWR<DashboardCoachMemory>("/api/dashboard/coach-memory", fetcher);
   const { data: pulse, error: pulseError, mutate: mutatePulse } = useSWR<PortfolioPulse>("/api/portfolio/pulse", fetcher);
   const { data: upcomingEarnings = [] } = useSWR<UpcomingEarnings[]>("/api/portfolio/upcoming-earnings", fetcher, { fallbackData: [] });
   const { data: quarterlyReview = null } = useSWR<QuarterlyReviewCurrent>("/api/quarterly-review/current", fetcher);
-  const { data: draftStatus = null, mutate: mutateDraftStatus } = useSWR<DraftStatus>("/api/portfolio/draft-status", fetcher);
+  const { data: openLoops = [], mutate: mutateOpenLoops } = useSWR<DashboardOpenLoop[]>("/api/dashboard/open-loops", fetcher);
   const { data: onboardingState = null } = useSWR<OnboardingState>("/api/onboarding/state", fetcher);
   const { data: userPrefs = null } = useSWR<UserPreferences>("/api/settings", fetcher);
-  const investorProfile = onboardingState?.investor_profile ?? null;
+  const investorProfile = workspace?.investor_profile ?? onboardingState?.investor_profile ?? null;
   const copy = dashboardCopy(investorProfile);
   const displayName = userPrefs?.display_name?.trim() || null;
   const greeting = greetingForHour(new Date().getHours());
+  const presentedCoachAdviceRef = useRef<string | null>(null);
+  const [dismissedCoachAdviceKey, setDismissedCoachAdviceKey] = useState<string | null>(null);
 
   // Live prices (updates in background every 60s)
   const { data: livePricesRaw } = useSWR<LivePrice[]>("/api/portfolio/live-prices", fetcher, {
@@ -361,29 +276,23 @@ function DashboardInner() {
       mutateHoldings(),
       mutateSummary(),
       mutateTheses(),
+      mutateWorkspace(),
+      mutateCommandCenter(),
       mutatePulse(),
-      mutateDraftStatus(),
+      mutateCoachMemory(),
     ]);
   };
 
-  const handleGenerateDraft = async (holdingId: string, ticker: string) => {
+  const handleDismissOpenLoop = async (loopKey: string) => {
     try {
-      const draft = await api.post<{ why_own_it: string; must_remain_true: string; what_would_change_my_mind: string }>(
-        "/api/theses/draft", { ticker }
-      );
-      await api.post("/api/theses", {
-        holding_id: holdingId,
-        thesis_kind: "company",
-        ...draft,
-        status: "active",
-        confidence: "medium",
-        source: "ai_assisted",
-        review_cadence_days: 30,
+      await api.post("/api/dashboard/open-loops/dismiss", {
+        loop_key: loopKey,
+        dismiss_for_days: 7,
       });
-      toast.success(`Draft thesis saved for ${ticker}`);
-      void refresh();
+      await mutateOpenLoops();
+      toast.success("Follow-up hidden for a week.");
     } catch (err) {
-      toast.error(getErrorMessage(err, "Failed to generate draft"));
+      toast.error(getErrorMessage(err, "Couldn't hide follow-up"));
     }
   };
 
@@ -408,68 +317,32 @@ function DashboardInner() {
 
   const pulseByHolding = decisionInbox.pulsesByHoldingId;
   const earningsByHolding = decisionInbox.earningsByHoldingId;
-  const needsAttention = decisionInbox.attentionEntries.flatMap((entry) => entry.pulse ? [entry.pulse] : []);
+  const needsAttention = decisionInbox.attentionEntries
+    .map((entry) => entry.pulse)
+    .filter((pulse): pulse is PortfolioPulse["pulses"][number] => Boolean(pulse));
   const reviewCount = decisionInbox.counts.needsDecision;
   const missingThesisCount = decisionInbox.counts.needsWrittenCase;
   const nearTermEarnings = decisionInbox.nearTermEarnings;
   const visibleEarnings = decisionInbox.visibleEarnings;
-  const dashboardState = dashboardStateCopy(
-    onboardingState?.investor_profile ?? null,
-    { review: reviewCount, watch: decisionInbox.counts.changed, missing: missingThesisCount },
-    nearTermEarnings,
-    needsAttention[0] ?? null,
-    recentReviewBanner,
-  );
-  const dashboardStatePrimaryCta = dashboardStateCta({
-    primaryEntry: decisionInbox.primaryEntry,
-    nearTermEarnings,
-  });
+  const draftReadyCount = workspace?.summary_metrics.drafts_ready_count ?? 0;
   const caseQualityStats = decisionInbox.caseQualityCounts;
   const weakestHolding = decisionInbox.weakestCaseEntry?.holding ?? null;
   const weakestQuality = decisionInbox.weakestCaseEntry?.caseQuality ?? null;
-  const caseQualityHeadline =
-    caseQualityStats.missing > 0
-      ? weakestHolding
-        ? investorProfile === "hearsay_driven"
-          ? `${cleanTicker(weakestHolding.ticker)} has no reason yet.`
-          : `${cleanTicker(weakestHolding.ticker)} has no thesis yet.`
-        : investorProfile === "hearsay_driven"
-          ? `${caseQualityStats.missing} ${caseQualityStats.missing === 1 ? "position has" : "positions have"} no reason yet.`
-          : `${caseQualityStats.missing} ${caseQualityStats.missing === 1 ? "position has" : "positions have"} no thesis yet.`
-      : caseQualityStats.weak > 0
-        ? `${caseQualityStats.weak} ${caseQualityStats.weak === 1 ? "position needs" : "positions need"} a clearer written reason.`
-        : caseQualityStats.review_overdue > 0
-          ? `${caseQualityStats.review_overdue} ${caseQualityStats.review_overdue === 1 ? "written reason is" : "written reasons are"} due for review.`
-          : caseQualityStats.workable > 0
-            ? `${caseQualityStats.workable} ${caseQualityStats.workable === 1 ? "position has" : "positions have"} a reason that could be more specific.`
-            : "Every position has a clear, current written reason.";
-  const caseQualityDetail =
-    caseQualityStats.missing > 0
-      ? investorProfile === "hearsay_driven"
-        ? "Write the reason, then monitoring can judge it."
-        : "Write the thesis, then monitoring can judge it."
-      : caseQualityStats.weak > 0
-        ? "Add the business condition or result that would make you reconsider."
-      : caseQualityStats.review_overdue > 0
-        ? "Nothing has necessarily changed. Confirm that the original reason still applies."
-        : caseQualityStats.workable > 0
-          ? "The reason can be monitored, but one or more conditions are still broad."
-          : "The reasons and conditions are ready to be checked against new evidence."
-  const caseQualityCta = weakestHolding
-    ? {
-        href: `/dashboard/positions/${weakestHolding.ticker}`,
-        label:
-          weakestQuality?.kind === "missing"
-            ? investorProfile === "hearsay_driven"
-              ? `Write ${cleanTicker(weakestHolding.ticker)} →`
-              : `Write ${cleanTicker(weakestHolding.ticker)} →`
-            : weakestQuality?.kind === "review_overdue"
-              ? `Refresh ${cleanTicker(weakestHolding.ticker)} →`
-            : weakestQuality?.kind === "weak" || weakestQuality?.kind === "workable"
-              ? `Tighten ${cleanTicker(weakestHolding.ticker)} →`
-              : `Open ${cleanTicker(weakestHolding.ticker)} →`,
-      }
-    : null;
+  const coachPlan = useMemo(
+    () => (workspace ? deriveDashboardCoach({ workspace, openLoops, coachMemory }) : null),
+    [workspace, openLoops, coachMemory],
+  );
+  const visibleCoachPlan = coachPlan && coachPlan.adviceKey !== dismissedCoachAdviceKey ? coachPlan : null;
+  const commandCenterSections = commandCenter?.sections ?? [];
+  const visibleCommandCenterSections = commandCenterSections.filter((section) => section.count > 0);
+  const liveCaseCount = workspace?.summary_metrics.monitored_count ?? summary?.theses_active ?? 0;
+  const blindSpotCount = workspace?.blind_spots.length
+    ?? (caseQualityStats.missing + caseQualityStats.weak + caseQualityStats.review_overdue);
+  const snapshotStats = [
+    { label: "Monitored", value: String(liveCaseCount) },
+    { label: "Reviews waiting", value: String(openLoops.length) },
+    { label: "Needs attention", value: String(blindSpotCount) },
+  ];
 
   const sortedHoldings = decisionInbox.entries.map((entry) => entry.holding);
 
@@ -502,6 +375,64 @@ function DashboardInner() {
     }
   }, [showActivationBanner]);
 
+  useEffect(() => {
+    if (!visibleCoachPlan || presentedCoachAdviceRef.current === visibleCoachPlan.adviceKey) {
+      return;
+    }
+
+    presentedCoachAdviceRef.current = visibleCoachPlan.adviceKey;
+    void api.post("/api/dashboard/coach-feedback", {
+      advice_key: visibleCoachPlan.adviceKey,
+      mode: visibleCoachPlan.feedback.mode,
+      event: "presented",
+      holding_id: visibleCoachPlan.feedback.holdingId,
+      thesis_id: visibleCoachPlan.feedback.thesisId,
+      loop_key: visibleCoachPlan.feedback.loopKey,
+      pattern_kind: visibleCoachPlan.feedback.patternKind,
+    }).then(() => mutateCoachMemory());
+  }, [visibleCoachPlan, mutateCoachMemory]);
+
+  const recordCoachAction = async (
+    event: "acted" | "skipped",
+    actionLabel?: string,
+  ) => {
+    if (!visibleCoachPlan) return;
+    await api.post("/api/dashboard/coach-feedback", {
+      advice_key: visibleCoachPlan.adviceKey,
+      mode: visibleCoachPlan.feedback.mode,
+      event,
+      holding_id: visibleCoachPlan.feedback.holdingId,
+      thesis_id: visibleCoachPlan.feedback.thesisId,
+      loop_key: visibleCoachPlan.feedback.loopKey,
+      pattern_kind: visibleCoachPlan.feedback.patternKind,
+      action_label: actionLabel ?? null,
+    });
+    await mutateCoachMemory();
+  };
+
+  const handleCoachAct = async (
+    target: NonNullable<typeof visibleCoachPlan>["primaryCta"] | NonNullable<NonNullable<typeof visibleCoachPlan>["secondaryCta"]>,
+  ) => {
+    try {
+      await recordCoachAction("acted", target.label);
+    } catch (err) {
+      toast.error(getErrorMessage(err, "Couldn't save coach response"));
+    } finally {
+      router.push(target.href);
+    }
+  };
+
+  const handleCoachSkip = async () => {
+    if (!visibleCoachPlan) return;
+    try {
+      await recordCoachAction("skipped");
+      setDismissedCoachAdviceKey(visibleCoachPlan.adviceKey);
+      toast.success("Coach suggestion hidden for now.");
+    } catch (err) {
+      toast.error(getErrorMessage(err, "Couldn't hide coach suggestion"));
+    }
+  };
+
   const showRecentReviewBanner = Boolean(
     recentReviewBanner && isRecentIsoHours(recentReviewBanner.saved_at, 2),
   );
@@ -518,20 +449,32 @@ function DashboardInner() {
   }
 
   // Error state
-  const loadError = holdingsError || summaryError || thesesError || pulseError;
+  const loadError = holdingsError || summaryError || thesesError || pulseError || workspaceError;
 
   if (loadError && (!holdings || holdings.length === 0)) {
     return (
-      <div className="flex flex-col items-center justify-center min-h-[calc(100vh-84px)] gap-4 text-center px-6">
-        <p className="font-sans text-sm text-muted-foreground">
-          {getErrorMessage(loadError, "Failed to load portfolio")}
-        </p>
-        <button
-          onClick={() => void refresh()}
-          className="font-mono text-[10px] uppercase tracking-[0.2em] text-primary border border-primary/30 px-4 py-2 hover:bg-primary/5 transition-colors"
-        >
-          Retry
-        </button>
+      <div className="flex min-h-[calc(100vh-84px)] items-center justify-center px-6 py-10">
+        <div className="product-panel w-full max-w-xl border border-border/70 bg-background/82 p-8 text-center">
+          <div className="space-y-3">
+            <p className="font-mono text-[10px] uppercase tracking-[0.2em] text-muted-foreground">
+              Dashboard unavailable
+            </p>
+            <h1 className="font-display text-[2rem] italic leading-tight text-foreground">
+              The portfolio did not load cleanly.
+            </h1>
+            <p className="mx-auto max-w-md font-sans text-sm leading-relaxed text-foreground/78">
+              {getErrorMessage(loadError, "Failed to load portfolio")}
+            </p>
+          </div>
+          <div className="mt-6 flex justify-center">
+            <button
+              onClick={() => void refresh()}
+              className="border border-primary/30 bg-background/72 px-4 py-2 font-mono text-[10px] uppercase tracking-[0.2em] text-primary transition-colors hover:border-primary/55"
+            >
+              Retry load
+            </button>
+          </div>
+        </div>
       </div>
     );
   }
@@ -539,36 +482,45 @@ function DashboardInner() {
   // Empty state
   if (!holdings || holdings.length === 0) {
     return (
-      <div className="flex flex-col items-center justify-center min-h-[calc(100vh-84px)] gap-8 text-center px-6">
+      <div className="flex min-h-[calc(100vh-84px)] items-center justify-center px-6 py-10">
         <motion.div
           initial={{ opacity: 0, y: 10 }}
           animate={{ opacity: 1, y: 0 }}
           transition={{ duration: 0.5 }}
-          className="space-y-3 max-w-sm"
+          className="product-panel w-full max-w-2xl border border-border/70 bg-[linear-gradient(180deg,rgba(163,126,79,0.06),rgba(255,255,255,0.96))] p-8 text-center"
         >
-          <div className="border-t-2 border-foreground pt-4">
-            <p className="font-display italic text-3xl text-foreground">Write it down.</p>
+          <div className="mx-auto max-w-xl space-y-4">
+            <div className="space-y-2">
+              <p className="font-mono text-[10px] uppercase tracking-[0.2em] text-muted-foreground">
+                Start the portfolio
+              </p>
+              <p className="font-display italic text-3xl leading-tight text-foreground">
+                Give the portfolio its first position.
+              </p>
+            </div>
+            <p className="font-sans text-sm leading-relaxed text-foreground/78">
+              {copy.emptyBody}
+            </p>
           </div>
-          <div className="border-b-2 border-foreground" />
-          <p className="font-sans text-sm text-muted-foreground leading-relaxed pt-1">
-            {copy.emptyBody}
-          </p>
-        </motion.div>
-        <motion.div
-          initial={{ opacity: 0 }}
-          animate={{ opacity: 1 }}
-          transition={{ duration: 0.4, delay: 0.2 }}
-          className="flex gap-3"
-        >
-          {/* Single CTA — /connect already presents Manual, CSV, and
-              Trading 212 as tabs (Manual is the default), so a "Connect
-              broker" label plus a broken "Add manually" split button was
-              both incorrect and confusing. */}
-          <Link href="/connect">
-            <button className="px-5 py-2.5 font-mono text-[11px] uppercase tracking-[0.15em] bg-primary text-primary-foreground hover:bg-primary/90 transition-colors">
-              Add position
-            </button>
-          </Link>
+          <motion.div
+            initial={{ opacity: 0 }}
+            animate={{ opacity: 1 }}
+            transition={{ duration: 0.4, delay: 0.2 }}
+            className="mt-7 flex flex-col items-center gap-4"
+          >
+            {/* Single CTA — /connect already presents Manual, CSV, and
+                Trading 212 as tabs (Manual is the default), so a "Connect
+                broker" label plus a broken "Add manually" split button was
+                both incorrect and confusing. */}
+            <Link href="/connect">
+              <button className="bg-primary px-5 py-2.5 font-mono text-[11px] uppercase tracking-[0.15em] text-primary-foreground transition-colors hover:bg-primary/90">
+                Add position
+              </button>
+            </Link>
+            <p className="font-sans text-xs leading-relaxed text-muted-foreground">
+              Manual entry, CSV import, and broker sync all start from the same flow.
+            </p>
+          </motion.div>
         </motion.div>
       </div>
     );
@@ -588,49 +540,43 @@ function DashboardInner() {
           className="pointer-events-none absolute inset-0 bg-[radial-gradient(circle_at_top_left,rgba(121,83,48,0.18),transparent_30%),linear-gradient(180deg,rgba(255,255,255,0.35),transparent_80%)]"
         />
         <div className="relative">
-          <section id="dashboard-overview" className="product-panel product-panel-muted overflow-hidden p-5 sm:p-6 scroll-mt-24">
+          <section
+            id="dashboard-overview"
+            className="product-panel overflow-hidden border border-border/70 bg-[linear-gradient(180deg,rgba(163,126,79,0.05),rgba(255,255,255,0.96))] p-5 sm:p-6 scroll-mt-24"
+          >
             <div className="space-y-5">
               <div className="space-y-4">
                 <div>
                   <div className="flex items-center gap-1.5">
                     <p className="font-mono text-[10px] uppercase tracking-[0.22em] text-muted-foreground">
-                      Decision inbox
+                      Command center
                     </p>
-                    <InfoTip label="Decision inbox" align="center">
-                      Positions are ordered by what needs you first: decisions, changed cases, missing written cases, then scheduled reviews.
+                    <InfoTip label="Command center" align="center">
+                      Start with the position that needs a decision now, then move through what held up, what needs clarifying, and what is still unresolved.
                     </InfoTip>
                   </div>
                   <h1 className="mt-2 font-display text-[2rem] italic leading-tight text-foreground sm:text-[2.5rem]">
                     {displayName ? `${greeting}, ${displayName}.` : `${greeting}.`}
                     <span className="block text-foreground/60 text-[0.72em] mt-1">
-                      Here&apos;s what needs your attention.
+                      Here&apos;s where the portfolio needs you.
                     </span>
                   </h1>
                 </div>
 
-                <div className={`border px-5 py-5 sm:px-6 sm:py-6 ${dashboardState.tone}`}>
-                  <p className="font-mono text-[10px] uppercase tracking-[0.18em] text-foreground/60">
-                    {dashboardState.eyebrow}
-                  </p>
-                  <p className="mt-2 font-display text-[1.65rem] italic leading-tight text-foreground sm:text-[2rem]">
-                    {dashboardState.title}
-                  </p>
-                  <p className="mt-2 max-w-2xl font-sans text-sm leading-relaxed text-foreground/85">
-                    {dashboardState.body}
-                  </p>
-                  {dashboardStatePrimaryCta && (
-                    <Link
-                      href={dashboardStatePrimaryCta.href}
-                      className="mt-5 inline-flex items-center gap-2 border border-primary/25 bg-background/70 px-3 py-2 font-mono text-[10px] uppercase tracking-[0.16em] text-primary transition-colors hover:border-primary/50"
-                    >
-                      {dashboardStatePrimaryCta.label.replace(" →", "")}
-                      <ArrowRight className="h-3.5 w-3.5" />
-                    </Link>
-                  )}
-                </div>
-
-                {summary && (
-                  <SinceLastVisit summary={summary} trend={trend} />
+                {commandCenter ? (
+                  <CommandCenterHero center={commandCenter} />
+                ) : (
+                  <div className="product-panel border border-emerald-500/25 bg-[linear-gradient(180deg,rgba(16,185,129,0.08),rgba(255,255,255,0.94))] px-5 py-5 sm:px-6 sm:py-6">
+                    <p className="font-mono text-[10px] uppercase tracking-[0.18em] text-emerald-700/80">
+                      Quiet board
+                    </p>
+                    <p className="mt-2 font-display text-[1.65rem] italic leading-tight text-foreground sm:text-[2rem]">
+                      Quiet right now.
+                    </p>
+                    <p className="mt-2 max-w-2xl font-sans text-sm leading-relaxed text-foreground/85">
+                      {quietBoardBody(investorProfile)}
+                    </p>
+                  </div>
                 )}
               </div>
 
@@ -639,19 +585,39 @@ function DashboardInner() {
         </div>
       </motion.div>
 
+      {visibleCommandCenterSections.length > 0 && (
+        <div className="order-4 px-4 pt-4 sm:px-8">
+          <section className="grid gap-4 xl:grid-cols-2">
+            {visibleCommandCenterSections.map((section) => (
+              <CommandCenterSection
+                key={section.kind}
+                section={section}
+                investorProfile={commandCenter?.investor_profile ?? investorProfile}
+              />
+            ))}
+          </section>
+        </div>
+      )}
+
+      {summary && (
+        <div className="order-4 px-4 pt-3 sm:px-8">
+          <SinceLastVisit summary={summary} trend={trend} />
+        </div>
+      )}
+
       {/* ── Banners ─────────────────────────────────────────────────── */}
-      <div className="order-3 px-4 pt-3 sm:px-8 space-y-2 empty:hidden">
+      <div className="order-5 px-4 pt-3 sm:px-8 space-y-2 empty:hidden">
         {/* Only one contextual banner at a time — recent review takes priority over activation */}
         {showActivationBanner && !showRecentReviewBanner && (
-          <div className="flex items-center justify-between gap-4 border border-emerald-500/20 bg-emerald-500/8 px-5 py-3">
-            <div className="space-y-1">
+          <div className="product-panel flex items-start justify-between gap-4 border border-emerald-500/20 bg-[linear-gradient(180deg,rgba(16,185,129,0.08),rgba(255,255,255,0.94))] px-5 py-4">
+            <div className="space-y-1.5">
               <p className="font-mono text-[10px] uppercase tracking-[0.18em] text-emerald-700">
                 {activationCopy.eyebrow}
               </p>
-              <p className="font-sans text-sm text-foreground/85">
+              <p className="font-sans text-sm leading-relaxed text-foreground/85">
                 {activationCopy.title}
               </p>
-              <p className="font-sans text-xs text-foreground/80">
+              <p className="font-sans text-xs leading-relaxed text-foreground/78">
                 {activationCopy.body}
               </p>
             </div>
@@ -671,20 +637,20 @@ function DashboardInner() {
         )}
 
         {showRecentReviewBanner && recentReviewCopy && (
-          <div className="flex items-center justify-between gap-4 border border-sky-500/25 bg-sky-500/8 px-5 py-3">
-            <div className="space-y-1">
+          <div className="product-panel flex items-start justify-between gap-4 border border-sky-500/25 bg-[linear-gradient(180deg,rgba(14,165,233,0.08),rgba(255,255,255,0.94))] px-5 py-4">
+            <div className="space-y-1.5">
               <p className="font-mono text-[10px] uppercase tracking-[0.18em] text-sky-700">
                 {recentReviewCopy.eyebrow}
               </p>
-              <p className="font-sans text-sm text-foreground/85">
+              <p className="font-sans text-sm leading-relaxed text-foreground/85">
                 {recentReviewCopy.title}
               </p>
-              <p className="font-sans text-xs text-foreground/80">
+              <p className="font-sans text-xs leading-relaxed text-foreground/78">
                 {recentReviewCopy.body}
               </p>
               <Link
                 href={recentReviewCopy.href}
-                className="inline-block font-mono text-[10px] uppercase tracking-[0.15em] text-primary hover:text-primary/75 transition-colors"
+                className="inline-flex items-center border border-primary/25 bg-background/72 px-3 py-2 font-mono text-[10px] uppercase tracking-[0.15em] text-primary transition-colors hover:border-primary/45"
               >
                 {recentReviewCopy.cta}
               </Link>
@@ -712,38 +678,50 @@ function DashboardInner() {
 
         {(() => {
           const noTheses = (summary?.theses_active ?? 0) === 0;
-          const showDraft = !onboardingBannerVisible && (draftStatus?.ready ?? 0) > 0 && !draftBannerDismissed;
+          const showDraft = !onboardingBannerVisible && draftReadyCount > 0 && !draftBannerDismissed;
           const showQuarterly = !noTheses && (quarterlyReview?.pending_count ?? 0) > 0;
           if (!showDraft && !showQuarterly) return null;
           const draftCta = onboardingState?.investor_profile === "thesis_driven" ? "Review theses →"
             : onboardingState?.investor_profile === "hearsay_driven" ? "Review reasons →"
             : "Review →";
-          const draftCount = draftStatus?.ready ?? 0;
+          const draftCount = draftReadyCount;
+          const bannerBody = showDraft && showQuarterly
+            ? `${draftCount === 1 ? "1 draft is" : `${draftCount} drafts are`} ready. ${quarterlyReview!.pending_count} quarterly review${quarterlyReview!.pending_count > 1 ? "s are" : " is"} also waiting.`
+            : showDraft
+              ? copy.draftBanner.replace("{count}", draftCount === 1 ? "1 position" : `${draftCount} positions`)
+              : copy.quarterly
+                  .replace("{count}", String(quarterlyReview!.pending_count))
+                  .replace("{plural}", quarterlyReview!.pending_count > 1 ? "s" : "");
           return (
-            <div className="flex items-center justify-between border border-primary/25 bg-primary/5 px-5 py-2.5">
-              <div className="flex items-center gap-3 min-w-0 flex-1">
-                <span className="font-mono text-[10px] uppercase tracking-[0.15em] text-primary border border-primary/30 px-1.5 py-0.5 shrink-0">
-                  {showQuarterly && quarterlyReview ? quarterlyReview.quarter : "New"}
+            <div className="product-panel flex items-start justify-between gap-4 border border-primary/25 bg-[linear-gradient(180deg,rgba(163,126,79,0.08),rgba(255,255,255,0.95))] px-5 py-4">
+              <div className="flex min-w-0 flex-1 items-start gap-3">
+                <span className="shrink-0 border border-primary/30 px-1.5 py-0.5 font-mono text-[10px] uppercase tracking-[0.15em] text-primary">
+                  {showQuarterly && quarterlyReview ? quarterlyReview.quarter : "Next up"}
                 </span>
-                <p className="font-sans text-sm text-foreground/80 truncate">
-                  {showDraft && showQuarterly
-                    ? `${draftCount === 1 ? "1 position" : `${draftCount} positions`} to review · ${quarterlyReview!.pending_count} quarterly check${quarterlyReview!.pending_count > 1 ? "s" : ""} due`
-                    : showDraft
-                      ? copy.draftBanner.replace("{count}", draftCount === 1 ? "1 position" : `${draftCount} positions`)
-                      : copy.quarterly
-                          .replace("{count}", String(quarterlyReview!.pending_count))
-                          .replace("{plural}", quarterlyReview!.pending_count > 1 ? "s" : "")}
-                </p>
+                <div className="min-w-0">
+                  <p className="font-mono text-[10px] uppercase tracking-[0.16em] text-primary/75">
+                    Review queue
+                  </p>
+                  <p className="mt-1 font-sans text-sm leading-relaxed text-foreground/82">
+                    {bannerBody}
+                  </p>
+                </div>
               </div>
-              <div className="flex items-center gap-4 shrink-0 ml-4">
+              <div className="ml-4 flex shrink-0 items-center gap-4 self-start">
                 {showDraft && (
-                  <Link href="/onboarding/review-drafts" className="font-mono text-[10px] uppercase tracking-[0.15em] text-primary hover:text-primary/70 transition-colors whitespace-nowrap">
+                  <Link
+                    href="/onboarding/review-drafts"
+                    className="inline-flex items-center border border-primary/25 bg-background/72 px-3 py-2 font-mono text-[10px] uppercase tracking-[0.15em] text-primary transition-colors hover:border-primary/45 whitespace-nowrap"
+                  >
                     {draftCta}
                   </Link>
                 )}
                 {showQuarterly && (
-                  <Link href="/dashboard/quarterly-review" className="font-mono text-[10px] uppercase tracking-[0.15em] text-primary hover:text-primary/70 transition-colors whitespace-nowrap">
-                    Quarterly →
+                  <Link
+                    href="/dashboard/quarterly-review"
+                    className="inline-flex items-center border border-primary/25 bg-background/72 px-3 py-2 font-mono text-[10px] uppercase tracking-[0.15em] text-primary transition-colors hover:border-primary/45 whitespace-nowrap"
+                  >
+                    Review quarter →
                   </Link>
                 )}
                 {showDraft && (
@@ -757,9 +735,21 @@ function DashboardInner() {
         })()}
       </div>
 
+      {workspace && (
+        <div className="order-6 px-4 pt-4 sm:px-8">
+          <BehavioralMemoryStrip
+            workspace={workspace}
+            coachMemory={coachMemory}
+            coachPlan={visibleCoachPlan}
+            onCoachAct={handleCoachAct}
+            onCoachSkip={handleCoachSkip}
+          />
+        </div>
+      )}
+
 
       <AnimatePresence>
-        {needsAttention.length > 0 && (
+        {!workspace && needsAttention.length > 0 && (
           <motion.div
             id="live-pressure"
             initial={{ opacity: 0, y: -4 }}
@@ -775,15 +765,15 @@ function DashboardInner() {
                       What changed
                     </p>
                     <InfoTip label="What changed" align="center">
-                      Evidence appears here only when it connects to something in a written case. Open a position to see the assumption and the model read.
+                      Evidence appears here only when it touches something you wrote down. Open a position to see the assumption and the model read.
                     </InfoTip>
                   </div>
                   <p className="mt-1 font-sans text-sm text-foreground/80">
-                    Evidence connected to something you wrote.
+                    Evidence tied to something you already wrote down.
                   </p>
                 </div>
                 <span className="border border-primary/20 bg-primary/6 px-2 py-1 font-mono text-[10px] uppercase tracking-[0.14em] text-primary/75">
-                  {needsAttention.length} to read
+                  {needsAttention.length} need your read
                 </span>
               </div>
               <ErrorBoundary>
@@ -826,10 +816,10 @@ function DashboardInner() {
             <div className="flex flex-wrap items-center gap-3">
               <button
                 onClick={() => setShowAddForm((v) => !v)}
-                className={`border px-3 py-2 font-mono text-[10px] uppercase tracking-[0.16em] transition-colors ${
+                className={`px-3 py-2 font-mono text-[10px] uppercase tracking-[0.16em] transition-colors ${
                   showAddForm
-                    ? "border-border/80 text-muted-foreground"
-                    : "border-primary/30 bg-primary/5 text-primary hover:border-primary/60"
+                    ? "border border-border/80 bg-background/70 text-muted-foreground hover:text-foreground"
+                    : "border border-primary/30 bg-primary/5 text-primary hover:border-primary/60"
                 }`}
               >
                 {showAddForm ? "Cancel" : "+ Add"}
@@ -863,7 +853,6 @@ function DashboardInner() {
                 earnings={earningsByHolding[h.id]}
                 livePrice={livePrices[h.ticker]}
                 totalValue={displayTotalValue}
-                onGenerateDraft={() => handleGenerateDraft(h.id, h.ticker)}
                 onPeek={() => setPeekHoldingId(h.id)}
                 investorProfile={onboardingState?.investor_profile ?? null}
                 index={i}
@@ -873,83 +862,137 @@ function DashboardInner() {
           </div>
         </div>
 
-        <aside className="product-panel self-start p-4 sm:p-5 lg:sticky lg:top-[96px]">
-          <p className="font-mono text-[10px] uppercase tracking-[0.16em] text-muted-foreground">
-            Portfolio snapshot
-          </p>
-          <div className="mt-3 flex flex-wrap items-baseline gap-2">
-            <AnimatedCurrency
-              value={displayTotalValue}
-              currency={summary?.portfolio_currency ?? "GBP"}
-              className="font-display text-[1.9rem] italic leading-none tracking-tight text-foreground tabular-nums"
-            />
-            {(livePnlPct != null ? livePnlPct : summary?.total_pnl_pct) != null && (
-              <span className={`font-mono text-[10px] tabular-nums ${
-                (livePnl ?? summary?.total_pnl ?? 0) >= 0 ? "text-emerald-700" : "text-red-600"
-              }`}>
-                {formatPercent(livePnlPct ?? summary?.total_pnl_pct ?? 0)}
-              </span>
-            )}
-          </div>
-          <p className="mt-2 font-sans text-xs text-muted-foreground">
-            {holdings.length} position{holdings.length === 1 ? "" : "s"}
-            {hasLivePrices ? " · prices checked recently" : ""}
-          </p>
-          {summary?.fx_unavailable && (
-            <p className="mt-2 font-sans text-xs leading-relaxed text-amber-700">
-              {summary.preferred_currency} conversion is temporarily unavailable. Values are shown in GBP.
+        <aside className="self-start space-y-5 lg:sticky lg:top-[96px]">
+          <div className="product-panel p-4 sm:p-5">
+            <p className="font-mono text-[10px] uppercase tracking-[0.16em] text-muted-foreground">
+              At a glance
             </p>
-          )}
-
-          <div className="mt-5 space-y-3 border-t border-border/60 pt-4">
-            <div className="flex items-start gap-3">
-              <CircleAlert className="mt-0.5 h-4 w-4 shrink-0 text-primary" />
-              <div className="space-y-1">
-                <p className="font-sans text-sm leading-relaxed text-foreground/85">
-                  {caseQualityHeadline}
+            <div className="mt-3 flex flex-wrap items-baseline gap-2">
+              <AnimatedCurrency
+                value={displayTotalValue}
+                currency={summary?.portfolio_currency ?? "GBP"}
+                className="font-display text-[1.9rem] italic leading-none tracking-tight text-foreground tabular-nums"
+              />
+              {(livePnlPct != null ? livePnlPct : summary?.total_pnl_pct) != null && (
+                <span className={`font-mono text-[10px] tabular-nums ${
+                  (livePnl ?? summary?.total_pnl ?? 0) >= 0 ? "text-emerald-700" : "text-red-600"
+                }`}>
+                  {formatPercent(livePnlPct ?? summary?.total_pnl_pct ?? 0)}
+                </span>
+              )}
+            </div>
+            <p className="mt-2 font-sans text-xs text-muted-foreground">
+              {holdings.length} position{holdings.length === 1 ? "" : "s"}
+              {hasLivePrices ? " · prices refreshed recently" : ""}
+            </p>
+            <div className="mt-4 grid grid-cols-3 gap-2">
+              {snapshotStats.map((stat) => (
+                <div key={stat.label} className="border border-border/60 bg-background/55 px-3 py-2">
+                  <p className="font-mono text-[10px] uppercase tracking-[0.14em] text-muted-foreground">
+                    {stat.label}
+                  </p>
+                  <p className="mt-1 font-sans text-lg leading-none text-foreground">
+                    {stat.value}
+                  </p>
+                </div>
+              ))}
+            </div>
+            {summary?.fx_unavailable && (
+              <div className="mt-3 border border-amber-500/20 bg-amber-500/6 px-3 py-2.5">
+                <p className="font-mono text-[10px] uppercase tracking-[0.14em] text-amber-800">
+                  FX unavailable
                 </p>
-                <p className="font-sans text-xs leading-relaxed text-muted-foreground">
-                  {caseQualityDetail}
+                <p className="mt-1 font-sans text-xs leading-relaxed text-foreground/78">
+                  {summary.preferred_currency} conversion is temporarily unavailable. Values are shown in GBP.
                 </p>
-                {caseQualityCta && (
-                  <Link href={caseQualityCta.href} className="inline-flex items-center gap-1.5 font-mono text-[10px] uppercase tracking-[0.14em] text-primary hover:text-primary/75">
-                    {caseQualityCta.label.replace(" →", "")}
-                    <ArrowRight className="h-3 w-3" />
-                  </Link>
-                )}
               </div>
+            )}
+
+            <div className="mt-5 space-y-3 border-t border-border/60 pt-4">
+              <div className="flex items-start gap-3">
+                <CalendarClock className="mt-0.5 h-4 w-4 shrink-0 text-primary" />
+                <p className="font-sans text-sm leading-relaxed text-foreground/85">
+                  {nearTermEarnings
+                    ? `${cleanTicker(nearTermEarnings.ticker)} reports ${daysUntilLabel(nearTermEarnings.days_until)}.`
+                    : "No earnings reports in the next three weeks."}
+                </p>
+              </div>
+
+              {pulse?.next_digest_at && (
+                <div className="flex items-start gap-3 border-t border-border/60 pt-3">
+                  <BellRing className="mt-0.5 h-4 w-4 shrink-0 text-primary" />
+                  <div className="space-y-1">
+                    <p className="font-mono text-[10px] uppercase tracking-[0.14em] text-muted-foreground">
+                      Next digest
+                    </p>
+                    <DigestCountdown nextDigestAt={pulse.next_digest_at} />
+                  </div>
+                </div>
+              )}
             </div>
 
-            <div className="flex items-start gap-3 border-t border-border/60 pt-3">
-              <CalendarClock className="mt-0.5 h-4 w-4 shrink-0 text-primary" />
-              <p className="font-sans text-sm leading-relaxed text-foreground/85">
-                {nearTermEarnings
-                  ? `${cleanTicker(nearTermEarnings.ticker)} reports ${daysUntilLabel(nearTermEarnings.days_until)}.`
-                  : "No earnings calls in the next three weeks."}
+            <div className="mt-5 space-y-3 border-t border-border/60 pt-4">
+              <p className="font-mono text-[10px] uppercase tracking-[0.16em] text-muted-foreground">
+                Next steps
+              </p>
+              <div className="grid gap-2">
+                <Link href="/dashboard/simulate" className="flex items-center justify-between border border-border/80 bg-background/72 px-3 py-3 transition-colors hover:border-foreground/20">
+                  <div>
+                    <p className="font-mono text-[10px] uppercase tracking-[0.14em] text-primary/80">
+                      Preview an add
+                    </p>
+                    <p className="mt-1 font-sans text-xs leading-relaxed text-foreground/72">
+                      Check sizing, concentration, and fit before you commit capital.
+                    </p>
+                  </div>
+                  <ArrowRight className="h-3.5 w-3.5 shrink-0 text-muted-foreground" />
+                </Link>
+                <Link href="/connect?return=dashboard" className="flex items-center justify-between border border-border/80 bg-background/72 px-3 py-3 transition-colors hover:border-foreground/20">
+                  <div>
+                    <p className="font-mono text-[10px] uppercase tracking-[0.14em] text-primary/80">
+                      Import another account
+                    </p>
+                    <p className="mt-1 font-sans text-xs leading-relaxed text-foreground/72">
+                      Import another broker or refresh coverage.
+                    </p>
+                  </div>
+                  <ArrowRight className="h-3.5 w-3.5 shrink-0 text-muted-foreground" />
+                </Link>
+              </div>
+            </div>
+          </div>
+
+          {workspace && (
+            <>
+              <OpenLoopsSection
+                loops={openLoops}
+                onDismiss={handleDismissOpenLoop}
+              />
+              <BlindSpotsSection blindSpots={workspace.blind_spots} investorProfile={investorProfile} />
+            </>
+          )}
+          {!workspace && weakestHolding && weakestQuality && (
+            <div className="product-panel p-4 sm:p-5">
+              <p className="font-mono text-[10px] uppercase tracking-[0.18em] text-muted-foreground">
+                Needs attention
+              </p>
+              <p className="mt-2 font-sans text-sm leading-relaxed text-foreground/85">
+                {caseQualityStats.missing > 0
+                  ? investorProfile === "hearsay_driven"
+                    ? `${cleanTicker(weakestHolding.ticker)} has no reason yet.`
+                    : `${cleanTicker(weakestHolding.ticker)} has no thesis yet.`
+                  : caseQualityStats.weak > 0
+                    ? investorProfile === "hearsay_driven"
+                      ? `${cleanTicker(weakestHolding.ticker)} needs a clearer reason.`
+                      : investorProfile === "thesis_driven"
+                        ? `${cleanTicker(weakestHolding.ticker)} needs a clearer thesis.`
+                        : `${cleanTicker(weakestHolding.ticker)} needs a clearer reason.`
+                    : caseQualityStats.review_overdue > 0
+                      ? `${cleanTicker(weakestHolding.ticker)} is due for review.`
+                      : `${cleanTicker(weakestHolding.ticker)} can be made more specific.`}
               </p>
             </div>
-
-            {pulse?.next_digest_at && (
-              <div className="flex items-start gap-3 border-t border-border/60 pt-3">
-                <BellRing className="mt-0.5 h-4 w-4 shrink-0 text-primary" />
-                <div className="space-y-1">
-                  <p className="font-mono text-[10px] uppercase tracking-[0.14em] text-muted-foreground">
-                    Next digest
-                  </p>
-                  <DigestCountdown nextDigestAt={pulse.next_digest_at} />
-                </div>
-              </div>
-            )}
-          </div>
-
-          <div className="mt-5 flex flex-wrap gap-2 border-t border-border/60 pt-4">
-            <Link href="/dashboard/simulate" className="border border-border/80 px-3 py-2 font-mono text-[10px] uppercase tracking-[0.14em] text-muted-foreground hover:text-foreground">
-              Simulate trade
-            </Link>
-            <Link href="/connect?return=dashboard" className="border border-border/80 px-3 py-2 font-mono text-[10px] uppercase tracking-[0.14em] text-muted-foreground hover:text-foreground">
-              Import data
-            </Link>
-          </div>
+          )}
         </aside>
         </div>
       </div>
@@ -976,16 +1019,16 @@ function DashboardInner() {
         <ErrorBoundary>
           <div className="order-5 px-4 sm:px-8">
             <div className="product-panel mb-2 px-4 py-3 sm:px-5">
-              <div className="flex items-center gap-6 overflow-x-auto">
+              <div className="flex flex-wrap items-center gap-3 overflow-x-auto">
                 <p className="shrink-0 font-mono text-[10px] uppercase tracking-[0.18em] text-muted-foreground">
                   Upcoming earnings
                 </p>
-                <div className="flex items-center gap-4">
+                <div className="flex items-center gap-2">
                   {visibleEarnings.slice(0, 6).map((e) => (
                     <Link
                       key={e.holding_id}
                       href={`/dashboard/positions/${e.ticker}`}
-                      className="group flex items-center gap-2 shrink-0"
+                      className="group flex items-center gap-2 shrink-0 border border-border/70 bg-background/72 px-2.5 py-1.5 transition-colors hover:border-foreground/20"
                     >
                       <span className="font-mono text-[10px] font-medium text-primary/70 transition-colors group-hover:text-primary">
                         {cleanTicker(e.ticker)}

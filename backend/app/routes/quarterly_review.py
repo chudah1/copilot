@@ -5,6 +5,7 @@ from app.database import get_db
 from app.dependencies import get_current_user
 from app.models.user import User
 from app.schemas.quarterly_review import (
+    DecisionPatternsResponse,
     QuarterlyReviewCurrentResponse,
     QuarterlyReviewHoldingResponse,
     QuarterlyReviewSubmissionResponse,
@@ -18,7 +19,7 @@ from app.services.quarterly_review import (
 router = APIRouter(prefix="/api/quarterly-review", tags=["quarterly-review"])
 
 
-@router.get("/patterns")
+@router.get("/patterns", response_model=DecisionPatternsResponse)
 async def get_decision_patterns_endpoint(
     user: User = Depends(get_current_user),
     db: AsyncSession = Depends(get_db),
