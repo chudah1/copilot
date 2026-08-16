@@ -4,9 +4,7 @@ import Link from "next/link";
 import { ArrowRight } from "lucide-react";
 
 import { cleanTicker } from "@/components/portfolio/position-card";
-import { DecisionCoachCard } from "@/components/dashboard/decision-coach-card";
 import { formatAssumptionLabel } from "@/lib/assumption-label";
-import type { DashboardCoachPlan } from "@/lib/dashboard-coach";
 import {
   coachOutcomeCopy,
   decisionMemoryCta,
@@ -111,15 +109,9 @@ function timeAgo(iso: string) {
 export function BehavioralMemoryStrip({
   workspace,
   coachMemory,
-  coachPlan,
-  onCoachAct,
-  onCoachSkip,
 }: {
   workspace: DashboardWorkspace;
   coachMemory: DashboardCoachMemory | null;
-  coachPlan?: DashboardCoachPlan | null;
-  onCoachAct?: (target: DashboardCoachPlan["primaryCta"] | NonNullable<DashboardCoachPlan["secondaryCta"]>) => Promise<void>;
-  onCoachSkip?: () => Promise<void>;
 }) {
   const { decision_memory: memory, recent_decisions: recentDecisions, top_decision: currentPressure, investor_profile: investorProfile } = workspace;
   const coachOutcome = coachOutcomeCopy(coachMemory);
@@ -134,7 +126,6 @@ export function BehavioralMemoryStrip({
   const decisionTrailHref = recentDecisions[0]
     ? positionDecisionTrailHref(recentDecisions[0].ticker)
     : "/dashboard/quarterly-review#decision-patterns";
-  const hasCoachPanel = Boolean(coachPlan && onCoachAct && onCoachSkip);
   const hasFollowThroughStats = Boolean(
     coachOutcome && (
       coachOutcome.summary.resolved > 0 ||
@@ -212,17 +203,7 @@ export function BehavioralMemoryStrip({
         </div>
       </div>
 
-      {hasCoachPanel && coachPlan && onCoachAct && onCoachSkip && (
-        <div className="xl:col-span-3">
-          <DecisionCoachCard
-            plan={coachPlan}
-            onAct={onCoachAct}
-            onSkip={onCoachSkip}
-          />
-        </div>
-      )}
-
-      <div className={cn("product-panel border border-border/70 bg-background/88 p-5 sm:p-6", hasCoachPanel ? "xl:col-span-2" : "xl:col-span-3")}>
+      <div className="product-panel border border-border/70 bg-background/88 p-5 sm:p-6 xl:col-span-3">
         <div className="space-y-5">
           <div className="space-y-2">
             <p className="font-mono text-[10px] uppercase tracking-[0.18em] text-muted-foreground">
@@ -281,7 +262,7 @@ export function BehavioralMemoryStrip({
         </div>
       </div>
 
-      <div className={cn("product-panel border border-border/70 bg-background/88 p-5 sm:p-6", hasCoachPanel ? "xl:col-span-2" : "xl:col-span-4")}>
+      <div className="product-panel border border-border/70 bg-background/88 p-5 sm:p-6 xl:col-span-4">
         <div className="space-y-4">
           <div className="space-y-2">
             <p className="font-mono text-[10px] uppercase tracking-[0.18em] text-muted-foreground">

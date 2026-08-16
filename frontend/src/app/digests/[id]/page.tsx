@@ -97,7 +97,10 @@ export default function DigestDetailPage() {
   const [showAllPoints, setShowAllPoints] = useState(false);
 
   useEffect(() => {
-    api.get<Digest>(`/api/digests/${id}`).then(setDigest);
+    api.get<Digest>(`/api/digests/${id}`).then((nextDigest) => {
+      setDigest(nextDigest);
+      void api.post(`/api/digests/${id}/review`).catch(() => undefined);
+    });
   }, [id]);
 
   if (!digest) {
@@ -152,6 +155,7 @@ export default function DigestDetailPage() {
     digest.content.open_loops_count ||
     digest.content.concentration_warning;
   const copy = digestDetailCopy(digest.content.investor_profile ?? null);
+  const actionQueue = digest.content.action_queue ?? (digest.content.next_action ? [digest.content.next_action] : []);
 
   return (
     <AppShell>
@@ -214,6 +218,57 @@ export default function DigestDetailPage() {
               </div>
             </div>
         </div>
+
+        {actionQueue.length > 0 && (
+          <section className="product-panel border border-primary/30 bg-[linear-gradient(180deg,rgba(163,126,79,0.1),rgba(255,255,255,0.96))] p-5 sm:p-6">
+            <div className="flex flex-col gap-1.5 sm:flex-row sm:items-end sm:justify-between">
+              <div>
+                <p className="font-mono text-[10px] uppercase tracking-[0.22em] text-primary">
+                  Your next move
+                </p>
+                <h2 className="mt-2 font-display text-[1.7rem] italic leading-tight text-foreground">
+                  Start here, then close the rest if they still need you.
+                </h2>
+              </div>
+              <p className="font-mono text-[10px] uppercase tracking-[0.16em] text-muted-foreground/65">
+                {actionQueue.length} {actionQueue.length === 1 ? "action" : "actions"}
+              </p>
+            </div>
+            <div className="mt-5 grid gap-3 lg:grid-cols-3">
+              {actionQueue.map((action, index) => (
+                <div
+                  key={action.action_key}
+                  className={`flex flex-col justify-between gap-4 border p-4 ${index === 0 ? "border-primary/45 bg-background/90" : "border-border/70 bg-background/65"}`}
+                >
+                  <div className="space-y-2">
+                    <div className="flex flex-wrap items-center gap-2">
+                      <span className="font-mono text-[10px] uppercase tracking-[0.16em] text-primary">
+                        {action.ticker}
+                      </span>
+                      {action.carried_forward && (
+                        <span className="border border-amber-600/25 bg-amber-600/10 px-1.5 py-0.5 font-mono text-[9px] uppercase tracking-[0.12em] text-amber-800">
+                          Carried forward
+                        </span>
+                      )}
+                    </div>
+                    <h3 className="font-sans text-sm font-medium leading-snug text-foreground">
+                      {action.title}
+                    </h3>
+                    <p className="font-sans text-xs leading-relaxed text-foreground/70">
+                      {action.detail}
+                    </p>
+                  </div>
+                  <Link
+                    href={action.cta_href}
+                    className="inline-flex w-fit items-center border border-primary/30 px-3 py-2 font-mono text-[10px] uppercase tracking-[0.14em] text-primary transition-colors hover:border-primary/60"
+                  >
+                    {action.cta_label}
+                  </Link>
+                </div>
+              ))}
+            </div>
+          </section>
+        )}
 
         <div className="grid gap-5 xl:grid-cols-[minmax(0,1fr)_18rem]">
           <div className="space-y-5">

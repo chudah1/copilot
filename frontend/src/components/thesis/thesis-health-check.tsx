@@ -98,7 +98,7 @@ export function ThesisHealthCheck({
       </div>
 
       <div className="space-y-5 p-5 sm:p-6">
-        <div className="grid grid-cols-2 gap-3 text-sm sm:grid-cols-4">
+        <div className="grid grid-cols-2 gap-3 text-sm">
           {result.current_price != null && (
             <div className="min-w-0 border border-border/60 bg-background/70 p-3">
               <p className="truncate font-mono text-[10px] uppercase tracking-[0.16em] text-muted-foreground">Price</p>

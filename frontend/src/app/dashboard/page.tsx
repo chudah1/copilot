@@ -28,16 +28,16 @@ import { DashboardSkeleton } from "@/components/portfolio/dashboard-skeleton";
 import { ErrorBoundary } from "@/components/ui/error-boundary";
 import { InfoTip } from "@/components/ui/info-tip";
 import { BlindSpotsSection } from "@/components/dashboard/blind-spots-section";
-import { CommandCenterHero } from "@/components/dashboard/command-center-hero";
-import { CommandCenterSection } from "@/components/dashboard/command-center-section";
-import { OpenLoopsSection } from "@/components/dashboard/open-loops-section";
+import { DashboardActionCenter } from "@/components/dashboard/dashboard-action-center";
 import { deriveDashboardCoach } from "@/lib/dashboard-coach";
+import { buildDashboardActionQueue } from "@/lib/dashboard-action-queue";
 import { toast } from "sonner";
 import type {
   DashboardCommandCenter,
   DashboardCoachMemory,
   DashboardOpenLoop,
   DashboardWorkspace,
+  Digest,
   Holding,
   LivePrice,
   OnboardingState,
@@ -99,16 +99,6 @@ function dashboardCopy(investorProfile: "thesis_driven" | "hearsay_driven" | nul
     quarterly:
       "Quarterly review ready for {count} position{plural}.",
   };
-}
-
-function quietBoardBody(investorProfile: "thesis_driven" | "hearsay_driven" | null) {
-  if (investorProfile === "hearsay_driven") {
-    return "Nothing needs you right now. Use the quiet to clarify one unclear reason before the market asks harder questions.";
-  }
-  if (investorProfile === "thesis_driven") {
-    return "Nothing needs you right now. Use the quiet to clarify one unclear thesis before the market asks harder questions.";
-  }
-  return "Nothing needs you right now. Use the quiet to clarify one unclear reason before the market asks harder questions.";
 }
 
 function isRecentIsoDate(value: string | null | undefined, days: number) {
@@ -215,10 +205,8 @@ function recentReviewBannerCopy(
 function DashboardInner() {
   const router = useRouter();
   const searchParams = useSearchParams();
-  const [draftBannerDismissed, setDraftBannerDismissed] = useState(false);
   const [showAddForm, setShowAddForm] = useState(false);
   const [peekHoldingId, setPeekHoldingId] = useState<string | null>(null);
-  const [onboardingBannerVisible, setOnboardingBannerVisible] = useState(false);
   const [activationBannerDismissed, setActivationBannerDismissed] = useState(() => {
     if (typeof window === "undefined") return false;
     return window.localStorage.getItem("dashboard_activation_banner_dismissed") === "1";
@@ -250,7 +238,8 @@ function DashboardInner() {
   const { data: pulse, error: pulseError, mutate: mutatePulse } = useSWR<PortfolioPulse>("/api/portfolio/pulse", fetcher);
   const { data: upcomingEarnings = [] } = useSWR<UpcomingEarnings[]>("/api/portfolio/upcoming-earnings", fetcher, { fallbackData: [] });
   const { data: quarterlyReview = null } = useSWR<QuarterlyReviewCurrent>("/api/quarterly-review/current", fetcher);
-  const { data: openLoops = [], mutate: mutateOpenLoops } = useSWR<DashboardOpenLoop[]>("/api/dashboard/open-loops", fetcher);
+  const { data: openLoops = [] } = useSWR<DashboardOpenLoop[]>("/api/dashboard/open-loops", fetcher);
+  const { data: digests = [], mutate: mutateDigests } = useSWR<Digest[]>("/api/digests", fetcher);
   const { data: onboardingState = null } = useSWR<OnboardingState>("/api/onboarding/state", fetcher);
   const { data: userPrefs = null } = useSWR<UserPreferences>("/api/settings", fetcher);
   const investorProfile = workspace?.investor_profile ?? onboardingState?.investor_profile ?? null;
@@ -280,20 +269,8 @@ function DashboardInner() {
       mutateCommandCenter(),
       mutatePulse(),
       mutateCoachMemory(),
+      mutateDigests(),
     ]);
-  };
-
-  const handleDismissOpenLoop = async (loopKey: string) => {
-    try {
-      await api.post("/api/dashboard/open-loops/dismiss", {
-        loop_key: loopKey,
-        dismiss_for_days: 7,
-      });
-      await mutateOpenLoops();
-      toast.success("Follow-up hidden for a week.");
-    } catch (err) {
-      toast.error(getErrorMessage(err, "Couldn't hide follow-up"));
-    }
   };
 
   // ── Derived state ─────────────────────────────────────────────────────
@@ -324,7 +301,6 @@ function DashboardInner() {
   const missingThesisCount = decisionInbox.counts.needsWrittenCase;
   const nearTermEarnings = decisionInbox.nearTermEarnings;
   const visibleEarnings = decisionInbox.visibleEarnings;
-  const draftReadyCount = workspace?.summary_metrics.drafts_ready_count ?? 0;
   const caseQualityStats = decisionInbox.caseQualityCounts;
   const weakestHolding = decisionInbox.weakestCaseEntry?.holding ?? null;
   const weakestQuality = decisionInbox.weakestCaseEntry?.caseQuality ?? null;
@@ -333,8 +309,6 @@ function DashboardInner() {
     [workspace, openLoops, coachMemory],
   );
   const visibleCoachPlan = coachPlan && coachPlan.adviceKey !== dismissedCoachAdviceKey ? coachPlan : null;
-  const commandCenterSections = commandCenter?.sections ?? [];
-  const visibleCommandCenterSections = commandCenterSections.filter((section) => section.count > 0);
   const liveCaseCount = workspace?.summary_metrics.monitored_count ?? summary?.theses_active ?? 0;
   const blindSpotCount = workspace?.blind_spots.length
     ?? (caseQualityStats.missing + caseQualityStats.weak + caseQualityStats.review_overdue);
@@ -343,6 +317,21 @@ function DashboardInner() {
     { label: "Reviews waiting", value: String(openLoops.length) },
     { label: "Needs attention", value: String(blindSpotCount) },
   ];
+
+  const latestDigest = digests[0] ?? null;
+  const weeklyDigestReady = Boolean(
+    latestDigest &&
+    ["ready", "sent"].includes(latestDigest.status) &&
+    !latestDigest.reviewed_at,
+  );
+  const dashboardActions = buildDashboardActionQueue({
+    commandCenter,
+    latestDigest,
+    weeklyDigestReady,
+    quarterlyReview,
+    investorProfile,
+    coachPlan: visibleCoachPlan,
+  });
 
   const sortedHoldings = decisionInbox.entries.map((entry) => entry.holding);
 
@@ -549,10 +538,10 @@ function DashboardInner() {
                 <div>
                   <div className="flex items-center gap-1.5">
                     <p className="font-mono text-[10px] uppercase tracking-[0.22em] text-muted-foreground">
-                      Command center
+                      Portfolio command center
                     </p>
                     <InfoTip label="Command center" align="center">
-                      Start with the position that needs a decision now, then move through what held up, what needs clarifying, and what is still unresolved.
+                      One prioritized queue for your weekly review, decisions, and follow-through.
                     </InfoTip>
                   </div>
                   <h1 className="mt-2 font-display text-[2rem] italic leading-tight text-foreground sm:text-[2.5rem]">
@@ -563,21 +552,9 @@ function DashboardInner() {
                   </h1>
                 </div>
 
-                {commandCenter ? (
-                  <CommandCenterHero center={commandCenter} />
-                ) : (
-                  <div className="product-panel border border-emerald-500/25 bg-[linear-gradient(180deg,rgba(16,185,129,0.08),rgba(255,255,255,0.94))] px-5 py-5 sm:px-6 sm:py-6">
-                    <p className="font-mono text-[10px] uppercase tracking-[0.18em] text-emerald-700/80">
-                      Quiet board
-                    </p>
-                    <p className="mt-2 font-display text-[1.65rem] italic leading-tight text-foreground sm:text-[2rem]">
-                      Quiet right now.
-                    </p>
-                    <p className="mt-2 max-w-2xl font-sans text-sm leading-relaxed text-foreground/85">
-                      {quietBoardBody(investorProfile)}
-                    </p>
-                  </div>
-                )}
+                <p className="max-w-2xl font-sans text-sm leading-relaxed text-foreground/72">
+                  Start with the highest-priority action, then move through the rest when you are ready.
+                </p>
               </div>
 
             </div>
@@ -585,17 +562,13 @@ function DashboardInner() {
         </div>
       </motion.div>
 
-      {visibleCommandCenterSections.length > 0 && (
+      {dashboardActions.length > 0 && (
         <div className="order-4 px-4 pt-4 sm:px-8">
-          <section className="grid gap-4 xl:grid-cols-2">
-            {visibleCommandCenterSections.map((section) => (
-              <CommandCenterSection
-                key={section.kind}
-                section={section}
-                investorProfile={commandCenter?.investor_profile ?? investorProfile}
-              />
-            ))}
-          </section>
+          <DashboardActionCenter
+            actions={dashboardActions}
+            onCoachAct={handleCoachAct}
+            onCoachSkip={handleCoachSkip}
+          />
         </div>
       )}
 
@@ -672,67 +645,10 @@ function DashboardInner() {
 
         {shouldRenderOnboardingBanner && (
           <ErrorBoundary>
-            <OnboardingBanner onVisibilityChange={setOnboardingBannerVisible} />
+            <OnboardingBanner />
           </ErrorBoundary>
         )}
 
-        {(() => {
-          const noTheses = (summary?.theses_active ?? 0) === 0;
-          const showDraft = !onboardingBannerVisible && draftReadyCount > 0 && !draftBannerDismissed;
-          const showQuarterly = !noTheses && (quarterlyReview?.pending_count ?? 0) > 0;
-          if (!showDraft && !showQuarterly) return null;
-          const draftCta = onboardingState?.investor_profile === "thesis_driven" ? "Review theses →"
-            : onboardingState?.investor_profile === "hearsay_driven" ? "Review reasons →"
-            : "Review →";
-          const draftCount = draftReadyCount;
-          const bannerBody = showDraft && showQuarterly
-            ? `${draftCount === 1 ? "1 draft is" : `${draftCount} drafts are`} ready. ${quarterlyReview!.pending_count} quarterly review${quarterlyReview!.pending_count > 1 ? "s are" : " is"} also waiting.`
-            : showDraft
-              ? copy.draftBanner.replace("{count}", draftCount === 1 ? "1 position" : `${draftCount} positions`)
-              : copy.quarterly
-                  .replace("{count}", String(quarterlyReview!.pending_count))
-                  .replace("{plural}", quarterlyReview!.pending_count > 1 ? "s" : "");
-          return (
-            <div className="product-panel flex items-start justify-between gap-4 border border-primary/25 bg-[linear-gradient(180deg,rgba(163,126,79,0.08),rgba(255,255,255,0.95))] px-5 py-4">
-              <div className="flex min-w-0 flex-1 items-start gap-3">
-                <span className="shrink-0 border border-primary/30 px-1.5 py-0.5 font-mono text-[10px] uppercase tracking-[0.15em] text-primary">
-                  {showQuarterly && quarterlyReview ? quarterlyReview.quarter : "Next up"}
-                </span>
-                <div className="min-w-0">
-                  <p className="font-mono text-[10px] uppercase tracking-[0.16em] text-primary/75">
-                    Review queue
-                  </p>
-                  <p className="mt-1 font-sans text-sm leading-relaxed text-foreground/82">
-                    {bannerBody}
-                  </p>
-                </div>
-              </div>
-              <div className="ml-4 flex shrink-0 items-center gap-4 self-start">
-                {showDraft && (
-                  <Link
-                    href="/onboarding/review-drafts"
-                    className="inline-flex items-center border border-primary/25 bg-background/72 px-3 py-2 font-mono text-[10px] uppercase tracking-[0.15em] text-primary transition-colors hover:border-primary/45 whitespace-nowrap"
-                  >
-                    {draftCta}
-                  </Link>
-                )}
-                {showQuarterly && (
-                  <Link
-                    href="/dashboard/quarterly-review"
-                    className="inline-flex items-center border border-primary/25 bg-background/72 px-3 py-2 font-mono text-[10px] uppercase tracking-[0.15em] text-primary transition-colors hover:border-primary/45 whitespace-nowrap"
-                  >
-                    Review quarter →
-                  </Link>
-                )}
-                {showDraft && (
-                  <button onClick={() => setDraftBannerDismissed(true)} className="text-muted-foreground hover:text-foreground text-xs transition-colors">
-                    ✕
-                  </button>
-                )}
-              </div>
-            </div>
-          );
-        })()}
       </div>
 
       {workspace && (
@@ -740,9 +656,6 @@ function DashboardInner() {
           <BehavioralMemoryStrip
             workspace={workspace}
             coachMemory={coachMemory}
-            coachPlan={visibleCoachPlan}
-            onCoachAct={handleCoachAct}
-            onCoachSkip={handleCoachSkip}
           />
         </div>
       )}
@@ -963,13 +876,7 @@ function DashboardInner() {
           </div>
 
           {workspace && (
-            <>
-              <OpenLoopsSection
-                loops={openLoops}
-                onDismiss={handleDismissOpenLoop}
-              />
-              <BlindSpotsSection blindSpots={workspace.blind_spots} investorProfile={investorProfile} />
-            </>
+            <BlindSpotsSection blindSpots={workspace.blind_spots} investorProfile={investorProfile} />
           )}
           {!workspace && weakestHolding && weakestQuality && (
             <div className="product-panel p-4 sm:p-5">

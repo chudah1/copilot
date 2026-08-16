@@ -56,3 +56,21 @@ async def get_digest(digest_id: uuid.UUID, user: User = Depends(get_current_user
     if digest is None:
         raise HTTPException(status_code=404, detail="Digest not found")
     return digest
+
+
+@router.post("/{digest_id}/review", response_model=DigestResponse)
+async def review_digest(
+    digest_id: uuid.UUID,
+    user: User = Depends(get_current_user),
+    db: AsyncSession = Depends(get_db),
+):
+    result = await db.execute(select(Digest).where(Digest.id == digest_id, Digest.user_id == user.id))
+    digest = result.scalar_one_or_none()
+    if digest is None:
+        raise HTTPException(status_code=404, detail="Digest not found")
+
+    if digest.reviewed_at is None:
+        digest.reviewed_at = datetime.now(timezone.utc)
+        await db.commit()
+        await db.refresh(digest)
+    return digest

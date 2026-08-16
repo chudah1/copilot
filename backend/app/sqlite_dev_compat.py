@@ -148,6 +148,12 @@ def ensure_sqlite_dev_compatibility(conn) -> None:
             conn.execute(text("ALTER TABLE onboarding_states ADD COLUMN reengagement_email_sent_at DATETIME"))
             logger.info("Added missing onboarding_states.reengagement_email_sent_at column for local SQLite compatibility")
 
+    if "digests" in tables:
+        digest_columns = {column["name"] for column in inspector.get_columns("digests")}
+        if "reviewed_at" not in digest_columns:
+            conn.execute(text("ALTER TABLE digests ADD COLUMN reviewed_at DATETIME"))
+            logger.info("Added missing digests.reviewed_at column for local SQLite compatibility")
+
 
 def bootstrap_local_sqlite_alembic_head(conn, metadata, head_revision: str | None) -> bool:
     if conn.dialect.name != "sqlite" or not head_revision:

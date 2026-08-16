@@ -334,9 +334,22 @@ export interface PortfolioSummary {
   }>;
 }
 
+export interface DigestAction {
+  action_key: string;
+  kind: "follow_up" | "evidence" | "refresh" | "write" | string;
+  ticker: string;
+  title: string;
+  detail: string;
+  cta_label: string;
+  cta_href: string;
+  priority: number;
+  carried_forward: boolean;
+}
+
 export interface Digest {
   id: string;
   sent_at: string | null;
+  reviewed_at: string | null;
   period_start: string;
   period_end: string;
   content: {
@@ -366,6 +379,8 @@ export interface Digest {
       cta_label: string;
       cta_href: string;
     }>;
+    action_queue?: DigestAction[];
+    next_action?: DigestAction | null;
     concentration_warning?: string;
     monitoring_receipt?: string;
     quiet_nudge?: string | null;

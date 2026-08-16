@@ -3,7 +3,7 @@ from unittest.mock import AsyncMock, patch
 
 from sqlalchemy import select
 
-from app.jobs.digest_builder import run_digest_builder
+from app.jobs.digest_builder import _build_action_queue, run_digest_builder
 from app.models.digest import Digest
 from app.models.earnings_calendar import EarningsCalendar
 from app.models.holding import Holding
@@ -22,6 +22,85 @@ async def test_list_digests_empty(client, auth_headers):
 async def test_list_digests_requires_auth(client):
     response = await client.get("/api/digests")
     assert response.status_code == 403
+
+
+def test_digest_action_queue_prioritizes_carried_forward_follow_up():
+    queue = _build_action_queue(
+        open_loops=[
+            {
+                "loop_key": "open:NVDA",
+                "ticker": "NVDA_US_EQ",
+                "title": "Revisit the NVDA thesis",
+                "detail": "A prior review is still waiting for a decision.",
+                "cta_label": "Review thesis ->",
+                "cta_href": "/dashboard/positions/NVDA",
+                "priority": 1,
+                "age_days": 8,
+            }
+        ],
+        events_data=[
+            {
+                "ticker": "TSLA_US_EQ",
+                "title": "Tesla evidence changed",
+                "verdict": "threatens",
+                "severity": "warning",
+                "created_at": datetime.now(timezone.utc),
+                "evidence_summary": "Demand evidence needs a closer read.",
+            }
+        ],
+        holdings_with_theses=[],
+        missing_theses=[],
+        stale_theses=[],
+    )
+
+    assert queue[0]["kind"] == "follow_up"
+    assert queue[0]["ticker"] == "NVDA"
+    assert queue[0]["carried_forward"] is True
+    assert queue[1]["kind"] == "evidence"
+    assert queue[1]["ticker"] == "TSLA"
+
+
+async def test_review_digest_marks_only_owned_digest_reviewed(client, auth_headers, db, test_user):
+    digest = Digest(
+        user_id=test_user.id,
+        period_start=datetime.now(timezone.utc) - timedelta(days=7),
+        period_end=datetime.now(timezone.utc),
+        content={"headline": "A weekly read"},
+        status="sent",
+    )
+    db.add(digest)
+    await db.commit()
+    await db.refresh(digest)
+
+    response = await client.post(f"/api/digests/{digest.id}/review", headers=auth_headers)
+
+    assert response.status_code == 200
+    assert response.json()["reviewed_at"] is not None
+
+    stored = await db.get(Digest, digest.id)
+    assert stored is not None
+    await db.refresh(stored)
+    assert stored.reviewed_at is not None
+
+    repeat_response = await client.post(f"/api/digests/{digest.id}/review", headers=auth_headers)
+    assert repeat_response.status_code == 200
+    assert repeat_response.json()["reviewed_at"] == response.json()["reviewed_at"]
+
+    other_user = User(email="other-digest@example.com", password_hash=hash_password("testpass123"))
+    db.add(other_user)
+    await db.flush()
+    other_digest = Digest(
+        user_id=other_user.id,
+        period_start=digest.period_start,
+        period_end=digest.period_end,
+        content={},
+        status="sent",
+    )
+    db.add(other_digest)
+    await db.commit()
+
+    foreign_response = await client.post(f"/api/digests/{other_digest.id}/review", headers=auth_headers)
+    assert foreign_response.status_code == 404
 
 
 async def test_digest_builder_records_missing_and_stale_theses(db, job_session_factory):

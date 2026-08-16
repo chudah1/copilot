@@ -363,10 +363,10 @@ export function ThesisCard({ thesis, decomposition, investorProfile, monitoringG
               </p>
             </div>
           </div>
-          <div className="mt-4 grid gap-3 sm:grid-cols-3">
-            <div className="border border-border/60 bg-background/70 p-3">
-              <div className="flex items-center gap-1.5">
-                <p className="font-mono text-[10px] uppercase tracking-[0.16em] text-muted-foreground">
+          <div className="mt-4 grid gap-3 sm:grid-cols-2 lg:grid-cols-3">
+            <div className="min-w-0 border border-border/60 bg-background/70 p-3">
+              <div className="flex min-w-0 items-start gap-1.5">
+                <p className="min-w-0 font-mono text-[10px] uppercase leading-snug tracking-[0.16em] text-muted-foreground">
                   Monitorability
                 </p>
                 <InfoTip label="Monitorability">
@@ -377,9 +377,9 @@ export function ThesisCard({ thesis, decomposition, investorProfile, monitoringG
                 {quality.monitorability ?? "medium"}
               </p>
             </div>
-            <div className="border border-border/60 bg-background/70 p-3">
-              <div className="flex items-center gap-1.5">
-                <p className="font-mono text-[10px] uppercase tracking-[0.16em] text-muted-foreground">
+            <div className="min-w-0 border border-border/60 bg-background/70 p-3">
+              <div className="flex min-w-0 items-start gap-1.5">
+                <p className="min-w-0 font-mono text-[10px] uppercase leading-snug tracking-[0.16em] text-muted-foreground">
                   Review cadence
                 </p>
                 <InfoTip label="Review cadence">
@@ -390,9 +390,9 @@ export function ThesisCard({ thesis, decomposition, investorProfile, monitoringG
                 {quality.cadenceDays} days
               </p>
             </div>
-            <div className="border border-border/60 bg-background/70 p-3">
-              <div className="flex items-center gap-1.5">
-                <p className="font-mono text-[10px] uppercase tracking-[0.16em] text-muted-foreground">
+            <div className="min-w-0 border border-border/60 bg-background/70 p-3">
+              <div className="flex min-w-0 items-start gap-1.5">
+                <p className="min-w-0 font-mono text-[10px] uppercase leading-snug tracking-[0.16em] text-muted-foreground">
                   Monitoring checks
                 </p>
                 <InfoTip label="Monitoring checks">

@@ -262,6 +262,107 @@ def _serialize_digest_open_loop(loop) -> dict:
     }
 
 
+def _build_action_queue(
+    *,
+    open_loops: list[dict],
+    events_data: list[dict],
+    holdings_with_theses: list[dict],
+    missing_theses: list[str],
+    stale_theses: list[str],
+    investor_profile: InvestorProfile = None,
+) -> list[dict]:
+    """Turn the weekly read into a short, stable list of next actions."""
+    action_queue: list[dict] = []
+    covered_tickers: set[str] = set()
+    action_noun = "thesis" if investor_profile == "thesis_driven" else "reason"
+
+    for loop in open_loops[:3]:
+        ticker = loop["ticker"].replace("_US_EQ", "").replace("_EQ", "")
+        covered_tickers.add(ticker)
+        action_queue.append(
+            {
+                "action_key": f"follow_up:{loop['loop_key']}",
+                "kind": "follow_up",
+                "ticker": ticker,
+                "title": loop["title"],
+                "detail": loop["detail"],
+                "cta_label": loop["cta_label"],
+                "cta_href": loop["cta_href"],
+                "priority": loop["priority"],
+                "carried_forward": loop["age_days"] >= 7,
+            }
+        )
+
+    ranked_events = sorted(
+        [event for event in events_data if event.get("verdict") in {"threatens", "review"}],
+        key=_event_rank,
+    )
+    for event in ranked_events:
+        ticker = event["ticker"].replace("_US_EQ", "").replace("_EQ", "")
+        if ticker in covered_tickers or len(action_queue) >= 3:
+            continue
+        covered_tickers.add(ticker)
+        created_at = event.get("created_at")
+        action_queue.append(
+            {
+                "action_key": f"evidence:{ticker}:{created_at.isoformat() if created_at else event.get('title', '')}",
+                "kind": "evidence",
+                "ticker": ticker,
+                "title": f"Review {ticker}'s latest evidence",
+                "detail": _what_happened(event),
+                "cta_label": "Review evidence →",
+                "cta_href": f"/dashboard/positions/{event['ticker']}?tab=monitoring",
+                "priority": 10,
+                "carried_forward": False,
+            }
+        )
+
+    for snapshot in holdings_with_theses:
+        if len(action_queue) >= 3:
+            break
+        ticker = snapshot["ticker"].replace("_US_EQ", "").replace("_EQ", "")
+        if ticker in covered_tickers or snapshot["ticker"] not in stale_theses:
+            continue
+        covered_tickers.add(ticker)
+        action_queue.append(
+            {
+                "action_key": f"refresh:{ticker}",
+                "kind": "refresh",
+                "ticker": ticker,
+                "title": f"Refresh {ticker}'s {action_noun}",
+                "detail": f"This {action_noun} is due for a refresh before you rely on it again.",
+                "cta_label": f"Refresh {action_noun} →",
+                "cta_href": f"/dashboard/positions/{snapshot['ticker']}",
+                "priority": 20,
+                "carried_forward": False,
+            }
+        )
+
+    if len(action_queue) < 3:
+        for ticker_value in missing_theses:
+            ticker = ticker_value.replace("_US_EQ", "").replace("_EQ", "")
+            if ticker in covered_tickers:
+                continue
+            covered_tickers.add(ticker)
+            action_queue.append(
+                {
+                    "action_key": f"write:{ticker}",
+                    "kind": "write",
+                    "ticker": ticker,
+                    "title": f"Write the {action_noun} for {ticker}",
+                    "detail": f"Give this position a clear {action_noun} before the next weekly read.",
+                    "cta_label": f"Write {action_noun} →",
+                    "cta_href": f"/dashboard/positions/{ticker_value}",
+                    "priority": 30,
+                    "carried_forward": False,
+                }
+            )
+            if len(action_queue) >= 3:
+                break
+
+    return action_queue[:3]
+
+
 def _signal_status_text(intact_count: int, weakening_count: int) -> str:
     if intact_count == 0 and weakening_count == 0:
         return ""
@@ -728,6 +829,7 @@ def _render_digest_html(
     holdings_with_theses: list[dict],
     events_data: list[dict],
     open_loops: list[dict],
+    action_queue: list[dict] | None = None,
     observations: dict,
     headline: str,
     monitoring_receipt: str,
@@ -760,6 +862,20 @@ def _render_digest_html(
     )
     if intro_line:
         parts.append(f'<p style="color:{_DZ["muted"]};margin:8px 0 4px;">{intro_line}</p>')
+
+    if action_queue:
+        next_action = action_queue[0]
+        carry_label = "Carried forward" if next_action.get("carried_forward") else "Next move"
+        parts.append(_section_label(carry_label))
+        parts.append(
+            f'<div style="margin:10px 0 18px;padding:14px 16px;border:1px solid {_DZ["accent"]};background:{_DZ["quote"]};">'
+            f'<p style="margin:0 0 5px;font-family:{_SERIF};font-size:17px;color:{_DZ["ink"]};">'
+            f'<strong>{escape(next_action["ticker"])}</strong> &mdash; {escape(next_action["title"])}</p>'
+            f'<p style="margin:0;color:{_DZ["muted"]};line-height:1.55;">{escape(next_action["detail"])}</p>'
+            f'<p style="margin:10px 0 0;"><a href="{settings.frontend_url}{next_action["cta_href"]}" '
+            f'style="color:{_DZ["accent_deep"]};text-decoration:none;font-weight:600;">{escape(next_action["cta_label"])} &rarr;</a></p>'
+            '</div>'
+        )
 
     if ranked_events:
         # TLDR section
@@ -1314,11 +1430,20 @@ async def build_and_persist_user_digest(
     )
     open_loops = await list_open_loops(db, user=user, now=now)
     digest_open_loops = [_serialize_digest_open_loop(loop) for loop in open_loops[:3]]
+    action_queue = _build_action_queue(
+        open_loops=[_serialize_digest_open_loop(loop) for loop in open_loops],
+        events_data=events_data,
+        holdings_with_theses=holdings_with_theses,
+        missing_theses=missing_theses,
+        stale_theses=stale_theses,
+        investor_profile=investor_profile,
+    )
 
     html_content = _render_digest_html(
         holdings_with_theses=holdings_with_theses,
         events_data=events_data,
         open_loops=digest_open_loops,
+        action_queue=action_queue,
         observations=observations,
         headline=headline,
         monitoring_receipt=receipt,
@@ -1353,6 +1478,8 @@ async def build_and_persist_user_digest(
             "stale_theses_count": len(stale_theses),
             "open_loops_count": len(open_loops),
             "open_loops": digest_open_loops,
+            "action_queue": action_queue,
+            "next_action": action_queue[0] if action_queue else None,
             "concentration_warning": concentration_warnings,
             "monitoring_receipt": receipt,
             "quiet_nudge": quiet_nudge,
