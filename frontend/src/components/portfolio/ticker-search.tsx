@@ -1,6 +1,7 @@
 "use client";
 
 import { useState, useRef, useEffect, useCallback } from "react";
+import { createPortal } from "react-dom";
 import { Input } from "@/components/ui/input";
 import { api } from "@/lib/api";
 
@@ -15,6 +16,13 @@ interface TickerSearchProps {
   onSelect: (ticker: string, name: string) => void;
   onChange?: (value: string) => void;
   placeholder?: string;
+}
+
+interface MenuPosition {
+  top: number;
+  left: number;
+  width: number;
+  maxHeight: number;
 }
 
 function getSearchPriority(query: string, result: TickerResult) {
@@ -44,7 +52,22 @@ export function TickerSearch({ value, onSelect, onChange, placeholder = "NVDA or
   const [open, setOpen] = useState(false);
   const [activeIndex, setActiveIndex] = useState(-1);
   const containerRef = useRef<HTMLDivElement>(null);
+  const menuRef = useRef<HTMLDivElement>(null);
   const debounceRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const [menuPosition, setMenuPosition] = useState<MenuPosition | null>(null);
+
+  const updateMenuPosition = useCallback(() => {
+    const inputBounds = containerRef.current?.getBoundingClientRect();
+    if (!inputBounds) return;
+
+    const top = inputBounds.bottom + 8;
+    setMenuPosition({
+      top,
+      left: inputBounds.left,
+      width: inputBounds.width,
+      maxHeight: Math.max(160, window.innerHeight - top - 16),
+    });
+  }, []);
 
   const search = useCallback((q: string) => {
     if (debounceRef.current) clearTimeout(debounceRef.current);
@@ -78,8 +101,28 @@ export function TickerSearch({ value, onSelect, onChange, placeholder = "NVDA or
   }, []);
 
   useEffect(() => {
+    if (!open) {
+      return;
+    }
+
+    updateMenuPosition();
+    window.addEventListener("resize", updateMenuPosition);
+    // Follow the input when its parent scrolls inside the dashboard.
+    window.addEventListener("scroll", updateMenuPosition, true);
+    return () => {
+      window.removeEventListener("resize", updateMenuPosition);
+      window.removeEventListener("scroll", updateMenuPosition, true);
+    };
+  }, [open, updateMenuPosition]);
+
+  useEffect(() => {
     function handleClickOutside(e: MouseEvent) {
-      if (containerRef.current && !containerRef.current.contains(e.target as Node)) {
+      const target = e.target as Node;
+      if (
+        containerRef.current &&
+        !containerRef.current.contains(target) &&
+        !menuRef.current?.contains(target)
+      ) {
         setOpen(false);
       }
     }
@@ -124,14 +167,26 @@ export function TickerSearch({ value, onSelect, onChange, placeholder = "NVDA or
         autoComplete="off"
         spellCheck={false}
       />
-      {open && (
-        <div className="absolute left-0 top-full z-50 mt-2 w-full overflow-hidden border border-border/70 bg-background shadow-[0_20px_50px_rgba(33,24,17,0.12)]">
+      {open && menuPosition && typeof document !== "undefined" && createPortal(
+        <div
+          ref={menuRef}
+          className="fixed z-[100] overflow-hidden border border-border/70 bg-background shadow-[0_20px_50px_rgba(33,24,17,0.12)]"
+          style={{
+            top: menuPosition.top,
+            left: menuPosition.left,
+            width: menuPosition.width,
+            maxHeight: menuPosition.maxHeight,
+          }}
+        >
           <div className="border-b border-border/60 px-4 py-2">
             <p className="font-mono text-[9px] uppercase tracking-[0.18em] text-muted-foreground/70">
               Top matches
             </p>
           </div>
-          <div className="max-h-[22rem] overflow-y-auto">
+          <div
+            className="overflow-y-auto"
+            style={{ maxHeight: Math.max(96, menuPosition.maxHeight - 44) }}
+          >
             {results.map((result, i) => (
               <button
                 key={result.ticker}
@@ -156,7 +211,8 @@ export function TickerSearch({ value, onSelect, onChange, placeholder = "NVDA or
               </button>
             ))}
           </div>
-        </div>
+        </div>,
+        document.body,
       )}
     </div>
   );
