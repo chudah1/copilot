@@ -236,8 +236,11 @@ export function PositionHeader({
       {/* Keep only the lightweight tab rail sticky; the hero above keeps its
           natural height so scrolling never causes a layout jump. */}
       <div className="sticky top-[84px] z-30 border-b border-border/60 bg-background/95 backdrop-blur-sm">
-        <div className="mx-auto max-w-5xl px-4 sm:px-6 lg:px-10">
-          <div className="flex gap-1 overflow-x-auto pb-0.5">
+        <div className="mx-auto flex max-w-5xl items-center gap-4 px-4 sm:px-6 lg:px-10">
+          <span className="hidden shrink-0 border-r border-border/60 py-3 pr-4 font-mono text-[10px] uppercase tracking-[0.2em] text-muted-foreground sm:inline">
+            {cleanTicker(holding.ticker)}
+          </span>
+          <div className="flex min-w-0 flex-1 gap-1 overflow-x-auto">
             {tabs.map((tab) => (
               <button
                 key={tab.id}
