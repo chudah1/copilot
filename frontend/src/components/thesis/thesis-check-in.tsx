@@ -8,6 +8,7 @@ import { api, fetcher } from "@/lib/api";
 import { Textarea } from "@/components/ui/textarea";
 import { InfoTip } from "@/components/ui/info-tip";
 import { formatDate } from "@/lib/utils";
+import { cleanRichText } from "@/lib/text";
 import type {
   ClaimCheckInState,
   ClaimEvidenceItem,
@@ -139,13 +140,17 @@ function EvidenceRow({
             </span>
             <span className="font-mono text-[10px] text-muted-foreground/70">{formatDate(item.created_at)}</span>
           </div>
-          <p className="mt-1.5 font-sans text-sm leading-relaxed text-foreground/90">{item.summary || item.title}</p>
+          <p className="mt-1.5 whitespace-pre-line font-sans text-sm leading-relaxed text-foreground/90">
+            {cleanRichText(item.summary || item.title)}
+          </p>
           {item.ai_analysis && (
             <div className="product-panel mt-2.5 border border-emerald-600/20 bg-emerald-600/[0.05] px-3 py-2">
               <p className="font-mono text-[10px] uppercase tracking-[0.16em] text-emerald-700/80">
                 penKeep&apos;s read
               </p>
-              <p className="mt-1 font-sans text-xs leading-relaxed text-foreground/75">{item.ai_analysis}</p>
+              <p className="mt-1 whitespace-pre-line font-sans text-xs leading-relaxed text-foreground/75">
+                {cleanRichText(item.ai_analysis)}
+              </p>
             </div>
           )}
           {item.source_url && (
