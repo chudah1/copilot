@@ -1,6 +1,8 @@
 import re
 from typing import Any
 
+from app.services.signal_quality import cap_claim_signals, filter_signal_payloads
+
 
 VALID_REASON_TYPES = {
     "business_performance",
@@ -146,6 +148,10 @@ def normalize_decomposition_output(raw_output: dict[str, Any]) -> dict[str, Any]
                     {
                         "signal_type": signal_type,
                         "signal_label": normalized_text(signal.get("signal_label")) or None,
+                        "direction": normalized_text(signal.get("direction")).lower() or None,
+                        "evidence_scope": normalized_text(signal.get("evidence_scope")).lower() or None,
+                        "materiality": normalized_text(signal.get("materiality")).lower() or None,
+                        "observable": signal.get("observable") if isinstance(signal.get("observable"), bool) else None,
                         "signal_config_json": signal.get("signal_config_json") if isinstance(signal.get("signal_config_json"), dict) else {},
                         "rationale": normalized_text(signal.get("rationale")) or None,
                         "confidence": to_float(signal.get("confidence")),
@@ -153,6 +159,15 @@ def normalize_decomposition_output(raw_output: dict[str, Any]) -> dict[str, Any]
                         "raw_extraction_json": signal,
                     }
                 )
+            signals = filter_signal_payloads(
+                signals,
+                claim_text=claim_text,
+                source_field=source_field,
+                entity_name=entity_name,
+                entity_ticker=normalized_text(entity.get("entity_ticker")).upper() or None,
+                entity_type=entity_type,
+                relation_type=relation_type,
+            )
             entities.append(
                 {
                     "entity_name": entity_name,
@@ -166,6 +181,7 @@ def normalize_decomposition_output(raw_output: dict[str, Any]) -> dict[str, Any]
                     "signals": signals[:5],
                 }
             )
+        entities = cap_claim_signals(entities)
         claims.append(
             {
                 "claim_text": claim_text,

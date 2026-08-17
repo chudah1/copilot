@@ -53,7 +53,7 @@ export function PositionNoteDialog({
             Save a change in your thinking, a question to revisit, or something you want future you to remember.
           </DialogDescription>
         </DialogHeader>
-        <div className="grid gap-5 border-t border-border/60 px-5 py-5 sm:px-6 lg:grid-cols-[minmax(0,1fr)_13rem]">
+        <div className="grid items-start gap-5 border-t border-border/60 px-5 py-5 sm:px-6 lg:grid-cols-[minmax(0,1fr)_13rem]">
           <textarea
             aria-label="Position note"
             value={note}
@@ -61,7 +61,7 @@ export function PositionNoteDialog({
             placeholder="What changed, what stood out, or what should you check later?"
             rows={5}
             autoFocus
-            className="w-full resize-none border border-border bg-background px-4 py-3 font-sans text-sm leading-relaxed text-foreground placeholder:text-muted-foreground/50 focus:border-primary/50 focus:outline-none"
+            className="w-full resize-none border-0 bg-transparent p-0 font-sans text-base leading-relaxed text-foreground placeholder:text-muted-foreground/50 focus:border-0 focus:outline-none focus:ring-0 focus-visible:border-b focus-visible:border-primary/45"
           />
           <aside className="space-y-3 border-t border-border/50 pt-4 lg:border-t-0 lg:pt-0">
             <div className="product-panel border border-border/60 bg-background/72 px-3 py-3">

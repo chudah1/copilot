@@ -117,7 +117,32 @@ async def _refresh_claim(
                 signal.signal_label = new_label
             new_config = upd.get("signal_config_json")
             if isinstance(new_config, dict):
-                signal.signal_config_json = new_config
+                # Refreshing vocabulary must never erase the Phase 2 contract
+                # or a user's numeric/topic watch. The refresh model may return
+                # only the fields it understands, so merge rather than replace.
+                current_config = dict(signal.signal_config_json or {})
+                protected_fields = {
+                    key: current_config[key]
+                    for key in (
+                        "metric",
+                        "operator",
+                        "threshold",
+                        "threshold_pct",
+                        "segment",
+                        "topic",
+                        "watch_for",
+                        "direction",
+                        "evidence_scope",
+                        "materiality",
+                        "observable",
+                        "quality",
+                        "proxy_review_required",
+                        "proxy_source_metric",
+                        "proxy_for",
+                    )
+                    if key in current_config
+                }
+                signal.signal_config_json = {**protected_fields, **new_config}
             entity = entity_map.get(signal.entity_id)
             if entity:
                 new_name = (upd.get("entity_name") or "").strip()

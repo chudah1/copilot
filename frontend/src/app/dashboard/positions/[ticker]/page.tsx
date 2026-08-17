@@ -125,7 +125,6 @@ function PositionDetailInner() {
   const [hasPromptedBlindSpotEditor, setHasPromptedBlindSpotEditor] = useState(false);
   const [deleteConfirming, setDeleteConfirming] = useState(false);
   const [deleteLoading, setDeleteLoading] = useState(false);
-  const [headerCollapsed, setHeaderCollapsed] = useState(false);
   const [allGaps, setAllGaps] = useState<MonitoringGap[]>([]);
   const [historicalAudit, setHistoricalAudit] = useState<HistoricalAuditResponse | null>(null);
   const [historicalAuditThesisId, setHistoricalAuditThesisId] = useState<string | null>(null);
@@ -318,12 +317,6 @@ function PositionDetailInner() {
 
     return () => window.clearTimeout(timeoutId);
   }, [activeThesis, checkpointDraft, editing, fromSimulateCheckpoint, loading]);
-
-  useEffect(() => {
-    const onScroll = () => setHeaderCollapsed(window.scrollY > 80);
-    window.addEventListener("scroll", onScroll, { passive: true });
-    return () => window.removeEventListener("scroll", onScroll);
-  }, []);
 
   // Arriving from onboarding, the backend kicks off a first monitoring pass in
   // the background. Poll briefly so its results land live on this page instead of
@@ -962,7 +955,6 @@ function PositionDetailInner() {
         activeThesis={activeThesis}
         pulse={pulse}
         investorProfile={onboardingState?.investor_profile ?? null}
-        headerCollapsed={headerCollapsed}
         hasPrice={hasPrice}
         value={value}
         pnl={pnl}

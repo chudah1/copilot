@@ -24,6 +24,7 @@ from pydantic import BaseModel, Field
 
 from app.config import settings
 from app.services.news_watch import expand_watch_queries
+from app.services.text_cleaning import clean_text
 
 logger = logging.getLogger(__name__)
 
@@ -638,11 +639,11 @@ def _to_candidates(
     for item in items:
         if not isinstance(item, dict):
             continue
-        headline = (item.get("headline") or "").strip()
+        headline = clean_text(item.get("headline"))
         if not headline:
             continue
         url = item.get("url") or item.get("source_url") or ""
-        summary = (item.get("summary") or "").strip()
+        summary = clean_text(item.get("summary"))
         if ticker and name and not _mentions_target_company(
             headline=headline,
             summary=summary,

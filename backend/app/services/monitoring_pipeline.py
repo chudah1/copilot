@@ -45,6 +45,7 @@ from app.services.noise_filter import (
     story_anchor_for_candidate,
 )
 from app.services.signal_matching import build_evidence_summary, determine_verdict
+from app.services.text_cleaning import clean_text
 
 
 def _candidate_log_detail(candidate: dict[str, Any]) -> str:
@@ -176,7 +177,7 @@ def build_claim_signal_lookup(claims: list[Any] | None) -> tuple[dict[str, Any],
 
 def candidate_description_for_classifier(candidate: dict[str, Any]) -> str:
     evidence = candidate.get("evidence", {})
-    event_desc = candidate["description"]
+    event_desc = clean_text(candidate.get("description"))
     proxy_rationale = evidence.get("proxy_rationale")
     proxy_signal_hint = evidence.get("proxy_signal_hint")
     if proxy_rationale:
@@ -188,7 +189,7 @@ def candidate_description_for_classifier(candidate: dict[str, Any]) -> str:
 
 def candidate_summary_for_storage(candidate: dict[str, Any]) -> str:
     evidence = candidate.get("evidence", {})
-    stored_summary = candidate["description"]
+    stored_summary = clean_text(candidate.get("description"))
     proxy_rationale = evidence.get("proxy_rationale")
     proxy_signal_hint = evidence.get("proxy_signal_hint")
     if proxy_rationale:

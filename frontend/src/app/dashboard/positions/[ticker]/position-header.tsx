@@ -17,7 +17,6 @@ interface PositionHeaderProps {
   activeThesis: Thesis | undefined;
   pulse: HoldingPulse | null;
   investorProfile: "thesis_driven" | "hearsay_driven" | null;
-  headerCollapsed: boolean;
   hasPrice: boolean;
   value: number;
   pnl: number;
@@ -36,7 +35,7 @@ interface PositionHeaderProps {
 }
 
 export function PositionHeader({
-  holding, activeThesis, pulse, investorProfile, headerCollapsed, hasPrice, value, pnl, pnlPct,
+  holding, activeThesis, pulse, investorProfile, hasPrice, value, pnl, pnlPct,
   stalePressure, tabs, activeTab, unreviewedEvents, deleteConfirming,
   deleteLoading, onDelete, onSetDeleteConfirming, onCheckNowComplete, onSelectTab,
   onOpenNote,
@@ -57,7 +56,8 @@ export function PositionHeader({
   }[decisionState.kind];
 
   return (
-      <div className="sticky top-[84px] z-20 bg-background border-b border-border/60">
+    <>
+      <div className="relative z-20 border-b border-border/60 bg-background">
         <div className="max-w-5xl mx-auto px-4 sm:px-6 lg:px-10">
 
           {/* Nav row */}
@@ -114,7 +114,7 @@ export function PositionHeader({
           </div>
 
           {/* Identity + value row */}
-          <div className={`flex flex-col gap-4 pb-3 overflow-hidden transition-all duration-200 sm:flex-row sm:items-end sm:justify-between sm:gap-6 ${headerCollapsed ? "max-h-0 pb-0 opacity-0 sm:max-h-40 sm:pb-3 sm:opacity-100" : "max-h-60 sm:max-h-40"}`}>
+          <div className="flex flex-col gap-4 pb-3 sm:flex-row sm:items-end sm:justify-between sm:gap-6">
             <div>
               <p className="font-mono text-[10px] uppercase tracking-[0.16em] text-muted-foreground">
                 Position
@@ -158,7 +158,7 @@ export function PositionHeader({
             </div>
           </div>
 
-          <div className={`grid grid-cols-3 gap-px overflow-hidden border border-border/60 bg-border/60 transition-all duration-200 ${headerCollapsed ? "max-h-0 border-0 opacity-0 sm:max-h-24 sm:border sm:opacity-100" : "max-h-24"} mb-3`}>
+          <div className="mb-3 grid grid-cols-3 gap-px overflow-hidden border border-border/60 bg-border/60">
             <div className="bg-background/90 px-3 py-2">
               <p className="font-mono text-[9px] uppercase tracking-[0.15em] text-muted-foreground">
                 Shares
@@ -197,8 +197,7 @@ export function PositionHeader({
             </div>
           </div>
 
-          {/* The decision's price line — collapses with the rest of the header */}
-          <div className={`overflow-hidden transition-all duration-200 ${headerCollapsed ? "max-h-0 opacity-0 sm:max-h-36 sm:opacity-100" : "max-h-36"}`}>
+          <div>
             <PriceSparkline
               holdingId={holding.id}
               className="mb-3"
@@ -207,7 +206,7 @@ export function PositionHeader({
           </div>
 
           {/* Status ribbon */}
-          <div className={`flex flex-col items-start gap-3 pb-3 overflow-hidden transition-all duration-200 sm:flex-row sm:items-center sm:gap-4 ${headerCollapsed ? "max-h-0 pb-0 opacity-0 sm:max-h-20 sm:pb-3 sm:opacity-100" : "max-h-48 sm:max-h-20"}`}>
+          <div className="flex flex-col items-start gap-3 pb-3 sm:flex-row sm:items-center sm:gap-4">
             <div className="flex flex-wrap items-center gap-2">
               <span className={`h-1.5 w-1.5 rounded-full ${decisionStatusDot}`} />
               <span className="font-mono text-[10px] uppercase tracking-[0.2em] text-muted-foreground">
@@ -231,8 +230,14 @@ export function PositionHeader({
               )}
           </div>
 
-          {/* Tab strip */}
-          <div className="flex gap-1 -mx-1 overflow-x-auto pb-0.5">
+        </div>
+      </div>
+
+      {/* Keep only the lightweight tab rail sticky; the hero above keeps its
+          natural height so scrolling never causes a layout jump. */}
+      <div className="sticky top-[84px] z-30 border-b border-border/60 bg-background/95 backdrop-blur-sm">
+        <div className="mx-auto max-w-5xl px-4 sm:px-6 lg:px-10">
+          <div className="flex gap-1 overflow-x-auto pb-0.5">
             {tabs.map((tab) => (
               <button
                 key={tab.id}
@@ -262,5 +267,6 @@ export function PositionHeader({
           </div>
         </div>
       </div>
+    </>
   );
 }

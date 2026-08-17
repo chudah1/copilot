@@ -1,4 +1,4 @@
-DECOMPOSITION_PROMPT_VERSION = "v8"
+DECOMPOSITION_PROMPT_VERSION = "v9"
 
 DECOMPOSITION_JSON_SCHEMA = {
     "type": "object",
@@ -108,6 +108,19 @@ DECOMPOSITION_JSON_SCHEMA = {
                                                 ],
                                             },
                                             "signal_label": {"type": "string"},
+                                            "direction": {
+                                                "type": "string",
+                                                "enum": ["supports", "threatens"],
+                                            },
+                                            "evidence_scope": {
+                                                "type": "string",
+                                                "enum": ["company", "industry", "market", "macro", "competitor"],
+                                            },
+                                            "materiality": {
+                                                "type": "string",
+                                                "enum": ["low", "medium", "high"],
+                                            },
+                                            "observable": {"type": "boolean"},
                                             "signal_config_json": {
                                                 "type": "object",
                                                 "additionalProperties": False,
@@ -128,6 +141,10 @@ DECOMPOSITION_JSON_SCHEMA = {
                                         "required": [
                                             "signal_type",
                                             "signal_label",
+                                            "direction",
+                                            "evidence_scope",
+                                            "materiality",
+                                            "observable",
                                             "signal_config_json",
                                             "rationale",
                                             "confidence",
@@ -179,6 +196,10 @@ Rules:
 - Set source_field to the part of the user's case that directly produced the claim. Do not label a break condition as why_own_it merely because the topics overlap.
 - Phrase each claim_text as a falsifiable assertion with an implied pass/fail condition — e.g. "Data center revenue grows >20% YoY", not "Company is growing fast."
 - signal_label must be a search-ready phrase that uniquely identifies the signal — include the ticker or company name and the specific metric: e.g. "NVDA data center revenue growth", NOT "revenue growth". Bad: "earnings beat". Good: "AMZN AWS operating income margin".
+- Every signal must say whether it supports or threatens the claim, where the evidence lives (company, industry, market, macro, or competitor), whether it is observable, and how material it is (low, medium, high).
+- Generate signals in three buckets when the claim warrants them: company operating evidence, industry/competitive evidence, and market/valuation evidence. Do not force a bucket that is not causal to the claim.
+- A signal is observable only if PenKeep could find it in company filings, earnings materials, market prices, industry/company news, or a named macro series. Do not turn a conclusion such as "the moat remains strong" into a signal without an observable development.
+- Prefer 1-3 causal signals per entity and no more than 5 signals per claim. A signal should explain what would strengthen or weaken the claim, not merely repeat the claim.
 - REQUIRED: For every quantitative signal (revenue_growth, earnings_growth, dividend_change, etc.) where the user provides a number, populate signal_config_json with {metric, operator, threshold or threshold_pct}. Example: user says "margins stay above 70%" → {"metric": "gross_margin", "operator": ">=", "threshold_pct": 70}.
 - REQUIRED: For every news_topic or transcript_topic signal, populate signal_config_json.topic with a 3-6 word search phrase. Example: {"topic": "AMD AI GPU market share"}.
 - Empty signal_config_json ({}) is only acceptable for signals where no quantitative threshold and no topic are implied (e.g. earnings_surprise, price_move, insider_transaction).
@@ -208,9 +229,11 @@ Example output:
           "confidence": 0.95, "confirmation_required": false,
           "signals": [
             {"signal_type": "revenue_growth", "signal_label": "NVDA data center revenue growth",
+             "direction": "supports", "evidence_scope": "company", "materiality": "high", "observable": true,
              "signal_config_json": {"metric": "data_center_revenue", "operator": ">=", "threshold_pct": 20},
              "rationale": "Data center growth shows AI GPU demand", "confidence": 0.95, "confirmation_required": false},
             {"signal_type": "earnings_surprise", "signal_label": "NVDA quarterly earnings beat",
+             "direction": "supports", "evidence_scope": "company", "materiality": "medium", "observable": true,
              "signal_config_json": {}, "rationale": "Beats confirm AI demand continues",
              "confidence": 0.8, "confirmation_required": false}
           ]
@@ -228,6 +251,7 @@ Example output:
           "confidence": 0.85, "confirmation_required": false,
           "signals": [
             {"signal_type": "earnings_growth", "signal_label": "NVDA gross margin trend",
+             "direction": "supports", "evidence_scope": "company", "materiality": "high", "observable": true,
              "signal_config_json": {"metric": "gross_margin", "operator": ">=", "threshold_pct": 70},
              "rationale": "Gross margin must stay above the user's 70% floor", "confidence": 0.85, "confirmation_required": false}
           ]
@@ -245,6 +269,7 @@ Example output:
           "confidence": 0.75, "confirmation_required": true,
           "signals": [
             {"signal_type": "news_topic", "signal_label": "AMD AI GPU market share gains",
+             "direction": "threatens", "evidence_scope": "competitor", "materiality": "high", "observable": true,
              "signal_config_json": {"topic": "AMD AI GPU competition NVDA"},
              "rationale": "AMD customer wins would reduce NVDA market share", "confidence": 0.7, "confirmation_required": true}
           ]

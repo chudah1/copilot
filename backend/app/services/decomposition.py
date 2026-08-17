@@ -32,6 +32,7 @@ from app.services.reasoning.providers import (
 )
 from app.services.reasoning.types import ReasoningRequest, ReasoningResult, ReasoningTaskType
 from app.services.reasoning.validators import validate_decomposition_output
+from app.services.signal_quality import cap_claim_signals, filter_signal_payloads
 
 logger = logging.getLogger(__name__)
 
@@ -182,6 +183,7 @@ def _signal_is_direct_and_auto_activatable(
     normalized_signal_config: dict[str, Any] | None = None,
 ) -> bool:
     config = normalized_signal_config or {}
+    quality = config.get("quality") if isinstance(config.get("quality"), dict) else {}
     signal_type = signal_data.get("signal_type")
     confidence = signal_data.get("confidence") or 0.0
     relation_type = str(entity_data.get("relation_type") or "").strip()
@@ -247,6 +249,8 @@ def _signal_is_direct_and_auto_activatable(
             or not signal_data.get("confirmation_required", True)
         )
         and not bool(config.get("proxy_review_required"))
+        and quality.get("status", "ready") == "ready"
+        and config.get("observable", True) is True
     )
 
 
@@ -1013,7 +1017,8 @@ async def _persist_successful_decomposition(
         if primary_claim is None:
             primary_claim = claim
 
-        for entity_data in claim_data.get("entities", []):
+        claim_entities = cap_claim_signals(list(claim_data.get("entities", [])))
+        for entity_data in claim_entities:
             entity_confirmed = (
                 entity_data.get("entity_type") == "held_company"
                 and _entity_matches_holding(holding, entity_data)
@@ -1062,6 +1067,15 @@ async def _persist_successful_decomposition(
                         signal_payloads.append(companion_signal)
                         existing_signal_types.add(companion_key)
 
+            signal_payloads = filter_signal_payloads(
+                signal_payloads,
+                claim_text=claim.claim_text,
+                source_field=claim_data.get("source_field"),
+                entity_name=entity_data.get("entity_name"),
+                entity_ticker=entity_data.get("entity_ticker"),
+                entity_type=entity_data.get("entity_type"),
+                relation_type=entity_data.get("relation_type"),
+            )
             for signal_data in signal_payloads:
                 normalized_signal_config = _normalize_signal_config_json(
                     signal_type=signal_data["signal_type"],
@@ -1069,6 +1083,15 @@ async def _persist_successful_decomposition(
                     claim_text=claim.claim_text,
                     rationale=signal_data.get("rationale"),
                     raw_config=signal_data.get("signal_config_json") or {},
+                )
+                normalized_signal_config.update(
+                    {
+                        "direction": signal_data.get("direction") or "supports",
+                        "evidence_scope": signal_data.get("evidence_scope") or "company",
+                        "materiality": signal_data.get("materiality") or "medium",
+                        "observable": signal_data.get("observable") is not False,
+                        "quality": signal_data.get("quality") or {"status": "review", "issues": ["legacy_output"]},
+                    }
                 )
                 if signal_data["signal_type"] in {"news_topic", "transcript_topic"}:
                     relation_type = str(entity_data.get("relation_type") or "").strip()
@@ -1100,8 +1123,15 @@ async def _persist_successful_decomposition(
                     signal_data,
                     normalized_signal_config,
                 )
-                signal_confirmation_required = signal_data.get("confirmation_required", True) or bool(
-                    normalized_signal_config.get("proxy_review_required")
+                signal_confirmation_required = (
+                    signal_data.get("confirmation_required", True)
+                    or bool(normalized_signal_config.get("proxy_review_required"))
+                    or (
+                        normalized_signal_config.get("quality", {}).get("status") != "ready"
+                        if isinstance(normalized_signal_config.get("quality"), dict)
+                        else True
+                    )
+                    or normalized_signal_config.get("observable") is False
                 )
                 signal = ThesisSignal(
                     entity_id=entity.id,

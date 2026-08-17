@@ -13,6 +13,7 @@ from app.models.thesis_claim import ThesisClaim
 from app.models.thesis_decomposition import ThesisDecomposition
 from app.models.thesis_entity import ThesisEntity
 from app.models.thesis_signal import ThesisSignal
+from app.services.text_cleaning import clean_text
 
 # Used by upcoming_earnings + earnings_call_transcript events, which reveal
 # both top-line (revenue) and bottom-line (EPS) results.
@@ -712,7 +713,7 @@ def build_evidence_summary(
     verdict: str | None = None,
     investor_profile: str | None = None,
 ) -> str:
-    description = candidate.get("description", "")
+    description = clean_text(candidate.get("description"))
     watched_text = signal_label or claim_text
     implication = _build_event_implication(
         claim_text=claim_text,

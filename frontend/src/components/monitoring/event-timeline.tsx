@@ -6,6 +6,7 @@ import { Button } from "@/components/ui/button";
 import { Textarea } from "@/components/ui/textarea";
 import { InfoTip } from "@/components/ui/info-tip";
 import { formatDate } from "@/lib/utils";
+import { cleanRichText } from "@/lib/text";
 import type { MonitoringEvent } from "@/types";
 
 type ReviewAction = "reaffirmed" | "ignored" | "lowered_confidence" | "invalidated" | "not_relevant";
@@ -152,7 +153,7 @@ function reviewLanguage(investorProfile?: "thesis_driven" | "hearsay_driven" | n
 }
 
 function parseNarrative(text: string) {
-  const normalizedText = text.replace(/\\n/g, "\n");
+  const normalizedText = cleanRichText(text);
   const structuredKeys = new Set([
     "Your thesis",
     "You said",
@@ -191,8 +192,8 @@ function eventNarrativeFields(event: MonitoringEvent) {
   return {
     youSaid: narrative["Your thesis"] ?? narrative["You said"] ?? narrative["Your reason"] ?? null,
     weWatched: narrative["We were watching"] ?? narrative["What the app was checking"] ?? narrative["We watched"] ?? event.signal_label ?? null,
-    whatChanged: narrative["What changed"] ?? narrative["What happened"] ?? narrative._body0 ?? event.summary,
-    whyItMatters: narrative["Why it matters now"] ?? narrative["Why this matters now"] ?? narrative._body1 ?? event.ai_analysis ?? null,
+    whatChanged: cleanRichText(narrative["What changed"] ?? narrative["What happened"] ?? narrative._body0 ?? event.summary),
+    whyItMatters: cleanRichText(narrative["Why it matters now"] ?? narrative["Why this matters now"] ?? narrative._body1 ?? event.ai_analysis),
     rawNarrative: narrative,
   };
 }
@@ -207,7 +208,7 @@ function EvidenceNarrative({ text }: { text: string }) {
   ].filter((item): item is [string, string] => Boolean(item[1]));
 
   if (items.length === 0) {
-    return <p className="mt-2 whitespace-pre-line text-sm text-foreground/80">{text.replace(/\\n/g, "\n")}</p>;
+    return <p className="mt-2 whitespace-pre-line text-sm text-foreground/80">{cleanRichText(text)}</p>;
   }
 
   return (
