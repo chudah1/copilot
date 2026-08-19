@@ -6,6 +6,7 @@ import { useAuth } from "@/lib/auth";
 import { AuthShell } from "@/components/auth/auth-shell";
 import { Button } from "@/components/ui/button";
 import { getErrorMessage } from "@/lib/errors";
+import { REGISTRATION_OPEN } from "@/lib/registration";
 
 const inputCls = "w-full border border-border bg-background px-3 py-2 font-sans text-sm text-foreground placeholder:text-muted-foreground/50 focus:outline-none focus:border-foreground/30";
 
@@ -55,7 +56,7 @@ export default function LoginPage() {
         <p className="font-mono text-[10px] text-muted-foreground/70 text-center">
           No account?{" "}
           <Link href="/register" className="underline underline-offset-2 hover:text-foreground transition-colors">
-            Sign up
+            {REGISTRATION_OPEN ? "Sign up" : "Join the waitlist"}
           </Link>
         </p>
       )}

@@ -6,6 +6,8 @@ import { useAuth } from "@/lib/auth";
 import { AuthShell } from "@/components/auth/auth-shell";
 import { Button } from "@/components/ui/button";
 import { getErrorMessage } from "@/lib/errors";
+import { REGISTRATION_OPEN } from "@/lib/registration";
+import { WaitlistForm } from "@/app/_mkt/waitlist-form";
 
 const inputCls = "w-full border border-border bg-background px-3 py-2 font-sans text-sm text-foreground placeholder:text-muted-foreground/50 focus:outline-none focus:border-foreground/30";
 
@@ -17,6 +19,42 @@ export default function RegisterPage() {
   const [loading, setLoading] = useState(false);
 
   const passwordOk = password.length >= 8;
+
+  if (!REGISTRATION_OPEN) {
+    return (
+      <AuthShell
+        eyebrow="Private Beta"
+        title="Join the waitlist."
+        description="PenKeep is in private beta. Leave your email and we'll send you access."
+        asideHeading="What's coming"
+        asideBody="A few names, a written reason for each, and checks that tell you when that reason breaks."
+        asideItems={[
+          {
+            eyebrow: "First step",
+            title: "Add a few names.",
+            body: "You do not need a full import to feel the product.",
+          },
+          {
+            eyebrow: "Outcome",
+            title: "Make the case explicit.",
+            body: "Write what must stay true and what would break it.",
+          },
+        ]}
+        footer={(
+          <p className="font-mono text-[10px] text-muted-foreground/70 text-center">
+            Already have an account?{" "}
+            <Link href="/login" className="underline underline-offset-2 hover:text-foreground transition-colors">
+              Sign in
+            </Link>
+          </p>
+        )}
+      >
+        <div className="max-w-sm">
+          <WaitlistForm />
+        </div>
+      </AuthShell>
+    );
+  }
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();

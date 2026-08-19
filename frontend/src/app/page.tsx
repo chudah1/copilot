@@ -1,4 +1,5 @@
 import Link from "next/link";
+import { REGISTRATION_OPEN } from "@/lib/registration";
 import { MarketingNav } from "./_mkt/nav";
 import { MarketingFooter } from "./_mkt/footer";
 import { LaunchActions } from "./_mkt/launch-actions";
@@ -302,7 +303,7 @@ export default function LandingPage() {
                     whiteSpace: "nowrap",
                   }}
                 >
-                  Record your first decision →
+                  {REGISTRATION_OPEN ? "Record your first decision →" : "Join the waitlist →"}
                 </Link>
                 <a
                   href="#try-it"
@@ -468,7 +469,7 @@ export default function LandingPage() {
                 textDecoration: "none",
               }}
             >
-              Start your record →
+              {REGISTRATION_OPEN ? "Start your record →" : "Join the waitlist →"}
             </Link>
           </div>
         </div>

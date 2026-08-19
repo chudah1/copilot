@@ -11,6 +11,14 @@ async def test_register_duplicate_email(client, test_user):
     assert response.status_code == 409
 
 
+async def test_register_closed_when_waitlist_mode(client, monkeypatch):
+    from app.config import settings
+
+    monkeypatch.setattr(settings, "enable_public_registration", False)
+    response = await client.post("/api/auth/register", json={"email": "new@example.com", "password": "secure123"})
+    assert response.status_code == 403
+
+
 async def test_login_success(client, test_user):
     response = await client.post("/api/auth/login", json={"email": "test@example.com", "password": "testpass123"})
     assert response.status_code == 200

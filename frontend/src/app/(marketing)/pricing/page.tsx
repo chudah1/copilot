@@ -1,4 +1,5 @@
 import Link from "next/link";
+import { REGISTRATION_OPEN } from "@/lib/registration";
 import { InfoTip } from "@/components/ui/info-tip";
 import { FoundingForm } from "../../_mkt/founding-form";
 import { mk } from "../../_mkt/tokens";
@@ -224,7 +225,7 @@ export default function PricingPage() {
                     whiteSpace: "nowrap",
                   }}
                 >
-                  Create free account →
+                  {REGISTRATION_OPEN ? "Create free account →" : "Join the waitlist →"}
                 </Link>
                 <div
                   style={{

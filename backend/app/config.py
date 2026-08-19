@@ -19,6 +19,10 @@ class Settings(BaseSettings):
     # freshly-onboarded user sees real signal in their first session instead of an
     # empty "all calm" dashboard. Prod safety valve if it strains API budgets.
     enable_first_pulse: bool = True
+    # Waitlist mode: while False, POST /api/auth/register is closed and the
+    # frontend shows the waitlist form instead of a signup form. Flip back to
+    # True (+ redeploy) once real access is ready to open up.
+    enable_public_registration: bool = True
     # Shared secret that gates the global relevance-metrics endpoint
     # (GET /api/monitoring/relevance). Empty disables the endpoint entirely.
     metrics_token: str = ""

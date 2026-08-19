@@ -83,6 +83,12 @@ def _set_auth_cookies(
 @router.post("/register", response_model=TokenResponse, status_code=status.HTTP_201_CREATED)
 @limiter.limit("3/minute")
 async def register(request: Request, body: RegisterRequest, response: Response, db: AsyncSession = Depends(get_db)):
+    if not settings.enable_public_registration:
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="Public registration is currently closed. Join the waitlist and we'll email you access.",
+        )
+
     result = await db.execute(select(User).where(User.email == body.email))
     if result.scalar_one_or_none() is not None:
         raise HTTPException(status_code=status.HTTP_409_CONFLICT, detail="Email already registered")

@@ -7,6 +7,7 @@ import { Bell, BookOpenText, BriefcaseBusiness, Menu, Search, X } from "lucide-r
 import useSWR from "swr";
 import { useAuth } from "@/lib/auth";
 import { fetcher } from "@/lib/api";
+import { REGISTRATION_OPEN } from "@/lib/registration";
 import { positionMonitoringHref } from "@/lib/position-links";
 import type { PortfolioPulse } from "@/types";
 
@@ -148,7 +149,7 @@ export function Navbar() {
                   href="/register"
                   className="bg-primary px-3 py-2 font-mono text-[10px] uppercase tracking-[0.18em] text-primary-foreground transition-colors hover:bg-primary/90"
                 >
-                  Create account
+                  {REGISTRATION_OPEN ? "Create account" : "Join waitlist"}
                 </Link>
               </>
             )}
@@ -223,7 +224,7 @@ export function Navbar() {
                   onClick={() => setOpen(false)}
                   className="mx-2 px-4 py-3 font-mono text-[10px] uppercase tracking-[0.18em] text-primary transition-colors hover:bg-background hover:text-primary/80"
                 >
-                  Create account
+                  {REGISTRATION_OPEN ? "Create account" : "Join waitlist"}
                 </Link>
               </>
             )}

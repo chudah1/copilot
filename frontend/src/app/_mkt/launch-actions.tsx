@@ -1,4 +1,5 @@
 import Link from "next/link";
+import { REGISTRATION_OPEN } from "@/lib/registration";
 import { mk } from "./tokens";
 
 export function LaunchActions({ dark = false }: { dark?: boolean }) {
@@ -28,7 +29,7 @@ export function LaunchActions({ dark = false }: { dark?: boolean }) {
           whiteSpace: "nowrap",
         }}
       >
-        Record your first decision →
+        {REGISTRATION_OPEN ? "Record your first decision →" : "Join the waitlist →"}
       </Link>
       <Link
         href="/research"

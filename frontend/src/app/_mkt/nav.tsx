@@ -5,6 +5,7 @@ import Link from "next/link";
 import { usePathname } from "next/navigation";
 import { Menu, X } from "lucide-react";
 import { useAuth } from "@/lib/auth";
+import { REGISTRATION_OPEN } from "@/lib/registration";
 import { mk } from "./tokens";
 import { PenKeepMark } from "./mark";
 
@@ -152,7 +153,7 @@ export function MarketingNav({ active }: MarketingNavProps) {
                 whiteSpace: "nowrap",
               }}
             >
-              Create account →
+              {REGISTRATION_OPEN ? "Create account →" : "Join the waitlist →"}
             </Link>
           )}
         </div>
