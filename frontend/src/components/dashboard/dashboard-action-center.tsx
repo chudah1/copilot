@@ -24,11 +24,13 @@ function ActionCard({
   primary = false,
   onCoachAct,
   onCoachSkip,
+  onActionOpen,
 }: {
   action: DashboardAction;
   primary?: boolean;
   onCoachAct?: (target: NonNullable<DashboardAction["coachTarget"]>) => Promise<void>;
   onCoachSkip?: () => Promise<void>;
+  onActionOpen?: (action: DashboardAction) => void;
 }) {
   return (
     <div className={cn("flex flex-col justify-between gap-4 border p-4", actionTone(action, primary))}>
@@ -73,6 +75,7 @@ function ActionCard({
         ) : (
           <Link
             href={action.href}
+            onClick={() => onActionOpen?.(action)}
             className={cn(
               "inline-flex w-fit items-center gap-1.5 border px-3 py-2 font-mono text-[10px] uppercase tracking-[0.15em] transition-colors",
               primary
@@ -82,6 +85,15 @@ function ActionCard({
           >
             {action.ctaLabel}
             <ArrowRight className="h-3 w-3" />
+          </Link>
+        )}
+        {action.secondaryHref && action.secondaryLabel && (
+          <Link
+            href={action.secondaryHref}
+            onClick={() => onActionOpen?.(action)}
+            className="font-mono text-[10px] uppercase tracking-[0.14em] text-muted-foreground transition-colors hover:text-foreground"
+          >
+            {action.secondaryLabel}
           </Link>
         )}
         {action.coachTarget && onCoachSkip && (
@@ -102,10 +114,12 @@ export function DashboardActionCenter({
   actions,
   onCoachAct,
   onCoachSkip,
+  onActionOpen,
 }: {
   actions: DashboardAction[];
   onCoachAct?: (target: NonNullable<DashboardAction["coachTarget"]>) => Promise<void>;
   onCoachSkip?: () => Promise<void>;
+  onActionOpen?: (action: DashboardAction) => void;
 }) {
   if (actions.length === 0) return null;
 
@@ -128,11 +142,11 @@ export function DashboardActionCenter({
       </div>
 
       <div className="mt-5 grid gap-3 lg:grid-cols-[1.15fr_0.85fr]">
-        <ActionCard action={primary} primary onCoachAct={onCoachAct} onCoachSkip={onCoachSkip} />
+        <ActionCard action={primary} primary onCoachAct={onCoachAct} onCoachSkip={onCoachSkip} onActionOpen={onActionOpen} />
         {secondary.length > 0 && (
           <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-1">
             {secondary.slice(0, 3).map((action) => (
-              <ActionCard key={action.key} action={action} onCoachAct={onCoachAct} onCoachSkip={onCoachSkip} />
+              <ActionCard key={action.key} action={action} onCoachAct={onCoachAct} onCoachSkip={onCoachSkip} onActionOpen={onActionOpen} />
             ))}
           </div>
         )}

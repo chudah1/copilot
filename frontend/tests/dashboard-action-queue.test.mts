@@ -126,5 +126,38 @@ test("puts an unread weekly review before position work", () => {
 
   assert.equal(queue[0].kind, "weekly_review");
   assert.equal(queue[0].carriedForward, true);
+  assert.equal(queue[0].title, "Close the open review.");
+  assert.equal(queue[0].href, "/dashboard/positions/HIMS");
+  assert.equal(queue[0].secondaryHref, "/digests/digest-id");
+  assert.equal(queue[0].secondaryLabel, "Read weekly context");
   assert.equal(queue[1].ticker, "HIMS");
+});
+
+test("keeps a quiet weekly digest readable when there is no next action", () => {
+  const digest = {
+    id: "quiet-digest-id",
+    sent_at: null,
+    reviewed_at: null,
+    period_start: "2026-08-01T00:00:00Z",
+    period_end: "2026-08-08T00:00:00Z",
+    status: "ready",
+    content: {
+      headline: "Nothing touched what you are watching.",
+    },
+  } as Digest;
+
+  const queue = buildDashboardActionQueue({
+    commandCenter: null,
+    latestDigest: digest,
+    weeklyDigestReady: true,
+    quarterlyReview: null,
+    investorProfile: null,
+  });
+
+  assert.equal(queue.length, 1);
+  assert.equal(queue[0].title, "Nothing touched what you are watching.");
+  assert.equal(queue[0].href, "/digests/quiet-digest-id");
+  assert.equal(queue[0].ctaLabel, "Open weekly read");
+  assert.equal(queue[0].secondaryHref, "/digests/quiet-digest-id");
+  assert.equal(queue[0].secondaryLabel, undefined);
 });

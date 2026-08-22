@@ -20,6 +20,9 @@ export interface DashboardAction {
   ctaLabel: string;
   href: string;
   carriedForward?: boolean;
+  sourceDigestId?: string;
+  secondaryHref?: string;
+  secondaryLabel?: string;
   coachTarget?: DashboardCoachPlan["primaryCta"];
 }
 
@@ -162,15 +165,16 @@ export function buildDashboardActionQueue({
     actions.push({
       key: `weekly-review:${latestDigest.id}`,
       kind: "weekly_review",
-      eyebrow: nextAction?.carried_forward ? "Still open from last week" : "Weekly review",
+      eyebrow: nextAction?.carried_forward ? "Still open from last week" : "This week's decision",
       ticker: nextAction?.ticker ?? null,
-      title: latestDigest.content.headline || "See what changed this week.",
-      detail: nextAction
-        ? `${nextAction.ticker}: ${nextAction.title}. ${nextAction.detail}`
-        : "See what changed, what held up, and what deserves your next read.",
-      ctaLabel: "Review this week",
-      href: `/digests/${latestDigest.id}`,
+      title: nextAction?.title || latestDigest.content.headline || "See what changed this week.",
+      detail: nextAction?.detail || "See what changed, what held up, and what deserves your next read.",
+      ctaLabel: nextAction?.cta_label || "Open weekly read",
+      href: nextAction?.cta_href || `/digests/${latestDigest.id}`,
       carriedForward: Boolean(nextAction?.carried_forward),
+      sourceDigestId: latestDigest.id,
+      secondaryHref: `/digests/${latestDigest.id}`,
+      secondaryLabel: nextAction ? "Read weekly context" : undefined,
     });
   }
 

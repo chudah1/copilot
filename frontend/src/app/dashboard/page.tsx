@@ -30,7 +30,7 @@ import { InfoTip } from "@/components/ui/info-tip";
 import { BlindSpotsSection } from "@/components/dashboard/blind-spots-section";
 import { DashboardActionCenter } from "@/components/dashboard/dashboard-action-center";
 import { deriveDashboardCoach } from "@/lib/dashboard-coach";
-import { buildDashboardActionQueue } from "@/lib/dashboard-action-queue";
+import { buildDashboardActionQueue, type DashboardAction } from "@/lib/dashboard-action-queue";
 import { toast } from "sonner";
 import type {
   DashboardCommandCenter,
@@ -297,7 +297,6 @@ function DashboardInner() {
   const needsAttention = decisionInbox.attentionEntries
     .map((entry) => entry.pulse)
     .filter((pulse): pulse is PortfolioPulse["pulses"][number] => Boolean(pulse));
-  const reviewCount = decisionInbox.counts.needsDecision;
   const missingThesisCount = decisionInbox.counts.needsWrittenCase;
   const nearTermEarnings = decisionInbox.nearTermEarnings;
   const visibleEarnings = decisionInbox.visibleEarnings;
@@ -420,6 +419,13 @@ function DashboardInner() {
     } catch (err) {
       toast.error(getErrorMessage(err, "Couldn't hide coach suggestion"));
     }
+  };
+
+  const handleDashboardActionOpen = (action: DashboardAction) => {
+    if (!action.sourceDigestId) return;
+    void api.post(`/api/digests/${action.sourceDigestId}/review`)
+      .then(() => mutateDigests())
+      .catch(() => undefined);
   };
 
   const showRecentReviewBanner = Boolean(
@@ -568,6 +574,7 @@ function DashboardInner() {
             actions={dashboardActions}
             onCoachAct={handleCoachAct}
             onCoachSkip={handleCoachSkip}
+            onActionOpen={handleDashboardActionOpen}
           />
         </div>
       )}
