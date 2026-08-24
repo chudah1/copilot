@@ -1,7 +1,7 @@
 import logging
 from datetime import datetime, timezone
 
-from fastapi import APIRouter, Request
+from fastapi import APIRouter, HTTPException, Request
 from pydantic import BaseModel, EmailStr
 from sqlalchemy import text
 
@@ -35,6 +35,10 @@ async def join_waitlist(request: Request, body: WaitlistRequest):
             inserted = result.rowcount > 0
         except Exception as exc:
             logger.warning("Waitlist insert failed: %s", exc)
+            raise HTTPException(
+                status_code=503,
+                detail="Waitlist is temporarily unavailable. Please try again.",
+            ) from exc
 
     if inserted:
         _send_confirmation(str(body.email))

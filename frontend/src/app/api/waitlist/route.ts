@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
+import { resolveBackendApiUrl } from "@/lib/server-api-url";
 
-const BACKEND = process.env.NEXT_PUBLIC_API_URL ?? "http://localhost:8000";
+const BACKEND = resolveBackendApiUrl();
 
 export async function POST(req: NextRequest) {
   try {
