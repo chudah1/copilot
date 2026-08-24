@@ -216,8 +216,9 @@ async def submit_claim_reviews(
     """Write one ClaimReview row per decision under a shared session_id.
 
     Any claim marked broken forces a thesis-level decision: keep_lowered
-    (confidence steps down), invalidate, or rewrite (no mutation here — the
-    client routes to the editor). Raises ValueError on invalid input.
+    (confidence steps down), invalidate, or rewrite. A rewrite keeps the thesis
+    in needs_review until the revised case is actually saved by the editor.
+    Raises ValueError on invalid input.
     """
     if not decisions:
         raise ValueError("A check-in needs at least one claim decision")
@@ -234,6 +235,14 @@ async def submit_claim_reviews(
     now = datetime.now(timezone.utc)
     session_id = uuid.uuid4()
     check_in_states = {state.claim_id: state for state in await compute_check_in(db, thesis)}
+    decision_claim_ids = [decision.get("claim_id") for decision in decisions]
+    if len(decision_claim_ids) != len(set(decision_claim_ids)):
+        raise ValueError("A claim can only be reviewed once per check-in")
+    valid_claim_ids = set(check_in_states)
+    invalid_claim_ids = [claim_id for claim_id in decision_claim_ids if claim_id not in valid_claim_ids]
+    if invalid_claim_ids:
+        raise ValueError("One or more claims do not belong to this thesis")
+
     for decision in decisions:
         db.add(
             ClaimReview(
@@ -281,7 +290,10 @@ async def submit_claim_reviews(
         elif thesis_action == "keep_lowered":
             thesis.confidence = _lower_confidence(thesis.confidence)
             thesis.status = "active"
-        # rewrite: rows are recorded; the client routes to the thesis editor.
+        elif thesis_action == "rewrite":
+            # Do not reactivate a case whose claim just broke. The editor can
+            # explicitly move it back to active after the revised case saves.
+            thesis.status = "needs_review"
     elif thesis.status != "invalidated":
         thesis.status = "active"
     thesis.updated_at = now

@@ -323,3 +323,56 @@ async def test_submit_broken_with_keep_lowered_downgrades_confidence(db, test_us
 
     assert thesis.confidence == "medium"
     assert thesis.status == "active"
+
+
+@pytest.mark.asyncio
+async def test_submit_broken_with_rewrite_keeps_thesis_needing_revision(db, test_user):
+    holding, thesis, claim, _ = await _make_thesis(db, test_user)
+    await db.commit()
+
+    await submit_claim_reviews(
+        db,
+        thesis=thesis,
+        holding=holding,
+        user_id=test_user.id,
+        decisions=[{"claim_id": claim.id, "status": "broken", "notes": None}],
+        thesis_action="rewrite",
+    )
+    await db.commit()
+
+    assert thesis.status == "needs_review"
+
+
+@pytest.mark.asyncio
+async def test_submit_rejects_duplicate_claim_decisions(db, test_user):
+    holding, thesis, claim, _ = await _make_thesis(db, test_user)
+    await db.commit()
+
+    with pytest.raises(ValueError, match="only be reviewed once"):
+        await submit_claim_reviews(
+            db,
+            thesis=thesis,
+            holding=holding,
+            user_id=test_user.id,
+            decisions=[
+                {"claim_id": claim.id, "status": "holds", "notes": None},
+                {"claim_id": claim.id, "status": "weakened", "notes": None},
+            ],
+        )
+
+
+@pytest.mark.asyncio
+async def test_submit_rejects_claim_from_another_thesis(db, test_user):
+    holding, thesis, _claim, _ = await _make_thesis(db, test_user)
+    other_holding, _other_thesis, other_claim, _ = await _make_thesis(db, test_user)
+    del other_holding
+    await db.commit()
+
+    with pytest.raises(ValueError, match="do not belong"):
+        await submit_claim_reviews(
+            db,
+            thesis=thesis,
+            holding=holding,
+            user_id=test_user.id,
+            decisions=[{"claim_id": other_claim.id, "status": "holds", "notes": None}],
+        )

@@ -923,6 +923,33 @@ function PositionDetailInner() {
         ];
   const suppressSecondaryThesisPrompts = Boolean(decisionPrompt || showEarningsBanner || fromOnboarding);
 
+  // Keep the position header focused on one decision at a time. Several
+  // independent data sources can be true together (for example, an earnings
+  // event and a pending thesis decision), but stacking banners makes the next
+  // action ambiguous.
+  const showDecisionBanner = Boolean(
+    decisionPrompt && activeThesis && !nextStepNotice,
+  );
+  const showBlindSpotBanner = Boolean(
+    fromBlindSpot && !activeThesis && !editing && !nextStepNotice && !showDecisionBanner,
+  );
+  const showOnboardingBanner = Boolean(
+    fromOnboarding && activeThesis && !nextStepNotice && !showDecisionBanner && !showBlindSpotBanner,
+  );
+  const showRecentEarningsBanner = Boolean(
+    showEarningsBanner && !nextStepNotice && !showDecisionBanner && !showBlindSpotBanner && !showOnboardingBanner,
+  );
+  const showUpcomingEarningsBanner = Boolean(
+    activeThesis &&
+      upcomingEarnings &&
+      upcomingEarnings.days_until <= 14 &&
+      !nextStepNotice &&
+      !showDecisionBanner &&
+      !showBlindSpotBanner &&
+      !showOnboardingBanner &&
+      !showRecentEarningsBanner,
+  );
+
   const handleNextStepAction = () => {
     if (!nextStepNotice?.action) return;
     const action = nextStepNotice.action;
@@ -982,7 +1009,7 @@ function PositionDetailInner() {
       {/* ── Contextual banners ───────────────────────────────────────────── */}
       <div className="max-w-5xl mx-auto px-4 sm:px-6 lg:px-10">
 
-        {fromOnboarding && activeThesis && (
+        {showOnboardingBanner && (
           <motion.div
             initial={{ opacity: 0, y: -4 }}
             animate={{ opacity: 1, y: 0 }}
@@ -1033,7 +1060,7 @@ function PositionDetailInner() {
           </motion.div>
         )}
 
-        {fromBlindSpot && !activeThesis && !editing && (
+        {showBlindSpotBanner && (
           <motion.div
             initial={{ opacity: 0, y: -4 }}
             animate={{ opacity: 1, y: 0 }}
@@ -1097,7 +1124,7 @@ function PositionDetailInner() {
           </motion.div>
         )}
 
-        {decisionPrompt && activeThesis && !fromOnboarding && !(fromBlindSpot && !activeThesis && !editing) && (
+        {showDecisionBanner && decisionPrompt && (
           <motion.div
             initial={{ opacity: 0, y: -4 }}
             animate={{ opacity: 1, y: 0 }}
@@ -1130,7 +1157,7 @@ function PositionDetailInner() {
           </motion.div>
         )}
 
-        {activeThesis && upcomingEarnings && upcomingEarnings.days_until <= 14 && (
+        {showUpcomingEarningsBanner && upcomingEarnings && (
           <motion.div
             initial={{ opacity: 0, y: -4 }}
             animate={{ opacity: 1, y: 0 }}
@@ -1158,7 +1185,7 @@ function PositionDetailInner() {
           </motion.div>
         )}
 
-        {showEarningsBanner && (
+        {showRecentEarningsBanner && (
           <motion.div
             initial={{ opacity: 0, y: -4 }}
             animate={{ opacity: 1, y: 0 }}
