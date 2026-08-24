@@ -1,6 +1,12 @@
 import pytest
 
 
+def test_waitlist_manifesto_link_points_to_existing_public_page():
+    from app.routes.waitlist import MANIFESTO_URL
+
+    assert MANIFESTO_URL == "https://penkeep.io/blog"
+
+
 @pytest.mark.asyncio
 async def test_waitlist_reports_database_failure_instead_of_false_success(client, monkeypatch):
     from app.routes import waitlist

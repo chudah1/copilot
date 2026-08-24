@@ -9,6 +9,7 @@ from app.database import async_session
 from app.limiter import limiter
 
 logger = logging.getLogger(__name__)
+MANIFESTO_URL = "https://penkeep.io/blog"
 
 router = APIRouter(prefix="/api/waitlist", tags=["waitlist"])
 
@@ -59,7 +60,7 @@ def _send_confirmation(email: str) -> None:
             "html": (
                 "<p>Thanks for joining the penKeep waitlist.</p>"
                 "<p>We'll email you when it's ready. In the meantime, "
-                "read the <a href='https://penkeep.io/manifesto'>manifesto</a>.</p>"
+                f"read the <a href='{MANIFESTO_URL}'>manifesto</a>.</p>"
                 "<p style='color:#7a7268;font-size:13px'>— The penKeep team</p>"
             ),
         })
