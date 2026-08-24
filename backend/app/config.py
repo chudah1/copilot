@@ -66,6 +66,10 @@ class Settings(BaseSettings):
     edgar_user_agent: str = "PenKeep/1.0 contact@penkeep.io"
     frontend_url: str = "http://localhost:3000"
     app_url: str = ""  # e.g. https://app.penkeep.io — added to CORS alongside frontend_url
+    # Vercel preview host suffix for browser sessions before a deployment is
+    # promoted to penkeep.io. Keep this project-specific instead of allowing
+    # every *.vercel.app origin.
+    vercel_preview_domain: str = "ychudah-5081s-projects.vercel.app"
 
     # LLM optimizations / reliability
     llm_response_cache_ttl_seconds: int = 15 * 60

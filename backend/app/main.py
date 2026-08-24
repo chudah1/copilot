@@ -1,4 +1,5 @@
 from contextlib import asynccontextmanager
+import re
 from urllib.parse import urlparse
 
 from fastapi import FastAPI
@@ -54,6 +55,22 @@ def _cors_origins() -> list[str]:
     return sorted(origins)
 
 
+def _cors_origin_regex() -> str:
+    patterns = [
+        r"https?://(localhost|127\.0\.0\.1)(:\d+)?",
+        r"https://(.+\.)?penkeep\.io",
+        # Keep the legacy preview pattern while deployments migrate to the
+        # project-specific suffix below.
+        r"https://[a-z0-9-]+-chudah1\.vercel\.app",
+    ]
+    preview_domain = settings.vercel_preview_domain.strip().strip(".")
+    if preview_domain:
+        patterns.append(
+            rf"https://penkeep(?:-[a-z0-9-]+)?-{re.escape(preview_domain)}"
+        )
+    return "|".join(patterns)
+
+
 @asynccontextmanager
 async def lifespan(app: FastAPI):
     # Auto-create tables for SQLite local dev
@@ -77,7 +94,7 @@ app.add_exception_handler(RateLimitExceeded, _rate_limit_exceeded_handler)
 app.add_middleware(
     CORSMiddleware,
     allow_origins=_cors_origins(),
-    allow_origin_regex=r"https?://(localhost|127\.0\.0\.1)(:\d+)?|https://(.+\.)?penkeep\.io|https://[a-z0-9-]+-chudah1\.vercel\.app",
+    allow_origin_regex=_cors_origin_regex(),
     allow_credentials=True,
     allow_methods=["*"],
     allow_headers=["*"],
