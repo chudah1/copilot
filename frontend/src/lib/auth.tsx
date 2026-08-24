@@ -35,6 +35,19 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     async function checkAuth() {
       const apiUrl = getApiBaseUrl();
       const accessToken = getStoredAccessToken();
+      const refreshToken = getStoredRefreshToken();
+
+      // Public pages should not probe protected endpoints for visitors who
+      // have no local session. Besides wasting a request, the expected 403/422
+      // responses make a clean waitlist page look broken in DevTools.
+      if (!accessToken && !refreshToken) {
+        startTransition(() => {
+          setIsAuthenticated(false);
+          setIsLoading(false);
+        });
+        return;
+      }
+
       try {
         // Try access token cookie first
         const r = await fetch(`${apiUrl}/api/auth/me`, {
@@ -50,7 +63,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
           method: "POST",
           credentials: "include",
           headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({ refresh_token: getStoredRefreshToken() }),
+          body: JSON.stringify({ refresh_token: refreshToken }),
         });
         if (refreshed.ok) {
           const tokens = await refreshed.json() as TokenResponse;
