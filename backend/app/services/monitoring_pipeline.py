@@ -517,13 +517,15 @@ async def expand_transcript_candidates_for_signals(
     if not transcript_candidates:
         return candidates
 
-    # Active signal pairs (claim, signal) — flattened.
-    active_pairs: list[tuple[Any, Any]] = []
+    # Active signal pairs (claim, signal, relation_type) — flattened. Capture
+    # the scalar relation while the entity is already available so this
+    # session-free pipeline never lazy-loads signal.entity later.
+    active_pairs: list[tuple[Any, Any, str | None]] = []
     for claim in claims:
         for entity in getattr(claim, "entities", []) or []:
             for signal in getattr(entity, "signals", []) or []:
                 if getattr(signal, "active", False):
-                    active_pairs.append((claim, signal))
+                    active_pairs.append((claim, signal, getattr(entity, "relation_type", None)))
     if not active_pairs:
         return candidates
 
@@ -534,7 +536,7 @@ async def expand_transcript_candidates_for_signals(
         if not isinstance(full_text, str) or not full_text.strip():
             continue
 
-        for claim, signal in active_pairs:
+        for claim, signal, relation_type in active_pairs:
             label = str(getattr(signal, "signal_label", "") or "").strip()
             claim_text = str(getattr(claim, "claim_text", "") or "").strip()
             rationale = str(getattr(signal, "rationale", "") or "").strip()
@@ -543,9 +545,7 @@ async def expand_transcript_candidates_for_signals(
             if raw_direction in {"supports", "threatens"}:
                 signal_direction = raw_direction
             else:
-                signal_direction = (
-                    "threatens" if getattr(getattr(signal, "entity", None), "relation_type", None) == "threatened_by" else "supports"
-                )
+                signal_direction = "threatens" if relation_type == "threatened_by" else "supports"
             focus_texts = [t for t in (label, claim_text, rationale) if t]
             if not focus_texts:
                 continue

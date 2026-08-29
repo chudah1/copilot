@@ -2,6 +2,7 @@ from types import SimpleNamespace
 from unittest.mock import MagicMock, patch
 
 import pytest
+from sqlalchemy.orm.exc import DetachedInstanceError
 
 from app.services.monitoring_pipeline import (
     _build_transcript_windows,
@@ -210,6 +211,54 @@ async def test_expand_transcript_candidates_for_signals_creates_per_signal_candi
     # revenue-related sentence, not the margin one.
     assert "data center revenue" in revenue_specific["evidence"]["excerpt"].lower()
     assert "margin" in margin_specific["evidence"]["excerpt"].lower()
+
+
+@pytest.mark.asyncio
+async def test_expand_transcript_candidates_for_signals_does_not_lazy_load_detached_signal_entity(
+    monkeypatch,
+):
+    """Direction inference must survive signals detached from the ORM session."""
+    monkeypatch.setattr(
+        "app.services.monitoring_pipeline.settings.openai_api_key",
+        None,
+        raising=False,
+    )
+
+    class DetachedSignal:
+        id = "threat-sig"
+        signal_type = "transcript_topic"
+        signal_label = "competitive pressure"
+        rationale = "A competitor could weaken the case."
+        active = True
+        signal_config_json = None
+
+        @property
+        def entity(self):
+            raise DetachedInstanceError("signal entity is detached")
+
+    transcript_candidate = {
+        "event_type": "earnings_call_transcript",
+        "description": "Earnings call",
+        "evidence": {
+            "quarter": "2026Q2",
+            "full_transcript": "Management discussed competitive pressure and new entrants.",
+            "highlights": ["Management discussed competitive pressure and new entrants."],
+            "excerpt": "Management discussed competitive pressure and new entrants.",
+        },
+    }
+    entity = SimpleNamespace(
+        relation_type="threatened_by",
+        signals=[DetachedSignal()],
+    )
+    claim = SimpleNamespace(
+        id="claim-1",
+        claim_text="The competitive position remains durable",
+        entities=[entity],
+    )
+
+    expanded = await expand_transcript_candidates_for_signals([transcript_candidate], [claim])
+
+    assert expanded[1]["evidence"]["signal_direction"] == "threatens"
 
 
 @pytest.mark.asyncio
