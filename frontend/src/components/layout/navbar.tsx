@@ -39,6 +39,7 @@ export function Navbar() {
   ) ?? [];
   const alertCount = evidencePulses.length;
   const decisionCount = evidencePulses.filter((item) => item.pulse_status === "review").length;
+  const reviewCount = decisionCount > 0 ? decisionCount : alertCount;
   const primaryReviewPulse = evidencePulses.reduce<(typeof evidencePulses)[number] | null>(
     (highest, item) => !highest || item.urgency_score > highest.urgency_score ? item : highest,
     null,
@@ -54,7 +55,7 @@ export function Navbar() {
   const mobileLinks = [
     { href: "/dashboard", label: "Portfolio", icon: BriefcaseBusiness },
     { href: "/research", label: "Research", icon: Search },
-    { href: alertsHref, label: "Review", icon: Bell, count: alertCount },
+    { href: alertsHref, label: "Review", icon: Bell, count: reviewCount },
     { href: "/digests", label: "Digests", icon: BookOpenText },
   ];
 
@@ -124,9 +125,9 @@ export function Navbar() {
                   <span className="font-mono text-[10px] uppercase tracking-[0.14em]">
                     Review
                   </span>
-                  {alertCount > 0 && (
+                  {reviewCount > 0 && (
                     <span className="inline-flex min-w-5 items-center justify-center border border-amber-600/20 bg-amber-600/12 px-1.5 py-0.5 font-mono text-[10px] text-amber-900">
-                      {alertCount}
+                      {reviewCount}
                     </span>
                   )}
                 </Link>
@@ -197,9 +198,9 @@ export function Navbar() {
                     <Bell className="w-3.5 h-3.5" />
                     Review
                   </span>
-                  {alertCount > 0 && (
+                  {reviewCount > 0 && (
                     <span className="inline-flex min-w-5 items-center justify-center border border-amber-600/20 bg-amber-600/12 px-1.5 py-0.5 text-[10px] text-amber-900">
-                      {alertCount}
+                      {reviewCount}
                     </span>
                   )}
                 </Link>

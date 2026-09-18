@@ -23,7 +23,7 @@ interface MonitoringTabProps {
   };
   investorProfile: "thesis_driven" | "hearsay_driven" | null;
   events: MonitoringEvent[];
-  unreviewedEvents: number;
+  pendingDecisionCount: number;
   activeSignalCount: number;
   hasSignals: boolean;
   calmState: ReturnType<typeof getMonitoringCalmState>;
@@ -46,7 +46,7 @@ export function MonitoringTab({
   writtenCase,
   investorProfile,
   events,
-  unreviewedEvents,
+  pendingDecisionCount,
   activeSignalCount,
   hasSignals,
   calmState,
@@ -80,10 +80,7 @@ export function MonitoringTab({
     );
   }
 
-  const noCurrentEvidence = unreviewedEvents === 0;
-  const evidenceHeadline = noCurrentEvidence
-    ? "Nothing new needs your decision."
-    : `${unreviewedEvents} new evidence item${unreviewedEvents === 1 ? "" : "s"} arrived.`;
+  const noDecisionPending = pendingDecisionCount === 0;
   const monitoringStatus = decompositionLoading
     ? "Monitoring checks are updating."
     : hasSignals
@@ -96,7 +93,7 @@ export function MonitoringTab({
 
   return (
     <div className="space-y-8">
-      <section className="product-panel border border-border/70 bg-[linear-gradient(180deg,rgba(163,126,79,0.05),rgba(255,255,255,0.96))] p-5 sm:p-6">
+      {noDecisionPending && <section className="product-panel border border-border/70 bg-[linear-gradient(180deg,rgba(163,126,79,0.05),rgba(255,255,255,0.96))] p-5 sm:p-6">
         <div className="flex items-center gap-1.5">
           <p className="font-mono text-[10px] uppercase tracking-[0.2em] text-primary">
             What changed
@@ -110,43 +107,41 @@ export function MonitoringTab({
           </InfoTip>
         </div>
         <h2 className="mt-2 font-display italic text-[1.6rem] leading-tight text-foreground sm:text-[1.85rem]">
-          {evidenceHeadline}
+          Nothing new needs your decision.
         </h2>
         <p className="mt-2 max-w-2xl font-sans text-sm leading-relaxed text-foreground/80">
-          {noCurrentEvidence
-            ? calmState.body
-            : investorProfile === "hearsay_driven"
-              ? "Each item below shows the part of your reason it touches. Some items only add context; stronger evidence will ask for a real decision."
-            : investorProfile === "thesis_driven"
-                ? "Each item below shows the part of your thesis it touches. Some items only add context; stronger evidence will ask for a real decision."
-                : "Each item below shows the part of your reason it touches. Some items only add context; stronger evidence will ask for a real decision."}
+          {calmState.body}
         </p>
         <div className="mt-4 border-t border-border/60 pt-3">
           <p className="font-sans text-xs leading-relaxed text-muted-foreground">
             {monitoringStatus}
-            {noCurrentEvidence ? ` ${calmState.nextCheck}` : ""}
+            {` ${calmState.nextCheck}`}
           </p>
         </div>
-      </section>
+      </section>}
 
-      {unreviewedEvents > 0 && thesisId && (
+      {pendingDecisionCount > 0 && thesisId && (
         <ThesisCheckIn
+          key={thesisId}
           thesisId={thesisId}
           ticker={ticker}
           investorProfile={investorProfile}
           writtenCase={writtenCase}
           onFlagEvent={onFlagEvent}
           onAfterSubmit={onAfterCheckIn}
+          presentation="guided"
         />
       )}
 
       {/* While a check-in is open, supporting evidence already renders inside
           each claim card — repeating it here showed the same items twice. */}
-      {unreviewedEvents === 0 && supportingItems.length > 0 && (
+      {noDecisionPending && supportingItems.length > 0 && (
         <HeldUpThisWeek items={supportingItems} />
       )}
 
-      {reviewedItems.length > 0 && <ReviewedThisWeek items={reviewedItems} />}
+      {noDecisionPending && reviewedItems.length > 0 && (
+        <ReviewedThisWeek items={reviewedItems} />
+      )}
 
       {events.length === 0 &&
         !decompositionLoading &&

@@ -13,6 +13,7 @@ interface Props {
   decomposition?: ThesisDecomposition | null;
   investorProfile?: "thesis_driven" | "hearsay_driven" | null;
   monitoringGaps?: MonitoringGap[];
+  showMonitoringDetails?: boolean;
   onEdit: () => void;
   onInvalidate: () => void;
 }
@@ -138,7 +139,7 @@ function getInterpretation(thesis: Thesis) {
 
 // ── Component ─────────────────────────────────────────────────────────────────
 
-export function ThesisCard({ thesis, decomposition, investorProfile, monitoringGaps = [], onEdit, onInvalidate }: Props) {
+export function ThesisCard({ thesis, decomposition, investorProfile, monitoringGaps = [], showMonitoringDetails = true, onEdit, onInvalidate }: Props) {
   const [renderedAt] = useState(() => Date.now());
   const aiAssistCopy = aiAssistWeakMessaging(investorProfile);
   const { labels, watchHints, ambiguityNote } = getInterpretation(thesis);
@@ -479,7 +480,7 @@ export function ThesisCard({ thesis, decomposition, investorProfile, monitoringG
       </div>
 
       {/* ── Active signals or watch hints ── */}
-      {(activeSignals.length > 0 || watchDescriptions.length > 0) && (
+      {showMonitoringDetails && (activeSignals.length > 0 || watchDescriptions.length > 0) && (
         <div className="px-5 py-4 space-y-3">
           <div className="flex items-center gap-1.5">
             <p className="font-mono text-[10px] uppercase tracking-[0.2em] text-muted-foreground">

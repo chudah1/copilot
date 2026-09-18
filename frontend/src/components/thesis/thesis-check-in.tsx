@@ -30,6 +30,7 @@ interface Props {
   };
   onFlagEvent: (eventId: string) => Promise<void>;
   onAfterSubmit: (result: SubmitClaimReviewsResponse, thesisAction: ThesisAction | null) => Promise<void> | void;
+  presentation?: "standard" | "guided";
 }
 
 const STATUS_CHIP: Record<ClaimStatus, string> = {
@@ -103,18 +104,18 @@ function writtenCaseLabel(investorProfile: "thesis_driven" | "hearsay_driven" | 
   if (investorProfile === "hearsay_driven") {
     return {
       heading: "Your reason",
-      fallback: "Not tied to a specific part of your reason",
+      fallback: "Your core reason",
     };
   }
   if (investorProfile === "thesis_driven") {
     return {
       heading: "Your thesis",
-      fallback: "Not tied to a specific part of your thesis",
+      fallback: "Your core thesis",
     };
   }
   return {
     heading: "Your reason",
-    fallback: "Not tied to a specific part of your reason",
+    fallback: "Your core reason",
   };
 }
 
@@ -184,6 +185,7 @@ export function ThesisCheckIn({
   writtenCase,
   onFlagEvent,
   onAfterSubmit,
+  presentation = "standard",
 }: Props) {
   const { data, mutate, isLoading } = useSWR<ThesisCheckInData>(`/api/theses/${thesisId}/check-in`, fetcher);
   const [decisions, setDecisions] = useState<Record<string, ClaimStatus>>({});
@@ -192,6 +194,7 @@ export function ThesisCheckIn({
   const [submitting, setSubmitting] = useState(false);
   const submittingRef = useRef(false);
   const [flaggingId, setFlaggingId] = useState<string | null>(null);
+  const [guidedStep, setGuidedStep] = useState<"brief" | "evidence" | "decision">("brief");
 
   if (isLoading || !data) {
     return (
@@ -236,12 +239,7 @@ export function ThesisCheckIn({
       : investorProfile === "hearsay_driven"
         ? "your reason"
         : "your reason";
-  const removalLabel =
-    investorProfile === "thesis_driven"
-      ? "Remove from this thesis"
-      : investorProfile === "hearsay_driven"
-        ? "Remove from this reason"
-        : "Remove from this reason";
+  const removalLabel = "Not relevant";
   const subjectReference = `your ${subjectWord}`;
   const canSubmit =
     Object.keys(decisions).length > 0 &&
@@ -277,7 +275,13 @@ export function ThesisCheckIn({
       setNotes("");
       setThesisAction(null);
       await mutate();
-      await onAfterSubmit(result, anyBroken ? thesisAction : null);
+      setGuidedStep("brief");
+      try {
+        await onAfterSubmit(result, anyBroken ? thesisAction : null);
+      } catch (refreshError) {
+        console.error("Decision saved but follow-up refresh failed", refreshError);
+        toast.warning("Decision saved. Refresh the page to see the latest status.");
+      }
     } catch (error) {
       console.error(error);
       toast.error("Failed to save the decision");
@@ -287,28 +291,93 @@ export function ThesisCheckIn({
     }
   };
 
+  const guided = presentation === "guided";
+  const guidedReviewActive = guided && pendingClaims.length > 0;
+  const evidenceCount = claims.reduce(
+    (total, claim) => total + claim.supports.length + claim.threatens.length + claim.neutral.length,
+    0,
+  );
+  const threateningCount = claims.reduce((total, claim) => total + claim.threatens.length, 0);
+
   return (
     <div className="space-y-4">
-      <div className="space-y-3">
-        <div>
-          <p className="mb-1 font-mono text-[10px] uppercase tracking-[0.2em] text-muted-foreground">
-            {pendingClaims.length > 0 ? "Decision needed" : "Evidence reviewed"}
-          </p>
-          <p className="font-display italic text-[1.6rem] leading-tight text-foreground">
-            {pendingClaims.length > 0
-              ? `Does this change ${possessiveSubject} for ${ticker}?`
-              : hasEvidence
-                ? "No decision needed."
-                : `Nothing is testing ${possessiveSubject} right now.`}
-          </p>
-          <p className="mt-2 max-w-2xl font-sans text-sm leading-relaxed text-foreground/75">
-            {pendingClaims.length > 0
-              ? `Read the evidence, then say whether the part of ${possessiveSubject} below still holds.`
-              : `PenKeep checked the new evidence. It does not currently test ${possessiveSubject} strongly enough to need a decision.`}
-          </p>
+      {guidedReviewActive && (
+        <div className="grid grid-cols-3 border border-border/70 bg-card">
+          {(
+            [
+              { id: "brief", number: "1", label: "What needs you" },
+              { id: "evidence", number: "2", label: "Review evidence" },
+              { id: "decision", number: "3", label: "Make the call" },
+            ] as const
+          ).map((step) => {
+            const active = guidedStep === step.id;
+            const unavailable =
+              step.id === "decision" &&
+              (undecided.length > 0 || Object.keys(decisions).length === 0);
+            return (
+              <button
+                key={step.id}
+                type="button"
+                onClick={() => setGuidedStep(step.id)}
+                disabled={unavailable}
+                aria-current={active ? "step" : undefined}
+                className={`border-r border-border/70 px-3 py-3 text-left last:border-r-0 disabled:cursor-not-allowed disabled:opacity-45 ${active ? "bg-primary/[0.06]" : "bg-background"}`}
+              >
+                <span className={`font-mono text-[9px] ${active ? "text-primary" : "text-muted-foreground"}`}>{step.number}</span>
+                <span className={`ml-2 font-mono text-[9px] uppercase tracking-[0.12em] ${active ? "text-primary" : "text-muted-foreground"}`}>
+                  {step.label}
+                </span>
+              </button>
+            );
+          })}
         </div>
+      )}
 
-        <div className="product-panel border border-border/60 bg-background/72 px-4 py-3">
+      {guidedReviewActive && guidedStep === "brief" && (
+        <section className="border border-amber-500/30 bg-[linear-gradient(145deg,rgba(217,119,6,0.08),rgba(255,255,255,0.9))] p-6 sm:p-9">
+          <p className="font-mono text-[10px] uppercase tracking-[0.22em] text-amber-800">Decision needed</p>
+          <h2 className="mt-4 max-w-2xl font-display text-3xl italic leading-tight text-foreground sm:text-4xl">
+            Does {possessiveSubject} for {ticker} still hold?
+          </h2>
+          <p className="mt-4 max-w-2xl font-sans text-base leading-relaxed text-foreground/75">
+            {threateningCount > 0
+              ? `${threateningCount} warning ${threateningCount === 1 ? "update has" : "updates have"} challenged what you asked PenKeep to watch.`
+              : `${evidenceCount} new evidence ${evidenceCount === 1 ? "item is" : "items are"} ready for a quick review.`}
+            {` ${pendingClaims.length} part${pendingClaims.length === 1 ? "" : "s"} of ${possessiveSubject} ${pendingClaims.length === 1 ? "needs" : "need"} your judgment.`}
+          </p>
+          <button
+            type="button"
+            onClick={() => setGuidedStep("evidence")}
+            className="mt-7 bg-primary px-5 py-3 font-mono text-[10px] uppercase tracking-[0.18em] text-primary-foreground transition-colors hover:bg-primary/90"
+          >
+            Review what changed →
+          </button>
+        </section>
+      )}
+
+      {(!guidedReviewActive || guidedStep === "brief") && (
+        <div className="space-y-3">
+          {!guidedReviewActive && (
+            <div>
+              <p className="mb-1 font-mono text-[10px] uppercase tracking-[0.2em] text-muted-foreground">
+                {pendingClaims.length > 0 ? "Decision needed" : "Evidence reviewed"}
+              </p>
+              <p className="font-display italic text-[1.6rem] leading-tight text-foreground">
+                {pendingClaims.length > 0
+                  ? `Does this change ${possessiveSubject} for ${ticker}?`
+                  : hasEvidence
+                    ? "No decision needed."
+                    : `Nothing is testing ${possessiveSubject} right now.`}
+              </p>
+              <p className="mt-2 max-w-2xl font-sans text-sm leading-relaxed text-foreground/75">
+                {pendingClaims.length > 0
+                  ? `Read the evidence, then say whether the part of ${possessiveSubject} below still holds.`
+                  : `PenKeep checked the new evidence. It does not currently test ${possessiveSubject} strongly enough to need a decision.`}
+              </p>
+            </div>
+          )}
+
+        <div className={`product-panel border border-border/60 bg-background/72 px-4 py-3 ${guidedReviewActive ? "mt-4" : ""}`}>
           <p className="font-mono text-[10px] uppercase tracking-[0.16em] text-muted-foreground">{writtenCaseCopy.heading}</p>
           <div className="mt-3 grid gap-4 lg:grid-cols-3">
             <div>
@@ -329,19 +398,21 @@ export function ThesisCheckIn({
             )}
           </div>
         </div>
-      </div>
+        </div>
+      )}
 
-      <div className="space-y-3">
-        {pendingClaims.length > 0 && (
-          <div className="product-panel border border-primary/15 bg-primary/[0.04] px-4 py-3">
-            <p className="font-mono text-[10px] uppercase tracking-[0.18em] text-primary/75">
-              {coach.eyebrow}
-            </p>
-            <p className="mt-2 font-sans text-sm leading-relaxed text-foreground/82">
-              {coach.body}
-            </p>
-          </div>
-        )}
+      {(!guidedReviewActive || guidedStep === "evidence") && (
+        <div className="space-y-3">
+          {pendingClaims.length > 0 && (
+            <div className="product-panel border border-primary/15 bg-primary/[0.04] px-4 py-3">
+              <p className="font-mono text-[10px] uppercase tracking-[0.18em] text-primary/75">
+                {coach.eyebrow}
+              </p>
+              <p className="mt-2 font-sans text-sm leading-relaxed text-foreground/82">
+                {coach.body}
+              </p>
+            </div>
+          )}
         {claims.map((claim) => {
           const key = claimKey(claim);
           const decision = decisions[key];
@@ -385,40 +456,68 @@ export function ThesisCheckIn({
                           {`Evidence that weakens this part of ${subjectReference}. It only asks for a decision when the pressure is strong enough.`}
                         </InfoTip>
                       </div>
-                      {claim.threatens.map((item) => (
+                      {claim.threatens.slice(0, 2).map((item) => (
                         <EvidenceRow key={item.id} item={item} onFlag={handleFlag} flagging={flaggingId === item.id} removalLabel={removalLabel} />
                       ))}
+                      {claim.threatens.length > 2 && (
+                        <details className="group border border-border/60 bg-background/45 px-3 py-2">
+                          <summary className="flex cursor-pointer list-none items-center justify-between gap-3">
+                            <span className="font-sans text-xs text-foreground/70">
+                              {claim.threatens.length - 2} more challenging update{claim.threatens.length - 2 === 1 ? "" : "s"}
+                            </span>
+                            <span className="font-mono text-[9px] uppercase tracking-[0.13em] text-muted-foreground group-open:hidden">Show</span>
+                            <span className="hidden font-mono text-[9px] uppercase tracking-[0.13em] text-muted-foreground group-open:inline">Hide</span>
+                          </summary>
+                          <div className="mt-2 space-y-2">
+                            {claim.threatens.slice(2).map((item) => (
+                              <EvidenceRow key={item.id} item={item} onFlag={handleFlag} flagging={flaggingId === item.id} removalLabel={removalLabel} />
+                            ))}
+                          </div>
+                        </details>
+                      )}
                     </div>
                   )}
                   {claim.supports.length > 0 && (
-                    <div className="space-y-2">
-                      <div className="flex items-center gap-1.5">
-                        <p className="font-mono text-[10px] uppercase tracking-[0.16em] text-emerald-700/80">
-                          Held up · {claim.supports.length}
-                        </p>
+                    <details className="group border-t border-border/50 pt-2">
+                      <summary className="flex cursor-pointer list-none items-center justify-between gap-3 py-1">
+                        <span className="flex items-center gap-1.5">
+                          <span className="font-mono text-[10px] uppercase tracking-[0.16em] text-emerald-700/80">
+                            Held up · {claim.supports.length}
+                          </span>
                         <InfoTip label="Held up">
                           {`Evidence that supports this part of ${subjectReference}. It stays in the trail but does not require a response.`}
                         </InfoTip>
+                        </span>
+                        <span className="font-mono text-[9px] uppercase tracking-[0.13em] text-muted-foreground group-open:hidden">Show</span>
+                        <span className="hidden font-mono text-[9px] uppercase tracking-[0.13em] text-muted-foreground group-open:inline">Hide</span>
+                      </summary>
+                      <div className="mt-2 space-y-2">
+                        {claim.supports.map((item) => (
+                          <EvidenceRow key={item.id} item={item} onFlag={handleFlag} flagging={flaggingId === item.id} removalLabel={removalLabel} />
+                        ))}
                       </div>
-                      {claim.supports.map((item) => (
-                        <EvidenceRow key={item.id} item={item} onFlag={handleFlag} flagging={flaggingId === item.id} removalLabel={removalLabel} />
-                      ))}
-                    </div>
+                    </details>
                   )}
                   {claim.neutral.length > 0 && (
-                    <div className="space-y-2">
-                      <div className="flex items-center gap-1.5">
-                        <p className="font-mono text-[10px] uppercase tracking-[0.16em] text-muted-foreground/80">
-                          Background · {claim.neutral.length}
-                        </p>
+                    <details className="group border-t border-border/50 pt-2">
+                      <summary className="flex cursor-pointer list-none items-center justify-between gap-3 py-1">
+                        <span className="flex items-center gap-1.5">
+                          <span className="font-mono text-[10px] uppercase tracking-[0.16em] text-muted-foreground/80">
+                            Background · {claim.neutral.length}
+                          </span>
                         <InfoTip label="Background">
                           {`Related evidence that neither supports nor weakens this part of ${subjectReference}. It is kept for context and needs no response.`}
                         </InfoTip>
+                        </span>
+                        <span className="font-mono text-[9px] uppercase tracking-[0.13em] text-muted-foreground group-open:hidden">Show</span>
+                        <span className="hidden font-mono text-[9px] uppercase tracking-[0.13em] text-muted-foreground group-open:inline">Hide</span>
+                      </summary>
+                      <div className="mt-2 space-y-2">
+                        {claim.neutral.map((item) => (
+                          <EvidenceRow key={item.id} item={item} onFlag={handleFlag} flagging={flaggingId === item.id} removalLabel={removalLabel} />
+                        ))}
                       </div>
-                      {claim.neutral.map((item) => (
-                        <EvidenceRow key={item.id} item={item} onFlag={handleFlag} flagging={flaggingId === item.id} removalLabel={removalLabel} />
-                      ))}
-                    </div>
+                    </details>
                   )}
                 </div>
               )}
@@ -464,9 +563,47 @@ export function ThesisCheckIn({
             </div>
           );
         })}
-      </div>
+        {guidedReviewActive && (
+          <div className="flex flex-wrap items-center justify-between gap-3 border-t border-border/70 pt-4">
+            <button
+              type="button"
+              onClick={() => setGuidedStep("brief")}
+              className="font-mono text-[10px] uppercase tracking-[0.16em] text-muted-foreground transition-colors hover:text-foreground"
+            >
+              ← Back
+            </button>
+            <div className="flex flex-wrap items-center gap-3">
+              {undecided.length > 0 && (
+                <p className="font-sans text-xs text-muted-foreground">
+                  {undecided.length} part{undecided.length === 1 ? "" : "s"} still need{undecided.length === 1 ? "s" : ""} your answer.
+                </p>
+              )}
+              <button
+                type="button"
+                onClick={() => setGuidedStep("decision")}
+                disabled={undecided.length > 0 || Object.keys(decisions).length === 0}
+                className="bg-primary px-5 py-3 font-mono text-[10px] uppercase tracking-[0.18em] text-primary-foreground transition-colors hover:bg-primary/90 disabled:opacity-40"
+              >
+                Make the call →
+              </button>
+            </div>
+          </div>
+        )}
+        </div>
+      )}
 
-      {pendingClaims.length > 0 && <div className="product-panel space-y-4 p-4 sm:p-5">
+      {pendingClaims.length > 0 && (!guidedReviewActive || guidedStep === "decision") && <div className="product-panel space-y-4 p-4 sm:p-5">
+        {guidedReviewActive && (
+          <div className="border-b border-border/60 pb-4">
+            <p className="font-mono text-[10px] uppercase tracking-[0.2em] text-primary">Your decision</p>
+            <p className="mt-2 font-display text-2xl italic leading-tight text-foreground">
+              Record what the evidence changed.
+            </p>
+            <p className="mt-2 font-sans text-sm leading-relaxed text-foreground/70">
+              You reviewed {pendingClaims.length} part{pendingClaims.length === 1 ? "" : "s"} of {possessiveSubject}. This decision will be saved to the history for {ticker}.
+            </p>
+          </div>
+        )}
         {anyBroken && (
           <div className="space-y-2">
             <p className="font-mono text-[10px] uppercase tracking-[0.18em] text-red-700">
@@ -516,6 +653,15 @@ export function ThesisCheckIn({
         </div>
 
         <div className="flex flex-wrap items-center justify-between gap-3">
+          {guidedReviewActive && (
+            <button
+              type="button"
+              onClick={() => setGuidedStep("evidence")}
+              className="font-mono text-[10px] uppercase tracking-[0.16em] text-muted-foreground transition-colors hover:text-foreground"
+            >
+              ← Back to evidence
+            </button>
+          )}
           <p className="font-sans text-xs text-muted-foreground">
             {undecided.length > 0
               ? `${undecided.length} claim${undecided.length === 1 ? "" : "s"} still need${undecided.length === 1 ? "s" : ""} a call.`
@@ -529,7 +675,7 @@ export function ThesisCheckIn({
             disabled={!canSubmit}
             className="bg-primary px-5 py-2.5 font-mono text-[10px] uppercase tracking-[0.18em] text-primary-foreground transition-colors hover:bg-primary/90 disabled:opacity-40"
           >
-            {submitting ? "Recording…" : "Record decision"}
+            {submitting ? "Recording…" : "Save decision"}
           </button>
         </div>
       </div>}

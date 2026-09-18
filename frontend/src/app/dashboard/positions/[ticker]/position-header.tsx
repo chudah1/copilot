@@ -10,7 +10,8 @@ import { PriceSparkline } from "@/components/portfolio/price-sparkline";
 import { ageInDays, getDecisionState } from "@/lib/decision-state";
 import type { CaseReviewPressure } from "@/lib/decision-state";
 import { cleanTicker } from "./position-helpers";
-import type { TabId } from "./position-helpers";
+
+export type PositionSectionId = "reason" | "changes" | "checks" | "history";
 
 interface PositionHeaderProps {
   holding: Holding;
@@ -22,22 +23,23 @@ interface PositionHeaderProps {
   pnl: number;
   pnlPct: string;
   stalePressure: CaseReviewPressure | null;
-  tabs: { id: TabId; label: string; badge?: number | string }[];
-  activeTab: TabId;
-  unreviewedEvents: number;
+  sections: { id: PositionSectionId; label: string; badge?: number | string }[];
+  activeSection: PositionSectionId;
+  compactForReview: boolean;
+  pendingDecisionCount: number;
   deleteConfirming: boolean;
   deleteLoading: boolean;
   onDelete: () => void;
   onSetDeleteConfirming: (v: boolean) => void;
   onCheckNowComplete: (result: CheckNowResponse) => Promise<void> | void;
-  onSelectTab: (id: TabId) => void;
+  onSelectSection: (id: PositionSectionId) => void;
   onOpenNote: () => void;
 }
 
 export function PositionHeader({
   holding, activeThesis, pulse, investorProfile, hasPrice, value, pnl, pnlPct,
-  stalePressure, tabs, activeTab, unreviewedEvents, deleteConfirming,
-  deleteLoading, onDelete, onSetDeleteConfirming, onCheckNowComplete, onSelectTab,
+  stalePressure, sections, activeSection, compactForReview, pendingDecisionCount, deleteConfirming,
+  deleteLoading, onDelete, onSetDeleteConfirming, onCheckNowComplete, onSelectSection,
   onOpenNote,
 }: PositionHeaderProps) {
   const decisionState = getDecisionState({ thesis: activeThesis, pulse });
@@ -69,31 +71,12 @@ export function PositionHeader({
               ← Portfolio
             </Link>
             <div className="flex flex-wrap items-center gap-2 sm:justify-end">
-              {deleteConfirming ? (
-                <div className="flex flex-wrap items-center gap-2 border border-red-500/20 bg-red-500/5 px-3 py-2 sm:justify-end">
-                  <span className="font-mono text-[10px] uppercase tracking-[0.14em] text-red-700/80">
-                    Remove all data?
-                  </span>
-                  <button
-                    onClick={onDelete}
-                    disabled={deleteLoading}
-                    className="border border-red-500/25 bg-background/80 px-3 py-1.5 font-mono text-[10px] uppercase tracking-[0.15em] text-red-700/80 transition-colors hover:border-red-500/40 hover:text-red-800 disabled:opacity-40"
-                  >
-                    {deleteLoading ? "Removing…" : "Confirm"}
-                  </button>
-                  <button
-                    onClick={() => onSetDeleteConfirming(false)}
-                    className="border border-border/60 bg-background/72 px-3 py-1.5 font-mono text-[10px] uppercase tracking-[0.15em] text-muted-foreground transition-colors hover:border-border hover:text-foreground"
-                  >
-                    Cancel
-                  </button>
-                </div>
-              ) : (
+              {pendingDecisionCount > 0 && activeSection !== "changes" && (
                 <button
-                  onClick={() => onSetDeleteConfirming(true)}
-                  className="border border-border/60 bg-background/72 px-3 py-2 font-mono text-[10px] uppercase tracking-[0.15em] text-muted-foreground transition-colors hover:border-border hover:text-foreground"
+                  onClick={() => onSelectSection("changes")}
+                  className="bg-primary px-3 py-2 font-mono text-[10px] uppercase tracking-[0.15em] text-primary-foreground transition-colors hover:bg-primary/90"
                 >
-                  Remove position
+                  Review changes
                 </button>
               )}
               <button
@@ -102,14 +85,48 @@ export function PositionHeader({
               >
                 + Note
               </button>
-              <CheckNowButton
-                holdingId={holding.id}
-                ticker={holding.ticker}
-                currency={holding.currency}
-                portfolioCurrency={holding.portfolio_currency ?? "GBP"}
-                investorProfile={investorProfile ?? null}
-                onComplete={onCheckNowComplete}
-              />
+              <details className="group relative">
+                <summary className="cursor-pointer list-none border border-border/70 bg-background px-3 py-2 font-mono text-[10px] uppercase tracking-[0.15em] text-muted-foreground transition-colors hover:border-border hover:text-foreground">
+                  More
+                </summary>
+                <div className="absolute right-0 top-[calc(100%+0.4rem)] z-50 w-56 space-y-2 border border-border/80 bg-background p-3 shadow-xl">
+                  <CheckNowButton
+                    holdingId={holding.id}
+                    ticker={holding.ticker}
+                    currency={holding.currency}
+                    portfolioCurrency={holding.portfolio_currency ?? "GBP"}
+                    investorProfile={investorProfile ?? null}
+                    onComplete={onCheckNowComplete}
+                  />
+                  {deleteConfirming ? (
+                    <div className="space-y-2 border border-red-500/20 bg-red-500/5 p-2.5">
+                      <p className="font-sans text-xs leading-relaxed text-red-700/80">Remove this position and its history?</p>
+                      <div className="flex gap-2">
+                        <button
+                          onClick={onDelete}
+                          disabled={deleteLoading}
+                          className="border border-red-500/25 bg-background/80 px-2.5 py-1.5 font-mono text-[9px] uppercase tracking-[0.13em] text-red-700/80 disabled:opacity-40"
+                        >
+                          {deleteLoading ? "Removing…" : "Remove"}
+                        </button>
+                        <button
+                          onClick={() => onSetDeleteConfirming(false)}
+                          className="border border-border/60 bg-background/72 px-2.5 py-1.5 font-mono text-[9px] uppercase tracking-[0.13em] text-muted-foreground"
+                        >
+                          Cancel
+                        </button>
+                      </div>
+                    </div>
+                  ) : (
+                    <button
+                      onClick={() => onSetDeleteConfirming(true)}
+                      className="w-full border border-border/60 bg-background/72 px-3 py-2 text-left font-mono text-[10px] uppercase tracking-[0.14em] text-muted-foreground transition-colors hover:border-red-500/30 hover:text-red-700"
+                    >
+                      Remove position
+                    </button>
+                  )}
+                </div>
+              </details>
             </div>
           </div>
 
@@ -158,52 +175,56 @@ export function PositionHeader({
             </div>
           </div>
 
-          <div className="mb-3 grid grid-cols-3 gap-px overflow-hidden border border-border/60 bg-border/60">
-            <div className="bg-background/90 px-3 py-2">
-              <p className="font-mono text-[9px] uppercase tracking-[0.15em] text-muted-foreground">
-                Shares
-              </p>
-              <p className="mt-1 font-mono text-sm tabular-nums text-foreground">
-                {holding.quantity.toLocaleString()}
-              </p>
-            </div>
-            <div className="bg-background/90 px-3 py-2">
-              <p className="font-mono text-[9px] uppercase tracking-[0.15em] text-muted-foreground">
-                Current price
-              </p>
-              <p className="mt-1 font-mono text-sm tabular-nums text-foreground">
-                {holding.current_price != null
-                  ? formatCurrency(holding.current_price, holding.currency || "GBP")
-                  : "—"}
-              </p>
-            </div>
-            <div className="bg-background/90 px-3 py-2">
-              <p className="font-mono text-[9px] uppercase tracking-[0.15em] text-muted-foreground">
-                Average cost
-              </p>
-              <p className="mt-1 font-mono text-sm tabular-nums text-foreground">
-                {holding.average_cost_native != null
-                  ? formatCurrency(holding.average_cost_native, holding.currency || "GBP")
-                  : formatCurrency(
-                      holding.average_cost_basis,
-                      holding.portfolio_currency ?? "GBP",
-                    )}
-              </p>
-              {priceVsAvgCostPct != null && (
-                <p className={`mt-0.5 font-sans text-[10px] leading-tight ${priceVsAvgCostPct >= 0 ? "text-emerald-700" : "text-red-600"}`}>
-                  Price is {Math.abs(priceVsAvgCostPct).toFixed(1)}% {priceVsAvgCostPct >= 0 ? "above" : "below"} this
-                </p>
-              )}
-            </div>
-          </div>
+          {!compactForReview && (
+            <>
+              <div className="mb-3 grid grid-cols-3 gap-px overflow-hidden border border-border/60 bg-border/60">
+                <div className="bg-background/90 px-3 py-2">
+                  <p className="font-mono text-[9px] uppercase tracking-[0.15em] text-muted-foreground">
+                    Shares
+                  </p>
+                  <p className="mt-1 font-mono text-sm tabular-nums text-foreground">
+                    {holding.quantity.toLocaleString()}
+                  </p>
+                </div>
+                <div className="bg-background/90 px-3 py-2">
+                  <p className="font-mono text-[9px] uppercase tracking-[0.15em] text-muted-foreground">
+                    Current price
+                  </p>
+                  <p className="mt-1 font-mono text-sm tabular-nums text-foreground">
+                    {holding.current_price != null
+                      ? formatCurrency(holding.current_price, holding.currency || "GBP")
+                      : "—"}
+                  </p>
+                </div>
+                <div className="bg-background/90 px-3 py-2">
+                  <p className="font-mono text-[9px] uppercase tracking-[0.15em] text-muted-foreground">
+                    Average cost
+                  </p>
+                  <p className="mt-1 font-mono text-sm tabular-nums text-foreground">
+                    {holding.average_cost_native != null
+                      ? formatCurrency(holding.average_cost_native, holding.currency || "GBP")
+                      : formatCurrency(
+                          holding.average_cost_basis,
+                          holding.portfolio_currency ?? "GBP",
+                        )}
+                  </p>
+                  {priceVsAvgCostPct != null && (
+                    <p className={`mt-0.5 font-sans text-[10px] leading-tight ${priceVsAvgCostPct >= 0 ? "text-emerald-700" : "text-red-600"}`}>
+                      Price is {Math.abs(priceVsAvgCostPct).toFixed(1)}% {priceVsAvgCostPct >= 0 ? "above" : "below"} this
+                    </p>
+                  )}
+                </div>
+              </div>
 
-          <div>
-            <PriceSparkline
-              holdingId={holding.id}
-              className="mb-3"
-              investorProfile={investorProfile}
-            />
-          </div>
+              <div>
+                <PriceSparkline
+                  holdingId={holding.id}
+                  className="mb-3"
+                  investorProfile={investorProfile}
+                />
+              </div>
+            </>
+          )}
 
           {/* Status ribbon */}
           <div className="flex flex-col items-start gap-3 pb-3 sm:flex-row sm:items-center sm:gap-4">
@@ -227,7 +248,7 @@ export function PositionHeader({
                   </>
                 )}
               </div>
-              )}
+            )}
           </div>
 
         </div>
@@ -241,26 +262,26 @@ export function PositionHeader({
             {cleanTicker(holding.ticker)}
           </span>
           <div className="flex min-w-0 flex-1 gap-1 overflow-x-auto">
-            {tabs.map((tab) => (
+            {sections.map((section) => (
               <button
-                key={tab.id}
-                onClick={() => onSelectTab(tab.id)}
+                key={section.id}
+                onClick={() => onSelectSection(section.id)}
                 className="relative pb-3 px-3 font-mono text-[10px] uppercase tracking-[0.2em] transition-colors flex items-center gap-2 whitespace-nowrap"
-                style={{ color: activeTab === tab.id ? "var(--primary)" : "var(--muted-foreground)" }}
+                style={{ color: activeSection === section.id ? "var(--primary)" : "var(--muted-foreground)" }}
               >
-                {tab.label}
-                {tab.badge !== undefined && (
+                {section.label}
+                {section.badge !== undefined && (
                   <span className={`inline-flex items-center justify-center h-4 min-w-4 px-1 rounded-sm font-mono text-[10px] tabular-nums ${
-                    tab.id === "monitoring" && unreviewedEvents > 0
+                    section.id === "changes" && pendingDecisionCount > 0
                       ? "bg-primary/10 text-primary"
                       : "text-muted-foreground/60"
                   }`}>
-                    {tab.badge}
+                    {section.badge}
                   </span>
                 )}
-                {activeTab === tab.id && (
+                {activeSection === section.id && (
                   <motion.div
-                    layoutId="tab-indicator"
+                    layoutId="position-section-indicator"
                     className="absolute bottom-0 left-0 right-0 h-px bg-primary"
                     transition={{ type: "spring", stiffness: 400, damping: 35 }}
                   />

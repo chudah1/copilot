@@ -27,6 +27,7 @@ import { GuidedThesisSetup } from "@/components/thesis/guided-thesis-setup";
 import { InvalidateDialog } from "./invalidate-dialog";
 import { MonitoringTab } from "./monitoring-tab";
 import { PositionHeader } from "./position-header";
+import type { PositionSectionId } from "./position-header";
 import { PositionNoteDialog } from "./position-note-dialog";
 import { ThesisHealthCheck } from "@/components/thesis/thesis-health-check";
 import { CounterThesisCard } from "@/components/thesis/counter-thesis-card";
@@ -190,6 +191,21 @@ function PositionDetailInner() {
     setThesisSubTab("thesis");
     syncRouteTab("thesis", "thesis");
   };
+
+  // Keep browser back/forward navigation aligned with the selected section.
+  // Internal actions can still switch sections immediately while the URL is
+  // being replaced, so route changes only reconcile the same two state fields.
+  useEffect(() => {
+    const next = resolvePositionTabs(requestedTab);
+    const timeoutId = window.setTimeout(() => {
+      startTransition(() => {
+        setActiveTab(next.activeTab);
+        setThesisSubTab(next.thesisSubTab);
+      });
+    }, 0);
+
+    return () => window.clearTimeout(timeoutId);
+  }, [requestedTab]);
 
   const waitForRebuiltSignalMap = async (
     thesisId: string,
@@ -879,7 +895,13 @@ function PositionDetailInner() {
     : [];
   const monitoringPreviewItems = getMonitoringPreviewItems(decompositionEnvelope, watchHints);
   const earningsWatchList = watchHints.map((h) => describeWatchHint(h)).filter((h): h is string => Boolean(h)).slice(0, 3);
-  const unreviewedEvents = events.filter((e) => !e.review_action).length;
+  // Claim reviews, not raw event rows, are the unit of action. Most evidence
+  // deliberately keeps review_action=null and would otherwise stay "new"
+  // forever even after its claim was reviewed.
+  const pendingDecisionCount =
+    pulse?.pulse_basis === "evidence" && pulse.pulse_status === "review"
+      ? pulse.unresolved_event_count
+      : 0;
   const decisionPrompt = getDecisionPrompt(
     activeThesis,
     events,
@@ -904,11 +926,6 @@ function PositionDetailInner() {
       ? `Your ${thesisLabel} is saved. Review the suggested checks once so future alerts reflect what you meant.`
       : `Your ${thesisLabel} is saved. The first evidence check is running in the background.`;
 
-  const tabs: { id: TabId; label: string; badge?: number | string }[] = [
-    { id: "thesis", label: onboardingState?.investor_profile === "thesis_driven" ? "Thesis" : "Reason" },
-    { id: "monitoring", label: "What changed", badge: unreviewedEvents > 0 ? unreviewedEvents : undefined },
-  ];
-
   const lastReviewedEvent = events.filter((e) => e.review_action).sort((a, b) =>
     new Date(b.created_at).getTime() - new Date(a.created_at).getTime()
   )[0];
@@ -922,6 +939,27 @@ function PositionDetailInner() {
         ),
       0,
     ) ?? 0;
+  const sections: { id: PositionSectionId; label: string; badge?: number | string }[] = [
+    { id: "reason", label: "Reason" },
+    { id: "changes", label: "Changes", badge: pendingDecisionCount > 0 ? pendingDecisionCount : undefined },
+    { id: "checks", label: "Checks", badge: activeSignalCount > 0 ? activeSignalCount : undefined },
+    { id: "history", label: "History", badge: (convictionLog?.entries.length ?? 0) > 0 ? convictionLog!.entries.length : undefined },
+  ];
+  const activeSection: PositionSectionId =
+    activeTab === "monitoring"
+      ? "changes"
+      : thesisSubTab === "signals"
+        ? "checks"
+        : thesisSubTab === "log"
+          ? "history"
+          : "reason";
+  const openPositionSection = (section: PositionSectionId) => {
+    if (section === "changes") {
+      openMainTab("monitoring");
+      return;
+    }
+    openThesisSubTab(section === "checks" ? "signals" : section === "history" ? "log" : "thesis");
+  };
   const monitoringCalmState = getMonitoringCalmState({
     hasReviewedEvents: events.some((event) => Boolean(event.review_action)),
     lastReviewedEventAgeDays: lastReviewedEvent ? ageInDays(lastReviewedEvent.created_at) : null,
@@ -999,7 +1037,7 @@ function PositionDetailInner() {
   // event and a pending thesis decision), but stacking banners makes the next
   // action ambiguous.
   const showDecisionBanner = Boolean(
-    !editing && decisionPrompt && activeThesis && !nextStepNotice,
+    !editing && activeTab !== "monitoring" && pendingDecisionCount === 0 && decisionPrompt && activeThesis && !nextStepNotice,
   );
   const showBlindSpotBanner = Boolean(
     fromBlindSpot && !activeThesis && !editing && !nextStepNotice && !showDecisionBanner,
@@ -1060,15 +1098,16 @@ function PositionDetailInner() {
           pnl={pnl}
           pnlPct={pnlPct}
           stalePressure={stalePressure}
-          tabs={tabs}
-          activeTab={activeTab}
-          unreviewedEvents={unreviewedEvents}
+          sections={sections}
+          activeSection={activeSection}
+          compactForReview={activeSection === "changes" && pendingDecisionCount > 0}
+          pendingDecisionCount={pendingDecisionCount}
           deleteConfirming={deleteConfirming}
           deleteLoading={deleteLoading}
           onDelete={handleDelete}
           onSetDeleteConfirming={setDeleteConfirming}
           onCheckNowComplete={handleCheckNowComplete}
-          onSelectTab={openMainTab}
+          onSelectSection={openPositionSection}
           onOpenNote={() => setNoteOpen(true)}
         />
       )}
@@ -1444,31 +1483,6 @@ function PositionDetailInner() {
                       </motion.div>
                     )}
 
-                    <div className="flex gap-1 -mx-1 border-b border-border/40">
-                      {(
-                        [
-                          { id: "thesis" as ThesisSubTab, label: "Thesis" },
-                          { id: "signals" as ThesisSubTab, label: "Signals", badge: hasActiveSignals ? activeSignalCount : undefined },
-                          { id: "log" as ThesisSubTab, label: "Trail", badge: (convictionLog?.entries.length ?? 0) > 0 ? convictionLog!.entries.length : undefined },
-                        ]
-                      ).map((sub) => (
-                        <button
-                          key={sub.id}
-                          onClick={() => openThesisSubTab(sub.id)}
-                          className="relative pb-3 px-3 font-mono text-[10px] uppercase tracking-[0.18em] transition-colors flex items-center gap-1.5"
-                          style={{ color: thesisSubTab === sub.id ? "var(--primary)" : "var(--muted-foreground)" }}
-                        >
-                          {sub.label}
-                          {sub.badge !== undefined && (
-                            <span className="font-mono text-[9px] text-muted-foreground/70 tabular-nums">{sub.badge}</span>
-                          )}
-                          {thesisSubTab === sub.id && (
-                            <motion.div layoutId="thesis-sub-indicator" className="absolute bottom-0 left-0 right-0 h-px bg-primary" transition={{ type: "spring", stiffness: 400, damping: 35 }} />
-                          )}
-                        </button>
-                      ))}
-                    </div>
-
                     {/* ── Thesis sub-tab ──────────────────────────────────── */}
                     {thesisSubTab === "thesis" && (
                       <div className="grid items-start gap-5 xl:grid-cols-[minmax(0,1fr)_18rem]">
@@ -1478,13 +1492,14 @@ function PositionDetailInner() {
                             decomposition={decompositionEnvelope?.decomposition ?? null}
                             investorProfile={onboardingState?.investor_profile ?? null}
                             monitoringGaps={allGaps.filter((g) => g.thesis_id === activeThesis.id)}
+                            showMonitoringDetails={false}
                             onEdit={() => beginEditing(false)}
                             onInvalidate={() => setInvalidateOpen(true)}
                           />
                         </div>
 
                         <aside className="space-y-5 xl:sticky xl:top-[7.5rem]">
-                          {openLoops.length > 0 && (
+                          {openLoops.length > 0 && pendingDecisionCount === 0 && (
                             <OpenLoopsSection
                               loops={openLoops}
                               onDismiss={async (loopKey) => {
@@ -1742,7 +1757,7 @@ function PositionDetailInner() {
                   }}
                   investorProfile={onboardingState?.investor_profile ?? null}
                   events={events}
-                  unreviewedEvents={unreviewedEvents}
+                  pendingDecisionCount={pendingDecisionCount}
                   activeSignalCount={activeSignalCount}
                   hasSignals={hasSignals}
                   calmState={monitoringCalmState}
