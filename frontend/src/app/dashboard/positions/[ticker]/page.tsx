@@ -23,6 +23,7 @@ import { ConvictionLog } from "@/components/thesis/conviction-log";
 import { ThesisDecompositionReview } from "@/components/thesis/thesis-decomposition-review";
 import { HistoricalAuditCard } from "@/components/thesis/historical-audit-card";
 import { ThesisEditor } from "@/components/thesis/thesis-editor";
+import { GuidedThesisSetup } from "@/components/thesis/guided-thesis-setup";
 import { InvalidateDialog } from "./invalidate-dialog";
 import { MonitoringTab } from "./monitoring-tab";
 import { PositionHeader } from "./position-header";
@@ -88,6 +89,7 @@ function PositionDetailInner() {
   const requestedTab = searchParams.get("tab");
   const initialRequestedTab = useRef(requestedTab);
   const editRequested = searchParams.get("edit") === "1";
+  const guidedSetupRequested = searchParams.get("setup") === "1";
   const initialTabState = resolvePositionTabs(requestedTab);
   const [activeTab, setActiveTab] = useState<TabId>(
     initialTabState.activeTab,
@@ -128,6 +130,9 @@ function PositionDetailInner() {
   const [allGaps, setAllGaps] = useState<MonitoringGap[]>([]);
   const [historicalAudit, setHistoricalAudit] = useState<HistoricalAuditResponse | null>(null);
   const [historicalAuditThesisId, setHistoricalAuditThesisId] = useState<string | null>(null);
+  const [guidedSetupActive, setGuidedSetupActive] = useState(false);
+  const [guidedPreviousMapId, setGuidedPreviousMapId] = useState<string | null>(null);
+  const [guidedReuseExistingMap, setGuidedReuseExistingMap] = useState(false);
 
   const holding = holdings.find((h) => h.ticker === ticker);
   const activeThesis = selectActiveThesis(theses);
@@ -142,6 +147,15 @@ function PositionDetailInner() {
     () => (fromSimulateCheckpoint ? loadPreActionCheckpointDraft(ticker) : null),
     [fromSimulateCheckpoint, ticker],
   );
+
+  const beginEditing = (forceGuided = false) => {
+    setGuidedPreviousMapId(null);
+    setGuidedReuseExistingMap(false);
+    setGuidedSetupActive(
+      forceGuided || !activeThesis || activeThesis.status === "draft",
+    );
+    setEditing(true);
+  };
 
   const refreshPulse = async (holdingId: string) => {
     const portfolioPulse = await api.get<PortfolioPulse>("/api/portfolio/pulse").catch(() => null);
@@ -177,7 +191,10 @@ function PositionDetailInner() {
     syncRouteTab("thesis", "thesis");
   };
 
-  const waitForRebuiltSignalMap = async (thesisId: string, previousMapId: string) => {
+  const waitForRebuiltSignalMap = async (
+    thesisId: string,
+    previousMapId: string,
+  ): Promise<ThesisDecompositionEnvelope | null> => {
     setDecompositionLoading(true);
     try {
       for (let attempt = 0; attempt < 30; attempt += 1) {
@@ -187,13 +204,15 @@ function PositionDetailInner() {
         const envelope = await api.get<ThesisDecompositionEnvelope>(`/api/theses/${thesisId}/decomposition`);
         if (envelope.decomposition?.id && envelope.decomposition.id !== previousMapId) {
           setDecompositionEnvelope(envelope);
-          return;
+          return envelope;
         }
       }
       toast.message("The signal map is still updating. It will appear when the rebuild finishes.");
+      return null;
     } catch (error) {
       console.error(error);
       toast.error("Your update was saved, but the signal map could not be refreshed yet.");
+      return null;
     } finally {
       setDecompositionLoading(false);
     }
@@ -248,24 +267,29 @@ function PositionDetailInner() {
   }, [ticker]);
 
   useEffect(() => {
-    if (loading || editing || !editRequested) return;
+    if (loading || editing || (!editRequested && !guidedSetupRequested)) return;
 
     const timeoutId = window.setTimeout(() => {
       startTransition(() => {
         setActiveTab("thesis");
         setThesisSubTab("thesis");
+        setGuidedSetupActive(
+          guidedSetupRequested || !activeThesis || activeThesis.status === "draft",
+        );
         setEditing(true);
       });
 
       // Consume the one-shot command so saving the edit does not reopen it.
       const params = new URLSearchParams(searchParams.toString());
       params.delete("edit");
+      params.delete("setup");
+      params.delete("variant");
       const query = params.toString();
       router.replace(query ? `${pathname}?${query}` : pathname, { scroll: false });
     }, 0);
 
     return () => window.clearTimeout(timeoutId);
-  }, [editRequested, editing, loading, pathname, router, searchParams]);
+  }, [activeThesis, editRequested, editing, guidedSetupRequested, loading, pathname, router, searchParams]);
 
   useEffect(() => {
     if (
@@ -282,6 +306,7 @@ function PositionDetailInner() {
     const timeoutId = window.setTimeout(() => {
       startTransition(() => {
         setActiveTab("thesis");
+        setGuidedSetupActive(true);
         setEditing(true);
         setHasPromptedBlindSpotEditor(true);
       });
@@ -311,6 +336,7 @@ function PositionDetailInner() {
     const timeoutId = window.setTimeout(() => {
       startTransition(() => {
         setActiveTab("thesis");
+        setGuidedSetupActive(true);
         setEditing(true);
       });
     }, 0);
@@ -462,18 +488,28 @@ function PositionDetailInner() {
     interpretation: Record<string, unknown> | null;
     source: "user" | "ai_assisted";
     status: "active";
-  }) => {
+  }, options: { continueSetup?: boolean } = {}): Promise<Thesis | null> => {
     const previousMapId = decompositionEnvelope?.decomposition?.id ?? null;
+    const caseTextChanged = Boolean(
+      activeThesis && (
+        data.why_own_it !== activeThesis.why_own_it ||
+        data.must_remain_true !== activeThesis.must_remain_true ||
+        data.what_would_change_my_mind !== activeThesis.what_would_change_my_mind
+      ),
+    );
     try {
+      let savedThesis: Thesis | null = null;
       let savedThesisId: string | null = null;
       if (activeThesis) {
         const updated = await api.put<Thesis>(`/api/theses/${activeThesis.id}`, data);
         setTheses((current) => current.map((t) => (t.id === updated.id ? updated : t)));
+        savedThesis = updated;
         savedThesisId = updated.id;
       } else if (holding) {
         try {
           const created = await api.post<Thesis>("/api/theses", { holding_id: holding.id, ...data });
           setTheses((current) => [created, ...current]);
+          savedThesis = created;
           savedThesisId = created.id;
         } catch (error) {
           const message = getErrorMessage(error, "");
@@ -486,6 +522,7 @@ function PositionDetailInner() {
             }
             const updated = await api.put<Thesis>(`/api/theses/${existing.id}`, data);
             setTheses((current) => current.map((t) => (t.id === updated.id ? updated : t)));
+            savedThesis = updated;
             savedThesisId = updated.id;
             toast.message("Updated the existing reason for this holding.");
           } else {
@@ -498,25 +535,34 @@ function PositionDetailInner() {
       }
       setHistoricalAudit(null);
       setHistoricalAuditThesisId(null);
-      setEditing(false);
       if (savedThesisId) {
         clearPreActionCheckpointDraft(ticker);
         if (previousMapId) {
-          void waitForRebuiltSignalMap(savedThesisId, previousMapId);
+          if (options.continueSetup) {
+            setGuidedPreviousMapId(caseTextChanged ? previousMapId : null);
+            setGuidedReuseExistingMap(!caseTextChanged);
+          } else {
+            void waitForRebuiltSignalMap(savedThesisId, previousMapId);
+          }
         }
         runHealthCheck(savedThesisId);
-        setShowCounterThesis(true);
-        setShowAnalysis(true);
-        openThesisSubTab("thesis");
-        setNextStepNotice(buildPostSaveNotice({
-          investorProfile: onboardingState?.investor_profile ?? null,
-          blindSpotStart: fromBlindSpot && !activeThesis && !latestInvalidatedThesis,
-        }));
+        if (!options.continueSetup) {
+          setEditing(false);
+          setShowCounterThesis(true);
+          setShowAnalysis(true);
+          openThesisSubTab("thesis");
+          setNextStepNotice(buildPostSaveNotice({
+            investorProfile: onboardingState?.investor_profile ?? null,
+            blindSpotStart: fromBlindSpot && !activeThesis && !latestInvalidatedThesis,
+          }));
+        }
       }
       await Promise.all([refreshConvictionLog(), refreshOpenLoops()]);
+      return savedThesis;
     } catch (err) {
       console.error(err);
       toast.error(getErrorMessage(err, "Failed to save reason"));
+      return null;
     }
   };
 
@@ -548,30 +594,46 @@ function PositionDetailInner() {
     }
   };
 
-  const handleGenerateDecomposition = async () => {
-    if (!activeThesis) return;
+  const generateDecompositionForThesis = async (
+    thesisId: string,
+    options: { navigate?: boolean } = {},
+  ): Promise<ThesisDecompositionEnvelope | null> => {
+    const navigate = options.navigate ?? true;
     try {
       setDecompositionLoading(true);
-      const envelope = await api.post<ThesisDecompositionEnvelope>(`/api/theses/${activeThesis.id}/decompose`);
+      const envelope = await api.post<ThesisDecompositionEnvelope>(`/api/theses/${thesisId}/decompose`);
       setDecompositionEnvelope(envelope);
-      openThesisSubTab("signals");
-      setNextStepNotice(buildPostDecompositionNotice(envelope, onboardingState?.investor_profile ?? null));
+      if (navigate) {
+        openThesisSubTab("signals");
+        setNextStepNotice(buildPostDecompositionNotice(envelope, onboardingState?.investor_profile ?? null));
+      }
       await refreshCurrentThesis();
+      return envelope;
     } catch (error) {
       const message = getErrorMessage(error, "Failed to generate thesis signals");
       setDecompositionEnvelope({ status: "failed", message, decomposition: null });
+      return { status: "failed", message, decomposition: null };
     } finally {
       setDecompositionLoading(false);
     }
   };
 
-  const handleConfirmDecomposition = async (payload: ConfirmDecompositionRequest) => {
+  const handleGenerateDecomposition = async () => {
     if (!activeThesis) return;
-    setHistoricalAuditThesisId(activeThesis.id);
+    await generateDecompositionForThesis(activeThesis.id);
+  };
+
+  const confirmDecompositionForThesis = async (
+    thesisId: string,
+    payload: ConfirmDecompositionRequest,
+    options: { navigate?: boolean } = {},
+  ): Promise<ThesisDecompositionEnvelope | null> => {
+    const navigate = options.navigate ?? true;
+    setHistoricalAuditThesisId(thesisId);
     setHistoricalAudit({ status: "pending", results: null });
     try {
       setDecompositionSaving(true);
-      const envelope = await api.post<ThesisDecompositionEnvelope>(`/api/theses/${activeThesis.id}/decomposition/confirm`, payload);
+      const envelope = await api.post<ThesisDecompositionEnvelope>(`/api/theses/${thesisId}/decomposition/confirm`, payload);
       const confirmedSignalCount =
         envelope.decomposition?.claims.reduce(
           (sum, claim) =>
@@ -583,20 +645,29 @@ function PositionDetailInner() {
           0,
         ) ?? 0;
       setDecompositionEnvelope(envelope);
-      openMainTab("monitoring");
-      setNextStepNotice(
-        buildPostConfirmationNotice({
-          investorProfile: onboardingState?.investor_profile ?? null,
-          activeSignalCount: confirmedSignalCount,
-        }),
-      );
+      if (navigate) {
+        openMainTab("monitoring");
+        setNextStepNotice(
+          buildPostConfirmationNotice({
+            investorProfile: onboardingState?.investor_profile ?? null,
+            activeSignalCount: confirmedSignalCount,
+          }),
+        );
+      }
       await refreshCurrentThesis();
       await Promise.all([refreshConvictionLog(), refreshOpenLoops()]);
+      return envelope;
     } catch (error) {
       toast.error(getErrorMessage(error, "Failed to save signal setup"));
+      return null;
     } finally {
       setDecompositionSaving(false);
     }
+  };
+
+  const handleConfirmDecomposition = async (payload: ConfirmDecompositionRequest) => {
+    if (!activeThesis) return;
+    await confirmDecompositionForThesis(activeThesis.id, payload);
   };
 
   const handleDelete = async () => {
@@ -635,7 +706,7 @@ function PositionDetailInner() {
       setNextStepNotice(buildPostInvalidationNotice(onboardingState?.investor_profile ?? null));
     } else if (thesisAction === "rewrite") {
       openThesisSubTab("thesis");
-      setEditing(true);
+      beginEditing();
     } else if (refreshedEvents && refreshedEvents.every((candidate) => candidate.review_action)) {
       setNextStepNotice(buildPostReviewClearNotice(onboardingState?.investor_profile ?? null));
     }
@@ -928,19 +999,20 @@ function PositionDetailInner() {
   // event and a pending thesis decision), but stacking banners makes the next
   // action ambiguous.
   const showDecisionBanner = Boolean(
-    decisionPrompt && activeThesis && !nextStepNotice,
+    !editing && decisionPrompt && activeThesis && !nextStepNotice,
   );
   const showBlindSpotBanner = Boolean(
     fromBlindSpot && !activeThesis && !editing && !nextStepNotice && !showDecisionBanner,
   );
   const showOnboardingBanner = Boolean(
-    fromOnboarding && activeThesis && !nextStepNotice && !showDecisionBanner && !showBlindSpotBanner,
+    !editing && fromOnboarding && activeThesis && !nextStepNotice && !showDecisionBanner && !showBlindSpotBanner,
   );
   const showRecentEarningsBanner = Boolean(
-    showEarningsBanner && !nextStepNotice && !showDecisionBanner && !showBlindSpotBanner && !showOnboardingBanner,
+    !editing && showEarningsBanner && !nextStepNotice && !showDecisionBanner && !showBlindSpotBanner && !showOnboardingBanner,
   );
   const showUpcomingEarningsBanner = Boolean(
-    activeThesis &&
+    !editing &&
+      activeThesis &&
       upcomingEarnings &&
       upcomingEarnings.days_until <= 14 &&
       !nextStepNotice &&
@@ -955,7 +1027,7 @@ function PositionDetailInner() {
     const action = nextStepNotice.action;
     setNextStepNotice(null);
     if (action === "edit") {
-      setEditing(true);
+      beginEditing();
       openThesisSubTab("thesis");
       return;
     }
@@ -977,27 +1049,29 @@ function PositionDetailInner() {
     <div className="min-h-[calc(100vh-84px)]">
 
       {/* ── Sticky header ────────────────────────────────────────────────── */}
-      <PositionHeader
-        holding={holding}
-        activeThesis={activeThesis}
-        pulse={pulse}
-        investorProfile={onboardingState?.investor_profile ?? null}
-        hasPrice={hasPrice}
-        value={value}
-        pnl={pnl}
-        pnlPct={pnlPct}
-        stalePressure={stalePressure}
-        tabs={tabs}
-        activeTab={activeTab}
-        unreviewedEvents={unreviewedEvents}
-        deleteConfirming={deleteConfirming}
-        deleteLoading={deleteLoading}
-        onDelete={handleDelete}
-        onSetDeleteConfirming={setDeleteConfirming}
-        onCheckNowComplete={handleCheckNowComplete}
-        onSelectTab={openMainTab}
-        onOpenNote={() => setNoteOpen(true)}
-      />
+      {!guidedSetupActive && (
+        <PositionHeader
+          holding={holding}
+          activeThesis={activeThesis}
+          pulse={pulse}
+          investorProfile={onboardingState?.investor_profile ?? null}
+          hasPrice={hasPrice}
+          value={value}
+          pnl={pnl}
+          pnlPct={pnlPct}
+          stalePressure={stalePressure}
+          tabs={tabs}
+          activeTab={activeTab}
+          unreviewedEvents={unreviewedEvents}
+          deleteConfirming={deleteConfirming}
+          deleteLoading={deleteLoading}
+          onDelete={handleDelete}
+          onSetDeleteConfirming={setDeleteConfirming}
+          onCheckNowComplete={handleCheckNowComplete}
+          onSelectTab={openMainTab}
+          onOpenNote={() => setNoteOpen(true)}
+        />
+      )}
 
       <PositionNoteDialog
         open={noteOpen}
@@ -1078,7 +1152,7 @@ function PositionDetailInner() {
               </p>
             </div>
             <button
-              onClick={() => setEditing(true)}
+              onClick={() => beginEditing(true)}
               className="inline-flex items-center border border-amber-500/30 bg-background/72 px-3 py-2 font-mono text-[10px] uppercase tracking-[0.15em] text-amber-800 transition-colors hover:border-amber-500/45"
             >
               {blindSpotArrivalCopy.cta}
@@ -1086,7 +1160,7 @@ function PositionDetailInner() {
           </motion.div>
         )}
 
-        {nextStepNotice && (
+        {nextStepNotice && !editing && (
           <motion.div
             initial={{ opacity: 0, y: -4 }}
             animate={{ opacity: 1, y: 0 }}
@@ -1144,7 +1218,7 @@ function PositionDetailInner() {
             <button
               onClick={() => {
                 if (decisionPrompt.action === "edit") {
-                  setEditing(true);
+                  beginEditing();
                   openThesisSubTab("thesis");
                   return;
                 }
@@ -1297,15 +1371,56 @@ function PositionDetailInner() {
                 )}
 
                 {/* Editor */}
-                {editing && (
+                {editing && guidedSetupActive && (
+                  <GuidedThesisSetup
+                    ticker={cleanTicker(ticker)}
+                    thesis={editorSeedThesis}
+                    initialDraft={checkpointDraft}
+                    investorProfile={onboardingState?.investor_profile ?? null}
+                    onAssist={handleAssist}
+                    onSave={(data) => handleSave(data, { continueSetup: true })}
+                    onGenerate={async (thesisId) => {
+                      if (guidedReuseExistingMap && decompositionEnvelope?.decomposition) {
+                        return decompositionEnvelope;
+                      }
+                      if (guidedPreviousMapId) {
+                        const rebuilt = await waitForRebuiltSignalMap(thesisId, guidedPreviousMapId);
+                        if (rebuilt) setGuidedPreviousMapId(null);
+                        return rebuilt;
+                      }
+                      return generateDecompositionForThesis(thesisId, { navigate: false });
+                    }}
+                    onConfirm={(thesisId, payload) => confirmDecompositionForThesis(thesisId, payload, { navigate: false })}
+                    onCancel={() => {
+                      setGuidedPreviousMapId(null);
+                      setGuidedReuseExistingMap(false);
+                      setGuidedSetupActive(false);
+                      setEditing(false);
+                    }}
+                    onComplete={() => {
+                      setGuidedPreviousMapId(null);
+                      setGuidedReuseExistingMap(false);
+                      setGuidedSetupActive(false);
+                      setEditing(false);
+                      setShowCounterThesis(true);
+                      setShowAnalysis(true);
+                      openMainTab("monitoring");
+                    }}
+                  />
+                )}
+
+                {editing && !guidedSetupActive && (
                   <ThesisEditor
                     thesis={editorSeedThesis}
                     investorProfile={onboardingState?.investor_profile ?? null}
                     mode={editorMode}
                     initialDraft={checkpointDraft}
-                    onSave={handleSave}
+                    onSave={(data) => { void handleSave(data); }}
                     onAssist={handleAssist}
-                    onCancel={() => setEditing(false)}
+                    onCancel={() => {
+                      setGuidedSetupActive(false);
+                      setEditing(false);
+                    }}
                   />
                 )}
 
@@ -1363,7 +1478,7 @@ function PositionDetailInner() {
                             decomposition={decompositionEnvelope?.decomposition ?? null}
                             investorProfile={onboardingState?.investor_profile ?? null}
                             monitoringGaps={allGaps.filter((g) => g.thesis_id === activeThesis.id)}
-                            onEdit={() => setEditing(true)}
+                            onEdit={() => beginEditing(false)}
                             onInvalidate={() => setInvalidateOpen(true)}
                           />
                         </div>
@@ -1579,7 +1694,7 @@ function PositionDetailInner() {
 
                         <div className="flex flex-wrap items-center gap-3">
                           <button
-                            onClick={() => setEditing(true)}
+                            onClick={() => beginEditing(true)}
                             className="bg-primary px-5 py-2.5 font-mono text-[10px] uppercase tracking-[0.18em] text-primary-foreground transition-colors hover:bg-primary/90"
                           >
                             {firstWriteGuide.cta}
@@ -1637,7 +1752,7 @@ function PositionDetailInner() {
                   supportingItems={supportingItems}
                   onFlagEvent={handleFlagEvent}
                   onAfterCheckIn={handleCheckInComplete}
-                  onWriteThesis={() => { setEditing(true); openThesisSubTab("thesis"); }}
+                  onWriteThesis={() => { beginEditing(!activeThesis); openThesisSubTab("thesis"); }}
                 />
               </div>
             )}
