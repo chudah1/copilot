@@ -9,9 +9,9 @@ test("dashboard puts positions before supporting portfolio context", async () =>
   const dashboard = await source("src/app/dashboard/page.tsx");
 
   assert.match(dashboard, /id="positions" className="order-1/);
-  assert.match(dashboard, /Portfolio snapshot/);
+  assert.match(dashboard, /At a glance/);
   assert.match(dashboard, /lg:sticky lg:top-\[96px\]/);
-  assert.match(dashboard, /No earnings calls in the next three weeks/);
+  assert.match(dashboard, /No earnings reports in the next three weeks/);
   assert.doesNotMatch(dashboard, /usable but not sharp/i);
 });
 
@@ -34,8 +34,8 @@ test("monitoring leads with the answer instead of internal activity counts", asy
     "src/app/dashboard/positions/[ticker]/monitoring-tab.tsx",
   );
 
-  assert.match(monitoring, /No new evidence needs a decision/);
-  assert.match(monitoring, /part of your written case it affects/);
+  assert.match(monitoring, /Nothing new needs your decision/);
+  assert.match(monitoring, /supports or challenges something in your (?:thesis|reason)/);
   assert.doesNotMatch(monitoring, /Verdicts on file/);
   assert.doesNotMatch(monitoring, /Signal map/);
 });
@@ -52,7 +52,9 @@ test("long evidence and history lists are collapsed by default", async () => {
     "src/components/thesis/historical-audit-card.tsx",
   );
 
-  assert.match(history, /filteredEntries\.slice\(0, 2\)/);
+  assert.match(history, /resolvedDecisionEntries\.slice\(0, 2\)/);
+  assert.match(history, /openDecisionEntries\.slice\(0, 2\)/);
+  assert.match(history, /timelineEntries\.slice\(0, 3\)/);
   assert.match(heldUp, /items\.slice\(0, 3\)/);
   assert.match(reviewed, /items\.slice\(0, 3\)/);
   assert.match(audit, /results\.slice\(0, 3\)/);
@@ -69,14 +71,14 @@ test("homepage offers the stock risk check directly", async () => {
   assert.match(research, /Check the case before you buy/);
 });
 
-test("portfolio weights use the same live total shown in the snapshot", async () => {
+test("portfolio surfaces use the same live total shown at a glance", async () => {
   const dashboard = await source("src/app/dashboard/page.tsx");
 
-  assert.equal(
-    dashboard.match(/totalValue=\{displayTotalValue\}/g)?.length,
-    2,
-    "both the position card and position peek should use the displayed live total",
+  assert.ok(
+    (dashboard.match(/totalValue=\{displayTotalValue\}/g)?.length ?? 0) >= 2,
+    "position surfaces should share the displayed live total",
   );
+  assert.match(dashboard, /<AnimatedCurrency\s+value=\{displayTotalValue\}/);
   assert.doesNotMatch(dashboard, /totalValue=\{summary\?\.total_value \?\? 0\}/);
 });
 
@@ -93,8 +95,8 @@ test("digest delivery failures are not shown as failed content", async () => {
 test("the price sparkline explains its period, prices and evidence markers", async () => {
   const sparkline = await source("src/components/portfolio/price-sparkline.tsx");
 
-  assert.match(sparkline, /Price since you wrote this case/);
-  assert.match(sparkline, /Evidence that tested your case/);
+  assert.match(sparkline, /Price since you wrote this \$\{writtenNoun\}/);
+  assert.match(sparkline, /Evidence that tested your \{writtenNoun\}/);
   assert.match(sparkline, /formatCurrency\(firstClose, data\.currency\)/);
   assert.match(sparkline, /<button/);
   assert.match(sparkline, /event\.title/);

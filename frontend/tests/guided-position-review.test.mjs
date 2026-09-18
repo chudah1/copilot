@@ -39,4 +39,6 @@ test("position navigation exposes one clear section row", async () => {
   assert.match(page, /Keep browser back\/forward navigation aligned/);
   assert.match(page, /pulse\.unresolved_event_count/);
   assert.doesNotMatch(page, /events\.filter\(\(e\) => !e\.review_action\)\.length/);
+  assert.match(page, /mutateSWR\("\/api\/portfolio\/pulse", portfolioPulse/);
+  assert.match(page, /holding \? refreshPulse\(holding\.id\) : Promise\.resolve\(\)/);
 });

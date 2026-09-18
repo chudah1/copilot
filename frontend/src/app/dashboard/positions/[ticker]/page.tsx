@@ -3,6 +3,7 @@
 import { Suspense, startTransition, useEffect, useMemo, useRef, useState } from "react";
 import { useParams, usePathname, useRouter, useSearchParams } from "next/navigation";
 import { motion, AnimatePresence } from "framer-motion";
+import { useSWRConfig } from "swr";
 import { api } from "@/lib/api";
 import { getErrorMessage } from "@/lib/errors";
 import { ageInDays, getCaseReviewPressure } from "@/lib/decision-state";
@@ -87,6 +88,7 @@ function PositionDetailInner() {
   const pathname = usePathname();
   const searchParams = useSearchParams();
   const router = useRouter();
+  const { mutate: mutateSWR } = useSWRConfig();
   const requestedTab = searchParams.get("tab");
   const initialRequestedTab = useRef(requestedTab);
   const editRequested = searchParams.get("edit") === "1";
@@ -161,6 +163,9 @@ function PositionDetailInner() {
   const refreshPulse = async (holdingId: string) => {
     const portfolioPulse = await api.get<PortfolioPulse>("/api/portfolio/pulse").catch(() => null);
     setPulse(portfolioPulse?.pulses.find((p) => p.holding_id === holdingId) ?? null);
+    if (portfolioPulse) {
+      await mutateSWR("/api/portfolio/pulse", portfolioPulse, { revalidate: false });
+    }
   };
 
   const syncRouteTab = (nextActiveTab: TabId, nextThesisSubTab: ThesisSubTab) => {
@@ -704,7 +709,12 @@ function PositionDetailInner() {
   const handleFlagEvent = async (eventId: string) => {
     try {
       await api.post(`/api/monitoring/events/${eventId}/review`, { action: "not_relevant" });
-      await Promise.all([refreshEvents(), refreshConvictionLog(), refreshOpenLoops()]);
+      await Promise.all([
+        refreshEvents(),
+        refreshConvictionLog(),
+        refreshOpenLoops(),
+        holding ? refreshPulse(holding.id) : Promise.resolve(),
+      ]);
     } catch (error) {
       console.error(error);
       toast.error("Failed to flag the event");
@@ -716,7 +726,13 @@ function PositionDetailInner() {
     result: SubmitClaimReviewsResponse,
     thesisAction: "keep_lowered" | "rewrite" | "invalidate" | null,
   ) => {
-    const [refreshedEvents] = await Promise.all([refreshEvents(), refreshConvictionLog(), refreshCurrentThesis(), refreshOpenLoops()]);
+    const [refreshedEvents] = await Promise.all([
+      refreshEvents(),
+      refreshConvictionLog(),
+      refreshCurrentThesis(),
+      refreshOpenLoops(),
+      holding ? refreshPulse(holding.id) : Promise.resolve(),
+    ]);
     if (thesisAction === "invalidate") {
       openThesisSubTab("thesis");
       setNextStepNotice(buildPostInvalidationNotice(onboardingState?.investor_profile ?? null));
