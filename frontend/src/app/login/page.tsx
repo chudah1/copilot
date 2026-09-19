@@ -122,19 +122,23 @@ export default function LoginPage() {
           )}
 
           {(loading || handoff) && !error && (
-            <div className="border border-border/70 bg-background/55 px-3 py-2.5">
+            <div
+              className="border border-border/70 bg-background/55 px-3 py-2.5"
+              role="status"
+              aria-live="polite"
+            >
               <p className="font-mono text-[10px] uppercase tracking-[0.14em] text-primary">
                 {handoff ? "Opening dashboard" : "Signing you in"}
               </p>
               <p className="mt-1 font-sans text-sm leading-relaxed text-foreground/72">
                 {handoff
                   ? "Your session is live. Bringing your portfolio and decision inbox into view now."
-                  : "Checking your session and pulling your latest portfolio state. This can take a few seconds."}
+                  : "Checking your email and password. This usually only takes a moment."}
               </p>
             </div>
           )}
 
-          <Button type="submit" className="w-full" loading={loading}>
+          <Button type="submit" className="w-full" loading={loading || handoff}>
             <span className="font-mono text-[11px] uppercase tracking-[0.15em]">
               {handoff ? "Opening dashboard" : loading ? "Signing in" : "Sign in"}
             </span>

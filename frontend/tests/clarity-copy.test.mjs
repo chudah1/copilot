@@ -47,3 +47,13 @@ test("info tips work with hover, keyboard focus and a tap", async () => {
   assert.match(infoTip, /createPortal/);
   assert.match(infoTip, /window\.innerWidth - width - gutter/);
 });
+
+test("login only mentions the portfolio after credentials succeed", async () => {
+  const login = await source("src/app/login/page.tsx");
+
+  assert.match(login, /Checking your email and password/);
+  assert.match(login, /Your session is live\. Bringing your portfolio/);
+  assert.doesNotMatch(login, /pulling your latest portfolio state/);
+  assert.match(login, /role="status"/);
+  assert.match(login, /loading=\{loading \|\| handoff\}/);
+});
