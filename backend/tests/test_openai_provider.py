@@ -17,8 +17,14 @@ from unittest.mock import MagicMock, patch
 
 import pytest
 
-from app.services.reasoning.providers.openai_provider import OpenAIReasoningProvider
+from app.config import settings
+from app.services.reasoning.providers.openai_provider import OpenAILunaProvider, OpenAIReasoningProvider
 from app.services.reasoning.types import ReasoningRequest, ReasoningTaskType
+
+
+def test_openai_provider_roles_use_configured_luna_and_terra_models():
+    assert OpenAILunaProvider.model == settings.openai_fast_model
+    assert OpenAIReasoningProvider.model == settings.openai_reasoning_model
 
 
 @pytest.mark.asyncio

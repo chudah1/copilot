@@ -10,7 +10,7 @@ from app.services.ai_utils import strip_code_fences
 
 logger = logging.getLogger(__name__)
 
-SAME_EVENT_MODEL = "gpt-4o-mini"
+SAME_EVENT_MODEL = settings.openai_fast_model
 MAX_BUCKET_CANDIDATES = 5
 
 
@@ -171,8 +171,8 @@ async def judge_same_event_bucket(
                 {"role": "system", "content": _SAME_EVENT_SYSTEM},
                 {"role": "user", "content": json.dumps(prompt_payload, ensure_ascii=True)},
             ],
-            temperature=0,
-            max_tokens=1200,
+            max_completion_tokens=1200,
+            extra_body={"reasoning_effort": "low"},
             response_format={"type": "json_object"},
             timeout=20.0,
         )

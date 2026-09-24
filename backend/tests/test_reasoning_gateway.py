@@ -1,4 +1,4 @@
-from app.services.reasoning.gateway import ThesisReasoningGateway
+from app.services.reasoning.gateway import ThesisReasoningGateway, _CHEAP_PROVIDERS, _EXPENSIVE_PROVIDERS
 from app.services.reasoning.types import ReasoningRequest, ReasoningResult, ReasoningTaskType
 from app.services.reasoning.validators import output_needs_escalation
 
@@ -23,6 +23,11 @@ def _request(why_own_it: str = "Revenue should keep growing.") -> ReasoningReque
             "what_would_change_my_mind": None,
         },
     )
+
+
+def test_default_provider_order_keeps_openai_primary():
+    assert [provider.name for provider in _CHEAP_PROVIDERS] == ["openai_luna", "openai", "anthropic"]
+    assert [provider.name for provider in _EXPENSIVE_PROVIDERS] == ["openai", "anthropic"]
 
 
 async def test_gateway_stops_on_first_successful_provider():

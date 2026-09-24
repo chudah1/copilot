@@ -220,29 +220,21 @@ async def test_match_skips_when_judge_rejects():
 
 
 @pytest.mark.asyncio
-async def test_judge_news_watch_falls_back_to_openai_when_anthropic_fails(monkeypatch):
+async def test_judge_news_watch_falls_back_to_anthropic_when_openai_fails(monkeypatch):
     monkeypatch.setattr("app.services.news_watch.settings.anthropic_api_key", "anthropic-key")
     monkeypatch.setattr("app.services.news_watch.settings.openai_api_key", "openai-key")
     monkeypatch.setattr("app.services.news_watch.settings.anthropic_model", "claude-test")
 
-    anthropic_client = MagicMock()
-    anthropic_client.messages.create = AsyncMock(side_effect=RuntimeError("anthropic credits empty"))
     openai_client = MagicMock()
-    openai_client.chat.completions.create = AsyncMock(
+    openai_client.chat.completions.create = AsyncMock(side_effect=RuntimeError("openai unavailable"))
+    anthropic_client = MagicMock()
+    anthropic_client.messages.create = AsyncMock(
         return_value=SimpleNamespace(
-            choices=[
-                SimpleNamespace(
-                    message=SimpleNamespace(
-                        content=json.dumps(
-                            {
-                                "matches": True,
-                                "severity": "warning",
-                                "reason": "Management explicitly confirmed the watched condition.",
-                            }
-                        )
-                    )
-                )
-            ]
+            content=[SimpleNamespace(text=json.dumps({
+                "matches": True,
+                "severity": "warning",
+                "reason": "Management explicitly confirmed the watched condition.",
+            }))]
         )
     )
 
@@ -258,6 +250,35 @@ async def test_judge_news_watch_falls_back_to_openai_when_anthropic_fails(monkey
     assert verdict.matches is True
     assert verdict.severity == "warning"
     assert "confirmed" in verdict.reason.lower()
+    openai_client.chat.completions.create.assert_awaited_once()
+    anthropic_client.messages.create.assert_awaited_once()
+
+
+@pytest.mark.asyncio
+async def test_judge_news_watch_uses_luna_before_anthropic(monkeypatch):
+    monkeypatch.setattr("app.services.news_watch.settings.openai_api_key", "openai-key")
+    monkeypatch.setattr("app.services.news_watch.settings.anthropic_api_key", "anthropic-key")
+    monkeypatch.setattr("app.services.news_watch.settings.openai_fast_model", "luna-test")
+
+    openai_client = MagicMock()
+    openai_client.chat.completions.create = AsyncMock(
+        return_value=SimpleNamespace(choices=[SimpleNamespace(message=SimpleNamespace(content=json.dumps({
+            "matches": False,
+            "severity": "info",
+            "reason": "No contract was confirmed.",
+        })))])
+    )
+    anthropic_client = MagicMock()
+    anthropic_client.messages.create = AsyncMock()
+
+    with patch("openai.AsyncOpenAI", return_value=openai_client), patch(
+        "anthropic.AsyncAnthropic", return_value=anthropic_client
+    ):
+        verdict = await judge_news_watch("The companies are in talks.", "a signed contract", "supports")
+
+    assert verdict.matches is False
+    assert openai_client.chat.completions.create.await_args.kwargs["model"] == "luna-test"
+    anthropic_client.messages.create.assert_not_awaited()
 
 
 @pytest.mark.asyncio

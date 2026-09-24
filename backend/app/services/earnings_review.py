@@ -190,9 +190,6 @@ async def run_earnings_review(
 
     claims: list of {"id": str, "claim_text": str}
     """
-    if not settings.anthropic_api_key:
-        return _fallback_review(claims, company_data, ticker)
-
     surprise = company_data.recent_earnings_surprise_pct
     surprise_str = f"{'+' if surprise and surprise > 0 else ''}{surprise:.1f}%" if surprise is not None else "Not available"
 
@@ -212,20 +209,44 @@ async def run_earnings_review(
         news_headlines=_format_news_headlines(company_data),
     )
 
-    try:
-        client = anthropic.AsyncAnthropic(api_key=settings.anthropic_api_key)
-        response = await client.messages.create(
-            model=settings.anthropic_model,
-            max_tokens=1500,
-            messages=[{"role": "user", "content": prompt}],
-            timeout=45.0,
-        )
-        data = json.loads(strip_code_fences(response.content[0].text))
-        result = _parse_review_output(data, claims)
-        result.earnings_surprise_pct = surprise
-        if result.fiscal_quarter is None:
-            result.fiscal_quarter = company_data.recent_fiscal_quarter
-        return result
-    except Exception as e:
-        logger.error("Earnings review failed for %s: %s", ticker, e)
-        return _fallback_review(claims, company_data, ticker)
+    if settings.openai_api_key:
+        try:
+            from openai import AsyncOpenAI
+
+            client = AsyncOpenAI(api_key=settings.openai_api_key)
+            response = await client.chat.completions.create(
+                model=settings.openai_reasoning_model,
+                max_completion_tokens=4096,
+                extra_body={"reasoning_effort": "low"},
+                response_format={"type": "json_object"},
+                messages=[{"role": "user", "content": prompt}],
+                timeout=45.0,
+            )
+            data = json.loads(strip_code_fences(response.choices[0].message.content or ""))
+            result = _parse_review_output(data, claims)
+            result.earnings_surprise_pct = surprise
+            if result.fiscal_quarter is None:
+                result.fiscal_quarter = company_data.recent_fiscal_quarter
+            return result
+        except Exception as e:
+            logger.warning("OpenAI earnings review failed for %s, trying Anthropic: %s", ticker, e)
+
+    if settings.anthropic_api_key:
+        try:
+            client = anthropic.AsyncAnthropic(api_key=settings.anthropic_api_key)
+            response = await client.messages.create(
+                model=settings.anthropic_model,
+                max_tokens=1500,
+                messages=[{"role": "user", "content": prompt}],
+                timeout=45.0,
+            )
+            data = json.loads(strip_code_fences(response.content[0].text))
+            result = _parse_review_output(data, claims)
+            result.earnings_surprise_pct = surprise
+            if result.fiscal_quarter is None:
+                result.fiscal_quarter = company_data.recent_fiscal_quarter
+            return result
+        except Exception as e:
+            logger.error("Anthropic earnings review failed for %s: %s", ticker, e)
+
+    return _fallback_review(claims, company_data, ticker)

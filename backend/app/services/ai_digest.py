@@ -156,6 +156,21 @@ async def _call_anthropic_digest(prompt: str) -> dict[str, Any]:
     return _parse_digest_response(response.content[0].text)
 
 
+async def _call_openai_digest(prompt: str) -> dict[str, Any]:
+    from openai import AsyncOpenAI
+
+    client = AsyncOpenAI(api_key=settings.openai_api_key)
+    response = await client.chat.completions.create(
+        model=settings.openai_fast_model,
+        max_completion_tokens=2048,
+        extra_body={"reasoning_effort": "low"},
+        response_format={"type": "json_object"},
+        messages=[{"role": "user", "content": prompt}],
+        timeout=30.0,
+    )
+    return _parse_digest_response(response.choices[0].message.content or "")
+
+
 def _fallback_digest(
     holdings_with_theses: list[dict[str, Any]],
     events: list[dict[str, Any]],
@@ -214,10 +229,16 @@ async def generate_digest_content(
 ) -> dict[str, Any] | None:
     prompt = _build_digest_prompt(holdings_with_theses, events, observations)
 
-    try:
-        if not settings.anthropic_api_key:
-            return _fallback_digest(holdings_with_theses, events, observations)
-        return await _call_anthropic_digest(prompt)
-    except Exception as exc:
-        logger.error("Digest generation failed: %s", exc)
-        return _fallback_digest(holdings_with_theses, events, observations)
+    if settings.openai_api_key:
+        try:
+            return await _call_openai_digest(prompt)
+        except Exception as exc:
+            logger.warning("OpenAI digest generation failed, trying Anthropic: %s", exc)
+
+    if settings.anthropic_api_key:
+        try:
+            return await _call_anthropic_digest(prompt)
+        except Exception as exc:
+            logger.error("Anthropic digest generation failed: %s", exc)
+
+    return _fallback_digest(holdings_with_theses, events, observations)

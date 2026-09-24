@@ -285,22 +285,23 @@ async def classify_event(
         ticker=ticker,
         company_name=company_name,
     )
-    anthropic_failed = False
-    if settings.anthropic_api_key:
+    openai_failed = False
+    if settings.openai_api_key:
         try:
-            client = anthropic.AsyncAnthropic(api_key=settings.anthropic_api_key)
-            response = await client.messages.create(
-                model="claude-sonnet-4-6",
-                max_tokens=1024,
-                system=_CLASSIFY_SYSTEM,
-                messages=[{"role": "user", "content": prompt}],
+            from openai import AsyncOpenAI
+
+            client = AsyncOpenAI(api_key=settings.openai_api_key)
+            response = await client.chat.completions.create(
+                model=settings.openai_reasoning_model,
+                max_completion_tokens=4096,
+                messages=[
+                    {"role": "system", "content": _CLASSIFY_SYSTEM},
+                    {"role": "user", "content": prompt},
+                ],
+                extra_body={"reasoning_effort": "low"},
                 timeout=30.0,
-                # Classification is a judgment with a right answer; default
-                # temperature made the same event flip severity/direction
-                # between runs (observed 4/5 vs 1/5 splits on a real case).
-                temperature=0.0,
             )
-            text = response.content[0].text.strip()
+            text = (response.choices[0].message.content or "").strip()
             parsed = _normalize_classification_result(_parse_classification_response(text))
             if parsed.severity == "skip":
                 return None
@@ -315,42 +316,34 @@ async def classify_event(
                 direction=parsed.direction,
             )
         except Exception as e:
-            anthropic_failed = True
+            openai_failed = True
             logger.warning(
-                "[MONITOR-DIAG] classification provider failed provider=anthropic kind=%s ticker=%s company=%s detail=%s",
+                "[MONITOR-DIAG] classification provider failed provider=openai model=%s kind=%s ticker=%s company=%s detail=%s",
+                settings.openai_reasoning_model,
                 _provider_failure_kind(e),
                 ticker or "",
                 company_name or "",
                 e,
             )
 
-    if settings.openai_api_key:
+    if settings.anthropic_api_key:
         try:
-            from openai import AsyncOpenAI
-            oa_client = AsyncOpenAI(api_key=settings.openai_api_key)
-            # Side-by-side test on the NVDA "+5.6% surprise" walkthrough case
-            # showed gpt-4o-mini classifies the beat as a warning regardless of
-            # how unambiguous the description is (tried three description
-            # variants — all wrong on mini, all correct on gpt-4o). gpt-4o is
-            # the cheapest model that handles event-against-thesis judgments
-            # reliably.
-            oa_response = await oa_client.chat.completions.create(
-                model="gpt-4o",
+            client = anthropic.AsyncAnthropic(api_key=settings.anthropic_api_key)
+            response = await client.messages.create(
+                model=settings.anthropic_model,
                 max_tokens=1024,
-                messages=[
-                    {"role": "system", "content": _CLASSIFY_SYSTEM},
-                    {"role": "user", "content": prompt},
-                ],
+                system=_CLASSIFY_SYSTEM,
+                messages=[{"role": "user", "content": prompt}],
                 timeout=30.0,
                 temperature=0.0,
             )
-            text = (oa_response.choices[0].message.content or "").strip()
+            text = response.content[0].text.strip()
             parsed = _normalize_classification_result(_parse_classification_response(text))
             if parsed.severity == "skip":
                 return None
-            if anthropic_failed:
+            if openai_failed:
                 logger.info(
-                    "[MONITOR-DIAG] classification provider fallback_succeeded provider=openai ticker=%s company=%s severity=%s direction=%s",
+                    "[MONITOR-DIAG] classification provider fallback_succeeded provider=anthropic ticker=%s company=%s severity=%s direction=%s",
                     ticker or "",
                     company_name or "",
                     parsed.severity,
@@ -368,7 +361,7 @@ async def classify_event(
             )
         except Exception as e:
             logger.error(
-                "[MONITOR-DIAG] classification provider failed provider=openai kind=%s ticker=%s company=%s detail=%s",
+                "[MONITOR-DIAG] classification provider failed provider=anthropic kind=%s ticker=%s company=%s detail=%s",
                 _provider_failure_kind(e),
                 ticker or "",
                 company_name or "",

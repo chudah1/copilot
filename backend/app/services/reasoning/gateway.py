@@ -4,9 +4,9 @@ from app.services.reasoning.complexity import classify_complexity
 from app.services.reasoning.normalizers import normalize_decomposition_output
 from app.services.reasoning.providers import (
     AnthropicReasoningProvider,
+    OpenAILunaProvider,
     OpenAIReasoningProvider,
 )
-from app.services.reasoning.providers.openai_provider import Gpt4oMiniProvider
 from app.services.reasoning.types import ReasoningRequest, ReasoningResult, ReasoningTaskType
 from app.services.reasoning.validators import (
     output_needs_escalation,
@@ -16,10 +16,11 @@ from app.services.reasoning.validators import (
 
 logger = logging.getLogger(__name__)
 
-# Cheap tier: simple theses (complexity score < 4)
-# Use the latest OpenAI model first, then older OpenAI/Anthropic fallbacks.
-_CHEAP_PROVIDERS = [OpenAIReasoningProvider(), Gpt4oMiniProvider(), AnthropicReasoningProvider()]
-# Expensive tier: rich theses with explicit thresholds, competitors, all fields filled
+# Cheap tier: Luna first for high-volume work, then Terra if its output needs
+# escalation. Anthropic remains an independent final fallback.
+_CHEAP_PROVIDERS = [OpenAILunaProvider(), OpenAIReasoningProvider(), AnthropicReasoningProvider()]
+# Expensive tier: Terra first for rich theses with explicit thresholds,
+# competitors, and all fields filled.
 _EXPENSIVE_PROVIDERS = [OpenAIReasoningProvider(), AnthropicReasoningProvider()]
 
 

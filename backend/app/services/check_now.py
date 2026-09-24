@@ -441,7 +441,7 @@ async def run_check_now(
         # Thesis-aware relevance filter for news-style candidates. When Gemini
         # is up this trims polished noise (13F filings, fund-flow updates); when
         # Gemini is down it's the floor that keeps yfinance/AV news from
-        # surfacing as info-tier noise. Cheap (gpt-4o-mini) per-candidate check
+        # surfacing as info-tier noise. Cheap (Luna) per-candidate check
         # before the expensive severity classification downstream.
         if claims:
             from app.services.thesis_relevance_filter import (

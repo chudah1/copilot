@@ -17,7 +17,7 @@ from app.services.reasoning.simple_cache import TTLCache
 
 class OpenAIReasoningProvider:
     name = "openai"
-    model = "gpt-5.5"
+    model = settings.openai_reasoning_model
     timeout_seconds = 60
     schema_strict = True
     temperature: float | None = None  # Omit temperature for newer reasoning families that only support the default.
@@ -80,12 +80,16 @@ class OpenAIReasoningProvider:
                 extra["temperature"] = self.temperature
             response = await client.chat.completions.create(
                 model=self.model,
+                # Reasoning tokens count against this budget. Leave enough
+                # room for the strict decomposition payload after reasoning.
+                max_completion_tokens=4096,
                 # Pass prompt-cache fields via extra_body so the call works across
                 # OpenAI SDK versions (older SDKs reject these as top-level kwargs;
                 # extra_body forwards them straight to the API).
                 extra_body={
                     "prompt_cache_key": settings.openai_prompt_cache_key,
                     "prompt_cache_retention": settings.openai_prompt_cache_retention,
+                    "reasoning_effort": "low",
                 },
                 response_format={
                     "type": "json_schema",
@@ -115,7 +119,11 @@ class OpenAIReasoningProvider:
             return ReasoningResult(False, "failed", self.name, self.model, DECOMPOSITION_PROMPT_VERSION, None, None, None, latency, str(exc), True)
 
 
-class Gpt4oMiniProvider(OpenAIReasoningProvider):
-    """Cheaper OpenAI tier for simple theses — routed by complexity classifier."""
-    name = "openai_mini"
-    model = "gpt-4o-mini"
+class OpenAILunaProvider(OpenAIReasoningProvider):
+    """Fast OpenAI tier for simple, high-volume thesis decomposition."""
+    name = "openai_luna"
+    model = settings.openai_fast_model
+
+
+class Gpt4oMiniProvider(OpenAILunaProvider):
+    """Compatibility alias for eval tooling that imports the old class name."""

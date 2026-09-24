@@ -58,6 +58,7 @@ async def test_generate_digest_content_falls_back_without_api_key():
     observations = {"stable_holdings": [{"ticker": "MSFT", "stale": True}], "missing_theses": ["TSLA"]}
 
     with patch("app.services.ai_digest.settings") as mock_settings:
+        mock_settings.openai_api_key = None
         mock_settings.anthropic_api_key = None
         digest = await generate_digest_content(holdings, events, observations)
 
@@ -72,6 +73,7 @@ async def test_generate_digest_content_falls_back_on_malformed_model_response():
     mock_client = SimpleNamespace(messages=SimpleNamespace(create=AsyncMock(return_value=bad_response)))
 
     with patch("app.services.ai_digest.settings") as mock_settings:
+        mock_settings.openai_api_key = None
         mock_settings.anthropic_api_key = "test-key"
         with patch("app.services.ai_digest.anthropic.AsyncAnthropic", return_value=mock_client):
             digest = await generate_digest_content(holdings, events, observations)

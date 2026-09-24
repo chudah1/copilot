@@ -210,7 +210,7 @@ class _PriceMoveHint(BaseModel):
     def parse_threshold(cls, v: Any) -> float:
         return _coerce_threshold(v)
 PROXY_TICKER_PATTERN = re.compile(r"^[A-Z][A-Z0-9.\-]{0,9}$")
-OPENAI_ASSIST_MODEL = "gpt-5.5"
+OPENAI_ASSIST_MODEL = settings.openai_reasoning_model
 
 THESIS_ASSIST_WATCH_HINT_SCHEMA = {
     "type": "object",
@@ -1067,6 +1067,7 @@ async def _call_openai_json(
         # emitting any content. A budget sized for the visible JSON alone gets
         # fully consumed by reasoning, yielding empty content.
         request_kwargs[token_param_key] = max(max_tokens, 4096)
+        request_kwargs["extra_body"] = {"reasoning_effort": "low"}
     response = await client.chat.completions.create(**request_kwargs)
     content = strip_code_fences(response.choices[0].message.content or "")
     if not content.strip():
@@ -1519,47 +1520,46 @@ async def assist_thesis(
             market_data_section=market_data_section,
         )
 
-    try:
-        if not settings.anthropic_api_key:
-            raise RuntimeError("Anthropic API key not configured")
-
-        result = await _call_claude(prompt)
-        return _apply_assist_guardrails(result, ticker=clean_ticker)
-    except MaxTokensError:
-        raise  # never retry a max_tokens truncation
-    except (json.JSONDecodeError, ValueError) as parse_err:
-        logger.warning("Thesis assist JSON parse error for %s, retrying: %s", ticker, parse_err)
+    if settings.openai_api_key:
         try:
-            result = await _call_claude(prompt + _STRICT_JSON_SUFFIX)
+            result = await _call_openai_assist(prompt)
             return _apply_assist_guardrails(result, ticker=clean_ticker)
-        except Exception as retry_err:
-            logger.error("Thesis assist strict-JSON retry failed for %s: %s", ticker, retry_err)
-    except Exception as api_err:
-        logger.warning("Thesis assist Anthropic API error for %s, retrying after backoff: %s", ticker, api_err)
-        await asyncio.sleep(2)
+        except Exception as openai_error:
+            logger.warning("OpenAI thesis assist failed for %s, trying Anthropic: %s", ticker, openai_error)
+
+    if settings.anthropic_api_key:
         try:
             result = await _call_claude(prompt)
             return _apply_assist_guardrails(result, ticker=clean_ticker)
-        except Exception as backoff_retry_err:
-            logger.error("Thesis assist backoff retry failed for %s: %s", ticker, backoff_retry_err)
-    try:
-        if not settings.openai_api_key:
-            raise RuntimeError("OpenAI API key not configured")
-        result = await _call_openai_assist(prompt)
-        return _apply_assist_guardrails(result, ticker=clean_ticker)
-    except Exception as openai_error:
-        logger.error("OpenAI thesis assist failed for %s: %s", ticker, openai_error)
-        return (
-            _fallback_assist(
-                ticker=ticker,
-                why_own_it=why_own_it,
-                must_remain_true=must_remain_true,
-                what_would_change_my_mind=what_would_change_my_mind,
-                draft_text=draft_text,
-            )
-            if allow_fallback
-            else None
+        except MaxTokensError:
+            raise  # never retry a max_tokens truncation
+        except (json.JSONDecodeError, ValueError) as parse_err:
+            logger.warning("Anthropic thesis assist JSON parse error for %s, retrying: %s", ticker, parse_err)
+            try:
+                result = await _call_claude(prompt + _STRICT_JSON_SUFFIX)
+                return _apply_assist_guardrails(result, ticker=clean_ticker)
+            except Exception as retry_err:
+                logger.error("Anthropic thesis assist strict-JSON retry failed for %s: %s", ticker, retry_err)
+        except Exception as api_err:
+            logger.warning("Anthropic thesis assist failed for %s, retrying after backoff: %s", ticker, api_err)
+            await asyncio.sleep(2)
+            try:
+                result = await _call_claude(prompt)
+                return _apply_assist_guardrails(result, ticker=clean_ticker)
+            except Exception as retry_err:
+                logger.error("Anthropic thesis assist backoff retry failed for %s: %s", ticker, retry_err)
+
+    return (
+        _fallback_assist(
+            ticker=ticker,
+            why_own_it=why_own_it,
+            must_remain_true=must_remain_true,
+            what_would_change_my_mind=what_would_change_my_mind,
+            draft_text=draft_text,
         )
+        if allow_fallback
+        else None
+    )
 
 
 COUNTER_THESIS_PROMPT = """Today's date: {iso_date}. Do not reference any specific government administration; use neutral wording like "U.S. federal policy".
@@ -1653,15 +1653,6 @@ async def generate_counter_thesis(
     ai_summary: str | None,
     ticker: str,
 ) -> CounterThesisOutput:
-    if not settings.anthropic_api_key:
-        return _fallback_counter_thesis(
-            why_own_it=why_own_it,
-            must_remain_true=must_remain_true,
-            what_would_change_my_mind=what_would_change_my_mind,
-            ai_summary=ai_summary,
-            ticker=ticker,
-        )
-
     prompt = COUNTER_THESIS_PROMPT.format(
         iso_date=datetime.date.today().isoformat(),
         ticker=ticker,
@@ -1670,6 +1661,28 @@ async def generate_counter_thesis(
         what_would_change_my_mind=what_would_change_my_mind or "Not provided",
         ai_summary=ai_summary or "Not provided",
     )
+
+    if settings.openai_api_key:
+        try:
+            data = await _call_openai_json(
+                prompt=prompt,
+                model=OPENAI_ASSIST_MODEL,
+                max_tokens=1024,
+                schema=COUNTER_THESIS_JSON_SCHEMA,
+                schema_name="counter_thesis",
+            )
+            return _parse_counter_thesis_output(data)
+        except Exception as e:
+            logger.warning("OpenAI counter-thesis failed for %s, trying Anthropic: %s", ticker, e)
+
+    if not settings.anthropic_api_key:
+        return _fallback_counter_thesis(
+            why_own_it=why_own_it,
+            must_remain_true=must_remain_true,
+            what_would_change_my_mind=what_would_change_my_mind,
+            ai_summary=ai_summary,
+            ticker=ticker,
+        )
 
     try:
         data = await _call_anthropic_json(
@@ -1723,9 +1736,6 @@ async def generate_initial_draft(ticker: str) -> dict[str, str]:
     from app.services.market_data import _normalize_ticker
     clean_ticker = _normalize_ticker(ticker)
 
-    if not settings.anthropic_api_key:
-        return _fallback_initial_draft(clean_ticker)
-
     try:
         market_data = await fetch_company_data(ticker)
     except Exception as e:
@@ -1738,6 +1748,22 @@ async def generate_initial_draft(ticker: str) -> dict[str, str]:
         ticker=clean_ticker,
         market_data_section=market_data_section,
     )
+
+    if settings.openai_api_key:
+        try:
+            data = await _call_openai_json(
+                prompt=prompt,
+                model=OPENAI_ASSIST_MODEL,
+                max_tokens=500,
+                schema=DRAFT_THESIS_JSON_SCHEMA,
+                schema_name="initial_draft",
+            )
+            return _parse_draft_output(data, clean_ticker)
+        except Exception as e:
+            logger.warning("OpenAI draft thesis failed for %s, trying Anthropic: %s", ticker, e)
+
+    if not settings.anthropic_api_key:
+        return _fallback_initial_draft(clean_ticker, market_data)
 
     try:
         data = await _call_anthropic_json(
@@ -1907,14 +1933,6 @@ async def synthesize_thesis_from_qa(
     answer2: str,
     investor_profile: str | None = None,
 ) -> SynthesisOutput:
-    if not settings.anthropic_api_key:
-        return _fallback_synthesize(
-            ticker=ticker,
-            answer1=answer1,
-            answer2=answer2,
-            investor_profile=investor_profile,
-        )
-
     try:
         market_data = await fetch_company_data(ticker)
     except Exception as e:
@@ -1935,6 +1953,33 @@ async def synthesize_thesis_from_qa(
         answer2=answer2 or "Not provided",
         market_data_section=market_data_section,
     )
+
+    if settings.openai_api_key:
+        try:
+            data = await _call_openai_json(
+                prompt=prompt,
+                model=OPENAI_ASSIST_MODEL,
+                max_tokens=1024,
+                schema=THESIS_ASSIST_JSON_SCHEMA,
+                schema_name="synthesis",
+            )
+            return _parse_synthesis_output(
+                data,
+                ticker,
+                answer1=answer1,
+                answer2=answer2,
+                investor_profile=investor_profile,
+            )
+        except Exception as e:
+            logger.warning("OpenAI synthesis failed for %s, trying Anthropic: %s", ticker, e)
+
+    if not settings.anthropic_api_key:
+        return _fallback_synthesize(
+            ticker=ticker,
+            answer1=answer1,
+            answer2=answer2,
+            investor_profile=investor_profile,
+        )
 
     try:
         data = await _call_anthropic_json(

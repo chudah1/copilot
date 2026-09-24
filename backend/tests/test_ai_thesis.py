@@ -47,6 +47,39 @@ async def test_assist_thesis_returns_structured_output():
     assert any(hint["kind"] == "metric_threshold" for hint in result.interpretation["watch_hints"])
 
 
+async def test_assist_thesis_uses_openai_before_anthropic():
+    openai_output = ThesisAssistOutput(
+        why_own_it="Apple's services revenue and switching costs support recurring cash flow.",
+        must_remain_true="Services revenue keeps growing and retention remains high.",
+        what_would_change_my_mind="Services revenue contracts for two consecutive quarters.",
+        ai_summary="Apple is owned for services growth and customer retention.",
+        interpretation={
+            "labels": ["growth", "quality"],
+            "monitorability": "high",
+            "watch_hints": [],
+            "ambiguity_note": "",
+        },
+    )
+    with patch("app.services.ai_thesis.settings.openai_api_key", "openai-key"), patch(
+        "app.services.ai_thesis.settings.anthropic_api_key", "anthropic-key"
+    ), patch(
+        "app.services.ai_thesis._call_openai_assist", new_callable=AsyncMock, return_value=openai_output
+    ) as openai_call, patch(
+        "app.services.ai_thesis._call_claude", new_callable=AsyncMock
+    ) as anthropic_call:
+        result = await assist_thesis(
+            ticker="AAPL",
+            name="Apple Inc",
+            quantity=10,
+            average_cost=150.50,
+            draft_text="I own it for services growth.",
+        )
+
+    assert result is not None
+    openai_call.assert_awaited_once()
+    anthropic_call.assert_not_awaited()
+
+
 async def test_assist_thesis_falls_back_when_ai_fails():
     # Disable the OpenAI fallback so we exercise the deterministic no-AI fallback,
     # not whatever live OPENAI_API_KEY happens to be in the environment.
@@ -85,8 +118,8 @@ async def test_assist_thesis_returns_none_when_strict_and_ai_fails():
     assert result is None
 
 
-async def test_assist_thesis_falls_back_to_openai_when_anthropic_fails():
-    openai_output = ThesisAssistOutput(
+async def test_assist_thesis_falls_back_to_anthropic_when_openai_fails():
+    anthropic_output = ThesisAssistOutput(
         why_own_it="Apple's ecosystem strength and switching costs remain durable.",
         must_remain_true="Retention stays high and services growth remains resilient.",
         what_would_change_my_mind="Ecosystem weakening or sustained retention deterioration.",
@@ -100,8 +133,8 @@ async def test_assist_thesis_falls_back_to_openai_when_anthropic_fails():
     )
     with patch("app.services.ai_thesis.settings.anthropic_api_key", "test-key"):
         with patch("app.services.ai_thesis.settings.openai_api_key", "openai-key"):
-            with patch("app.services.ai_thesis._call_claude", new_callable=AsyncMock, side_effect=Exception("Anthropic failed")):
-                with patch("app.services.ai_thesis._call_openai_assist", new_callable=AsyncMock, return_value=openai_output):
+            with patch("app.services.ai_thesis._call_openai_assist", new_callable=AsyncMock, side_effect=Exception("OpenAI failed")):
+                with patch("app.services.ai_thesis._call_claude", new_callable=AsyncMock, return_value=anthropic_output):
                     result = await assist_thesis(
                         ticker="AAPL",
                         name="Apple Inc",

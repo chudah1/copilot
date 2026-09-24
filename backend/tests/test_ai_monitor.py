@@ -1,5 +1,6 @@
 import pytest
-from unittest.mock import patch
+from types import SimpleNamespace
+from unittest.mock import AsyncMock, MagicMock, patch
 
 from app.services.ai_monitor import (
     _CLASSIFY_SYSTEM,
@@ -104,6 +105,40 @@ async def test_classify_event_stays_quiet_when_no_classifier_is_available():
         )
 
     assert result is None
+
+
+async def test_classify_event_uses_terra_before_anthropic(monkeypatch):
+    monkeypatch.setattr("app.services.ai_monitor.settings.openai_api_key", "openai-key")
+    monkeypatch.setattr("app.services.ai_monitor.settings.anthropic_api_key", "anthropic-key")
+    monkeypatch.setattr("app.services.ai_monitor.settings.openai_reasoning_model", "terra-test")
+
+    openai_client = MagicMock()
+    openai_client.chat.completions.create = AsyncMock(
+        return_value=SimpleNamespace(choices=[SimpleNamespace(message=SimpleNamespace(content=(
+            '{"severity":"warning","direction":"threatens",'
+            '"analysis":"ServiceNow subscription growth slowed. Management cut its full-year outlook."}'
+        )))])
+    )
+    anthropic_client = MagicMock()
+    anthropic_client.messages.create = AsyncMock()
+
+    with patch("openai.AsyncOpenAI", return_value=openai_client), patch(
+        "app.services.ai_monitor.anthropic.AsyncAnthropic", return_value=anthropic_client
+    ):
+        result = await classify_event(
+            why_own_it="Subscription revenue should keep growing.",
+            must_remain_true="Subscription growth stays above 20%.",
+            what_would_change_my_mind="Growth falls below 15%.",
+            ai_summary=None,
+            event_description="ServiceNow cut guidance after subscription growth slowed.",
+            ticker="NOW",
+            company_name="ServiceNow",
+        )
+
+    assert result is not None
+    assert result.severity == "warning"
+    assert openai_client.chat.completions.create.await_args.kwargs["model"] == "terra-test"
+    anthropic_client.messages.create.assert_not_awaited()
 
 
 def test_normalize_classification_result_caps_supportive_thesis_breaking():

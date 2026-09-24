@@ -2,7 +2,7 @@
 Rule-based complexity classifier for thesis decomposition requests.
 
 Scores a thesis payload 0-7 on richness signals. Score >= 4 routes to the
-expensive tier (Sonnet); below 4 routes to the cheap tier (gpt-4o-mini).
+expensive tier (Terra); below 4 routes to the fast tier (Luna).
 """
 import re
 

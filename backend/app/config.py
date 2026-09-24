@@ -57,6 +57,10 @@ class Settings(BaseSettings):
     # The current Sonnet ID is claude-sonnet-4-6.
     anthropic_model: str = "claude-sonnet-4-6"
     openai_api_key: str = ""
+    # OpenAI is the primary reasoning path. Luna handles frequent, narrow
+    # checks; Terra handles thesis writing and alert-grade judgments.
+    openai_fast_model: str = "gpt-5.6-luna"
+    openai_reasoning_model: str = "gpt-5.6-terra"
     gemini_api_key: str = ""
     resend_api_key: str = ""
     sentry_dsn: str = ""

@@ -242,44 +242,20 @@ async def judge_news_watch(evidence_text: str, watch_for: str, direction: str) -
     than guess)."""
     prompt = _JUDGE_USER.format(direction=direction, watch_for=watch_for, evidence_text=evidence_text)
 
-    if settings.anthropic_api_key:
-        try:
-            import anthropic
-
-            client = anthropic.AsyncAnthropic(api_key=settings.anthropic_api_key)
-            resp = await client.messages.create(
-                model=settings.anthropic_model,
-                max_tokens=256,
-                system=_JUDGE_SYSTEM,
-                messages=[{
-                    "role": "user",
-                    "content": prompt,
-                }],
-                timeout=30.0,
-            )
-            data = json.loads(strip_code_fences(resp.content[0].text.strip()))
-            matches = bool(data.get("matches"))
-            severity = data.get("severity")
-            if severity not in {"info", "warning", "thesis_breaking"}:
-                severity = "warning" if matches else "info"
-            if matches and severity == "info":
-                severity = "warning"
-            return NewsWatchVerdict(matches=matches, severity=severity, reason=str(data.get("reason") or ""))
-        except Exception as exc:
-            logger.warning("Anthropic news_watch judge failed (%s), trying OpenAI: %s", type(exc).__name__, exc)
-
+    openai_failed = False
     if settings.openai_api_key:
         try:
             from openai import AsyncOpenAI
 
             client = AsyncOpenAI(api_key=settings.openai_api_key)
             resp = await client.chat.completions.create(
-                model="gpt-4o-mini",
-                max_tokens=256,
+                model=settings.openai_fast_model,
+                max_completion_tokens=512,
                 messages=[
                     {"role": "system", "content": _JUDGE_SYSTEM},
                     {"role": "user", "content": prompt},
                 ],
+                extra_body={"reasoning_effort": "low"},
                 timeout=30.0,
             )
             text = (resp.choices[0].message.content or "").strip()
@@ -292,7 +268,33 @@ async def judge_news_watch(evidence_text: str, watch_for: str, direction: str) -
                 severity = "warning"
             return NewsWatchVerdict(matches=matches, severity=severity, reason=str(data.get("reason") or ""))
         except Exception as exc:
-            logger.error("OpenAI news_watch judge also failed (%s): %s", type(exc).__name__, exc)
+            openai_failed = True
+            logger.warning("OpenAI news_watch judge failed (%s), trying Anthropic: %s", type(exc).__name__, exc)
+
+    if settings.anthropic_api_key:
+        try:
+            import anthropic
+
+            client = anthropic.AsyncAnthropic(api_key=settings.anthropic_api_key)
+            resp = await client.messages.create(
+                model=settings.anthropic_model,
+                max_tokens=256,
+                system=_JUDGE_SYSTEM,
+                messages=[{"role": "user", "content": prompt}],
+                timeout=30.0,
+            )
+            data = json.loads(strip_code_fences(resp.content[0].text.strip()))
+            matches = bool(data.get("matches"))
+            severity = data.get("severity")
+            if severity not in {"info", "warning", "thesis_breaking"}:
+                severity = "warning" if matches else "info"
+            if matches and severity == "info":
+                severity = "warning"
+            if openai_failed:
+                logger.info("Anthropic news_watch fallback succeeded")
+            return NewsWatchVerdict(matches=matches, severity=severity, reason=str(data.get("reason") or ""))
+        except Exception as exc:
+            logger.error("Anthropic news_watch judge also failed (%s): %s", type(exc).__name__, exc)
 
     return NewsWatchVerdict(matches=False, severity="info", reason="judge unavailable")
 

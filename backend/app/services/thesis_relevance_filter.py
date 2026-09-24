@@ -17,8 +17,8 @@ This module runs a quick LLM relevance check on each news-style candidate
     things — quiet products only feel quiet-and-informed if the reviewed-
     but-dropped items are visible.
 
-The check is intentionally cheap (gpt-4o-mini) because it's a binary
-relevance decision, not severity classification. Severity stays on gpt-4o
+The check is intentionally cheap (Luna) because it's a binary relevance
+decision, not severity classification. Severity stays on Terra
 in ai_monitor.classify_event.
 """
 
@@ -108,7 +108,7 @@ _RELEVANCE_FILTER_EVENT_TYPES = {
     "gemini_news",
 }
 
-_RELEVANCE_MODEL = "gpt-4o-mini"
+_RELEVANCE_MODEL = settings.openai_fast_model
 
 _RELEVANCE_PROMPT = """You are filtering news for a stock investor.
 Lead with the conclusion. Name the exact company, metric, customer, competitor, or event.
@@ -173,10 +173,10 @@ async def _judge_one(
     response = await client.chat.completions.create(
         model=_RELEVANCE_MODEL,
         messages=[{"role": "user", "content": prompt}],
-        temperature=0,
         # Enough budget for the extra `reason` string (up to ~30 words) plus
         # the boolean + signal-label array.
-        max_tokens=220,
+        max_completion_tokens=512,
+        extra_body={"reasoning_effort": "low"},
         response_format={"type": "json_object"},
         timeout=15.0,
     )

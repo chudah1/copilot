@@ -337,7 +337,7 @@ ADJUDICATION_CEILING = 0.85
 DEFAULT_MAX_ADJUDICATIONS_PER_CANDIDATE = 5
 DEFAULT_MAX_ADJUDICATIONS_PER_BATCH = 25
 
-_ADJUDICATION_MODEL = "gpt-4o-mini"
+_ADJUDICATION_MODEL = settings.openai_fast_model
 
 _ADJUDICATION_PROMPT = """You are scoring whether a news item provides evidence about a specific watch signal an investor cares about.
 
@@ -371,8 +371,8 @@ async def _adjudicate_one(client, *, signal_label: str, claim_text: str, headlin
         response = await client.chat.completions.create(
             model=_ADJUDICATION_MODEL,
             messages=[{"role": "user", "content": prompt}],
-            temperature=0,
-            max_tokens=64,
+            max_completion_tokens=256,
+            extra_body={"reasoning_effort": "low"},
             response_format={"type": "json_object"},
             timeout=15.0,
         )
@@ -401,7 +401,7 @@ async def adjudicate_signal_matches(
     """LLM-refine the borderline embedding matches.
 
     For each candidate, finds matches whose cosine sits in the medium band
-    [floor, ceiling] and asks gpt-4o-mini whether the evidence really touches
+    [floor, ceiling] and asks Luna whether the evidence really touches
     that signal. The LLM's confidence replaces the cosine score in
     match_confidence_by_signal. Matches that come back below drop_threshold
     are removed from matched_signal_ids and matched_signal_labels.
